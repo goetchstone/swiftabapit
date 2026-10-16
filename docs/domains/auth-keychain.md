@@ -43,6 +43,11 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   2. Open `SwiftAbapit.xcodeproj`, build the `abapit` scheme (Debug) once in Xcode.
   3. In Terminal: `ABAPIT_SPIKE=keychain <DerivedData>/Build/Products/Debug/abapit.app/Contents/MacOS/abapit`
      and answer Touch ID. Paste the printed lines (no secrets are printed) into this section.
+  4. Then `ABAPIT_SPIKE=vault …/abapit` (Phase 1a): the app's own `KeychainStore` and `Vault` end to end on a
+     throwaway org (`swiftabapit-spike`, service `swiftabapit-spike`) — a key stored, two signatures verified
+     (the second inside the session, so no second prompt), a password stored, the inventory listed, everything
+     removed. It is the only check of `KeychainStore`'s DER-to-raw conversion before a live token mint: the
+     offline suite runs `MemoryStore`, and an ad-hoc build gets -34018 (seen 2026-10-16).
 
 ## Gotchas (inherited from SwiftGamGui, each a test when Phase 1 builds the Vault)
 
@@ -67,7 +72,21 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 ## Files
 
 - `App/Debug/Spikes.swift` — spike S1 (Phase 0).
-- `Packages/AbapitKit/Sources/Vault/` — Phase 1.
+- `Sources/Vault/Secret.swift` — `Secret` (never prints); `VaultItem` (org slug + kind; the slug can't steer
+  an account name).
+- `Sources/Vault/SecretStore.swift` — the protocol; `MemoryStore` with `failNext` and real OSStatus codes.
+- `Sources/Vault/KeychainStore.swift` — generic passwords (Mosyle) and `kSecClassKey` items (Apple keys,
+  tagged `swiftabapit/<org>/apple-key`, signed with in place, never read out); a name-only index of what each
+  org stores; one shared `LAContext` under a lock. Queries that carry the context are built inside the lock
+  (Swift 6 region isolation refuses a dictionary from outside it).
+- `Sources/Vault/Vault.swift` — the actor: 600 s session on an injected `ContinuousClock`, Keychain calls on a
+  GCD thread, whole-or-absent sets, removal most-dangerous-first, compare-and-swap write-back.
+- `Sources/Vault/KeyImport.swift` — read the picked file once by descriptor (regular, `O_NOFOLLOW`, ≤ 16 KiB);
+  abapit's normalization, P-256 only (golden-held); `ImportedKey` shows a public-key fingerprint, never the
+  key; `Base64URL`.
+- `Sources/Orgs/` — `orgs.json`: profiles without secrets, tolerant of fields a newer version wrote.
+- `Sources/AppleBusiness/ClientAssertion.swift`, `TokenBroker.swift` — the ES256 assertion (`exp` an hour,
+  not abapit's 179 days: a listed deviation) and the single-flight, memory-only token.
 
 ## Testing / live-verification status
 

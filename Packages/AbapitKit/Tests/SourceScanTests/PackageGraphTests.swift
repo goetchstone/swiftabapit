@@ -11,7 +11,8 @@ struct PackageGraphTests {
     /// manifest SwiftPM evaluates (`swift package dump-package`): this regex can be fooled by a variable or a
     /// later `.append` (Phase 0's review), and `scripts/test.sh` and CI run both.
     /// Every allowed edge. Wire is the pure home of `WireOperation`, shared by Planners, HTTPCore and
-    /// ChangeCore (RULE-FEEDBACK 2026-10-16). A new edge is a reviewed change to this list and the plan.
+    /// ChangeCore (RULE-FEEDBACK 2026-10-16); Orgs holds the non-secret org profiles (`orgs.json`, Phase 1).
+    /// A new edge is a reviewed change to this list and the plan.
     static let allowed: [String: Set<String>] = [
         "JSONAPI": [],
         "AppleModels": ["JSONAPI"],
@@ -20,14 +21,15 @@ struct PackageGraphTests {
         "Planners": ["AppleModels", "MosyleModels", "JSONAPI", "Wire"],
         "Reports": ["AppleModels", "MosyleModels"],
         "ProfileSchema": [],
+        "Orgs": ["JSONAPI"],
         "Vault": [],
         "HTTPCore": ["Wire"],
-        "AppleBusiness": ["HTTPCore", "Wire", "Vault", "AppleModels", "JSONAPI"],
-        "Mosyle": ["HTTPCore", "Wire", "Vault", "MosyleModels"],
-        "History": ["AppleModels", "MosyleModels", "Reports"],
-        "ChangeCore": ["HTTPCore", "Wire", "Planners", "Vault"],
+        "AppleBusiness": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"],
+        "Mosyle": ["HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels"],
+        "History": ["Orgs", "AppleModels", "MosyleModels", "Reports"],
+        "ChangeCore": ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"],
         "Assist": ["Planners", "Reports"],
-        "TestSupport": ["HTTPCore", "Wire", "Vault", "AppleModels", "MosyleModels", "JSONAPI"],
+        "TestSupport": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
     ]
 
     /// Modules that build on Linux (the fuzz job) and so import only Foundation.
@@ -63,7 +65,7 @@ struct PackageGraphTests {
     /// Every module's own imports stay within its edges, plus the system frameworks it may use.
     @Test func eachModuleImportsOnlyItsDependencies() throws {
         let system: [String: Set<String>] = [
-            "Vault": ["CryptoKit", "Security", "LocalAuthentication", "Synchronization", "Dispatch", "os"],
+            "Vault": ["CryptoKit", "Security", "LocalAuthentication", "Synchronization", "Dispatch", "Darwin", "os"],
             "HTTPCore": ["os", "Synchronization"],
             "AppleBusiness": ["CryptoKit", "os", "Synchronization"],
             "Mosyle": ["os", "Synchronization"],

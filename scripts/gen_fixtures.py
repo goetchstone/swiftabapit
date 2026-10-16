@@ -366,10 +366,20 @@ def gen_reports(m: dict) -> None:
     for value in ["2024-03-01T10:00:00Z", "2024-03-01T10:00:00.123Z", "2024-03-01T10:00:00+00:00",
                   "2024-03-01T10:00:00.123456+02:00", "2024-03-01", "2024-03-01T10:00", "2024-03-01 10:00:00",
                   "20240301", "2024-03-01T10:00:00", "2024-13-01", "", None, "not a date", "2024-03-01T10:00:00ZZ",
-                  "2024-03-01T24:00:00Z", "2024-W09", "2024-03-01T10:00:00.5Z", "  2024-03-01  "]:
+                  "2024-03-01T24:00:00Z", "2024-W09", "2024-03-01T10:00:00.5Z", "  2024-03-01  ",
+                  "2024-03-01T10:00:00,5Z", "2024-03-01T10", "2024-03-01T1000", "2024-03-01T10:00:00.1234567Z",
+                  "2024-03-01T10:00:00+0530", "2024-03-01T10:00:00+05", "2024-03-01T10:00:00-00:00", "2024-03",
+                  "2024-03-01T10:00:00 +00:00", "2024-02-29", "2023-02-29", "2024-03-01T10:00:60Z",
+                  "2024-03-01T10:00:00+24:00", "2024-03-01T23:59:59.999999-12:00", "0001-01-01", "9999-12-31T23:59:59Z"]:
         parsed = reports.parse_iso(value)
-        cases.append({"function": "parse_iso", "input": {"value": value},
-                      "expected": {"ok": parsed.isoformat() if parsed else None}})
+        abapit = parsed.isoformat() if parsed else None
+        # Python 3.11+ reads ISO week dates and a space before the offset; neither appears in Apple's or
+        # Mosyle's data, and the Swift parser refuses both (a listed deviation).
+        corrected = None if isinstance(value, str) and ("W" in value or " +" in value) else abapit
+        case = {"function": "parse_iso", "input": {"value": value}, "expected": {"ok": corrected}}
+        if corrected != abapit:
+            case["abapit"] = {"ok": abapit}
+        cases.append(case)
     for _ in range(10):
         attrs = rng.choice([{"deviceModel": "iPhone 16"}, {"name": "Sales"}, {"serverName": "Mosyle", "name": ""},
                             {"managedAppleAccount": "avery@example.com"}, {"description": "AppleCare+"}, {},

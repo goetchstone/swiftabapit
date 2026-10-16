@@ -48526,8 +48526,11 @@
    }
   },
   {
-   "expected": {
+   "abapit": {
     "ok": "2024-02-26T00:00:00+00:00"
+   },
+   "expected": {
+    "ok": null
    },
    "function": "parse_iso",
    "input": {
@@ -48550,6 +48553,153 @@
    "function": "parse_iso",
    "input": {
     "value": "  2024-03-01  "
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00.500000+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00,5Z"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T1000"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00.123456+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00.1234567Z"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00+05:30"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00+0530"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00+05:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00+05"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T10:00:00+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00-00:00"
+   }
+  },
+  {
+   "expected": {
+    "ok": null
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03"
+   }
+  },
+  {
+   "abapit": {
+    "ok": "2024-03-01T10:00:00+00:00"
+   },
+   "expected": {
+    "ok": null
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00 +00:00"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-02-29T00:00:00+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-02-29"
+   }
+  },
+  {
+   "expected": {
+    "ok": null
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2023-02-29"
+   }
+  },
+  {
+   "expected": {
+    "ok": null
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:60Z"
+   }
+  },
+  {
+   "expected": {
+    "ok": null
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T10:00:00+24:00"
+   }
+  },
+  {
+   "expected": {
+    "ok": "2024-03-01T23:59:59.999999-12:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "2024-03-01T23:59:59.999999-12:00"
+   }
+  },
+  {
+   "expected": {
+    "ok": "0001-01-01T00:00:00+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "0001-01-01"
+   }
+  },
+  {
+   "expected": {
+    "ok": "9999-12-31T23:59:59+00:00"
+   },
+   "function": "parse_iso",
+   "input": {
+    "value": "9999-12-31T23:59:59Z"
    }
   },
   {

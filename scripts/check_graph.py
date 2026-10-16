@@ -36,14 +36,15 @@ EDGES = {
     "Planners": {"AppleModels", "MosyleModels", "JSONAPI", "Wire"},
     "Reports": {"AppleModels", "MosyleModels"},
     "ProfileSchema": set(),
+    "Orgs": {"JSONAPI"},
     "Vault": set(),
     "HTTPCore": {"Wire"},
-    "AppleBusiness": {"HTTPCore", "Wire", "Vault", "AppleModels", "JSONAPI"},
-    "Mosyle": {"HTTPCore", "Wire", "Vault", "MosyleModels"},
-    "History": {"AppleModels", "MosyleModels", "Reports"},
-    "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault"},
+    "AppleBusiness": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"},
+    "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels"},
+    "History": {"Orgs", "AppleModels", "MosyleModels", "Reports"},
+    "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault", "Orgs"},
     "Assist": {"Planners", "Reports"},
-    "TestSupport": {"HTTPCore", "Wire", "Vault", "AppleModels", "MosyleModels", "JSONAPI"},
+    "TestSupport": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"},
 }
 
 
