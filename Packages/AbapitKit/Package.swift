@@ -33,6 +33,9 @@ let package = Package(
         .library(name: "History", targets: ["History"]),
         .library(name: "ChangeCore", targets: ["ChangeCore"]),
         .library(name: "Assist", targets: ["Assist"]),
+        // The screen models (orgs, devices, the inspector): the app's views are thin over them, and here they can be
+        // tested (invariant 8's screen-model tests; Phase 1b review M6).
+        .library(name: "AppModels", targets: ["AppModels"]),
         // The strict stubs and the demo fleet: the app links it for its DEBUG demo org only (dead-stripped from
         // Release, which never references it; scripts/check_app.sh refuses the demo switch in a Release binary).
         .library(name: "TestSupport", targets: ["TestSupport"]),
@@ -55,6 +58,8 @@ let package = Package(
         .target(name: "History", dependencies: ["Orgs", "AppleModels", "MosyleModels", "Reports"], swiftSettings: settings),
         .target(name: "ChangeCore", dependencies: ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"], swiftSettings: settings),
         .target(name: "Assist", dependencies: ["Planners", "Reports"], swiftSettings: settings),
+        // App-facing: never HTTPCore, Wire or ChangeCore, so no read is built and no write is reachable from a screen model.
+        .target(name: "AppModels", dependencies: ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI"], swiftSettings: settings),
         .target(name: "TestSupport", dependencies: ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
                 swiftSettings: settings),
         // Tests: one target per module, plus the source scans.
@@ -78,6 +83,8 @@ let package = Package(
         .testTarget(name: "ChangeCoreTests", dependencies: ["ChangeCore", "HTTPCore", "Wire", "Planners", "Vault", "TestSupport"],
                     swiftSettings: settings),
         .testTarget(name: "AssistTests", dependencies: ["Assist", "Planners", "Reports", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "AppModelsTests", dependencies: ["AppModels", "AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI",
+                                                           "HTTPCore", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "SourceScanTests", dependencies: ["TestSupport"], swiftSettings: settings),
     ]
 )

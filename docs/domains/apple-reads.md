@@ -7,7 +7,9 @@ and checked against Apple's DocC contract (plan §3.3, Appendix A).
 
 **Enforcement home:** `ModelContractTests` (each view reads exactly Apple's attributes; enums are Apple's
 values; Apple's examples decode), `ReadContractTests` (every read is a documented endpoint, parameter and
-`fields` value, for both scopes), `AppleClientTests` against the strict `AppleStub`.
+`fields` value, for both scopes), `AppleClientTests` against the strict `AppleStub`, and `AppModelsTests`
+(invariant 8's screen-model tests: org switches, superseded loads, panels, partial and unusable states, the
+org editor's save).
 
 ## Files
 - `Sources/JSONAPI/` — `JSONValue`/`JSONObject` (Python-faithful, ordered, exact text; from SwiftGamGui),
@@ -18,9 +20,19 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here),
   `AppleClient` (pages as an `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; read
   probes), `AppleAPIError` (status + Apple `code`, never prose).
+- `Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`, public API only):
+  `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
+  services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3).
 
 ## Gotchas / stub-lies traps
+- **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing**, and can still be handed a
+  page already in its buffer. A load checks its token after every page and every await, or a superseded load
+  says "loaded" and records its rate on the next org (Phase 1b review H2; failure-log 2026-10-16, "the screen
+  models had no tests"). An org switch clears every model through `OrgsModel.onSwitch`, not through a view.
+- **A device is "unassigned" only when every service's device list was read whole.** A 403 on `mdmServers`, one
+  service's failing list or a list cut at the page cap makes the rest "Unknown", with a note; the devices still
+  load (Phase 1b review M3).
 - **`fields[orgDevices]` can't name the MDM-migration attributes** (`isMdmMigrationCapable`,
   `mdmMigrationStatus`, `mdmMigrationDeadlineDateTime`), and the device table filters on them, so the device
   list asks for every attribute. The services list uses sparse fields.

@@ -29,6 +29,7 @@ struct PackageGraphTests {
         "History": ["Orgs", "AppleModels", "MosyleModels", "Reports"],
         "ChangeCore": ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"],
         "Assist": ["Planners", "Reports"],
+        "AppModels": ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI"],
         "TestSupport": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
     ]
 
@@ -72,6 +73,7 @@ struct PackageGraphTests {
             "History": ["SQLite3", "os", "Synchronization", "Darwin"],
             "ChangeCore": ["CryptoKit", "os", "Synchronization", "Darwin"],
             "Assist": ["FoundationModels"],
+            "AppModels": ["Observation"],
             "TestSupport": ["Testing", "CryptoKit", "Security", "Synchronization"],
         ]
         for (module, edges) in Self.allowed {
@@ -115,7 +117,7 @@ struct PackageGraphTests {
     /// and the system frameworks it uses; `TestSupport` (the stubs and the demo) only under `#if DEBUG`.
     @Test func theAppImportsOnlyThePlannedModules() throws {
         let package: Set = ["ChangeCore", "AppleBusiness", "AppleModels", "Mosyle", "History", "Reports", "Planners", "Assist", "Vault",
-                            "Orgs", "JSONAPI", "TestSupport"]
+                            "Orgs", "JSONAPI", "AppModels", "TestSupport"]
         let system: Set = ["SwiftUI", "AppKit", "Foundation", "Charts", "Observation", "UniformTypeIdentifiers", "CryptoKit",
                            "LocalAuthentication", "Security", "Synchronization", "FoundationModels", "Dispatch", "AppIntents", "os"]
         for file in try SourceScan.swiftFiles(in: "App") {

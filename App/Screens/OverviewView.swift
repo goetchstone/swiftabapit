@@ -1,10 +1,12 @@
 import AppleModels
+import AppModels
 import Charts
 import Reports
 import SwiftUI
 
 /// Overview (plan §8 Phase 1: the minimal dashboard): the fleet's counts, devices added per month, the
-/// unassigned ones, and services that haven't connected lately. Built from the Devices screen's load.
+/// unassigned ones, and services that haven't connected lately. Built from the Devices screen's load. An org that
+/// can't be read says why instead of showing zeros (Phase 1b review, LOW).
 struct OverviewView: View {
     let model: DevicesModel
     let hasOrg: Bool
@@ -19,14 +21,27 @@ struct OverviewView: View {
             } actions: {
                 Button("Open Settings", action: addOrg)
             }
+        } else if case .unusable(let why) = model.state {
+            ContentUnavailableView {
+                Label("This organization can't be read", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(why)
+            } actions: {
+                Button("Open Settings", action: addOrg)
+            }
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total) {
+                    StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total,
+                                 partial: model.partialCount) {
                         model.load(force: true)
                     }
+                    if let note = model.serviceNote {
+                        Label(note, systemImage: "questionmark.circle").font(.callout).foregroundStyle(.secondary)
+                    }
                     let stats = DeviceStats(model.devices.map(\.resource), now: Date())
-                    let unassigned = model.rows.filter { $0.service.isEmpty }.count
+                    // Only devices known to be unassigned: an unknown or not-yet-read service isn't counted as none.
+                    let unassigned = model.rows.filter { $0.assignment == .unassigned }.count
                     HStack(spacing: 12) {
                         Tile(title: "Devices", value: stats.total)
                         Tile(title: "Added in 30 days", value: stats.added30)

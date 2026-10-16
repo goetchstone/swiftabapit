@@ -1,9 +1,11 @@
 import AppleModels
+import AppModels
 import SwiftUI
 import UniformTypeIdentifiers
 
 /// Devices (plan §4): the org's devices as a sortable, searchable table that fills as pages arrive; filters
-/// by family and status; CSV export of what's shown; the inspector for the selected device.
+/// by family and status; CSV export of what's shown, off while the list is loading or partial (a file can't say
+/// it is partial; Phase 1b review); the inspector for the selected device.
 struct DevicesView: View {
     @Bindable var model: DevicesModel
     let detail: DeviceDetailModel
@@ -12,9 +14,19 @@ struct DevicesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total) { model.load(force: true) }
-                .padding(.horizontal)
-                .padding(.vertical, 6)
+            StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total, partial: model.partialCount) {
+                model.load(force: true)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+            if let note = model.serviceNote {
+                Label(note, systemImage: "questionmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .padding(.bottom, 6)
+                    .accessibilityIdentifier("devices.serviceNote")
+            }
             Table(model.shown, selection: $selection, sortOrder: $model.sortOrder) {
                 TableColumn("Serial", value: \.serial, comparator: String.StandardComparator.lexical) { Text($0.serial).monospaced() }
                     .width(min: 110, ideal: 130)
@@ -45,8 +57,8 @@ struct DevicesView: View {
                 }
                 .accessibilityIdentifier("devices.status")
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(model.shown.isEmpty)
-                    .help("Exports the devices shown, every attribute that may leave the app")
+                    .disabled(model.shown.isEmpty || model.exportBlocked != nil)
+                    .help(model.exportBlocked ?? "Exports the devices shown, every attribute that may leave the app")
                     .accessibilityIdentifier("devices.export")
             }
         }

@@ -1,13 +1,17 @@
+import AppModels
 import SwiftUI
 
 /// Where a list's data stands, always in words (invariant 8): loading and how far, loaded and when, cut short
-/// by the page cap, forbidden for this role, or failed and why.
+/// by the page cap, forbidden for this role, failed and why (and how many rows were read before it), or unusable
+/// and why.
 struct StatusBanner: View {
     let state: LoadState
     var shown: Int? = nil
     var truncated = false
     /// Apple's own total, when it gives one.
     var total: Int? = nil
+    /// Rows a failed read left on screen: "partial: N rows read before the error".
+    var partial: Int? = nil
     var retry: (() -> Void)? = nil
 
     var body: some View {
@@ -30,11 +34,15 @@ struct StatusBanner: View {
                     .foregroundStyle(.secondary)
                 }
             case .forbidden:
-                Label("Your role can't read this. An administrator can change the API account's role in Apple Business.",
+                Label("Your role can't read this. An administrator can change the API account's role in Apple Business."
+                      + (partial.map { " Partial: \($0.formatted()) rows read before the refusal." } ?? ""),
                       systemImage: "lock")
             case .failed(let message):
-                Label(message, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
+                Label(message + (partial.map { " Partial: \($0.formatted()) rows read before the error." } ?? ""),
+                      systemImage: "exclamationmark.octagon").foregroundStyle(.red)
                 if let retry { Button("Try Again", action: retry) }
+            case .unusable(let why):
+                Label(why, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
             }
             Spacer(minLength: 0)
         }

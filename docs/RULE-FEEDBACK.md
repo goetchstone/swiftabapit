@@ -27,6 +27,18 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-16 — Invariant 8 named a home that didn't exist
+- **What happened:** Phase 1b's review found the screen models (`App/Models`) untested: an org switch kept the
+  old org's rows, CSV and Find; a superseded load said "loaded" and saved its rate on the next org; one failing
+  services read emptied the device list. Every mutant there survived (failure-log 2026-10-16, "the screen models
+  had no tests").
+- **Invariant in force:** #8, "stale or truncated data is never silent", home "screen-model tests".
+- **Why it didn't hold:** the models lived in the app target, which `swift test` doesn't build, and no app test
+  target existed, so the named home was empty and nothing said so.
+- **Would a rule have caught it?** Only if enforced differently: a home an invariant names should be a test target
+  that exists. The models are now the `AppModels` package module with `AppModelsTests`.
+- **Enforcement home if changed:** tripwire test (a check that every enforcement home CLAUDE.md names exists).
+
 ## 2026-10-16 — "Stubs fail like the APIs" was read as "refuse like the APIs"
 - **What happened:** Phase 1a's strict stub refused every request Apple would refuse, and could not
   produce a dropped connection, a revoked account, a short-lived token or an oversized body. 13 of the

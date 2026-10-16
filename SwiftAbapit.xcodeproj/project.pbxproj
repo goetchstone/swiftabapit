@@ -19,6 +19,7 @@
 		5AB000000000000000000109 /* AppleModels in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000209 /* AppleModels */; };
 		5AB000000000000000000110 /* JSONAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000210 /* JSONAPI */; };
 		5AB000000000000000000111 /* TestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000211 /* TestSupport */; };
+		5AB000000000000000000112 /* AppModels in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000212 /* AppModels */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +54,7 @@
 				5AB000000000000000000109 /* AppleModels in Frameworks */,
 				5AB000000000000000000110 /* JSONAPI in Frameworks */,
 				5AB000000000000000000111 /* TestSupport in Frameworks */,
+				5AB000000000000000000112 /* AppModels in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +120,7 @@
 				5AB000000000000000000209 /* AppleModels */,
 				5AB000000000000000000210 /* JSONAPI */,
 				5AB000000000000000000211 /* TestSupport */,
+				5AB000000000000000000212 /* AppModels */,
 			);
 			productName = abapit;
 			productReference = 5AB000000000000000000001 /* abapit.app */;
@@ -364,6 +367,10 @@
 		5AB000000000000000000211 /* TestSupport */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TestSupport;
+		};
+		5AB000000000000000000212 /* AppModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppModels;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
