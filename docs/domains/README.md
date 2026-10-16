@@ -16,6 +16,7 @@ history the design inherits; read it too while ours is a stub.
 | ChangeCore: preview, guard, executor, audit | [change-core.md](change-core.md) | stub (phase 4) |
 | Assist, App Intents, Spotlight | [assist-intents.md](assist-intents.md) | stub (phase 9) |
 | Contracts: Apple's DocC manifest and the drift job | [contracts.md](contracts.md) | phase 0: crawler and manifest |
+| The gates: source scans and the Release gate (`check_app.sh`) | [gates.md](gates.md) | phase 1b: scanner self-tests, debug-only scans, stripped gate |
 
 Template for a filled runbook: **One line** · **Owns invariant(s)** · **Enforcement home** · Files ·
 How it works · Invariants & failure history · Gotchas / stub-lies traps · Testing / live-verification

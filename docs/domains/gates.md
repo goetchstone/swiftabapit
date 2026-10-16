@@ -1,0 +1,76 @@
+# Domain: the gates (source scans and the Release gate)
+
+**One line:** the checks that hold the invariants the compiler can't: source scans over the app and the
+package (`SourceScanTests`), and `scripts/check_app.sh` over the built Release app (plan §3.9).
+
+**Owns invariant(s):** the structural halves of #1–#4 (one door per route, reads by type, the Keychain only in
+the Vault, no listener) and plan §3.9's "no debug code in Release". Each invariant's own runbook names its
+home; this one says how the homes themselves work and fail.
+
+**Enforcement home:** `ScannerTests` (the scanner finds every spelling each needle list must find, and its
+lexer reads literals as Swift does), `DebugOnlyTests`, and the mutants recorded in each gate change's PR.
+
+## Files
+- `Packages/AbapitKit/Sources/TestSupport/Fixtures.swift` — `SourceScan`: `code(_:strings:)` (the lexer),
+  `mentions`/`files(in:matching:except:)` (needles), `outsideDebug` (`#if DEBUG` regions), `imports(of:)`.
+- `Packages/AbapitKit/Tests/SourceScanTests/` — `RouteTests` (the needle lists and where each may appear),
+  `PackageGraphTests` (edges, imports, `TestSupport` only in debug code), `DebugOnlyTests` (every `ABAPIT_`
+  switch and every use of Vault's `MemoryStore` in debug code), `ScannerTests` (the scanner's own tests).
+- `scripts/check_app.sh` — the Release gate; CI runs it on the Release build and again after an incremental
+  `DEPLOYMENT_POSTPROCESSING=YES` build (an archive's strip), which costs seconds.
+- `scripts/check_graph.py`, `scripts/check_text.py` — the manifest SwiftPM evaluates; invisible characters.
+
+## How it works
+- **What a scan reads.** `SourceScan.code` blanks every comment (nested too) and, unless asked to keep them,
+  string literals' contents, scalar for scalar with line breaks kept. It follows raw strings, multi-line
+  strings, escapes, interpolations (code again) and `#/…/#` regex literals.
+- **What counts.** Code and string literals count; comments never do. A string is how a run-time lookup
+  names a class (`NSClassFromString("NSURLSession")`), and `nothingLooksCodeUpByName` refuses the lookups.
+- **How a needle matches.** Anywhere, inside a longer name too (`URLSession` finds `NSURLSession` and
+  `URLSessionConfiguration`), and across whitespace. Only a whole `except` name is excused
+  (`URLSessionTransport`, in the package only).
+- **Debug-only code.** `outsideDebug` reads `#if`/`#elseif`/`#else`/`#endif` from the code alone and counts
+  only the true branch of a condition that is exactly `DEBUG`, at any depth.
+- **The Release gate's code checks** run on a stripped copy (`strip -D`, as an archive does) and then on the
+  binary as built. Both must be clean. A hit only the second pass finds is in the symbol table alone: the gate
+  says so, because its strings need a needle for it.
+
+## Invariants & failure history
+- failure-log 2026-10-16, "the gate checked names, not values" (Phase 0): exact entitlements, one Mach-O,
+  the tokenizing import scan.
+- failure-log 2026-10-16, "the gate looked for what it could not see" (Phase 1b review H3, M1 and LOW, and a
+  pipe that hid every `nm` hit): this runbook's gotchas.
+
+## Gotchas / traps
+- **`\b` in a Swift `Regex` is a Unicode word boundary** (UAX #29). `.` doesn't break a word, so
+  `\bURLSession\b` misses `URLSession.shared`, `Foundation.URLSession` and `URLSession.self`. The scans
+  compare scalars and use ASCII boundaries.
+- **Swift accepts whitespace in a call:** `ReadRequest (host:`, `ReadRequest .init(host:`, and `.init(` with
+  `host:` on the next line. Needles have no spaces and are matched with whitespace removed.
+- **A directive can follow code on its line** (`let a = 1; #if DEBUG`); its condition runs to the line's end.
+- **Swift keeps a string literal of 15 bytes or fewer inside the instructions.** `strings` never shows
+  `ABAPIT_DEMO`, `ABAPIT_SCREEN` or `ABAPIT_SNAPSHOT`. So the gate refuses the *read*: ProcessInfo's
+  `environment` and `arguments` selectors, `getenv` and its kin, Swift's `CommandLine`. `DebugOnlyTests`
+  holds the names in the source.
+- **A stripped binary has no symbol table.** `nm` finds nothing in an archive build. A linked stub still shows
+  in `strings` as `_TtC11TestSupport9AppleStub` and as its `#filePath` (`…/Sources/TestSupport/…`).
+- **Never `tool | grep -q` under `pipefail`.** `grep` exits at the first match and the writer dies of SIGPIPE
+  once its output outgrows the pipe (64 KiB). The pipeline then fails, and `if` reads that as "no match".
+  `nm` prints over 1 MB here: the old check never saw `MemoryStore` in any Release build, or the stub in
+  mutant E. Capture the output, then search it.
+- **Vault's `MemoryStore` is public and in every build.** The binary can't tell a use of it from its presence,
+  so `DebugOnlyTests` holds its use to debug code instead.
+
+## Testing / verification status
+- Offline: `scripts/test.sh` (all four suites). Gate changes are proven by building mutant Release apps from
+  a scratch copy and running the gate on each (list them in the PR).
+- Not covered: a bare `/…/` regex literal is lexed as code (none is in the tree); a name assembled at run
+  time beyond the lookups listed in `RouteTests.lookups`.
+- On a new Xcode, re-run the environment-read mutants (an `ABAPIT_DEMO` read, a `getenv`, a `CommandLine`
+  read). The check reads ObjC selector names and C imports, which a Foundation rewrite could move.
+
+## To do common tasks here
+- **A new guarded API:** add the needle to its `RouteTests` list and its spellings to `ScannerTests`. Then
+  check the scan fails with one use added in the package and one in `App/`.
+- **A new debug switch:** name it `ABAPIT_…` and read it under `#if DEBUG`. Both gates hold it with no edit.
+- **A gate change:** build each mutant it should refuse, from a scratch copy, and run the gate on each.

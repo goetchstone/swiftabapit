@@ -121,10 +121,10 @@ struct PackageGraphTests {
         for file in try SourceScan.swiftFiles(in: "App") {
             let extra = Set(SourceScan.imports(of: file)).subtracting(package).subtracting(system)
             #expect(extra.isEmpty, "\(file.path) imports \(extra.sorted())")
-            let lines = file.text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
-            for (index, line) in lines.enumerated() where line == "import TestSupport" {
-                #expect(index > 0 && lines[index - 1] == "#if DEBUG", "\(file.path): TestSupport is imported outside #if DEBUG")
-            }
+            // Read as code, directives and all: a line comparison let `import TestSupport // demo` through outside
+            // `#if DEBUG` (Phase 1b review). Any use of the module, not only its import, is debug code.
+            let release = SourceScan.outsideDebug(file, ["TestSupport"], strings: false)
+            #expect(release.isEmpty, "TestSupport outside #if DEBUG: \(release)")
         }
     }
 
