@@ -8,8 +8,8 @@ import Wire
 /// One Mosyle org's login (plan §3.5): `POST /v1/login` with the access token in the `accessToken` header and
 /// the admin's email and password in the body; the JWT comes back in the response's `Authorization` header.
 /// Single-flight, memory only, re-logged once on a 401. The JWT's own `exp` sets its life (else 23 h; Mosyle's
-/// `Expires` header is PHP's fixed 1981 date and is ignored). The Logs Stream is a second service with its own
-/// token and login on its own host.
+/// `Expires` header is PHP's fixed 1981 date and is ignored), renewed 60 s early or halfway through a shorter life.
+/// The Logs Stream is a second service with its own token and login on its own host.
 public actor MosyleSession: Authorizer {
     public enum Service: Sendable {
         case business, logs
@@ -21,6 +21,10 @@ public actor MosyleSession: Authorizer {
     public static let fallbackLifetime: Duration = .seconds(23 * 3600)
     public static let refreshEarly: Duration = .seconds(60)
 
+    /// How long before its end a JWT that lives `lifetime` is renewed: 60 s, or half a shorter life. A flat 60 s
+    /// renewed a 45 s JWT on every read (Phase 7a review M2: 5 pings, 5 logins).
+    static func margin(for lifetime: Duration) -> Duration { min(refreshEarly, lifetime / 2) }
+
     public let org: String
     public let service: Service
     private let vault: Vault
@@ -28,7 +32,7 @@ public actor MosyleSession: Authorizer {
     private let now: @Sendable () -> Date
     private let clock: @Sendable () -> ContinuousClock.Instant
     /// The access token and the JWT it was exchanged for, together: both memory only, both dropped on a 401.
-    private var session: (token: Secret, jwt: Secret, expires: ContinuousClock.Instant)?
+    private var session: (token: Secret, jwt: Secret, renew: ContinuousClock.Instant)?
     private var minting: Task<(Secret, Secret, ContinuousClock.Instant), any Error>?
     public private(set) var logins = 0
 
@@ -56,7 +60,7 @@ public actor MosyleSession: Authorizer {
     }
 
     private func current() async throws -> (Secret, Secret) {
-        if let session, clock() < session.expires.advanced(by: .zero - Self.refreshEarly) { return (session.token, session.jwt) }
+        if let session, clock() < session.renew { return (session.token, session.jwt) }
         if let minting { let made = try await minting.value; return (made.0, made.1) }
         let task = Task { try await self.login() }
         minting = task
@@ -86,9 +90,17 @@ public actor MosyleSession: Authorizer {
         let response = try await http.authenticate(AuthRequest(host: service.host, path: "/v1/login", contentType: "application/json",
                                                                headers: ["accessToken": String(decoding: token.bytes, as: UTF8.self)],
                                                                body: Data(JSONValue.dumps(.object(body)).utf8)))
-        guard response.isSuccess else { throw MosyleAPIError.login(status: response.status) }
+        // A refused login is about the credentials; a 429 or a 5xx isn't, and must not send the operator to re-enter
+        // them (Phase 7a review M2). A login is never retried (plan §3.4.3).
+        switch response.status {
+        case 200..<300: break
+        case 429: throw MosyleAPIError.rateLimited
+        case 500...599: throw MosyleAPIError.server(status: response.status)
+        default: throw MosyleAPIError.login(status: response.status)
+        }
         guard let jwt = Self.bearer(response) else { throw MosyleAPIError.noToken }
-        return (token, Secret(jwt), started.advanced(by: Self.lifetime(of: jwt, now: now())))
+        let lifetime = Self.lifetime(of: jwt, now: now())
+        return (token, Secret(jwt), started.advanced(by: lifetime - Self.margin(for: lifetime)))
     }
 
     /// The JWT from the `Authorization` header (`Bearer x` or bare), else from the body as abapit tolerated.
@@ -105,15 +117,17 @@ public actor MosyleSession: Authorizer {
         return (body?["Authorization"]?.string ?? body?["token"]?.string).flatMap(strip)
     }
 
-    /// From the JWT's `exp` claim, never past the fallback; the fallback when there is none or it can't be read.
+    /// From the JWT's `exp` claim, never past the fallback; the fallback when there is none or it can't be read. An
+    /// `exp` at or before now is read as unreadable: Mosyle just issued this JWT, so the claim is stale or this Mac's
+    /// clock runs ahead, and a zero life logged in again for every read (Phase 7a review M2: 7 reads, 7 logins). If
+    /// the JWT really has expired, Mosyle's 401 brings one fresh login.
     static func lifetime(of jwt: String, now: Date) -> Duration {
         let parts = jwt.split(separator: ".")
         guard parts.count == 3, let payload = Base64URL.decode(String(parts[1])),
               let exp = JSONValue.parse(String(decoding: payload, as: UTF8.self))?["exp"]?.double else { return fallbackLifetime }
         // Clamped as a number first: `Duration.seconds` traps past about 1.7e20 (Phase 1a's review H1).
         let remaining = exp - now.timeIntervalSince1970
-        guard remaining.isFinite else { return remaining > 0 ? fallbackLifetime : .zero }
-        guard remaining > 0 else { return .zero }
+        guard remaining.isFinite, remaining > 0 else { return fallbackLifetime }
         return .seconds(min(remaining, Double(fallbackLifetime.components.seconds)))
     }
 }
@@ -121,10 +135,17 @@ public actor MosyleSession: Authorizer {
 /// A Mosyle failure: an HTTP status, or Mosyle's own status inside an HTTP 200 (plan §3.5; defect 3).
 public enum MosyleAPIError: Error, Equatable, Sendable {
     case unauthorized
+    /// A 403. Not logged in again: abapit re-logged on 403 as on 401, but plan §3.5 re-logs on 401 only, and a fresh
+    /// login can't lift a permission or an IP restriction (Phase 7a review L5; check live what Mosyle's 403 means).
+    case forbidden
     case login(status: Int)
     case noToken
     case invalidMethod
     case status(OpenEnum<MosyleStatus>, info: String?)
+    /// An HTTP 200 that isn't an answer Mosyle sends (Phase 7a review H2), with what is wrong with it.
+    case malformed(String)
+    /// A request that isn't on `MosyleRead.allowed` as it would be sent, refused before it left (review M4).
+    case notARead(String)
     case rateLimited
     case server(status: Int)
     case unexpected(status: Int)
@@ -138,11 +159,16 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
         case .unauthorized:
             "Mosyle refused this organization's credentials, even after a fresh login. If the access token is restricted to "
                 + "certain IP addresses, this Mac's may not be one."
+        case .forbidden:
+            "Mosyle refused this read (HTTP 403). The admin account or the access token may not be allowed it, or the token "
+                + "may be restricted to other IP addresses."
         case .login(let status): "Mosyle's login refused the email, password or access token (HTTP \(status))."
         case .noToken: "Mosyle's login answered without a token."
         case .invalidMethod: "Mosyle refused the request's method (INVALID_METHOD)."
         case .status(let status, let info): "Mosyle answered \(status.rawValue)\(info.map { ": \($0)" } ?? ".")"
-        case .rateLimited: "Mosyle is rate-limiting this organization. It was retried; try again in a minute."
+        case .malformed(let reason): "Mosyle's answer couldn't be read as a list: \(reason). Nothing was read from it."
+        case .notARead(let template): "\(template) isn't a Mosyle read this app may send, so it wasn't sent."
+        case .rateLimited: "Mosyle is rate-limiting this organization. Try again in a minute."
         case .server(let status): "Mosyle's service failed (HTTP \(status)). Try again later."
         case .unexpected(let status): "Mosyle answered HTTP \(status), which this app doesn't expect."
         case .notJSON(let bytes): "Mosyle's answer wasn't readable (\(bytes) bytes that aren't JSON)."

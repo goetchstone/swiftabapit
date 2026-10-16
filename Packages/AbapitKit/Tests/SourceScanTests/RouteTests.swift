@@ -33,10 +33,15 @@ struct RouteTests {
     }
 
     /// Mosyle's reads are POSTs, so the method can't tell a read from a write (invariant 2): every Mosyle read is on
-    /// `MosyleRead.allowed`, and that list holds no operation that changes anything.
+    /// `MosyleRead.allowed`, and that list holds no operation that changes anything. Phase 7a's review passed
+    /// `insert_users`, `variables#save` and an operation-less `/v1/lostmode#`: an operation is now a read verb with no
+    /// write word in it, and only the two endpoints that have no operation may go without one. `MosyleReadTests`
+    /// holds the list's value, which a computed addition after the literal could change.
     @Test func everyMosyleReadIsOnTheAllowlist() throws {
         let writes = ["update", "assign", "change", "create", "delete", "remove", "wipe", "lock", "restart", "shutdown", "clear",
-                      "enable", "disable", "play", "request", "bulk", "set", "add"]
+                      "enable", "disable", "play", "request", "bulk", "set", "add", "insert", "save", "send", "push", "move", "erase",
+                      "reset", "revoke", "release", "limbo", "install", "rename", "edit", "modify", "apply", "attach", "detach",
+                      "import", "upload", "sync", "activation", "lost", "command", "restore", "enroll", "retire", "write", "post"]
         let file = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/Mosyle").first { $0.path.hasSuffix("MosyleRead.swift") })
         let text = file.lines.joined(separator: "\n")
         let start = try #require(text.range(of: "allowed: Set<String> = ["))
@@ -44,13 +49,53 @@ struct RouteTests {
         let entries = text[start.upperBound..<end.lowerBound].split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         #expect(entries.count == 8, "\(entries)")
+        var allowed: Set<String> = []
         for entry in entries {
-            let operation = entry.split(separator: "#").last.map(String.init)?.lowercased() ?? ""
-            #expect(!writes.contains { operation.contains($0) } || operation == "list_custom_device_attributes", "\(entry)")
+            #expect(entry.hasPrefix("\"") && entry.hasSuffix("\"") && entry.filter { $0 == "\"" }.count == 2, "a plain literal: \(entry)")
+            let key = String(entry.dropFirst().dropLast())
+            allowed.insert(key)
+            let parts = key.split(separator: "#", omittingEmptySubsequences: false).map(String.init)
+            #expect(parts.count == 2 && parts[0].hasPrefix("/v1/"), "\(entry)")
+            let (path, operation) = (parts.first ?? "", (parts.last ?? "").lowercased())
+            if operation.isEmpty {
+                #expect(["/v1/adminlogs", "/v1/logsstream"].contains(path), "only these two have no operation: \(entry)")
+            } else {
+                #expect(operation.hasPrefix("list") || operation == "get_info", "a read verb: \(entry)")
+                #expect(!writes.contains { operation.contains($0) }, "\(entry)")
+            }
         }
         // The only builders in the file go through `read(_:_:_:)` or the Logs Stream's own; both check the list.
         #expect(text.components(separatedBy: "ReadRequest(").count - 1 == 2)
         #expect(text.components(separatedBy: "precondition(allowed.contains").count - 1 == 2)
+        // Every `read(path, operation…)` the file makes is on the list, called or not: the trap fires only when called.
+        let calls = try Regex(#"read\("(/v1/[A-Za-z_/]+)",\s*(?:"([A-Za-z_]*)"|nil)"#)
+        let made = text.matches(of: calls).map { match in
+            "\(match.output[1].substring ?? "")#\(match.output[2].substring ?? "")"
+        }
+        #expect(made.count >= 4 && Set(made).isSubset(of: allowed), "\(made)")
+        // The Logs Stream's body is top-level with no `operation`: one there would make it another request.
+        let logs = try #require(text.range(of: "func logsStream("))
+        let logsEnd = try #require(text[logs.upperBound...].range(of: "\n    }\n"))
+        #expect(!text[logs.lowerBound..<logsEnd.lowerBound].contains("operation"))
+    }
+
+    /// Nothing outside `Wire` extends `ReadRequest` or names it otherwise: an extension's `Self(host: …)` was a second
+    /// Mosyle builder that every scan above passed (Phase 7a review M4).
+    @Test func nothingElseExtendsOrRenamesReadRequest() throws {
+        let patterns = [try Regex(#"extension\s+(Wire\s*\.\s*)?ReadRequest\b"#),
+                        try Regex(#"typealias\s+\w+\s*(<[^>]*>)?\s*=\s*(Wire\s*\.\s*)?ReadRequest\b"#),
+                        try Regex(#"\bSelf\s*(\.\s*init\s*)?\(\s*host\s*:"#)]
+        var scanned = 0
+        for directory in [Self.sources, "App"] {
+            for file in try SourceScan.swiftFiles(in: directory) where file.path != "\(Self.sources)/Wire/Requests.swift" {
+                scanned += 1
+                let code = file.lines.joined(separator: "\n")
+                for pattern in patterns { #expect(!code.contains(pattern), "\(file.path)") }
+            }
+        }
+        #expect(scanned > 50)
+        let wire = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/Wire").first { $0.path.hasSuffix("Requests.swift") })
+        #expect(wire.lines.contains { $0.contains("public struct ReadRequest") })
     }
 
     /// Only the Vault touches the Keychain (invariant 3); the app's spike uses throwaway items only.

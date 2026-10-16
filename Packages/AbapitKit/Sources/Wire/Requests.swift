@@ -65,6 +65,20 @@ public struct AuthRequest: Sendable {
     }
 }
 
+/// The access token rides in `headers` and the email and password in `body`: printing, `dump` and a `Mirror` show
+/// the header names only, as `Secret` shows nothing (Phase 7a review L6).
+extension AuthRequest: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String {
+        "credential exchange: POST \(host.rawValue)\(path), headers \(headers.keys.sorted()), body \(body.count) bytes, redacted"
+    }
+
+    public var debugDescription: String { description }
+    public var customMirror: Mirror {
+        Mirror(self, children: ["host": host.rawValue, "path": path, "contentType": contentType, "headers": headers.keys.sorted(),
+                                "body": "\(body.count) bytes"], displayStyle: .struct)
+    }
+}
+
 extension URL {
     /// `https://<host><path>?<query>`, each name and value percent-encoded except RFC 3986's unreserved
     /// characters (so `fields[orgDevices]` goes as `fields%5BorgDevices%5D`, as abapit's httpx sent it).
