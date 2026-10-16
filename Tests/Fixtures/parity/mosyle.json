@@ -44,8 +44,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -106,8 +105,7 @@
      "isSupervised": 1,
      "lostModeStatus": "ENABLED",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -168,8 +166,7 @@
      "lastCheckIn": "2026-08-19T13:29:41Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -232,9 +229,7 @@
      "lastCheckIn": "2026-07-02T04:48:36Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -297,8 +292,7 @@
      "lostModeStatus": "ENABLED",
      "lastCheckIn": null,
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -364,8 +358,7 @@
      "lastCheckIn": null,
      "enrolledAt": null,
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -432,9 +425,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -500,9 +491,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -567,9 +556,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "",
-     "managedBy": "Mosyle",
-     "tags": null,
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -633,8 +620,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "AppleTV",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -701,9 +687,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -771,9 +755,7 @@
      "lastCheckIn": "2026-09-12T21:54:27Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -839,9 +821,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -907,9 +887,7 @@
      "lostModeStatus": "DISABLED",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -978,9 +956,7 @@
      "lastCheckIn": "2026-08-24T17:00:32Z",
      "enrolledAt": null,
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1049,9 +1025,7 @@
      "lastCheckIn": "2026-07-14T03:29:52Z",
      "enrolledAt": null,
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1120,9 +1094,7 @@
      "lastCheckIn": "2026-06-28T10:03:12Z",
      "enrolledAt": null,
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": null,
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1185,6 +1157,26 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TESTYOBJTUS4",
+    "attributes": {
+     "serialNumber": "TESTYOBJTUS4",
+     "deviceUdid": "fdbb2f1f7cc963b58b985f5e",
+     "deviceName": "",
+     "deviceModelId": "",
+     "deviceModel": "iPhone 16",
+     "osVersion": "",
+     "status": "pending",
+     "batteryLevel": "0.81",
+     "isSupervised": true,
+     "lostModeStatus": "PENDINGTOENABLE",
+     "lastCheckIn": "2026-10-01",
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "iPhone",
      "managedBy": "Mosyle",
      "custom_field": "x"
     }
@@ -1229,9 +1221,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1296,9 +1286,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1355,6 +1343,24 @@
      "lostModeStatus": "ENABLED",
      "lastCheckIn": "2026-10-01",
      "productFamily": "",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TEST00LSXPO8",
+    "attributes": {
+     "serialNumber": "TEST00LSXPO8",
+     "deviceUdid": "816e14f60eaf989bd02f440b",
+     "deviceName": "",
+     "deviceModelId": "",
+     "deviceModel": "MacBook Air",
+     "osVersion": "18.6",
+     "status": "enrolled",
+     "isSupervised": "1",
+     "lostModeStatus": "ENABLED",
+     "lastCheckIn": "2026-10-01",
+     "productFamily": "",
      "managedBy": "Mosyle",
      "custom_field": "x"
     }
@@ -1397,9 +1403,7 @@
      "lostModeStatus": "PENDINGTOENABLE",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1460,8 +1464,7 @@
      "lostModeStatus": "DISABLED",
      "enrolledAt": null,
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1525,8 +1528,7 @@
      "lastCheckIn": "2026-06-12T16:43:32Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1593,9 +1595,7 @@
      "lastCheckIn": "2026-07-30T07:48:12Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "AppleTV",
-     "managedBy": "Mosyle",
-     "tags": null,
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1664,9 +1664,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1735,9 +1733,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPad",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1802,9 +1798,7 @@
      "lostModeStatus": "DISABLED",
      "lastCheckIn": "2026-10-01",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1865,6 +1859,26 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TEST2YXWM2NS",
+    "attributes": {
+     "serialNumber": "TEST2YXWM2NS",
+     "deviceUdid": "2ecfd25f0977ff44b66367a0",
+     "deviceName": "Lobby TV",
+     "deviceModelId": "iPad12,1",
+     "deviceModel": "iPad12,1",
+     "osVersion": "",
+     "status": "enrolled",
+     "totalDiskGB": "256",
+     "isSupervised": "0",
+     "lostModeStatus": "PENDINGTOENABLE",
+     "lastCheckIn": null,
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "iPad",
      "managedBy": "Mosyle",
      "custom_field": "x"
     }
@@ -1908,9 +1922,7 @@
      "lostModeStatus": "DISABLED",
      "lastCheckIn": null,
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -1975,9 +1987,7 @@
      "lostModeStatus": "DISABLED",
      "lastCheckIn": "2026-06-27T21:44:41Z",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2040,6 +2050,26 @@
      "lastCheckIn": "2026-09-01T08:29:16Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TESTNRX50GY3",
+    "attributes": {
+     "serialNumber": "TESTNRX50GY3",
+     "deviceUdid": "17cf357a19d0fc3ffe11fe8f",
+     "deviceName": "iPad 3",
+     "deviceModelId": "iPhone17,3",
+     "deviceModel": "iPad (9th generation)",
+     "osVersion": "26.0",
+     "status": "enrolled",
+     "batteryLevel": "0.81",
+     "isSupervised": "1",
+     "lostModeStatus": "DISABLED",
+     "lastCheckIn": "2026-09-01T08:29:16Z",
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "iPhone",
      "managedBy": "Mosyle",
      "tags": "a,b",
      "custom_field": "x"
@@ -2083,9 +2113,7 @@
      "lostModeStatus": "PENDINGTOENABLE",
      "lastCheckIn": "2026-10-01",
      "productFamily": "AppleTV",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2152,8 +2180,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2216,8 +2243,7 @@
      "lostModeStatus": "PENDINGTOENABLE",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2285,9 +2311,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Vision",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2357,9 +2381,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": null,
      "productFamily": "",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2423,6 +2445,26 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TESTCNH9CIOE",
+    "attributes": {
+     "serialNumber": "TESTCNH9CIOE",
+     "deviceUdid": "a232e6b991373a96cb4b106a",
+     "deviceName": "",
+     "deviceModelId": "iPad12,1",
+     "deviceModel": "iPad (9th generation)",
+     "osVersion": "18.6",
+     "status": "pending",
+     "currentUser": "avery",
+     "isSupervised": true,
+     "lostModeStatus": "PENDINGTOENABLE",
+     "lastCheckIn": "2026-10-01",
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "iPad",
      "managedBy": "Mosyle",
      "tags": "a,b",
      "custom_field": "x"
@@ -2469,8 +2511,7 @@
      "lastCheckIn": "2026-07-09T07:35:11Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2534,8 +2575,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2597,9 +2637,7 @@
      "lostModeStatus": "ENABLED",
      "lastCheckIn": null,
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2664,8 +2702,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2732,8 +2769,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2799,8 +2835,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2867,9 +2902,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": null,
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -2937,9 +2970,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3007,9 +3038,7 @@
      "lastCheckIn": "2026-09-16T19:26:56Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3078,8 +3107,7 @@
      "lastCheckIn": "2026-08-30T21:39:10Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3145,9 +3173,7 @@
      "isSupervised": "0",
      "lostModeStatus": "ENABLED",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3213,8 +3239,7 @@
      "lastCheckIn": "2026-10-01",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3275,8 +3300,7 @@
      "lostModeStatus": "PENDINGTOENABLE",
      "lastCheckIn": null,
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3340,9 +3364,7 @@
      "lastCheckIn": null,
      "enrolledAt": null,
      "productFamily": "AppleTV",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3407,9 +3429,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3474,9 +3494,7 @@
      "lastCheckIn": "2026-08-19T13:01:37Z",
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "AppleTV",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3539,6 +3557,26 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TEST2IWZ6XK3",
+    "attributes": {
+     "serialNumber": "TEST2IWZ6XK3",
+     "deviceUdid": "ebdb4d8cfedbf3b7b99c778b",
+     "deviceName": "",
+     "deviceModelId": "iPhone17,3",
+     "deviceModel": "iPad (9th generation)",
+     "osVersion": "26.0",
+     "status": "pending",
+     "batteryLevel": "0.81",
+     "isSupervised": "1",
+     "lostModeStatus": "ENABLED",
+     "lastCheckIn": null,
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "iPhone",
      "managedBy": "Mosyle",
      "custom_field": "x"
     }
@@ -3579,9 +3617,7 @@
      "lostModeStatus": "DISABLED",
      "lastCheckIn": "2026-10-01",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3644,9 +3680,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Watch",
-     "managedBy": "Mosyle",
-     "tags": "a,b",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3714,9 +3748,7 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Mac",
-     "managedBy": "Mosyle",
-     "tags": "",
-     "custom_field": "x"
+     "managedBy": "Mosyle"
     }
    },
    "abapit": {
@@ -3783,6 +3815,27 @@
      "lastCheckIn": null,
      "enrolledAt": "2023-11-14T22:13:20Z",
      "productFamily": "Vision",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "TEST5O0VQQUQ",
+    "attributes": {
+     "serialNumber": "TEST5O0VQQUQ",
+     "deviceUdid": "a93c5576ac0c4999bdfad4be",
+     "deviceName": "Avery's Mac",
+     "deviceModelId": "iPhone17,3",
+     "deviceModel": "iPad (9th generation)",
+     "osVersion": "",
+     "status": "enrolled",
+     "batteryLevel": "0.81",
+     "totalDiskGB": "64.0000000000",
+     "isSupervised": 1,
+     "lostModeStatus": "ENABLED",
+     "lastCheckIn": null,
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "Vision",
      "managedBy": "Mosyle",
      "tags": "",
      "custom_field": "x"
@@ -3810,6 +3863,27 @@
     "os": ""
    },
    "expected": {
+    "type": "orgDevices",
+    "id": "beb2b730fb2d843fc02bb3f1",
+    "attributes": {
+     "serialNumber": "",
+     "deviceUdid": "beb2b730fb2d843fc02bb3f1",
+     "deviceName": "Lobby TV",
+     "deviceModelId": "",
+     "deviceModel": "MacBook Air",
+     "osVersion": "26.0",
+     "status": "enrolled",
+     "batteryLevel": null,
+     "totalDiskGB": "64.0000000000",
+     "isSupervised": "0",
+     "lostModeStatus": "DISABLED",
+     "lastCheckIn": null,
+     "enrolledAt": "2023-11-14T22:13:20Z",
+     "productFamily": "",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
     "type": "orgDevices",
     "id": "beb2b730fb2d843fc02bb3f1",
     "attributes": {
@@ -3975,6 +4049,192 @@
      "managedBy": "Mosyle"
     }
    }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTPAD00002",
+    "device_type": "iPad",
+    "os": ""
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTPAD00002",
+    "attributes": {
+     "serialNumber": "TESTPAD00002",
+     "deviceModel": "",
+     "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTPHONE002",
+    "device_type": "iPhone"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTPHONE002",
+    "attributes": {
+     "serialNumber": "TESTPHONE002",
+     "deviceModel": "",
+     "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTPHONE003",
+    "device_model": "Xiphone",
+    "os": ""
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTPHONE003",
+    "attributes": {
+     "serialNumber": "TESTPHONE003",
+     "deviceModelId": "Xiphone",
+     "deviceModel": "Xiphone",
+     "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTPAD00003",
+    "model_name": "myipad",
+    "device_type": "x"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTPAD00003",
+    "attributes": {
+     "serialNumber": "TESTPAD00003",
+     "modelName": "myipad",
+     "deviceModel": "myipad",
+     "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTIOSX0001",
+    "os": "iosx",
+    "device_model": "x"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTIOSX0001",
+    "attributes": {
+     "serialNumber": "TESTIOSX0001",
+     "deviceModelId": "x",
+     "deviceModel": "x",
+     "productFamily": "",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serialNumber": "TESTCAMEL001",
+    "deviceudid": "u3",
+    "lastCheckIn": "2026-01-01",
+    "productFamily": "Mac",
+    "managedBy": "Jamf",
+    "deviceModel": "Fake",
+    "osVersion": "1.0"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "u3",
+    "attributes": {
+     "deviceUdid": "u3",
+     "deviceModel": "",
+     "productFamily": "",
+     "managedBy": "Mosyle"
+    }
+   },
+   "abapit": {
+    "type": "orgDevices",
+    "id": "u3",
+    "attributes": {
+     "deviceUdid": "u3",
+     "deviceModel": "",
+     "productFamily": "",
+     "managedBy": "Mosyle",
+     "serialNumber": "TESTCAMEL001",
+     "lastCheckIn": "2026-01-01",
+     "osVersion": "1.0"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTCAMEL002",
+    "serialNumber": "TESTOTHER001",
+    "date_last_beat": "1700000000",
+    "lastCheckIn": "2001-01-01"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTCAMEL002",
+    "attributes": {
+     "serialNumber": "TESTCAMEL002",
+     "lastCheckIn": "2023-11-14T22:13:20Z",
+     "deviceModel": "",
+     "productFamily": "",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "device_columns",
+   "input": null,
+   "expected": [
+    "serial_number",
+    "deviceudid",
+    "device_name",
+    "device_model",
+    "device_model_name",
+    "model_name",
+    "osversion",
+    "status",
+    "enrollment_type",
+    "ManagementStatus",
+    "userid",
+    "useremail",
+    "username",
+    "CurrentConsoleManagedUser",
+    "currentconsolemanageduser",
+    "battery",
+    "total_disk",
+    "available_disk",
+    "is_supervised",
+    "lostmode_status",
+    "asset_tag",
+    "imei",
+    "meid",
+    "wifi_mac_address",
+    "bluetooth_mac_address",
+    "ethernet_mac_address",
+    "date_last_beat",
+    "date_last_push",
+    "date_enroll",
+    "date_checkin",
+    "date_app_info",
+    "os",
+    "device_type"
+   ]
   },
   {
    "function": "adapt_user",
@@ -6543,6 +6803,286 @@
   },
   {
    "function": "to_iso",
+   "input": {
+    "value": "\t1700000000\t"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\n1700000000\n"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u000b1700000000\u000b"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\f1700000000\f"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\r1700000000\r"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u001c1700000000\u001c"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u001d1700000000\u001d"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u001e1700000000\u001e"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u001f1700000000\u001f"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": " 1700000000 "
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u00851700000000\u0085"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u00a01700000000\u00a0"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u16801700000000\u1680"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20001700000000\u2000"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20011700000000\u2001"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20021700000000\u2002"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20031700000000\u2003"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20041700000000\u2004"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20051700000000\u2005"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20061700000000\u2006"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20071700000000\u2007"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20081700000000\u2008"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20091700000000\u2009"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u200a1700000000\u200a"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20281700000000\u2028"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u20291700000000\u2029"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u202f1700000000\u202f"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u205f1700000000\u205f"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u30001700000000\u3000"
+   },
+   "expected": "2023-11-14T22:13:20Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "1\u00b2"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "17\u200b00000000"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "1\u00b5"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u00bd\u00bd\u00bd\u00bd-01"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\u4e00\u4e8c\u4e09\u56db-01"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "123a-x"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "1\ud839\udcf12"
+   },
+   "expected": "1970-01-01T00:01:52Z"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\ud839\udcf1\ud839\udcf2\ud839\udcf3\ud839\udcf4-01"
+   },
+   "expected": "\ud839\udcf1\ud839\udcf2\ud839\udcf3\ud839\udcf4-01"
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "1\ud803\udd402"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\ud803\udd40\ud803\udd41"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input": {
+    "value": "\ud803\udd40\ud803\udd41\ud803\udd42\ud803\udd43-01"
+   },
+   "expected": null
+  },
+  {
+   "function": "to_iso",
    "input_json": "{\"value\": 1e3}",
    "expected": "1970-01-01T00:16:40Z"
   },
@@ -7133,6 +7673,11 @@
    "function": "py_str",
    "input_json": "{\"value\": [\"\\u00e9\", \"\\u200b\", \"\\u0085\", \"\\u00a0\", \"\\t\\n\\r\", \"\\u0007\", \"\\u007f\", \"\\ud83d\\ude00\", \"\\udb40\\udc01\", \"\\u2028\", \"\\ue000\", \"\\u0378\", \"\\u00ff\", \"\\u0100\"]}",
    "expected": "['\u00e9', '\\u200b', '\\x85', '\\xa0', '\\t\\n\\r', '\\x07', '\\x7f', '\ud83d\ude00', '\\U000e0001', '\\u2028', '\\ue000', '\\u0378', '\u00ff', '\u0100']"
+  },
+  {
+   "function": "py_str",
+   "input_json": "{\"value\": [\"\\u2029\", \"\\uffff\", \"\\ufffe\", \"\\ud800\\udc00\", \"\\udbff\\udfff\", \"\\ud839\\udcd0\", \"\\ud87a\\udff0\", \"\\ud803\\udd40\", \"\\u1acf\", \"\\u088f\"]}",
+   "expected": "['\\u2029', '\\uffff', '\\ufffe', '\ud800\udc00', '\\U0010ffff', '\ud839\udcd0', '\\U0002ebf0', '\\U00010d40', '\\u1acf', '\\u088f']"
   },
   {
    "function": "py_str",
@@ -11844,6 +12389,17 @@
    "abapit": "TypeError"
   },
   {
+   "function": "dedupe_devices",
+   "input_json": "[{\"custom_index\": 0, \"serial_number\": \"i123\"}, {\"custom_index\": 1, \"serial_number\": 123}, {\"custom_index\": 2, \"serial_number\": \"f0.5\"}, {\"custom_index\": 3, \"serial_number\": 0.5}, {\"custom_index\": 4, \"serial_number\": \"123\"}]",
+   "expected": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ]
+  },
+  {
    "function": "normalize_logs",
    "input": {
     "action_logs": {
@@ -15610,7 +16166,18 @@
      "user": ""
     }
    ],
-   "abapit": "AttributeError"
+   "abapit": "AttributeError",
+   "abapit_without_junk": [
+    {
+     "kind": "compliance",
+     "when": "2023-11-14T22:13:20Z",
+     "label": "R",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
   },
   {
    "function": "normalize_logs",
@@ -15626,7 +16193,18 @@
      "user": ""
     }
    ],
-   "abapit": "AttributeError"
+   "abapit": "AttributeError",
+   "abapit_without_junk": [
+    {
+     "kind": "dns",
+     "when": "2023-11-14T22:13:21Z",
+     "label": "d",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
   },
   {
    "function": "normalize_logs",
@@ -15642,7 +16220,18 @@
      "user": ""
     }
    ],
-   "abapit": "AttributeError"
+   "abapit": "AttributeError",
+   "abapit_without_junk": [
+    {
+     "kind": "zero_trust",
+     "when": "2023-11-14T22:13:22Z",
+     "label": "Z",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
   }
  ]
 }

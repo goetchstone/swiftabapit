@@ -3,9 +3,20 @@ import JSONAPI
 
 /// The few Python behaviours abapit's `mosyle.py` leans on, made exact so the adapters hold to its goldens:
 /// truthiness (`x or y`), `str()` of a parsed value, `int()` of a timestamp, `in` on strings and a set's keys.
-/// Unicode properties come from Swift's own tables, which may be a version ahead of the generator's Python (the
-/// golden's `unicode`): only a character assigned in between can differ.
+/// Unicode properties come from Swift's own tables, read as of `unicodeVersion`.
 enum Python {
+    /// The Unicode version of the Python the goldens came from (the golden's `unicode`, which a test holds this
+    /// to). Swift's tables are newer (17.0 on macOS 27), so a character assigned since is unassigned here, as it is
+    /// to abapit: `repr()` escapes it, and `int()` and `str.isdigit()` take it for no digit. Verifier round 1:
+    /// `1` + U+10D40 + `2`, a Garay digit from Unicode 16.0, read as 102 where abapit gave None.
+    static let unicodeVersion = (major: 15, minor: 0)
+
+    /// Whether abapit's Python knows the character: Unicode had assigned it by `unicodeVersion`.
+    static func known(_ scalar: Unicode.Scalar) -> Bool {
+        guard let age = scalar.properties.age else { return false }
+        return (age.major, age.minor) <= (unicodeVersion.major, unicodeVersion.minor)
+    }
+
     /// `bool(value)`: null, `false`, `0`, `0.0`, `""`, `[]` and `{}` are false; NaN is true.
     static func truthy(_ value: JSONValue?) -> Bool {
         switch value {
@@ -97,9 +108,10 @@ enum Python {
         return out + String(quote)
     }
 
-    /// `str.isprintable()` for one character past ASCII: not Other (Cc, Cf, Cs, Co, Cn) and not a Separator.
+    /// `str.isprintable()` for one character past ASCII: known, not Other (Cc, Cf, Cs, Co, Cn) and not a Separator.
     static func isPrintable(_ scalar: Unicode.Scalar) -> Bool {
-        switch scalar.properties.generalCategory {
+        guard known(scalar) else { return false }
+        return switch scalar.properties.generalCategory {
         case .control, .format, .surrogate, .privateUse, .unassigned, .spaceSeparator, .lineSeparator, .paragraphSeparator: false
         default: true
         }
@@ -161,22 +173,23 @@ enum Python {
 
     static func isASCIIDigit(_ scalar: Unicode.Scalar) -> Bool { ("0"..."9").contains(scalar) }
 
-    /// A decimal digit's value (Unicode's Nd, `Numeric_Type=Decimal`): the set `int()` reads.
+    /// A known decimal digit's value (Unicode's Nd, `Numeric_Type=Decimal`): the set `int()` reads.
     static func decimal(_ scalar: Unicode.Scalar) -> Int? {
-        guard scalar.properties.numericType == .decimal, let value = scalar.properties.numericValue else { return nil }
+        guard known(scalar), scalar.properties.numericType == .decimal, let value = scalar.properties.numericValue else { return nil }
         return Int(value)
     }
 
-    /// `str.isdigit()` for one character: a decimal digit, or a digit such as `²` or `①` (`Numeric_Type` Decimal or
-    /// Digit).
+    /// `str.isdigit()` for one known character: a decimal digit, or a digit such as `²` or `①` (`Numeric_Type`
+    /// Decimal or Digit; a Numeric such as `½` or `一` is not one).
     static func isDigit(_ scalar: Unicode.Scalar) -> Bool {
-        scalar.properties.numericType == .decimal || scalar.properties.numericType == .digit
+        known(scalar) && (scalar.properties.numericType == .decimal || scalar.properties.numericType == .digit)
     }
 
-    /// Python's `str.isspace()`, the same set the serial parser uses.
+    /// Python's `str.isspace()` past ASCII, the characters `int()` turns into a space. ASCII's own (tab to CR, the
+    /// space, and U+001C to U+001F) never reach this: `int()` keeps them as they are.
     static func isSpace(_ scalar: Unicode.Scalar) -> Bool {
-        [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x85, 0xA0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003,
-         0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000].contains(scalar.value)
+        [0x85, 0xA0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+         0x2028, 0x2029, 0x202F, 0x205F, 0x3000].contains(scalar.value)
     }
 
     /// `part in text`, by code points as Python compares. Swift's `contains` compares Characters, so "ipad" + U+0301

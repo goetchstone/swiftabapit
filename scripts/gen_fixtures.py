@@ -13,12 +13,16 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
     ASCII, and a non-ASCII token matches no device either way);
   - csv: a dict or nested list cell is JSON (sorted keys), not Python's repr;
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
-  - mosyle adapt_device: no `activation_bypass*` key (defect 1); a serial that isn't a string gives the id its
-    `str()` (abapit's id is the raw number or boolean; a Resource's id is a string);
+  - mosyle adapt_device: an allowlist (defect 1, invariant 11): what abapit makes of the raw cut to the columns
+    the list asks for, so no raw key is passed through (`activation_bypass*`, or a raw `serialNumber`); a serial
+    that isn't a string gives the id its `str()` (abapit's id is the raw number or boolean; a Resource's id is a
+    string);
   - mosyle adapt_user / adapt_group: cut to an allowlist (invariant 11; abapit kept every raw key, a password or a
     token included);
   - mosyle device dedupe: a list or an object serial is no key, so the device is kept (abapit raised TypeError and
     lost the whole list);
+  - mosyle normalize_logs: a log entry that isn't an object is skipped (abapit raised AttributeError and lost the
+    page; `abapit_without_junk` holds abapit's own reading once the junk is out);
   - mosyle compliance timestamps (`01:00 PM - 03/12/2024`, no zone) parse as local time (defect 5), with an hour
     of 1 to 12 and a proleptic Gregorian date.
 
@@ -657,6 +661,10 @@ def logs_case(mosyle, response: dict, text: str | None = None) -> dict:
     case = {"function": "normalize_logs", **({"input_json": text} if text else {"input": response}), "expected": expected}
     if expected != abapit:
         case["abapit"] = abapit
+    if abapit == "AttributeError":
+        # Verifier round 1: what abapit made of the response once the junk was out, so the test can check that the
+        # expectation differs from it only by the compliance stamps.
+        case["abapit_without_junk"] = jsonable(mosyle.normalize_logs(logs_without_junk(response)))
     return case
 
 
@@ -701,6 +709,32 @@ def dedupe_case(m: dict, text: str) -> dict:
     return case
 
 
+def device_columns(mosyle) -> list:
+    """The raw columns the device list asks for (`specific_columns`): abapit's `_FIELD_MAP` and `_DATE_MAP` sources,
+    in order, then the two its `_family` reads. abapit never sent the parameter (it took every column); this pins
+    the list MosyleAdapter.deviceColumns sends, so a column can't be added unseen (verifier round 1). Whether
+    Mosyle accepts each name is the Phase 7 live check's, not this golden's."""
+    return list(mosyle._FIELD_MAP) + list(mosyle._DATE_MAP) + ["os", "device_type"]
+
+
+def device_case(mosyle, raw: dict) -> dict:
+    """adapt_device as an allowlist (defect 1, invariant 11): abapit's own output for the raw cut to the requested
+    columns. That is abapit's output with its passed-through raw keys taken off the end (bypass codes, a raw
+    `serialNumber` or `lastCheckIn` sent without its source, anything unknown), and an id that is a string."""
+    abapit = jsonable(mosyle.adapt_device(raw))
+    columns = device_columns(mosyle)
+    expected = jsonable(mosyle.adapt_device({k: v for k, v in raw.items() if k in columns}))
+    if not isinstance(expected["id"], str):
+        expected["id"] = str(raw.get("serial_number") or raw.get("deviceudid"))
+    kept, full = list(expected["attributes"].items()), list(abapit["attributes"].items())
+    if kept != full[:len(kept)] or any(raw.get(k, object()) != v for k, v in full[len(kept):]):
+        raise SystemExit(f"the allowlisted device is not abapit's with its passed-through keys cut: {raw}")
+    case = {"function": "adapt_device", "input": raw, "expected": expected}
+    if expected != abapit:
+        case["abapit"] = abapit
+    return case
+
+
 def raw_mosyle_device(rng: random.Random) -> dict:
     os_value = rng.choice(["ios", "mac", "tvos", "visionos", "", "macos", "watchos", None])
     raw = {"serial_number": fake_serial(rng) if rng.random() < 0.9 else "",
@@ -741,16 +775,20 @@ def gen_mosyle(m: dict) -> None:
                 {"serial_number": "", "deviceudid": "u2", "device_model": "iPad\u0301", "os": ""},
                 {"serial_number": "TESTPAD00001", "device_model_name": 0.0, "device_model": "iPad12,1"},
                 {"serial_number": "TESTPHONE001", "device_type": "IPHONE\u0301", "model_name": "x"}]
+    # Verifier round 1: `in` when the word is the whole text or ends it, an `os` that only holds "ios", and raw keys
+    # spelled like abapit's own names (abapit passed them through when their source was missing; here they are cut).
+    devices += [{"serial_number": "TESTPAD00002", "device_type": "iPad", "os": ""},
+                {"serial_number": "TESTPHONE002", "device_type": "iPhone"},
+                {"serial_number": "TESTPHONE003", "device_model": "Xiphone", "os": ""},
+                {"serial_number": "TESTPAD00003", "model_name": "myipad", "device_type": "x"},
+                {"serial_number": "TESTIOSX0001", "os": "iosx", "device_model": "x"},
+                {"serialNumber": "TESTCAMEL001", "deviceudid": "u3", "lastCheckIn": "2026-01-01", "productFamily": "Mac",
+                 "managedBy": "Jamf", "deviceModel": "Fake", "osVersion": "1.0"},
+                {"serial_number": "TESTCAMEL002", "serialNumber": "TESTOTHER001", "date_last_beat": "1700000000",
+                 "lastCheckIn": "2001-01-01"}]
     for raw in devices:
-        abapit = jsonable(mosyle.adapt_device(raw))
-        expected = copy.deepcopy(abapit)
-        expected["attributes"] = {k: v for k, v in expected["attributes"].items() if not k.startswith("activation_bypass")}
-        if not isinstance(expected["id"], str):
-            expected["id"] = str(raw.get("serial_number") or raw.get("deviceudid"))
-        case = {"function": "adapt_device", "input": raw, "expected": expected}
-        if expected != abapit:
-            case["abapit"] = abapit
-        cases.append(case)
+        cases.append(device_case(mosyle, raw))
+    cases.append({"function": "device_columns", "input": None, "expected": device_columns(mosyle)})
     for _ in range(25):
         raw = {k: v for k, v in {"iduser": rng.choice([str(rng.randint(1, 999)), rng.randint(1, 999), None]),
                                  "identifier": rng.choice(["avery", "", None]), "name": rng.choice(["Avery Chen", ""]),
@@ -800,6 +838,16 @@ def gen_mosyle(m: dict) -> None:
                   "\x1c12", "12\x1f", "\x8512", "\u300012\u3000", " \t12\n", "\x0b12\x0c", "12\x00",
                   "\u0661\u0669\u0667\u0660-01-01", "\u00b2\u00b2\u00b2\u00b2-01", "\u2460\u2461\u2462\u2463-", "12-", "2024-\u0301"]:
         cases.append({"function": "to_iso", "input": {"value": value}, "expected": mosyle._to_iso(value)})
+    # Verifier round 1: each of str.isspace()'s characters around the digits (int() strips ASCII's, maps the others
+    # to a space and strips that, refuses U+001C to U+001F); a character that is neither a space nor a decimal digit
+    # among them (a superscript, a zero-width space); a numeric that isn't a digit (a vulgar fraction, for
+    # str.isdigit()); three digits before the dash; and digits on each side of the golden's `unicode`: Nag Mundari
+    # (15.0) is a digit to abapit's Python, Garay (16.0) is not.
+    for value in [chr(c) + "1700000000" + chr(c) for c in PY_WHITESPACE] + [
+            "1\u00b2", "17\u200b00000000", "1\u00b5", "\u00bd\u00bd\u00bd\u00bd-01", "\u4e00\u4e8c\u4e09\u56db-01",
+            "123a-x", "1\U0001e4f12", "\U0001e4f1\U0001e4f2\U0001e4f3\U0001e4f4-01", "1\U00010d402",
+            "\U00010d40\U00010d41", "\U00010d40\U00010d41\U00010d42\U00010d43-01"]:
+        cases.append({"function": "to_iso", "input": {"value": value}, "expected": mosyle._to_iso(value)})
     for text in ['{"value": 1e3}', '{"value": 1E3}', '{"value": -0.5}', '{"value": -0}', '{"value": 0.0}', '{"value": 1e20}',
                  '{"value": 9.2e18}', '{"value": NaN}', '{"value": Infinity}', '{"value": -Infinity}', '{"value": 1700000000.9}',
                  '{"value": 253402300799.5}', '{"value": -62135596800.9}', '{"value": -62135596801.5}', '{"value": []}',
@@ -828,6 +876,11 @@ def gen_mosyle(m: dict) -> None:
              '["it\'s", "say \\"hi\\"", "both \' and \\"", "back\\\\slash"]',
              '["\\u00e9", "\\u200b", "\\u0085", "\\u00a0", "\\t\\n\\r", "\\u0007", "\\u007f", "\\ud83d\\ude00", '
              '"\\udb40\\udc01", "\\u2028", "\\ue000", "\\u0378", "\\u00ff", "\\u0100"]',
+             # Verifier round 1: U+2029, the last \u and the first \U escape, noncharacters, the last code point, and
+             # characters on each side of the golden's `unicode` (15.0's print; 15.1's, 16.0's and 17.0's are
+             # unassigned there, so escaped).
+             '["\\u2029", "\\uffff", "\\ufffe", "\\ud800\\udc00", "\\udbff\\udfff", "\\ud839\\udcd0", "\\ud87a\\udff0", '
+             '"\\ud803\\udd40", "\\u1acf", "\\u088f"]',
              '{"a": [1, {"b": null}], "k\'": "v", "": 1.25}']
     floats = random.Random(1009)
     for _ in range(300):
@@ -863,7 +916,10 @@ def gen_mosyle(m: dict) -> None:
                  ['{"serial_number": 0.1}', '{"serial_number": 0.10000000000000001}', '{"serial_number": 0.2}',
                   '{"serial_number": -5}', '{"serial_number": -5.0}', '{"serial_number": -0.5}'],
                  ['{"serial_number": ["A"]}', '{"serial_number": "A"}', '{"serial_number": "A"}'],
-                 ['{"serial_number": {"a": 1}, "deviceudid": "U"}', '{"deviceudid": "U"}']]:
+                 ['{"serial_number": {"a": 1}, "deviceudid": "U"}', '{"deviceudid": "U"}'],
+                 # Verifier round 1: a string serial that spells a number's key is still a string.
+                 ['{"serial_number": "i123"}', '{"serial_number": 123}', '{"serial_number": "f0.5"}',
+                  '{"serial_number": 0.5}', '{"serial_number": "123"}']]:
         text = "[" + ", ".join(f'{{"custom_index": {i}' + (", " + row[1:] if row != "{}" else "}")
                                for i, row in enumerate(rows)) + "]"
         cases.append(dedupe_case(m, text))

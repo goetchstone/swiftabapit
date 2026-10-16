@@ -28,7 +28,8 @@ public enum MosyleAdapter {
     /// to pages and CSV). The list request asks for these sources only (`specific_columns`).
     public static let deviceAttributes: Set<String> = Set(fields.map(\.name) + dates.map(\.name) + ["deviceModel", "productFamily", "managedBy"])
 
-    /// The raw columns to request: the sources above, plus the two that pick the family.
+    /// The raw columns to request: the sources above, plus the two that pick the family. The golden's `device_columns`
+    /// case pins the list (verifier round 1), so a column can't join the request unseen.
     public static let deviceColumns: [String] = fields.map(\.source) + dates.map(\.source) + ["os", "device_type"]
 
     /// Phase 7a review L1 (invariant 11): users and groups pass an allowlist too. abapit's `adapt_user` and

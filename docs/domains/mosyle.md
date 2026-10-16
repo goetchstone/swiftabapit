@@ -54,14 +54,22 @@
   to 1e16), of a list or dict its `repr()`; `int()` of a string reads any script's decimal digits and strips only
   ASCII whitespace (U+001C refuses); `str.isdigit()`, `in` and set keys go by code points, never Swift's canonical
   equivalence; dates are computed proleptic Gregorian (Foundation's Gregorian calendar is Julian before
-  1582-10-15). Unicode tables are Swift's, possibly a version past the golden's `unicode`.
+  1582-10-15). Swift's Unicode tables are read as of the golden's `unicode` (`Python.unicodeVersion`, 15.0, held
+  to the header by a test): a character assigned since (a Garay digit, 16.0) is unassigned to abapit's Python,
+  so `repr()` escapes it and `int()` refuses it here too.
+- **Devices pass the allowlist exactly**: the golden's expectation is abapit's own output for the raw cut to the
+  requested columns (`device_columns`, pinned: abapit's maps' sources plus `os` and `device_type`). So a raw key
+  spelled like one of abapit's names (`serialNumber` sent without `serial_number`), which abapit passed through,
+  is cut, and the golden records it.
 - **A number passed through keeps Mosyle's text** (`battery: 1e3` stays `1e3`); abapit's pages and CSV printed its
   `str()` (`1000.0`). Only the fields abapit `str()`'d (ids, the family's words, a log's stamp) use the Python rule.
 - **The device dedupe key** is `MosyleAdapter.deviceKey`: by value for a number (`123` = `123.0` = `1.23e2`, `true`
   = `1`; `"123"` differs), by code points for a string; a list or an object is no key (abapit raised `TypeError`).
-  `MosyleClient.devices()` still keys on string serials only, and is to switch to it.
+  `MosyleClient.devices()` still keys on string serials only, and is to switch to it, with a client test through
+  the stub (one page holding `123`, `123.0` and `"123"`).
 - **Compliance stamps** are ASCII, hour 1 to 12, a real proleptic Gregorian date; anything else stays raw, as abapit
-  showed it. A log entry that isn't an object is skipped (abapit raised `AttributeError` and lost the page).
+  showed it. A log entry that isn't an object is skipped (abapit raised `AttributeError` and lost the page; the
+  golden's `abapit_without_junk` is abapit's reading with the junk out, which the test holds the expectation to).
 
 ## Gotchas / stub-lies traps
 - **`Duration.seconds` traps past about 1.7e20.** A JWT `exp` is clamped as a number before it becomes a `Duration`
