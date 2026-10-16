@@ -17,7 +17,7 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   snapshots store what came. `unreadAttributes` feeds the acceptance pass.
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here),
   `AppleClient` (pages as an `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; read
-  probes), `AppleAPIError` (status + Apple `code`, never prose).
+  probes), `AppleAPIError` (status + Apple `code`, never prose), `AcceptancePass` (the DEBUG pass, plan §7).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3).
 
 ## Gotchas / stub-lies traps
@@ -39,6 +39,14 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
 - **Only a 404 or `"data": null` is unassigned.** A 403, a 500 or a malformed 200 (`{}`, `[]`, a linkage of
   another type) throws `.malformed` or its error: Phase 4's Guard re-validates assignments with this read.
 - **A probe says what failed**: `forbidden`, `ok`, or `error <status>`; never `ok` for a failure (invariant 8).
+- **The acceptance pass says `ok` only for a read that ran and fully succeeded** (Phase 1b review M5: a
+  forbidden device list left five per-device lines `ok … 0`). Otherwise `forbidden`, `truncated` (the page cap
+  cut a list; the count is what was read), `skipped: <why>` (a read it needs failed or found nothing, so it
+  isn't sent) or `error <status>`. Every per-device read covers the whole sample, capped at
+  `acceptanceSampleLimit` (20) whatever the caller asks. Its notes carry counts and Apple's `code` only, never
+  `detail` (it may echo an identifier) or `AppleAPIError.message` (which quotes it). `AcceptancePassTests`.
+- **A Keychain refusal while signing is `AppleAPIError.vault(guidance)`** (Touch ID cancelled, a locked Mac,
+  no key stored): nothing is sent, and the next read signs again. `MemoryStore.failNext(.sign, with:)` drives it.
 - School has no people, content or audit endpoints: `AppleSection.businessOnly`, and the stub fails a School
   request for them as unhandled.
 
