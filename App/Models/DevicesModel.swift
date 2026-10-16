@@ -60,7 +60,8 @@ final class DevicesModel {
     var search = ""
     var family = ""
     var status = ""
-    var sortOrder: [KeyPathComparator<DeviceRow>] = [KeyPathComparator(\DeviceRow.serial)]
+    /// Serials sort as text, character by character: a numeric-aware sort put `DEMO1…` before `DEMO03…`.
+    var sortOrder: [KeyPathComparator<DeviceRow>] = [KeyPathComparator(\DeviceRow.serial, comparator: String.StandardComparator.lexical)]
 
     private let orgs: OrgsModel
     private var loading: Task<Void, Never>?

@@ -16,7 +16,7 @@ struct DevicesView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 6)
             Table(model.shown, selection: $selection, sortOrder: $model.sortOrder) {
-                TableColumn("Serial", value: \.serial) { Text($0.serial).monospaced() }
+                TableColumn("Serial", value: \.serial, comparator: String.StandardComparator.lexical) { Text($0.serial).monospaced() }
                     .width(min: 110, ideal: 130)
                 TableColumn("Model", value: \.model)
                     .width(min: 120, ideal: 200)
