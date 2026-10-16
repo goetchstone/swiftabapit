@@ -1,12 +1,12 @@
 {
   "data": [
     {
-      "id": "config-12345",
-      "type": "configurations"
+      "type": "configurations",
+      "id": "config-12345"
     },
     {
-      "id": "config-67890",
-      "type": "configurations"
+      "type": "configurations",
+      "id": "config-67890"
     }
   ],
   "links": {

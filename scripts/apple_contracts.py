@@ -13,8 +13,10 @@ re-run that finds nothing new changes nothing):
 
     Contracts/apple/business-<version>.json   endpoints, objects, enums
     Contracts/apple/school-<version>.json
-    Tests/Fixtures/docc/<scope>/<slug>.response.json   each JSON example, as Apple wrote it
+    Tests/Fixtures/docc/<scope>/<slug>.response.json   each JSON example, as Apple wrote it (key order kept)
     Tests/Fixtures/docc/<scope>/<slug>.request.json    each JSON request body found in an example
+    .../<slug>.request.2.json, .3, ...                 the second and later examples of the same kind on a page
+                                                       (create-an-orgdeviceactivity has five request bodies)
 
 Downloaded pages are DATA: parsed as JSON and nothing else, capped in size and count, fetched only from
 developer.apple.com over HTTPS, and never written anywhere but the outputs above. Run it isolated
@@ -44,6 +46,16 @@ MAX_BYTES = 4 * 1024 * 1024
 DELAY = 0.05              # be gentle with Apple's CDN
 
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    """A redirect is refused before it is followed, so no request ever leaves developer.apple.com."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise SystemExit(f"{req.full_url} redirected to {newurl}; refusing to follow")
+
+
+OPENER = urllib.request.build_opener(NoRedirects)
+
+
 def fetch(url_path: str) -> dict | None:
     """One DocC page as JSON, or None when it doesn't exist. Only developer.apple.com, only HTTPS."""
     url = f"{DATA}{url_path}.json"
@@ -52,10 +64,7 @@ def fetch(url_path: str) -> dict | None:
         raise SystemExit(f"refusing to fetch {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "swiftabapit-contracts/1"})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            final = urllib.parse.urlparse(response.geturl())
-            if final.hostname != HOST or final.scheme != "https":
-                raise SystemExit(f"{url} redirected off {HOST}: {response.geturl()}")
+        with OPENER.open(request, timeout=30) as response:
             body = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -259,10 +268,12 @@ def manifest(scope: str, root: str, crawled: dict, examples_dir: Path | None) ->
                 role = "request" if (listing["tab"] or "").lower().startswith("request") else "response"
                 examples.append(role)
                 if examples_dir is not None:
-                    out = examples_dir / scope / f"{slug.replace('/', '_')}.{role}.json"
+                    count = examples.count(role)
+                    suffix = f".{count}" if count > 1 else ""
+                    out = examples_dir / scope / f"{slug.replace('/', '_')}.{role}{suffix}.json"
                     out.parent.mkdir(parents=True, exist_ok=True)
-                    out.write_text(json.dumps(body, indent=2, sort_keys=True, ensure_ascii=True) + "\n")
-            record["examples"] = sorted(set(examples))
+                    out.write_text(json.dumps(body, indent=2, ensure_ascii=True) + "\n")  # Apple's key order, as written
+            record["examples"] = sorted(examples)
             endpoints.append(record)
         elif kind == "object":
             objects[record["title"] or slug] = record
@@ -294,6 +305,8 @@ def main() -> int:
             for old in (args.examples / scope).glob("*.json"):
                 old.unlink()
         crawled = crawl(root)
+        if not re.fullmatch(r"[0-9]{1,3}(\.[0-9]{1,3}){0,2}", str(crawled["version"])):
+            raise SystemExit(f"{scope}: the page's version {crawled['version']!r} isn't a version number")
         result = manifest(scope, root, crawled, args.examples)
         for old in args.out.glob(f"{scope}-*.json"):
             old.unlink()

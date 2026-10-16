@@ -27,6 +27,22 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-16 — A check's own author picked its mutants, and the review broke eight checks
+- **What happened:** Phase 0's checks each passed their author's mutants and fell to the reviewer's (failure-log
+  2026-10-16, "the gate checked names, not values"): a sandbox entitlement of another type, a second
+  executable, a computed manifest edge, a key attribute from the wrong class, a second example on a page.
+- **Invariant in force:** #4 (no listener, sandbox on, exact entitlements) and #1 in spirit (Assist must not
+  reach a write).
+- **Why it didn't hold:** wrong layer for the mutants: "mutate the code by hand" is in CLAUDE.md, but the
+  author mutates within the shape they already check.
+- **Would a rule have caught it?** only if enforced differently: the adversarial review earned its cost here
+  exactly as SwiftGamGui's PR #1 review did (nine defects in credential code). Keep it mandatory for every
+  check, gate and hook, not only for feature code; ask it to attack the check's assumptions.
+- **Enforcement home if changed:** skill (`pre-commit` item 13: the review attacks the checks too).
+- **Not fixable alone:** a PR can edit its own gate and so its own `ci-ok`. With one maintainer, a CODEOWNERS
+  review rule would block every merge. Left to the operator; meanwhile the reviewer is told to read any
+  change to `.github/`, `scripts/check_*`, `Config/*.entitlements` and the graph lists first.
+
 ## 2026-10-16 — The editing tool decoded escapes into invisible characters, again, on day one
 - **What happened:** writing `scripts/gen_fixtures.py`, the file-editing tool turned `\u00a0`, `\u2003`,
   `\u200b`, `\u3000`, `\u2028` and `\ufeff` in string literals into the characters themselves; writing the

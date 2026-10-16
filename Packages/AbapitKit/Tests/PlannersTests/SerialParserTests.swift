@@ -6,19 +6,23 @@ import TestSupport
 /// abapit's `assign.parse_serials`, held to `Tests/Fixtures/parity/serials.json` (invariant 6).
 @Suite("Serial parser parity")
 struct SerialParserTests {
-    struct Golden {
+    struct Golden: Decodable {
+        struct Case: Decodable {
+            let input: String
+            let expected: [String]
+            let abapit: [String]?
+        }
+
         let whitespace: [UInt32]
-        let cases: [(input: String, expected: [String], abapit: [String]?)]
+        let cases: [Case]
+
+        enum CodingKeys: String, CodingKey {
+            case whitespace = "python_whitespace", cases
+        }
     }
 
     static func golden() throws -> Golden {
-        let root = try #require(try Fixtures.parityGolden("serials") as? [String: Any])
-        let whitespace = try #require(root["python_whitespace"] as? [Int]).map(UInt32.init)
-        let cases = try #require(root["cases"] as? [[String: Any]]).map { item in
-            (input: item["input"] as? String ?? "", expected: item["expected"] as? [String] ?? [],
-             abapit: item["abapit"] as? [String])
-        }
-        return Golden(whitespace: whitespace, cases: cases)
+        try JSONDecoder().decode(Golden.self, from: Fixtures.parity("serials"))
     }
 
     /// Bytes, not `String ==`: Swift compares strings by canonical equivalence, so "é" would equal
@@ -48,6 +52,14 @@ struct SerialParserTests {
             #expect(item.input.unicodeScalars.contains { $0.value > 0x7F && $0.properties.isAlphabetic },
                     "deviation without a non-ASCII letter: \(item.input.debugDescription)")
         }
+    }
+
+    /// The loader must hand the parser what the golden holds: a leading U+FEFF is not whitespace to Python, so
+    /// it stays in the token.
+    @Test func theGoldenKeepsAByteOrderMarkInAString() throws {
+        let item = try #require(try Self.golden().cases.first { $0.input.unicodeScalars.first == "\u{FEFF}" })
+        #expect(item.expected.first?.unicodeScalars.first == "\u{FEFF}")
+        #expect(Self.bytes(SerialParser.parse(item.input)) == Self.bytes(item.expected))
     }
 
     @Test func tokensAreDedupedByCodePointsNotByCanonicalEquivalence() {

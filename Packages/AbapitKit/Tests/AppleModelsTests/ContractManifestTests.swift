@@ -52,6 +52,21 @@ struct ContractManifestTests {
                                                     "UPDATE_MDM_MIGRATION_DEADLINE", "CANCEL_MDM_MIGRATION", "RELEASE_DEVICES"])
     }
 
+    /// A page with several examples keeps them all: the activity page has one request body per activity type,
+    /// the shapes Phases 4 and 6 build (Phase 0's review: the crawler kept only the last).
+    @Test func everyActivityTypeHasItsExampleRequest() throws {
+        let folder = Fixtures.docc.appending(path: "business")
+        var types: Set<String> = []
+        for name in try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        where name.hasPrefix("create-an-orgdeviceactivity.request") {
+            let body = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appending(path: name))) as? [String: Any])
+            let attributes = ((body["data"] as? [String: Any])?["attributes"] as? [String: Any]) ?? [:]
+            if let type = attributes["activityType"] as? String { types.insert(type) }
+        }
+        #expect(types == ["ASSIGN_DEVICES", "ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE", "UPDATE_MDM_MIGRATION_DEADLINE",
+                          "CANCEL_MDM_MIGRATION", "RELEASE_DEVICES"])
+    }
+
     /// Every example Apple wrote parses as JSON: the decode tests of Phases 1–2 read these files.
     @Test func everyDocCExampleIsJSON() throws {
         var count = 0

@@ -29,13 +29,16 @@ Numbered; a retired number is never reused. Each names its enforcement home. A c
    whose `(path, operation)` is on the read allowlist; everything else is a write. Only allowlisted
    reads run automatically. The Logs Stream consumes what it returns, so it drains only from the drain
    task. *Home: `MosyleRead`/`AppleRead` initializers are `package`; `SourceScanTests`.*
-3. **Secrets live only in the Keychain** (data-protection, this device only, user presence). Bearer
-   tokens, assertions and Mosyle JWTs live only in actor memory. A `Secret` never prints, logs, encodes
-   or dumps. *Home: `Secret`'s `package` bytes; `VaultTests`; the credential-guard hook.*
+3. **Secrets live only in the Keychain** (data-protection, this device only, user presence). One listed
+   exception: an org's optional unattended **read-only** key (plan D5, §3.4.4) is stored without user
+   presence, after every write probe returned 403, and only a type with no route to a write may use it.
+   Bearer tokens, assertions and Mosyle JWTs live only in actor memory. A `Secret` never prints, logs,
+   encodes or dumps. *Home: `Secret`'s `package` bytes; `VaultTests`; the credential-guard hook.*
 4. **No listener. Sandbox on. Host allowlist. Zero third-party dependencies.** Outbound HTTPS only to
-   the five hosts in `HostAllowlist`; a redirect elsewhere is refused; a presigned `downloadUrl` is opened
-   in the browser, never fetched. *Home: `scripts/check_app.sh` (exact entitlements), `HTTPCoreTests`,
-   the package-graph test.*
+   the five allowlisted hosts; a redirect elsewhere is refused; a presigned `downloadUrl` is opened in the
+   browser, never fetched. *Home: `scripts/check_app.sh` (exact entitlements, keys and values; one
+   Mach-O; no listener symbol), `HTTPCoreTests`, `scripts/check_graph.py` (the manifest SwiftPM
+   evaluates) and the compiler's explicit-import check.*
 5. **The stubs fail like the APIs.** `AppleStub` and `MosyleStub` are strict: an unhandled request fails
    the test, and each failure mode is written from the API's documented or recorded behaviour, never
    from convention. *Home: `TestSupport`; the `pre-commit` skill.*
@@ -135,14 +138,14 @@ Contracts/                apple/ (generated from Apple's DocC JSON) · mosyle/ (
 Tests/Fixtures/           parity/ (goldens from frozen abapit) · docc/ (Apple's examples) · recorded/ (scrubbed live) · demo/
 Config/                   Base.xcconfig · entitlements (ad-hoc and team) — Local.xcconfig is gitignored
 Fuzz/                     libFuzzer target over the pure modules (Linux CI)
-scripts/                  check_app.sh · check_text.py · screenshots.sh · test.sh · fuzz.sh · apple_contracts.py · gen_fixtures.py
+scripts/                  check_app.sh · check_graph.py · check_text.py · screenshots.sh · test.sh · fuzz.sh · apple_contracts.py · gen_fixtures.py
 docs/                     plans/ · failure-log/ · domains/ · FRAMEWORK.md · RULE-FEEDBACK.md · screenshots/
 ```
 
 ## Commands
 
 ```bash
-scripts/test.sh                                                     # package suite (swift test)
+scripts/test.sh                                                     # graph check, explicit-import build, package suite
 xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -derivedDataPath build/DerivedData.noindex build
 scripts/check_app.sh build/DerivedData.noindex/Build/Products/Release/abapit.app   # the release gate
 ../abapit/.venv/bin/python -I -B scripts/gen_fixtures.py --abapit ../abapit       # regenerate parity goldens

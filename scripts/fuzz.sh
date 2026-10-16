@@ -20,9 +20,11 @@ rm -rf "$out/src"
 mkdir -p "$out/src" "$out/corpus"
 pattern="$(printf '%s|' $pure | sed 's/|$//')"
 for module in $pure; do
-  for file in Packages/AbapitKit/Sources/"$module"/*.swift; do
-    sed -E "/^(@testable )?import ($pattern)\$/d" "$file" > "$out/src/${module}_$(basename "$file")"
-  done
+  # Every Swift file of the module, subfolders included, each under a unique name.
+  while IFS= read -r -d '' file; do
+    flat="$(printf '%s' "${file#Packages/AbapitKit/Sources/}" | tr '/' '_')"
+    sed -E "/^(@testable )?import ($pattern)\$/d" "$file" > "$out/src/$flat"
+  done < <(find Packages/AbapitKit/Sources/"$module" -name '*.swift' -type f -print0)
 done
 swiftc -sanitize=fuzzer,address -parse-as-library -package-name abapitfuzz -module-name AbapitFuzz \
   Fuzz/AbapitFuzz.swift "$out"/src/*.swift -o "$out/abapitfuzz"

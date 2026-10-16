@@ -6,10 +6,9 @@ import LocalAuthentication
 import Security
 
 /// Phase 0 spikes, debug builds only, headless: `ABAPIT_SPIKE=keychain` (S1) or `model` (S4). Results
-/// print to stdout and the process exits before any window exists. They only ever touch throwaway
-/// Keychain items under the service `swiftabapit-spike` — never the operator's.
+/// print to stdout and the process exits before any window exists. They only ever touch one throwaway key
+/// item, tagged `swiftabapit-spike.p256` — never the operator's.
 enum Spikes {
-    static let service = "swiftabapit-spike"
     static let keyTag = Data("swiftabapit-spike.p256".utf8)
 
     /// Runs `name` and returns the exit status.
@@ -62,8 +61,9 @@ enum Spikes {
         add[kSecValueRef] = secKey
         add[kSecAttrAccessControl] = access
         add[kSecAttrSynchronizable] = false
+        // A key item is identified by its application tag: kSecAttrService belongs to passwords, and a key
+        // carrying it would fail on its own (Phase 0's review), hidden on an ad-hoc build behind -34018.
         add[kSecAttrLabel] = "swiftabapit-spike (throwaway P-256 key)"
-        add[kSecAttrService] = service
         let added = SecItemAdd(add as CFDictionary, nil)
         print("add kSecClassKey (data-protection, userPresence, this device only): \(describe(added))")
         if added == errSecMissingEntitlement {
@@ -77,6 +77,7 @@ enum Spikes {
         let context = LAContext()
         context.localizedReason = "run the swiftabapit Keychain spike (a throwaway key)"
         let message = Data("swiftabapit spike \(Date().timeIntervalSince1970)".utf8)
+        var allVerified = true
         for attempt in 1...2 {
             var query = base
             query[kSecAttrKeyClass] = kSecAttrKeyClassPrivate
@@ -101,13 +102,15 @@ enum Spikes {
             let raw = (try? P256.Signing.ECDSASignature(derRepresentation: der))?.rawRepresentation
             let verified = raw.flatMap { try? P256.Signing.ECDSASignature(rawRepresentation: $0) }
                 .map { software.publicKey.isValidSignature($0, for: message) } ?? false
+            allVerified = allVerified && verified
             print("sign \(attempt): DER \(der.count) bytes → raw \(raw?.count ?? 0) bytes, verifies=\(verified), took \(elapsed)"
                   + (attempt == 2 ? " (same LAContext: no second prompt expected)" : ""))
         }
         let deleted = SecItemDelete(base as CFDictionary)
         let again = SecItemDelete(base as CFDictionary)
         print("delete: \(describe(deleted)); delete again: \(describe(again)) (errSecItemNotFound expected)")
-        return deleted == errSecSuccess && again == errSecItemNotFound ? 0 : 1
+        // Every step must hold, the signature's verification included: a DER-in-JWS bug must not exit 0.
+        return allVerified && deleted == errSecSuccess && again == errSecItemNotFound ? 0 : 1
     }
 
     static func teamIdentifier() -> String? {

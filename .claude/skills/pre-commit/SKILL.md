@@ -56,8 +56,11 @@ Act on the items your diff touches.
 ## Before the PR
 13. **One adversarial review agent** reads the diff (the `abapit-write-reviewer` agent for the write
     path, Vault, signing or hosts; `/code-review high` plus `/security-review` otherwise for anything
-    parsing API or operator input). Fix each real finding with a test. A finding an invariant should
-    have stopped → one RULE-FEEDBACK entry.
+    parsing API or operator input). It attacks the **checks** too — gates, hooks, scans, stubs — with
+    mutants from an adversary's view: a value of another type, an extra file, a computed manifest edge, a
+    second example (failure-log 2026-10-16). It reads any change to `.github/`, `scripts/check_*`,
+    `Config/*.entitlements` or the graph lists first: a PR can weaken its own gate. Fix each real finding
+    with a test. A finding an invariant should have stopped → one RULE-FEEDBACK entry.
 14. **Mutants**: for ported behaviour, mutate the code by hand and record the mutants the tests killed
     in the PR description.
 15. **Publish as goetchstone**: `GH_TOKEN="$(gh auth token --user goetchstone)"`, after

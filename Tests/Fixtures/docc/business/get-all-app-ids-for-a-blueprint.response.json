@@ -1,22 +1,22 @@
 {
   "data": [
     {
-      "id": "361309726",
-      "type": "apps"
+      "type": "apps",
+      "id": "361309726"
     },
     {
-      "id": "409201541",
-      "type": "apps"
+      "type": "apps",
+      "id": "409201541"
     }
   ],
   "links": {
-    "next": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps?cursor=MDowOjE3NDYxMTg0NjkzOTc",
-    "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps"
+    "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps",
+    "next": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps?cursor=MDowOjE3NDYxMTg0NjkzOTc"
   },
   "meta": {
     "paging": {
-      "limit": 2,
-      "nextCursor": "MDowOjE3NDYxMTg0NjkzOTc"
+      "nextCursor": "MDowOjE3NDYxMTg0NjkzOTc",
+      "limit": 2
     }
   }
 }

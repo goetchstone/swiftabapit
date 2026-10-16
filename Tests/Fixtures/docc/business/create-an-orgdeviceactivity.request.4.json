@@ -1,0 +1,22 @@
+{
+  "data": {
+    "type": "orgDeviceActivities",
+    "attributes": {
+      "activityType": "CANCEL_MDM_MIGRATION"
+    },
+    "relationships": {
+      "devices": {
+        "data": [
+          {
+            "type": "orgDevices",
+            "id": "C39J8W1H3VG5"
+          },
+          {
+            "type": "orgDevices",
+            "id": "F2KZ3N4G5HD3"
+          }
+        ]
+      }
+    }
+  }
+}

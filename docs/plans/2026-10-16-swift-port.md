@@ -612,7 +612,10 @@ This is ported from SwiftGamGui and generalized from argv to HTTP.
   - Ad-hoc/CI build: `com.apple.security.app-sandbox`, `com.apple.security.network.client`,
     `com.apple.security.files.user-selected.read-write`.
   - Team build (`Local.xcconfig`): the same three plus `keychain-access-groups =
-    $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)`.
+    $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)`, and the `application-identifier` and
+    `team-identifier` Xcode adds when it provisions the group. `check_app.sh` compares keys **and values**
+    (Phase 0's review: a sandbox set to `0` passed a names-only check); the team values are pinned from
+    the operator's first team build (S1).
   - `check_app.sh` diffs `codesign -d --entitlements` against these lists.
 - **Hardened runtime**: on, with no exceptions. Release builds are not debuggable.
 - **Signing**:
@@ -935,10 +938,13 @@ Mosyle tracks don't bend a shared mock.
 **Status:** built on branch `phase-0-scaffold` (2026-10-16): repo, project, package graph (with the pure
 `Wire` module, §3.2), process files and skills, CI (hygiene, macOS, libFuzzer, `ci-ok`), CodeQL, Scorecard,
 the drift job, `check_app.sh`; **S2** contracts: Business 2.6 = 57 endpoints, School 1.7 = 11; **S3** goldens
-from abapit `9875ee7`, deterministic across runs, with the serial parser ported as the pilot (5/5 mutants
+from abapit `3890091` (main; its pure modules are identical to `9875ee7`), deterministic across runs, with the serial parser ported as the pilot (5/5 mutants
 killed); **S4**: `.unavailable(.modelNotReady)`, 24 languages; **S1 ad-hoc, sandboxed**: every data-protection
 call returns -34018 and the spike prints the "sign with your team" guidance. **Pending the operator: S1 with
-a Personal Team** (one Xcode build, one Touch ID; steps in `docs/domains/auth-keychain.md`).
+a Personal Team** (one Xcode build, one Touch ID; steps in `docs/domains/auth-keychain.md`). The review's
+findings are fixed in the same PR (failure-log 2026-10-16, "the gate checked names, not values"). **Open for
+the operator:** a PR can change its own `ci.yml`, `check_app.sh` or `check_graph.py`, and so its own `ci-ok`;
+with one maintainer, a CODEOWNERS review rule would block every merge (RULE-FEEDBACK 2026-10-16).
 
 **Owns:** everything. Nothing runs in parallel with Phase 0.
 

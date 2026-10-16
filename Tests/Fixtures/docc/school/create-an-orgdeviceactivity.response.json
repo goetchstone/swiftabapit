@@ -1,15 +1,15 @@
 {
   "data": {
+    "type": "orgDeviceActivities",
+    "id": "b1481656-b267-480d-b284-a809eed8b041",
     "attributes": {
-      "createdDateTime": "2026-02-27T18:00:00.000Z",
       "status": "IN_PROGRESS",
-      "subStatus": "SUBMITTED"
+      "subStatus": "SUBMITTED",
+      "createdDateTime": "2025-05-05T04:15:43.282Z"
     },
-    "id": "f7e6d5c4-b3a2-1098-fedc-ba9876543210",
     "links": {
-      "self": "https://api-school.apple.com/v1/orgDeviceActivities/f7e6d5c4-b3a2-1098-fedc-ba9876543210"
-    },
-    "type": "orgDeviceActivities"
+      "self": "https://api-school.apple.com/v1/orgDeviceActivities/b1481656-b267-480d-b284-a809eed8b041"
+    }
   },
   "links": {
     "self": "https://api-school.apple.com/v1/orgDeviceActivities"

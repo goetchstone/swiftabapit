@@ -1,49 +1,49 @@
 {
   "data": [
     {
-      "attributes": {
-        "agreementNumber": null,
-        "contractCancelDateTime": null,
-        "description": "Limited Warranty",
-        "endDateTime": "2026-02-02T00:00:00Z",
-        "isCanceled": false,
-        "isRenewable": false,
-        "paymentType": "NONE",
-        "startDateTime": "2025-02-02T00:00:00Z",
-        "status": "ACTIVE"
-      },
+      "type": "appleCareCoverage",
       "id": "XABC123X0ABC123X0",
-      "type": "appleCareCoverage"
-    },
-    {
       "attributes": {
-        "agreementNumber": "0000000001",
         "contractCancelDateTime": null,
-        "description": "AppleCare+",
-        "endDateTime": "2026-04-17T00:00:00Z",
+        "startDateTime": "2025-02-02T00:00:00Z",
+        "isRenewable": false,
         "isCanceled": false,
-        "isRenewable": true,
-        "paymentType": "SUBSCRIPTION",
-        "startDateTime": "2025-04-17T00:00:00Z",
-        "status": "ACTIVE"
-      },
-      "id": "0000000001",
-      "type": "appleCareCoverage"
-    },
-    {
-      "attributes": {
+        "description": "Limited Warranty",
         "agreementNumber": null,
+        "endDateTime": "2026-02-02T00:00:00Z",
+        "status": "ACTIVE",
+        "paymentType": "NONE"
+      }
+    },
+    {
+      "type": "appleCareCoverage",
+      "id": "0000000001",
+      "attributes": {
         "contractCancelDateTime": null,
-        "description": "AppleCare+ for Business",
-        "endDateTime": null,
-        "isCanceled": false,
-        "isRenewable": true,
-        "paymentType": "ABE_SUBSCRIPTION",
         "startDateTime": "2025-04-17T00:00:00Z",
-        "status": "ACTIVE"
-      },
+        "isRenewable": true,
+        "isCanceled": false,
+        "description": "AppleCare+",
+        "agreementNumber": "0000000001",
+        "endDateTime": "2026-04-17T00:00:00Z",
+        "status": "ACTIVE",
+        "paymentType": "SUBSCRIPTION"
+      }
+    },
+    {
+      "type": "appleCareCoverage",
       "id": "abe-XABC123X0ABC123X0",
-      "type": "appleCareCoverage"
+      "attributes": {
+        "contractCancelDateTime": null,
+        "startDateTime": "2025-04-17T00:00:00Z",
+        "isRenewable": true,
+        "isCanceled": false,
+        "description": "AppleCare+ for Business",
+        "agreementNumber": null,
+        "endDateTime": null,
+        "status": "ACTIVE",
+        "paymentType": "ABE_SUBSCRIPTION"
+      }
     }
   ],
   "links": {

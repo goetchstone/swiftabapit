@@ -1,10 +1,10 @@
 {
   "data": {
-    "id": "1F97349736CF4614A94F624E705841AD",
-    "type": "mdmServers"
+    "type": "mdmServers",
+    "id": "1F97349736CF4614A94F624E705841AD"
   },
   "links": {
-    "related": "https://api-business.apple.com/v1/orgDevices/DVVS36G1YD3JKQNI/assignedServer",
-    "self": "https://api-business.apple.com/v1/orgDevices/DVVS36G1YD3JKQNI/relationships/assignedServer"
+    "self": "https://api-business.apple.com/v1/orgDevices/DVVS36G1YD3JKQNI/relationships/assignedServer",
+    "related": "https://api-business.apple.com/v1/orgDevices/DVVS36G1YD3JKQNI/assignedServer"
   }
 }

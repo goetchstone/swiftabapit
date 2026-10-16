@@ -1,56 +1,56 @@
 {
   "data": {
+    "type": "blueprints",
+    "id": "blueprint-12345",
     "attributes": {
+      "name": "Engineering Onboarding",
+      "description": "Updated description",
+      "status": "ACTIVE",
       "appLicenseDeficient": false,
       "createdDateTime": "2024-01-15T10:30:00Z",
-      "description": "Updated description",
-      "name": "Engineering Onboarding",
-      "status": "ACTIVE",
       "updatedDateTime": "2024-06-15T14:22:00Z"
     },
-    "id": "blueprint-12345",
-    "links": {
-      "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345"
-    },
     "relationships": {
-      "apps": {
+      "userGroups": {
         "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=apps",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps"
-        }
-      },
-      "configurations": {
-        "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=configurations",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/configurations"
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/userGroups",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=userGroups"
         }
       },
       "orgDevices": {
         "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=orgDevices",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/orgDevices"
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/orgDevices",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=orgDevices"
         }
       },
       "packages": {
         "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=packages",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/packages"
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/packages",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=packages"
         }
       },
-      "userGroups": {
+      "configurations": {
         "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=userGroups",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/userGroups"
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/configurations",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=configurations"
         }
       },
       "users": {
         "links": {
-          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=users",
-          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/users"
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/users",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=users"
+        }
+      },
+      "apps": {
+        "links": {
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps",
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-12345?include=apps"
         }
       }
     },
-    "type": "blueprints"
+    "links": {
+      "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345"
+    }
   },
   "links": {
     "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345"

@@ -1,12 +1,12 @@
 {
   "data": [
     {
-      "id": "ABC123DEF456",
-      "type": "orgDevices"
+      "type": "orgDevices",
+      "id": "ABC123DEF456"
     },
     {
-      "id": "XYZ789GHI012",
-      "type": "orgDevices"
+      "type": "orgDevices",
+      "id": "XYZ789GHI012"
     }
   ],
   "links": {

@@ -1,12 +1,12 @@
 {
   "data": [
     {
-      "id": "1234567890",
-      "type": "users"
+      "type": "users",
+      "id": "1234567890"
     },
     {
-      "id": "0987654321",
-      "type": "users"
+      "type": "users",
+      "id": "0987654321"
     }
   ],
   "links": {

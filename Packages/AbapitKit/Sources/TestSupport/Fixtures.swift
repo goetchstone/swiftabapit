@@ -18,10 +18,11 @@ public enum Fixtures {
     public static var contracts: URL { repoRoot.appending(path: "Contracts") }
     public static var packageManifest: URL { repoRoot.appending(path: "Packages/AbapitKit/Package.swift") }
 
-    /// A parity golden by name (`Tests/Fixtures/parity/<name>.json`), parsed.
-    public static func parityGolden(_ name: String) throws -> Any {
-        try JSONSerialization.jsonObject(with: Data(contentsOf: parity.appending(path: "\(name).json")),
-                                         options: [.fragmentsAllowed])
+    /// A parity golden's bytes (`Tests/Fixtures/parity/<name>.json`): decode it with `JSONDecoder`, which keeps
+    /// every string's code points. `JSONSerialization` dropped a leading U+FEFF from a string value, so the
+    /// golden `"\u{FEFF}ab"` was tested as `ab` on both sides (Phase 0's review).
+    public static func parity(_ name: String) throws -> Data {
+        try Data(contentsOf: parity.appending(path: "\(name).json"))
     }
 }
 
@@ -32,6 +33,13 @@ public enum SourceScan {
         public let path: String
         public let lines: [String]
         public let text: String
+
+        public init(path: String, text: String) {
+            self.path = path
+            self.text = text
+            lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+        }
     }
 
     /// Every Swift file under `directory` (relative to the repo), sorted.
@@ -39,10 +47,7 @@ public enum SourceScan {
         let base = Fixtures.repoRoot.appending(path: directory)
         guard let paths = FileManager.default.subpaths(atPath: base.path) else { return [] }
         return try paths.filter { $0.hasSuffix(".swift") }.sorted().map { path in
-            let text = try String(contentsOf: base.appending(path: path), encoding: .utf8)
-            let code = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            return File(path: "\(directory)/\(path)", lines: code, text: text)
+            try File(path: "\(directory)/\(path)", text: try String(contentsOf: base.appending(path: path), encoding: .utf8))
         }
     }
 
@@ -56,17 +61,52 @@ public enum SourceScan {
         }.map(\.path))
     }
 
-    /// The modules a file imports (`import X`, `@testable import X`, `import struct X.Y`), in order.
+    /// The modules a file imports, however it is spelled: `import X`, `@testable import X`, `@preconcurrency
+    /// import X`, `fileprivate import X`, `import struct X.Y`, several on one line after `;`, an `import` on
+    /// one line and its module on the next. Comments and string literals are removed first, so neither hides
+    /// an import nor fakes one (Phase 0's review).
     public static func imports(of file: File) -> [String] {
-        file.lines.compactMap { line in
-            var words = line.split(whereSeparator: \.isWhitespace).map(String.init)
-            while let first = words.first, first.hasPrefix("@") || ["public", "package", "internal", "private"].contains(first) {
-                words.removeFirst()
-            }
-            guard words.first == "import", words.count >= 2 else { return nil }
-            let target = ["struct", "class", "enum", "protocol", "func", "var", "let", "typealias"].contains(words[1]) && words.count >= 3
-                ? words[2] : words[1]
-            return String(target.split(separator: ".").first ?? Substring(target))
+        let tokens = tokenize(file.text)
+        var found: [String] = []
+        let kinds: Set = ["struct", "class", "enum", "protocol", "func", "var", "let", "typealias", "actor", "macro"]
+        for (index, token) in tokens.enumerated() where token == "import" {
+            var next = index + 1
+            if next < tokens.count, kinds.contains(tokens[next]) { next += 1 }
+            guard next < tokens.count else { continue }
+            let module = tokens[next].split(separator: ".").first.map(String.init) ?? tokens[next]
+            if !module.isEmpty, module.first?.isLetter == true || module.first == "_" { found.append(module) }
         }
+        return found
+    }
+
+    /// Swift source as tokens, with comments (nested block comments too) and string literals' contents dropped,
+    /// split on whitespace and punctuation other than `.`, `_` and `@`.
+    static func tokenize(_ text: String) -> [String] {
+        var out = "", depth = 0, inString = false, inLineComment = false
+        let scalars = Array(text.unicodeScalars)
+        var index = 0
+        while index < scalars.count {
+            let scalar = scalars[index], next = index + 1 < scalars.count ? scalars[index + 1] : " "
+            if inLineComment {
+                if scalar == "\n" { inLineComment = false; out.append(" ") }
+            } else if depth > 0 {
+                if scalar == "*", next == "/" { depth -= 1; index += 1 } else if scalar == "/", next == "*" { depth += 1; index += 1 }
+            } else if inString {
+                if scalar == "\\" { index += 1 } else if scalar == "\"" || scalar == "\n" { inString = false; out.append(" ") }
+            } else if scalar == "/", next == "/" {
+                inLineComment = true
+            } else if scalar == "/", next == "*" {
+                depth = 1
+                index += 1
+            } else if scalar == "\"" {
+                inString = true
+            } else if scalar.properties.isAlphabetic || ("0"..."9").contains(scalar) || scalar == "_" || scalar == "." || scalar == "@" {
+                out.unicodeScalars.append(scalar)
+            } else {
+                out.append(" ")
+            }
+            index += 1
+        }
+        return out.split(separator: " ").map(String.init)
     }
 }

@@ -1,39 +1,39 @@
 {
   "data": {
+    "type": "users",
+    "id": "1234567890",
     "attributes": {
-      "costCenter": "CC100",
-      "createdDateTime": "2023-01-10T10:30:00Z",
-      "department": "IT",
-      "division": "Engineering",
+      "firstName": "John",
+      "lastName": "Doe",
+      "middleName": "A",
+      "status": "ACTIVE",
+      "managedAppleAccount": "john.doe@appleid.example.com",
+      "isExternalUser": false,
+      "roleOuList": [
+        {
+          "roleName": "Administrator",
+          "ouId": "OU123456"
+        }
+      ],
       "email": "john.doe@example.com",
       "employeeNumber": "EMP001",
-      "firstName": "John",
-      "isExternalUser": false,
+      "costCenter": "CC100",
+      "division": "Engineering",
+      "department": "IT",
       "jobTitle": "Software Engineer",
-      "lastName": "Doe",
-      "managedAppleAccount": "john.doe@appleid.example.com",
-      "middleName": "A",
+      "startDateTime": "2023-01-15T08:00:00Z",
+      "createdDateTime": "2023-01-10T10:30:00Z",
+      "updatedDateTime": "2024-06-01T14:22:00Z",
       "phoneNumbers": [
         {
           "phoneNumber": "+1-555-123-4567",
           "type": "WORK"
         }
-      ],
-      "roleOuList": [
-        {
-          "ouId": "OU123456",
-          "roleName": "Administrator"
-        }
-      ],
-      "startDateTime": "2023-01-15T08:00:00Z",
-      "status": "ACTIVE",
-      "updatedDateTime": "2024-06-01T14:22:00Z"
+      ]
     },
-    "id": "1234567890",
     "links": {
       "self": "https://api-business.apple.com/v1/users/1234567890"
-    },
-    "type": "users"
+    }
   },
   "links": {
     "self": "https://api-business.apple.com/v1/users/1234567890"

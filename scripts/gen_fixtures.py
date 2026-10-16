@@ -26,6 +26,7 @@ this file can't move a drawn case (SwiftGamGui RULE-FEEDBACK 2026-10-08). Run it
 from __future__ import annotations
 
 import argparse
+import atexit
 import base64
 import copy
 import importlib
@@ -35,6 +36,7 @@ import os
 import platform
 import random
 import re
+import shutil
 import string
 import subprocess
 import sys
@@ -44,7 +46,9 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-ABAPIT_PIN = "9875ee762b3db990a3498b88d96a4c3ba2eaf7d3"
+# abapit's main (the merge of PR #4). Its pure modules are identical to 9875ee7, which the plan was written
+# at, but that commit lives only on an unmerged branch that may be deleted (Phase 0's review).
+ABAPIT_PIN = "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f"
 FIXED_NOW = datetime(2026, 10, 16, 12, 0, 0, tzinfo=timezone.utc)
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "Tests" / "Fixtures" / "parity"
@@ -78,6 +82,7 @@ def load_abapit(repo: Path) -> dict:
     os.environ["ABAPIT_DATA_DIR"] = str(scratch / "data")
     os.environ["ABAPIT_CONFIG_DIR"] = str(scratch / "config")
     modules["scratch"] = scratch
+    atexit.register(shutil.rmtree, scratch, ignore_errors=True)   # the throwaway keys written below go with it
     return modules
 
 

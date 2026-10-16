@@ -1,18 +1,16 @@
 {
   "data": [
     {
-      "attributes": {
-        "createdDateTime": "2023-03-15T10:00:00Z",
-        "name": "Engineering Team",
-        "ouId": "OU789012",
-        "status": "ACTIVE",
-        "totalMemberCount": 25,
-        "type": "STANDARD",
-        "updatedDateTime": "2024-06-01T14:30:00Z"
-      },
+      "type": "userGroups",
       "id": "UG123456",
-      "links": {
-        "self": "https://api-business.apple.com/v1/userGroups/UG123456"
+      "attributes": {
+        "ouId": "OU789012",
+        "name": "Engineering Team",
+        "type": "STANDARD",
+        "totalMemberCount": 25,
+        "status": "ACTIVE",
+        "createdDateTime": "2023-03-15T10:00:00Z",
+        "updatedDateTime": "2024-06-01T14:30:00Z"
       },
       "relationships": {
         "users": {
@@ -21,17 +19,19 @@
           }
         }
       },
-      "type": "userGroups"
+      "links": {
+        "self": "https://api-business.apple.com/v1/userGroups/UG123456"
+      }
     }
   ],
   "links": {
-    "next": "https://api-business.apple.com/v1/userGroups?cursor=MDowOjE3NDYxMTM4OTI1OTA6MTc0NjExMzg5MjU5MDp0cnVlOmZhbHNlOjE3NDYxMTM4OTI1OTA",
-    "self": "https://api-business.apple.com/v1/userGroups"
+    "self": "https://api-business.apple.com/v1/userGroups",
+    "next": "https://api-business.apple.com/v1/userGroups?cursor=MDowOjE3NDYxMTM4OTI1OTA6MTc0NjExMzg5MjU5MDp0cnVlOmZhbHNlOjE3NDYxMTM4OTI1OTA"
   },
   "meta": {
     "paging": {
-      "limit": 100,
-      "nextCursor": "MDowOjE3NDYxMTM4OTI1OTA6MTc0NjExMzg5MjU5MDp0cnVlOmZhbHNlOjE3NDYxMTM4OTI1OTA"
+      "nextCursor": "MDowOjE3NDYxMTM4OTI1OTA6MTc0NjExMzg5MjU5MDp0cnVlOmZhbHNlOjE3NDYxMTM4OTI1OTA",
+      "limit": 100
     }
   }
 }

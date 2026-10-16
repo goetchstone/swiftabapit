@@ -1,8 +1,8 @@
 {
   "data": [
     {
-      "id": "pkg-12345",
-      "type": "packages"
+      "type": "packages",
+      "id": "pkg-12345"
     }
   ],
   "links": {

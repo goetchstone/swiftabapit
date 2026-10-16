@@ -15,7 +15,8 @@ in the data-protection Keychain, this device only, behind user presence; one aut
 SwiftGamGui proved Personal Team + `keychain-access-groups` **without** the App Sandbox
 (its `docs/domains/secrets.md`, 2026-10-08). This app is sandboxed, so S1 repeats it **with**
 `com.apple.security.app-sandbox`. The spike is `ABAPIT_SPIKE=keychain` (DEBUG, headless: no window),
-in `App/Debug/Spikes.swift`. It touches only throwaway items under the service `swiftabapit-spike`:
+in `App/Debug/Spikes.swift`. It touches only one throwaway key item, identified by its application tag
+`swiftabapit-spike.p256` (a key item has no service; `kSecAttrService` is a password attribute):
 
 1. add a P-256 `kSecClassKey` item, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` + `.userPresence`,
    not synchronizable, through `kSecUseDataProtectionKeychain`;
@@ -23,6 +24,8 @@ in `App/Debug/Spikes.swift`. It touches only throwaway items under the service `
    the signature with the public half;
 3. sign again in the same `LAContext` (the reuse window: no second prompt expected);
 4. delete the item, and confirm a second delete reads `errSecItemNotFound`.
+
+It exits 0 only if every step held, both signatures' verification included.
 
 On an ad-hoc build every data-protection call is expected to fail with `errSecMissingEntitlement`
 (-34018); the spike then prints the "sign with your team" guidance and exits non-zero.

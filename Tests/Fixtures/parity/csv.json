@@ -1,5 +1,5 @@
 {
- "abapit": "9875ee762b3db990a3498b88d96a4c3ba2eaf7d3",
+ "abapit": "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f",
  "cases": [
   {
    "abapit": "id,meta,ratio,'@at\r\n,plain,1e+16,\"a,b\"\r\nTEST1,,'quoted,\r\n,,\"{'b': 'a,b', 'a': 1e+16}\",\"{'id': 'x', 'n': 1}; y\"\r\n'=id,\"{'id': 'x', 'n': 1}; y\",\u00e9t\u00e9; y,'=\r\n",

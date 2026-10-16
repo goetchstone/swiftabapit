@@ -1,22 +1,24 @@
 {
   "data": {
+    "type": "orgDeviceActivities",
     "attributes": {
-      "activityType": "CANCEL_MDM_MIGRATION"
+      "activityType": "ASSIGN_DEVICES"
     },
     "relationships": {
+      "mdmServer": {
+        "data": {
+          "type": "mdmServers",
+          "id": "1F97349736CF4614A94F624E705841AD"
+        }
+      },
       "devices": {
         "data": [
           {
-            "id": "C39J8W1H3VG5",
-            "type": "orgDevices"
-          },
-          {
-            "id": "F2KZ3N4G5HD3",
-            "type": "orgDevices"
+            "type": "orgDevices",
+            "id": "XABC123X0ABC123X0"
           }
         ]
       }
-    },
-    "type": "orgDeviceActivities"
+    }
   }
 }

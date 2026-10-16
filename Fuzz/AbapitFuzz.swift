@@ -21,7 +21,8 @@ func require(_ condition: Bool, _ what: @autoclosure () -> String) {
 }
 
 /// Pasted serials: never a crash; every token non-empty, free of separators and ASCII lowercase, unique by
-/// code points; and parsing its own output, joined, gives it back.
+/// code points; parsing its own output, joined, gives it back; and the tokens are exactly what a plain
+/// reference reading of the spec gives (Phase 0's review: without that, a parser returning nothing passed).
 func serials(_ raw: String) {
     let tokens = SerialParser.parse(raw)
     var seen: Set<[UInt32]> = []
@@ -34,4 +35,23 @@ func serials(_ raw: String) {
     }
     let again = SerialParser.parse(tokens.joined(separator: "\n"))
     require(again.map { Array($0.utf8) } == tokens.map { Array($0.utf8) }, "not idempotent on \(raw.debugDescription)")
+    require(referenceSerials(raw) == tokens.map { $0.unicodeScalars.map(\.value) }, "differs from the reference on \(raw.debugDescription)")
+}
+
+/// The spec, read plainly: runs of non-separators, ASCII a-z uppercased, first of each kept.
+func referenceSerials(_ raw: String) -> [[UInt32]] {
+    var out: [[UInt32]] = [], current: [UInt32] = []
+    func flush() {
+        if !current.isEmpty, !out.contains(current) { out.append(current) }
+        current = []
+    }
+    for scalar in raw.unicodeScalars {
+        if scalar == "," || scalar == ";" || SerialParser.pythonWhitespace.contains(scalar.value) {
+            flush()
+        } else {
+            current.append((0x61...0x7A).contains(scalar.value) ? scalar.value - 0x20 : scalar.value)
+        }
+    }
+    flush()
+    return out
 }

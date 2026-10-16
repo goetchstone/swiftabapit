@@ -7,6 +7,9 @@ import TestSupport
 /// may import.
 @Suite("Package graph")
 struct PackageGraphTests {
+    /// A fast local check of the edges. The authoritative one is `scripts/check_graph.py`, which reads the
+    /// manifest SwiftPM evaluates (`swift package dump-package`): this regex can be fooled by a variable or a
+    /// later `.append` (Phase 0's review), and `scripts/test.sh` and CI run both.
     /// Every allowed edge. Wire is the pure home of `WireOperation`, shared by Planners, HTTPCore and
     /// ChangeCore (RULE-FEEDBACK 2026-10-16). A new edge is a reviewed change to this list and the plan.
     static let allowed: [String: Set<String>] = [
@@ -85,6 +88,25 @@ struct PackageGraphTests {
                 #expect(extra.isEmpty, "\(file.path) imports \(extra.sorted()); pure modules build on Linux")
             }
         }
+    }
+
+    /// Every way of spelling an import Phase 0's review found the first scan missed, and the ways a comment or
+    /// a string could fake one.
+    @Test func theImportScanSeesEveryWayOfSpellingAnImport() {
+        let text = """
+        fileprivate import ChangeCore
+        /* drafts only */ import HTTPCore
+        let _x = 0; import Security
+        import
+          Vault
+        @preconcurrency import Network
+        @_spi(X) @testable public import struct Wire.ReadRequest
+        // import CommentOnly
+        /* import BlockOnly /* nested import Nested */ still comment */
+        let text = "import StringOnly"
+        """
+        let found = SourceScan.imports(of: SourceScan.File(path: "x.swift", text: text))
+        #expect(found == ["ChangeCore", "HTTPCore", "Security", "Vault", "Network", "Wire"])
     }
 
     /// The app reaches the package through its public API only: `@testable` would reopen every route.
