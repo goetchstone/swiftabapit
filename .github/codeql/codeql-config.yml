@@ -1,0 +1,11 @@
+name: "swiftabapit CodeQL config"
+
+# Broader than the default suite: this app holds keys that can move or release every device in an
+# organization, so a few more false positives are worth it.
+queries:
+  - uses: security-extended
+
+# Only code we ship and control: not generated contracts or test fixtures.
+paths-ignore:
+  - Contracts
+  - Tests

@@ -1,0 +1,13 @@
+{
+  "data": {
+    "type": "mdmServers",
+    "id": "2A87349736CF4614A94F624E705841BE",
+    "attributes": {
+      "serverName": "Marketing Team MDM (Renamed)",
+      "defaultProductFamilies": [
+        "IPAD",
+        "IPHONE"
+      ]
+    }
+  }
+}

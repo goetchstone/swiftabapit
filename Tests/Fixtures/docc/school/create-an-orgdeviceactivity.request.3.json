@@ -1,0 +1,25 @@
+{
+  "data": {
+    "type": "orgDeviceActivities",
+    "attributes": {
+      "activityType": "UPDATE_MDM_MIGRATION_DEADLINE",
+      "activityTypeMetadata": {
+        "mdmMigrationDeadlineDateTime": "2026-03-15T17:00:00.000Z"
+      }
+    },
+    "relationships": {
+      "devices": {
+        "data": [
+          {
+            "type": "orgDevices",
+            "id": "C39J8W1H3VG5"
+          },
+          {
+            "type": "orgDevices",
+            "id": "F2KZ3N4G5HD3"
+          }
+        ]
+      }
+    }
+  }
+}

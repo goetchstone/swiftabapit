@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned GitHub Actions current (security fixes arrive as PRs). There are no Swift or Python
+# package dependencies (plan L5): the dev-time scripts use the standard library, and gen_fixtures.py runs in
+# abapit's own venv.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    # CodeQL refuses to run when its steps' versions differ, so its init, analyze and upload-sarif move in
+    # one PR (SwiftGamGui, 2026-10-12: three separate bumps each failed CodeQL).
+    groups:
+      codeql-action:
+        patterns: ["github/codeql-action*"]

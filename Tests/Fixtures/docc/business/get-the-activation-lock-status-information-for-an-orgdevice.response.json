@@ -1,0 +1,13 @@
+{
+  "data": {
+    "type": "activationLockStatus",
+    "id": "C39J8W1H3VG5",
+    "attributes": {
+      "isLocked": true,
+      "lockType": "MDM"
+    }
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/orgDevices/C39J8W1H3VG5/activationLockStatus"
+  }
+}

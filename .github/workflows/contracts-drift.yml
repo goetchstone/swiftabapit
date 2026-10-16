@@ -1,0 +1,60 @@
+name: Contracts drift
+
+# Weekly: re-crawl Apple's DocC JSON for the Apple Business and Apple School Manager APIs and, when the
+# manifest in Contracts/apple/ no longer matches, open an issue with the diff (plan §3.10). An issue, not a
+# PR: a contract change is read by a person and ported deliberately (new user/group writes, app licensing,
+# new enum values). The crawler fetches only developer.apple.com and treats every page as data.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Apple contract drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Crawl Apple's docs
+        run: python3 -I -B scripts/apple_contracts.py --out Contracts/apple --examples Tests/Fixtures/docc
+      - name: Open an issue when the contract moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -A Contracts Tests/Fixtures/docc
+          if git diff --cached --quiet; then
+            echo "No drift."
+            exit 0
+          fi
+          {
+            echo "The weekly crawl of Apple's DocC JSON no longer matches \`Contracts/apple/\`."
+            echo
+            echo '```'
+            git diff --cached --stat
+            echo '```'
+            echo
+            echo '<details><summary>Manifest diff (first 400 lines)</summary>'
+            echo
+            echo '```diff'
+            git diff --cached -- Contracts | head -400
+            echo '```'
+            echo '</details>'
+            echo
+            echo "Port it deliberately: regenerate with \`scripts/apple_contracts.py\`, then update models, stubs and the contract tests (plan §3.10)."
+          } > body.md
+          title="Apple API contract drift ($(date -u +%Y-%m-%d))"
+          if gh issue list --state open --search "Apple API contract drift in:title" --json number --jq '.[0].number' | grep -q .; then
+            echo "An open drift issue already exists; not opening another."
+          else
+            gh issue create --title "$title" --body-file body.md
+          fi

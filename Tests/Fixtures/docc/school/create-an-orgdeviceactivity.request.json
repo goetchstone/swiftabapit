@@ -1,0 +1,24 @@
+{
+  "data": {
+    "type": "orgDeviceActivities",
+    "attributes": {
+      "activityType": "ASSIGN_DEVICES"
+    },
+    "relationships": {
+      "mdmServer": {
+        "data": {
+          "type": "mdmServers",
+          "id": "1F97349736CF4614A94F624E705841AD"
+        }
+      },
+      "devices": {
+        "data": [
+          {
+            "type": "orgDevices",
+            "id": "XABC123X0ABC123X0"
+          }
+        ]
+      }
+    }
+  }
+}

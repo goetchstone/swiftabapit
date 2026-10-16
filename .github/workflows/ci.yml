@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only: nothing here writes back.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No key, secret or local-only file is tracked
+        run: |
+          if git ls-files | grep -E '(\.(pem|p8|p12)|(^|/)(config\.json|tokens\.json|history\.sqlite|Local\.xcconfig|private-terms))$'; then
+            echo "::error::a key, a secret store or a local-only file is tracked"
+            exit 1
+          fi
+      - name: Scripts parse
+        run: |
+          python3 -m py_compile scripts/*.py
+          for script in scripts/*.sh; do bash -n "$script"; done
+      - name: No invisible or bidirectional characters in source
+        run: python3 -I scripts/check_text.py
+
+  macos:
+    # GitHub's xcode-27 image: macOS 27 + Xcode 27, what the app targets. No signing team here, so the app
+    # builds ad-hoc with the sandbox entitlements: the contributor-without-a-team path.
+    name: build + test (macOS 27)
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: sw_vers && xcodebuild -version && swift --version
+      - name: Package tests (parity goldens, contracts, source scans)
+        run: |
+          mkdir -p "$RUNNER_TEMP/attachments"
+          scripts/test.sh --attachments-path "$RUNNER_TEMP/attachments"
+      - name: Build the app (Release)
+        run: xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Release -derivedDataPath "$RUNNER_TEMP/dd" build
+      - name: Hardened runtime, sandbox, exact entitlements, no listener
+        run: scripts/check_app.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
+      - name: Screenshots (debug build, demo org only)
+        run: |
+          xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Debug -derivedDataPath "$RUNNER_TEMP/dd" build
+          scripts/screenshots.sh "$RUNNER_TEMP/dd/Build/Products/Debug/abapit.app" "$RUNNER_TEMP/attachments/screens"
+      - name: Keep the snapshot attachments
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: snapshots
+          path: ${{ runner.temp }}/attachments
+          if-no-files-found: ignore
+
+  fuzz:
+    # Coverage-guided fuzzing (libFuzzer, Fuzz/AbapitFuzz.swift) of the pure modules: the serial parser
+    # today, then JSON:API documents and paging, Mosyle envelopes and dates, the CSV writer. Linux only
+    # (Apple's toolchain ships no libFuzzer runtime), in the official Swift image pinned by digest. Building
+    # here also proves the pure modules need nothing but Foundation (plan §3.2).
+    name: fuzz (libFuzzer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: swift:6.4@sha256:4601bf61dab9485a3e93087770b72d268737e945a5b000e2286b6cc48bb048b6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fuzz
+        run: |
+          # In the workspace: inside a container, runner.temp names the host's path, not this one.
+          mkdir -p fuzz-crash
+          scripts/fuzz.sh -seed=1 -runs=300000 -max_len=4096 -print_final_stats=1 -artifact_prefix=fuzz-crash/
+      - name: Keep a crashing input
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crash
+          path: fuzz-crash
+          if-no-files-found: ignore
+
+  # The one required check for the PR gate ruleset.
+  ci-ok:
+    name: ci-ok
+    runs-on: ubuntu-latest
+    needs: [hygiene, macos, fuzz]
+    if: always()
+    steps:
+      - name: Every job passed
+        env:
+          HYGIENE: ${{ needs.hygiene.result }}
+          MACOS: ${{ needs.macos.result }}
+          FUZZ: ${{ needs.fuzz.result }}
+        run: |
+          echo "hygiene=$HYGIENE macos=$MACOS fuzz=$FUZZ"
+          test "$HYGIENE" = success && test "$MACOS" = success && test "$FUZZ" = success

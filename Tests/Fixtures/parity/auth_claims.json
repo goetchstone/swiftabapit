@@ -1,0 +1,64 @@
+{
+ "abapit": "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f",
+ "cases": [
+  {
+   "expected": {
+    "header": {
+     "alg": "ES256",
+     "kid": "00000000-0000-4000-8000-0000000000aa",
+     "typ": "JWT"
+    },
+    "jti": "uuid4",
+    "payload": {
+     "aud": "https://account.apple.com/auth/oauth2/v2/token",
+     "exp": 1805465600,
+     "iat": 1790000000,
+     "iss": "BUSINESSAPI.00000000-0000-4000-8000-000000000001",
+     "sub": "BUSINESSAPI.00000000-0000-4000-8000-000000000001"
+    },
+    "signature_bytes": 64,
+    "token_scope": "business.api",
+    "token_url": "https://account.apple.com/auth/oauth2/token"
+   },
+   "input": {
+    "client_id": "BUSINESSAPI.00000000-0000-4000-8000-000000000001",
+    "key_id": "00000000-0000-4000-8000-0000000000aa",
+    "now": 1790000000,
+    "scope": "business",
+    "team_id": ""
+   }
+  },
+  {
+   "expected": {
+    "header": {
+     "alg": "ES256",
+     "kid": "00000000-0000-4000-8000-0000000000bb",
+     "typ": "JWT"
+    },
+    "jti": "uuid4",
+    "payload": {
+     "aud": "https://account.apple.com/auth/oauth2/v2/token",
+     "exp": 1805465600,
+     "iat": 1790000000,
+     "iss": "TEAM000001",
+     "sub": "SCHOOLAPI.00000000-0000-4000-8000-000000000002"
+    },
+    "signature_bytes": 64,
+    "token_scope": "school.api",
+    "token_url": "https://account.apple.com/auth/oauth2/token"
+   },
+   "input": {
+    "client_id": "SCHOOLAPI.00000000-0000-4000-8000-000000000002",
+    "key_id": "00000000-0000-4000-8000-0000000000bb",
+    "now": 1790000000,
+    "scope": "school",
+    "team_id": "TEAM000001"
+   }
+  }
+ ],
+ "generator": "scripts/gen_fixtures.py",
+ "now": "2026-10-16T12:00:00+00:00",
+ "python": "3.12.13",
+ "seed": null,
+ "unicode": "15.0.0"
+}

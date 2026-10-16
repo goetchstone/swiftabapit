@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "type": "apps",
+      "id": "361309726"
+    },
+    {
+      "type": "apps",
+      "id": "409201541"
+    }
+  ],
+  "links": {
+    "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps",
+    "next": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/apps?cursor=MDowOjE3NDYxMTg0NjkzOTc"
+  },
+  "meta": {
+    "paging": {
+      "nextCursor": "MDowOjE3NDYxMTg0NjkzOTc",
+      "limit": 2
+    }
+  }
+}
