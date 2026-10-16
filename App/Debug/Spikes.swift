@@ -4,8 +4,11 @@ import CryptoKit
 import Foundation
 import LocalAuthentication
 import Security
+import Synchronization
+import Vault
 
-/// Phase 0 spikes, debug builds only, headless: `ABAPIT_SPIKE=keychain` (S1) or `model` (S4). Results
+/// Spikes, debug builds only, headless: `ABAPIT_SPIKE=keychain` (S1), `vault` (Phase 1: the real
+/// KeychainStore and Vault end to end) or `model` (S4). Results
 /// print to stdout and the process exits before any window exists. They only ever touch one throwaway key
 /// item, tagged `swiftabapit-spike.p256` — never the operator's.
 enum Spikes {
@@ -17,6 +20,7 @@ enum Spikes {
         print("signing: team=\(teamIdentifier() ?? "none (ad-hoc)"); sandboxed=\(isSandboxed)")
         switch name {
         case "keychain": return keychain()
+        case "vault": return vault()
         case "model": return ModelSpike.run()
         default:
             print("unknown spike \(name); use keychain or model")
@@ -111,6 +115,50 @@ enum Spikes {
         print("delete: \(describe(deleted)); delete again: \(describe(again)) (errSecItemNotFound expected)")
         // Every step must hold, the signature's verification included: a DER-in-JWS bug must not exit 0.
         return allVerified && deleted == errSecSuccess && again == errSecItemNotFound ? 0 : 1
+    }
+
+    /// Phase 1: the app's own `KeychainStore` and `Vault`, end to end, on a throwaway org `swiftabapit-spike`
+    /// under the service `swiftabapit-spike`: store a key, sign twice (the second inside the session, no prompt),
+    /// verify both raw signatures with the public half, store and read a password, list the inventory, remove
+    /// everything, and list it empty. The one place KeychainStore's DER-to-raw conversion runs before a live
+    /// token mint. Exits 0 only if every step held.
+    static func vault() -> Int32 {
+        NSApplication.shared.setActivationPolicy(.accessory)
+        let done = DispatchSemaphore(value: 0)
+        let status = Mutex<Int32>(1)
+        Task.detached {
+            defer { done.signal() }
+            let vault = Vault(store: KeychainStore(service: "swiftabapit-spike"))
+            guard let key = VaultItem(org: "swiftabapit-spike", kind: .appleKey),
+                  let token = VaultItem(org: "swiftabapit-spike", kind: .mosyleAccessToken) else { return }
+            do {
+                let software = P256.Signing.PrivateKey()
+                try await vault.storeKey(KeyImport.parse(Secret(software.pemRepresentation)), as: key)
+                var verified = true
+                for attempt in 1...2 {
+                    let message = Data("swiftabapit vault spike \(attempt)".utf8)
+                    let clock = ContinuousClock(), started = clock.now
+                    let signature = try await vault.signForSpike(message, with: key)
+                    let ok = (try? P256.Signing.ECDSASignature(rawRepresentation: signature)).map { software.publicKey.isValidSignature($0, for: message) } ?? false
+                    verified = verified && ok && signature.count == 64
+                    print("sign \(attempt): \(signature.count) bytes, verifies=\(ok), took \(clock.now - started)")
+                }
+                try await vault.store(Secret("not-a-secret"), as: token)
+                print("inventory: \(try await vault.inventory()["swiftabapit-spike"].map { $0.map(\.rawValue).sorted() } ?? [])")
+                try await vault.remove(org: "swiftabapit-spike")
+                let left = try await vault.inventory()["swiftabapit-spike"]
+                print("after remove: \(left.map { $0.map(\.rawValue).sorted() } ?? [])")
+                status.withLock { $0 = verified && left == nil ? 0 : 1 }
+            } catch let error as VaultError {
+                print("vault: \(error) — \(error.guidance)")
+                try? await vault.remove(org: "swiftabapit-spike")
+            } catch {
+                print("vault: \(error)")
+                try? await vault.remove(org: "swiftabapit-spike")
+            }
+        }
+        done.wait()
+        return status.withLock { $0 }
     }
 
     static func teamIdentifier() -> String? {

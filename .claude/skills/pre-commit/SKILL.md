@@ -62,6 +62,9 @@ Act on the items your diff touches.
     `Config/*.entitlements` or the graph lists first: a PR can weaken its own gate. Fix each real finding
     with a test. A finding an invariant should have stopped → one RULE-FEEDBACK entry.
 14. **Mutants**: for ported behaviour, mutate the code by hand and record the mutants the tests killed
-    in the PR description.
+    in the PR description. For each retry, refresh, cap, clamp and fallback in the diff, name the test
+    that drives it and the stub switch it uses; one without both is a finding (failure-log 2026-10-16,
+    "the stub could not fail"). Run mutants with a script that restores each file, and call an
+    equivalent mutant equivalent, with the reason.
 15. **Publish as goetchstone**: `GH_TOKEN="$(gh auth token --user goetchstone)"`, after
     `gh api user --jq .login` says `goetchstone`. Don't stack on a branch `--delete-branch` will remove.

@@ -935,7 +935,7 @@ Mosyle tracks don't bend a shared mock.
 
 ### Phase 0: scaffold, process, spikes, generators
 
-**Status:** built on branch `phase-0-scaffold` (2026-10-16): repo, project, package graph (with the pure
+**Status:** merged 2026-10-16 (PR #1). Built: repo, project, package graph (with the pure
 `Wire` module, §3.2), process files and skills, CI (hygiene, macOS, libFuzzer, `ci-ok`), CodeQL, Scorecard,
 the drift job, `check_app.sh`; **S2** contracts: Business 2.6 = 57 endpoints, School 1.7 = 11; **S3** goldens
 from abapit `3890091` (main; its pure modules are identical to `9875ee7`), deterministic across runs, with the serial parser ported as the pilot (5/5 mutants
@@ -994,7 +994,11 @@ with one maintainer, a CODEOWNERS review rule would block every merge (RULE-FEED
 
 ### Phase 1: Apple core
 
-**Status:** not started.
+**Status:** split in two for review size (2026-10-16). **1a** (package: Vault, Orgs, Wire, HTTPCore, JSONAPI,
+AppleModels for devices/coverage/locks/services, AppleBusiness reads and probes, the strict AppleStub): on
+branch `phase-1a-apple-core`. **1b** (the app: Devices, Find, inspector, services, minimal dashboard,
+Settings with key import, CSV with the allowlist, the demo org, the acceptance pass): next. Live checks wait
+for S1's team build.
 
 **Owns:** `Vault/`, `HTTPCore/`, `JSONAPI/`, `AppleModels/` (device + MDM-service types),
 `AppleBusiness/`, `TestSupport/AppleStub*`, `App/Screens/{Devices,DeviceInspector,MDMServices,Settings,Dashboard(stub)}`.
