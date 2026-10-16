@@ -6,8 +6,10 @@ import Wire
 /// and never stored with the request (a held write's digest excludes them, plan §3.8).
 public protocol Authorizer: Sendable {
     func headers(for host: APIHost) async throws -> [String: String]
-    /// A 401: drop the cached token, so the next `headers` mints a fresh one.
-    func invalidate() async
+    /// A 401 for a request sent with `rejected`: drop the cached credential if it is still that one, so the next
+    /// `headers` mints a fresh one. A late 401 for an older token must not throw away a newer one (Phase 1a's
+    /// review: one expiry minted three tokens).
+    func invalidate(rejected: [String: String]) async
 }
 
 /// An HTTP answer, whatever its status: each API's client classifies it.
@@ -40,15 +42,17 @@ public actor HTTPClient {
 
     private let transport: any Transport
     private let limiter: RateLimiter
+    private let bodyLimit: Int
     private let sleep: @Sendable (Duration) async throws -> Void
     private let clock: @Sendable () -> Date
     private static let log = Logger(subsystem: "io.github.goetchstone.swiftabapit", category: "http")
 
-    public init(transport: any Transport, limiter: RateLimiter,
+    public init(transport: any Transport, limiter: RateLimiter, bodyLimit: Int = HTTPClient.bodyLimit,
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
                 clock: @escaping @Sendable () -> Date = { Date() }) {
         self.transport = transport
         self.limiter = limiter
+        self.bodyLimit = bodyLimit
         self.sleep = sleep
         self.clock = clock
     }
@@ -64,11 +68,27 @@ public actor HTTPClient {
     }
 
     /// A next-page link Apple returned: followed only when it stays on `host`, under `/v1/`.
-    package func read(next url: URL, on host: APIHost, template: String, authorizer: any Authorizer) async throws -> HTTPResponse {
-        guard APIHost(of: url) == host, url.path(percentEncoded: true).hasPrefix("/v1/") else {
+    package func read(next url: URL, on host: APIHost, template: String, keeping limit: String? = nil,
+                      authorizer: any Authorizer) async throws -> HTTPResponse {
+        let path = url.path(percentEncoded: true)
+        // A dot segment in any spelling (`..`, `%2e%2E`, `.%2e`) or a bad escape is refused: decoded, it would climb
+        // out of `/v1/`.
+        guard APIHost(of: url) == host, path.hasPrefix("/v1/"),
+              !path.split(separator: "/").contains(where: { segment in
+                  guard let decoded = String(segment).removingPercentEncoding else { return true }
+                  return decoded == "." || decoded == ".." || decoded.contains("/")
+              }) else {
             throw HTTPFailure.refusedHost(url.host(percentEncoded: false) ?? "?")
         }
-        return try await read(url: url, host: host, method: .get, template: template, body: nil, authorizer: authorizer)
+        var target = url
+        // Apple's example next link carries only `cursor`; asked once for 1000 a page, keep asking for 1000, or the
+        // page cap would cover a tenth of the fleet (Phase 1a's review). Check live.
+        if let limit, var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           !(components.queryItems ?? []).contains(where: { $0.name == "limit" }) {
+            components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "limit", value: limit)]
+            target = components.url ?? url
+        }
+        return try await read(url: target, host: host, method: .get, template: template, body: nil, authorizer: authorizer)
     }
 
     private func read(url: URL, host: APIHost, method: HTTPMethod, template: String, body: Data?, authorizer: any Authorizer) async throws -> HTTPResponse {
@@ -83,7 +103,8 @@ public actor HTTPClient {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             }
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            for (name, value) in try await authorizer.headers(for: host) { request.setValue(value, forHTTPHeaderField: name) }
+            let credentials = try await authorizer.headers(for: host)
+            for (name, value) in credentials { request.setValue(value, forHTTPHeaderField: name) }
             let started = ContinuousClock.now
             let response: HTTPResponse
             do {
@@ -100,7 +121,7 @@ public actor HTTPClient {
             Self.log.info("\(method.rawValue, privacy: .public) \(host.rawValue, privacy: .public) \(template, privacy: .public) -> \(response.status) (\((ContinuousClock.now - started).components.seconds * 1000 + (ContinuousClock.now - started).components.attoseconds / 1_000_000_000_000_000) ms)")
             if response.status == 401, !refreshed {
                 refreshed = true
-                await authorizer.invalidate()
+                await authorizer.invalidate(rejected: credentials)
                 continue
             }
             if response.status == 429 {
@@ -136,7 +157,7 @@ public actor HTTPClient {
     private func exchange(_ request: URLRequest) async throws -> HTTPResponse {
         guard let url = request.url, APIHost(of: url) != nil else { throw HTTPFailure.refusedHost(request.url?.host() ?? "?") }
         do {
-            let (body, http) = try await transport.send(request, limit: Self.bodyLimit)
+            let (body, http) = try await transport.send(request, limit: bodyLimit)
             var headers: [String: String] = [:]
             for (name, value) in http.allHeaderFields {
                 if let name = name as? String, let value = value as? String { headers[name.lowercased()] = value }
@@ -153,8 +174,13 @@ public actor HTTPClient {
     /// `Retry-After` in seconds or as an HTTP date, else 2^attempt seconds; never more than 60 s (plan §3.3).
     static func wait(after response: HTTPResponse, attempt: Int, now: Date) -> Duration {
         if let value = response.headers["retry-after"]?.trimmingCharacters(in: .whitespaces) {
-            if let seconds = Double(value), seconds.isFinite, seconds >= 0 { return min(.seconds(seconds), longestWait) }
-            if let date = httpDate(value) { return min(.seconds(max(date.timeIntervalSince(now), 0)), longestWait) }
+            let ceiling = Double(longestWait.components.seconds)
+            // Clamped as a number first: `Duration.seconds` traps past about 1.7e20 (Phase 1a's review).
+            if let seconds = Double(value), seconds.isFinite, seconds >= 0 { return .seconds(min(seconds, ceiling)) }
+            if let date = httpDate(value) {
+                let wait = date.timeIntervalSince(now)
+                return .seconds(wait.isFinite ? min(max(wait, 0), ceiling) : ceiling)
+            }
         }
         return min(.seconds(1 << min(attempt, 6)), longestWait)
     }

@@ -14,6 +14,10 @@ public struct OrgStore: Sendable, Equatable {
     public var activeID: String?
     /// The version the file said; above `version`, `save` refuses.
     public private(set) var fileVersion: Int
+    /// Entries of `orgs` this version can't address (no string `id`) and keys of the file it doesn't know: kept and
+    /// written back as they were (Phase 1a's review: a load and save deleted them).
+    private var unaddressable: [JSONValue] = []
+    private var extras = JSONObject()
 
     public init(orgs: [OrgProfile] = [], activeID: String? = nil) {
         self.orgs = orgs
@@ -30,6 +34,7 @@ public struct OrgStore: Sendable, Equatable {
         case notAnOrgFile
         case newerVersion(Int)
         case duplicateClientID(String)
+        case duplicateID(String)
         case unknownOrg(String)
         case unwritable(errno: Int32)
 
@@ -40,6 +45,7 @@ public struct OrgStore: Sendable, Equatable {
             case .newerVersion(let version):
                 "The organizations file was written by a newer abapit (version \(version)); this one won't change it."
             case .duplicateClientID(let id): "Another organization already uses the client ID \(id)."
+            case .duplicateID(let id): "Another organization already has the id \(id)."
             case .unknownOrg(let id): "There's no organization \(id)."
             case .unwritable(let code): "The organizations file couldn't be saved (\(String(cString: strerror(code))))."
             }
@@ -50,7 +56,9 @@ public struct OrgStore: Sendable, Equatable {
 
     /// abapit's `slugify` (`[^a-z0-9]+` → `-`, trimmed, `org` when empty), kept to 48 characters, then made
     /// unique with `-2`, `-3`, … (abapit's `_unique_slug`).
-    public func uniqueID(for name: String) -> String {
+    /// `avoiding` adds ids that are taken elsewhere: an org removed from this file whose Keychain items are still
+    /// stored keeps its id, so a new org never inherits another's secrets (Phase 1a's review).
+    public func uniqueID(for name: String, avoiding taken: Set<String> = []) -> String {
         var slug = "", dash = false
         for scalar in name.lowercased().unicodeScalars {
             if ("a"..."z").contains(scalar) || ("0"..."9").contains(scalar) {
@@ -65,7 +73,7 @@ public struct OrgStore: Sendable, Equatable {
         while slug.hasSuffix("-") { slug.removeLast() }
         if slug.isEmpty { slug = "org" }
         var candidate = slug, counter = 2
-        while self[candidate] != nil {
+        while self[candidate] != nil || taken.contains(candidate) {
             candidate = "\(slug)-\(counter)"
             counter += 1
         }
@@ -74,6 +82,7 @@ public struct OrgStore: Sendable, Equatable {
 
     /// Adds `profile`; the first org becomes active. An Apple org's client ID must be unique.
     public mutating func add(_ profile: OrgProfile) throws(Failure) {
+        guard self[profile.id] == nil else { throw .duplicateID(profile.id) }
         try checkClientID(profile, replacing: nil)
         orgs.append(profile)
         if activeID == nil { activeID = profile.id }
@@ -93,9 +102,11 @@ public struct OrgStore: Sendable, Equatable {
         for index in orgs.indices where orgs[index].pairedOrg == id { orgs[index].pairedOrg = "" }
     }
 
+    /// Client IDs compare trimmed and case-insensitively: `BUSINESSAPI.abc ` is `businessapi.ABC` to a person.
     private func checkClientID(_ profile: OrgProfile, replacing: String?) throws(Failure) {
-        guard profile.provider == .known(.apple), !profile.clientID.isEmpty else { return }
-        if orgs.contains(where: { $0.id != replacing && $0.provider == .known(.apple) && $0.clientID == profile.clientID }) {
+        func key(_ id: String) -> String { id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard profile.provider == .known(.apple), !key(profile.clientID).isEmpty else { return }
+        if orgs.contains(where: { $0.id != replacing && $0.provider == .known(.apple) && key($0.clientID) == key(profile.clientID) }) {
             throw .duplicateClientID(profile.clientID)
         }
     }
@@ -120,9 +131,18 @@ public struct OrgStore: Sendable, Equatable {
         }
         guard let root = JSONValue.parse(String(decoding: bytes[..<total], as: UTF8.self))?.object,
               let version = root["version"]?.int, let list = root["orgs"]?.array else { throw .notAnOrgFile }
-        var store = OrgStore(orgs: list.compactMap { $0.object.map(OrgProfile.init(raw:)) }.filter { !$0.id.isEmpty },
-                             activeID: root["active"]?.string)
+        var usable: [OrgProfile] = [], kept: [JSONValue] = [], ids: Set<String> = []
+        for entry in list {
+            if let object = entry.object, let id = object["id"]?.string, !id.isEmpty, ids.insert(id).inserted {
+                usable.append(OrgProfile(raw: object))
+            } else {
+                kept.append(entry)
+            }
+        }
+        var store = OrgStore(orgs: usable, activeID: root["active"]?.string)
         store.fileVersion = version
+        store.unaddressable = kept
+        for (key, value) in root where !["version", "active", "orgs"].contains(key) { store.extras[key] = value }
         return store
     }
 
@@ -138,7 +158,8 @@ public struct OrgStore: Sendable, Equatable {
         var root = JSONObject()
         root["version"] = .number(String(Self.version))
         if let activeID { root["active"] = .string(activeID) }
-        root["orgs"] = .array(orgs.map { .object($0.raw) })
+        root["orgs"] = .array(orgs.map { .object($0.raw) } + unaddressable)
+        for (key, value) in extras { root[key] = value }
         let bytes = Array((JSONValue.dumps(.object(root)) + "\n").utf8)
         let final = folder.appending(path: Self.fileName)
         let temporary = folder.appending(path: ".\(Self.fileName).\(UUID().uuidString)")

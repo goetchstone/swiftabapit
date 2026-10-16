@@ -31,7 +31,8 @@ public actor RateLimiter {
     public init(readsPerMinute: Double? = nil,
                 now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now },
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
-        let reads = min(max(readsPerMinute ?? Self.defaultReadsPerMinute, Self.floor), Self.ceiling)
+        let asked = readsPerMinute.flatMap { $0.isFinite ? $0 : nil } ?? Self.defaultReadsPerMinute
+        let reads = min(max(asked, Self.floor), Self.ceiling)
         let start = now()
         buckets = [
             .read: Bucket(perSecond: reads / 60, burst: Self.readBurst, minimum: Self.floor / 60, maximum: Self.ceiling / 60,

@@ -30,9 +30,22 @@ broker makes a credential exchange), `HTTPCoreTests`, `scripts/check_app.sh` (no
 - **Swift 6.4 crashes compiling the async form of `urlSession(_:task:willPerformHTTPRedirection:newRequest:)`**
   in a class with `NonisolatedNonsendingByDefault` (SILGen, `emitNativeToForeignThunk`). The completion-handler
   form compiles. Recheck on the next toolchain.
+- **`Duration.seconds(Double)` traps past about 1.7e20 seconds.** A server's `Retry-After` is clamped as a
+  number before it becomes a `Duration` (Phase 1a review H1: a 22-digit value crashed the app). Any wait or
+  lifetime taken from a response goes through the same clamp.
+- **A late 401 must not drop a newer token.** `Authorizer.invalidate(rejected:)` gets the headers the refused
+  request carried; the broker drops its token only if they match. One expiry, one mint, however many reads
+  were in flight.
+- **A next link is checked after decoding**: a segment that decodes to `.` or `..` or holds a `/` is refused
+  (`.%2e` got past a list of spellings). Foundation re-encodes a bad escape (`%zz` becomes `%25zz`), so that
+  case is a literal, not a bypass.
+- **Apple's next link carries only `cursor`.** The client re-adds the first page's `limit`, or the 200-page
+  cap would cover a tenth of a large fleet. Check live.
+- A rate read from `orgs.json` that isn't finite is the default: a NaN rate never waits.
 - An ID typed into Find goes into a path: `AppleRead.isPathSafe` refuses anything but `[A-Za-z0-9._-]`, not
   starting with `.`, at most 128 characters, before a request exists.
 
 ## Testing / live-verification status
-- Offline: `HTTPCoreTests`, `AppleClientTests` (strict stub). Live (Phase 1, operator): the real read rate and
+- Offline: `HTTPCoreTests`, `AppleClientTests`, `AppleClientFailureTests` (transport failures, a revoked
+  account, a body over the cap, short and expiring tokens: all through the strict stub). Live (Phase 1, operator): the real read rate and
   whether 429 carries `Retry-After`.

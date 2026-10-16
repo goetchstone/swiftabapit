@@ -62,8 +62,10 @@ public actor TokenBroker: Authorizer {
         return ["Authorization": "Bearer " + String(decoding: bearer.bytes, as: UTF8.self)]
     }
 
-    public func invalidate() {
-        token = nil
+    /// Drops the token only if the rejected request carried it: a late 401 for an older token keeps the new one.
+    public func invalidate(rejected: [String: String]) {
+        guard let token, rejected["Authorization"] == "Bearer " + String(decoding: token.value.bytes, as: UTF8.self) else { return }
+        self.token = nil
     }
 
     private func current() async throws -> Secret {

@@ -104,8 +104,9 @@ public struct OrgProfile: Sendable, Equatable, Identifiable {
 
     /// Requests per minute the rate limiter learned for this org's reads (plan §3.3); 0 when not learned.
     public var learnedReadsPerMinute: Double {
-        get { raw["learned_reads_per_minute"]?.double ?? 0 }
-        set { raw["learned_reads_per_minute"] = .number(String(newValue)) }
+        get { raw["learned_reads_per_minute"]?.double.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 0 }
+        // Never NaN or infinity: JSON can't hold them, and a NaN rate never waits (Phase 1a's review).
+        set { raw["learned_reads_per_minute"] = newValue.isFinite && newValue > 0 ? .number(String(newValue)) : nil }
     }
 
     /// The assertion's issuer: the team ID when set, else the client ID.

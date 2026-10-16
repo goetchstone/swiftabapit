@@ -64,6 +64,18 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   compare-and-swap, so a removed org stays removed.
 - **A set is whole or absent**: a failure part-way through importing a Mosyle org's four secrets
   removes what was written.
+- **Every use checks the session**, not only reads: `sign`, `store`, `storeKey` and `refresh` end an
+  expired one first (Phase 1a review: an hour-old session still covered a write).
+- **A set's clean-up tries every kind** and throws the first refusal, so what is left after a refused
+  clean-up is at most the refused items, never old and new mixed.
+- **A key and a secret each have one door**: `store` refuses `.appleKey` and `storeKey` refuses the rest
+  (`VaultError.wrongKind`). `KeychainStore.write` would trap on a key; `MemoryStore` hid that.
+- **`storeKey` is still delete-then-add** (a `kSecClassKey` item can't be updated in place). A failed add
+  unindexes the key, so the inventory never lists a key that isn't stored; the old key is gone either way.
+- **A removed org's id stays taken while its items are stored**: `OrgStore.uniqueID(for:avoiding:)` takes
+  the vault inventory, or a new org of the same name would inherit the old one's secrets.
+- **The PEM text can't be wiped.** `KeyImport` zeroes its read buffer, but the `String` copies it parses
+  live until Swift frees them. Accepted: the key leaves memory for the Keychain at once.
 - **The session counts sleep**: `ContinuousClock`, not `SuspendingClock` (GamGUI failure-log
   2026-09-24).
 - **Keychain calls block on a prompt**: run them on a GCD thread, never the main thread or the

@@ -81,6 +81,50 @@ struct VaultTests {
         #expect(try await vault.inventory()[Self.org] == nil)
     }
 
+    /// Review M4: when the clean-up after a failed write is refused too, that refusal is thrown (something is
+    /// still stored), and every other kind of the set is still removed.
+    @Test func aRefusedCleanUpIsReportedAndTheRestIsStillRemoved() async throws {
+        let store = MemoryStore(), vault = Vault(store: store)
+        try await vault.replaceSet([.mosyleAccessToken: Secret("a"), .mosyleEmail: Secret("b"), .mosylePassword: Secret("c")], for: Self.org)
+        store.failNext(.write, with: errSecInteractionNotAllowed, skipping: 1)
+        store.failNext(.delete, with: errSecAuthFailed)
+        await #expect(throws: VaultError.keychain(errSecAuthFailed)) {
+            try await vault.replaceSet([.mosyleAccessToken: Secret("x"), .mosyleEmail: Secret("y"), .mosylePassword: Secret("z")],
+                                       for: Self.org)
+        }
+        #expect(try await vault.inventory()[Self.org]?.count == 1, "only the one whose removal was refused is left")
+    }
+
+    /// A key goes in only through `storeKey`, and a secret never through it.
+    @Test func eachKindGoesThroughItsOwnDoor() async throws {
+        let vault = Vault(store: MemoryStore())
+        await #expect(throws: VaultError.wrongKind(.appleKey)) { try await vault.store(Secret("x"), as: Self.key) }
+        await #expect(throws: VaultError.wrongKind(.mosyleAccessToken)) {
+            try await vault.storeKey(KeyImport.parseForTests(P256.Signing.PrivateKey()), as: Self.token)
+        }
+        await #expect(throws: VaultError.wrongKind(.appleKey)) { try await vault.replaceSet([.appleKey: Secret("x")], for: Self.org) }
+        #expect(try await vault.inventory()[Self.org] == nil)
+    }
+
+    /// Review M2 (mutant M12): signing, storing and refreshing all end an expired session first, not only reads.
+    @Test func everyUseEndsAnExpiredSession() async throws {
+        let store = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        try await vault.storeKey(KeyImport.parseForTests(P256.Signing.PrivateKey()), as: Self.key)
+        _ = try await vault.sign(Data("m".utf8), with: Self.key)
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        _ = try await vault.sign(Data("m".utf8), with: Self.key)
+        #expect(store.sessionsEnded == 1, "sign")
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        try await vault.store(Secret("t"), as: Self.token)
+        #expect(store.sessionsEnded == 2, "store")
+        _ = try await vault.secret(Self.token)
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        try await vault.refresh(Secret("u"), as: Self.token, replacing: Secret("t"))
+        #expect(store.sessionsEnded == 3, "refresh")
+    }
+
     @Test func removingStopsAtTheFirstRefusalAndRemovesTheKeyFirst() async throws {
         let store = MemoryStore(), vault = Vault(store: store)
         try await vault.storeKey(KeyImport.parseForTests(P256.Signing.PrivateKey()), as: Self.key)

@@ -10,6 +10,8 @@ public enum VaultError: Error, Equatable, Sendable {
     case accessControlUnavailable
     /// The key bytes couldn't be turned into a Keychain key.
     case keyNotUsable
+    /// A key handed where a secret belongs, or the other way round.
+    case wrongKind(VaultItem.Kind)
 
     /// What the operator is told: what happened and what to do, never a secret, never a bare status.
     public var guidance: String {
@@ -29,6 +31,8 @@ public enum VaultError: Error, Equatable, Sendable {
             "The Keychain couldn't set the Touch ID requirement on the item, so it wasn't stored."
         case .keyNotUsable:
             "That key couldn't be stored as a Keychain key."
+        case .wrongKind(let kind):
+            "\(kind.displayName) can't be stored that way."
         }
     }
 }

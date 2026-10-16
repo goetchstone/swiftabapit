@@ -85,6 +85,9 @@ def main() -> int:
                 problems.append(f"{name}: custom {key} {target[key]!r}")
         if target.get("exclude"):
             problems.append(f"{name}: exclude {target['exclude']!r}")
+        for setting in target.get("settings", []):
+            if "unsafeFlags" in json.dumps(setting.get("kind", {})):
+                problems.append(f"{name}: unsafeFlags (they can name the package and open its `package` boundary)")
         if kind == "regular":
             regular[name] = names(target["dependencies"])
         elif kind == "test":

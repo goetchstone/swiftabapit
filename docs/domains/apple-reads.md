@@ -32,7 +32,13 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   - The stub's error `code` strings (`FORBIDDEN_ERROR`, `NOT_FOUND`, `PARAMETER_ERROR.INVALID`): the contract
     documents the shape, not the values. The client classifies on status first, so a different code only
     loses detail.
-  - The shape of `links.next` (the stub uses `cursor`): the client follows the link as given, same host only.
+  - The shape of `links.next`: Apple's example carries only `cursor`, and the stub now does the same (with
+    `meta.paging.nextCursor`), so the client re-adds `limit`. The stub refuses any parameter an endpoint
+    doesn't document, `cursor` included where it isn't, as Apple's contract says Apple does.
+  - `meta.paging.total`: absent in Apple's example; the stub sends it only when a test asks.
+- **Only a 404 or `"data": null` is unassigned.** A 403, a 500 or a malformed 200 (`{}`, `[]`, a linkage of
+  another type) throws `.malformed` or its error: Phase 4's Guard re-validates assignments with this read.
+- **A probe says what failed**: `forbidden`, `ok`, or `error <status>`; never `ok` for a failure (invariant 8).
 - School has no people, content or audit endpoints: `AppleSection.businessOnly`, and the stub fails a School
   request for them as unhandled.
 

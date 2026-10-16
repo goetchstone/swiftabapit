@@ -16,6 +16,9 @@ public enum AppleAPIError: Error, Equatable, Sendable {
     case server(status: Int)
     case unexpected(status: Int)
     case notJSON(bytes: Int)
+    /// A 2xx whose JSON isn't the shape the endpoint documents (`{}`, a list for a single item, a linkage with no
+    /// type): never read as "none" (Phase 1a's review: a malformed 200 read as "unassigned").
+    case malformed(String)
     case http(HTTPFailure)
     case token(TokenFailure)
     case vault(String)
@@ -51,6 +54,7 @@ public enum AppleAPIError: Error, Equatable, Sendable {
         case .server(let status): "Apple's service failed (HTTP \(status)). Try again later."
         case .unexpected(let status): "Apple answered HTTP \(status), which this app doesn't expect."
         case .notJSON(let bytes): "Apple's answer wasn't readable (\(bytes) bytes that aren't JSON)."
+        case .malformed(let what): "Apple's answer wasn't the shape it documents (\(what))."
         case .http(let failure): failure.message
         case .token(let failure): failure.message
         case .vault(let guidance): guidance

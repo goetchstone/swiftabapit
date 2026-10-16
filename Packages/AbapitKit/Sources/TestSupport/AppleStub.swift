@@ -57,6 +57,10 @@ public final class AppleStub: Transport, Sendable {
         var tokenFailures: [Int] = []
         var requests: [String] = []
         var mints = 0
+        var alwaysUnauthorized = false
+        var transportFailures = 0
+        var expiresIn = 3600
+        var reportsTotal = false
     }
 
     private let state = Mutex(State())
@@ -89,6 +93,14 @@ public final class AppleStub: Transport, Sendable {
     public func expireTokensOnce() { state.withLock { $0.unauthorizedOnce = true } }
     /// The next token request answers `status` (429, 500).
     public func failNextToken(_ status: Int) { state.withLock { $0.tokenFailures.append(status) } }
+    /// Every resource request answers 401, as an account whose key was revoked: a fresh token doesn't help.
+    public func revokeAccount() { state.withLock { $0.alwaysUnauthorized = true } }
+    /// The next `count` requests fail before reaching "Apple" (offline, a reset connection).
+    public func failTransport(_ count: Int) { state.withLock { $0.transportFailures = count } }
+    /// Tokens' `expires_in` from now on.
+    public func tokenLifetime(_ seconds: Int) { state.withLock { $0.expiresIn = seconds } }
+    /// Apple's example has no `meta.paging.total`; the stub adds one only when asked.
+    public func reportTotals() { state.withLock { $0.reportsTotal = true } }
 
     /// Every request, as `METHOD host/path?query`: what the tests assert on.
     public var requests: [String] { state.withLock { $0.requests } }
@@ -98,6 +110,12 @@ public final class AppleStub: Transport, Sendable {
 
     public func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url, let host = APIHost(of: url) else { throw StubFailure.unhandled("\(request.url?.absoluteString ?? "?")") }
+        let offline = state.withLock { state -> Bool in
+            guard state.transportFailures > 0 else { return false }
+            state.transportFailures -= 1
+            return true
+        }
+        if offline { throw URLError(.networkConnectionLost) }
         let method = request.httpMethod ?? "GET"
         let path = url.path(percentEncoded: false)
         state.withLock { $0.requests.append("\(method) \(host.rawValue)\(path)\(url.query(percentEncoded: true).map { "?\($0)" } ?? "")") }
@@ -112,6 +130,8 @@ public final class AppleStub: Transport, Sendable {
         }
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/2",
                                        headerFields: ["Content-Type": "application/json"].merging(headers) { $1 })!
+        // The transport's cap, as URLSessionTransport enforces it.
+        if body.count > limit { throw HTTPFailure.tooLarge(limit: limit) }
         return (body, response)
     }
 
@@ -150,9 +170,10 @@ public final class AppleStub: Transport, Sendable {
         let value = "stub-token-" + UUID().uuidString
         state.withLock {
             $0.mints += 1
-            $0.tokens[value] = Token(clientID: clientID, scope: account.scope, expires: Date(timeIntervalSince1970: TimeInterval(now + 3600)))
+            $0.tokens[value] = Token(clientID: clientID, scope: account.scope, expires: Date(timeIntervalSince1970: TimeInterval(now + $0.expiresIn)))
         }
-        return (200, [:], Self.json(["access_token": .string(value), "token_type": .string("Bearer"), "expires_in": .number("3600"),
+        let lifetime = state.withLock { $0.expiresIn }
+        return (200, [:], Self.json(["access_token": .string(value), "token_type": .string("Bearer"), "expires_in": .number(String(lifetime)),
                                      "scope": .string(scope)]))
     }
 
@@ -166,6 +187,7 @@ public final class AppleStub: Transport, Sendable {
         // The bearer: issued here, unexpired, for this host's scope.
         let bearer = request.value(forHTTPHeaderField: "Authorization") ?? ""
         let valid = state.withLock { state -> Bool in
+            if state.alwaysUnauthorized { return false }
             if state.unauthorizedOnce {
                 state.unauthorizedOnce = false
                 return false
@@ -203,7 +225,7 @@ public final class AppleStub: Transport, Sendable {
             guard let device = state.withLock({ $0.devices.first { $0.id == s[1] } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": device.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
         case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "appleCareCoverage":
-            if let bad = Self.check(query, allowed: ["limit", "fields[appleCareCoverage]"], fields: nil) { return bad }
+            if let bad = Self.check(query, allowed: ["limit", "cursor", "fields[appleCareCoverage]"], fields: nil) { return bad }
             guard state.withLock({ $0.devices.contains { $0.id == s[1] } }) else { return Self.notFound(path) }
             return page(state.withLock { $0.coverage[s[1]] ?? [] }, url: url, query: query, host: host)
         case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "activationLockStatus":
@@ -212,29 +234,34 @@ public final class AppleStub: Transport, Sendable {
             return (200, [:], Self.json(["data": lock.asJSON]))
         case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "assignedServer":
             // abapit saw 404 for an unassigned device (client.py:176-182).
+            if let bad = Self.check(query, allowed: ["fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) { return bad }
             guard let id = state.withLock({ $0.assignments[s[1]] }),
                   let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
         case let s where s.count == 4 && s[0] == "orgDevices" && s[2] == "relationships" && s[3] == "assignedServer":
             // Assumed to match the full read's 404 (docs/domains/apple-reads.md: check live).
+            if let bad = Self.check(query, allowed: [], fields: nil) { return bad }
             guard let id = state.withLock({ $0.assignments[s[1]] }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(id)])]))
         case ["mdmServers"]:
-            if let bad = Self.check(query, allowed: ["limit", "fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) {
+            if let bad = Self.check(query, allowed: ["limit", "cursor", "fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) {
                 return bad
             }
             return page(state.withLock { $0.services }, url: url, query: query, host: host)
         case let s where s.count == 2 && s[0] == "mdmServers":
+            if let bad = Self.check(query, allowed: ["fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) { return bad }
             guard let service = state.withLock({ $0.services.first { $0.id == s[1] } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
         case let s where s.count == 4 && s[0] == "mdmServers" && s[2] == "relationships" && s[3] == "devices":
-            if let bad = Self.check(query, allowed: ["limit"], fields: nil) { return bad }
+            if let bad = Self.check(query, allowed: ["limit", "cursor"], fields: nil) { return bad }
             guard state.withLock({ $0.services.contains { $0.id == s[1] } }) else { return Self.notFound(path) }
             let linkages = state.withLock { state in
                 state.assignments.filter { $0.value == s[1] }.keys.sorted().map { Resource(type: "orgDevices", id: $0) }
             }
             return page(linkages, url: url, query: query, host: host, linkagesOnly: true)
         case ["auditEvents"]:
+            if let bad = Self.check(query, allowed: ["cursor", "fields[auditEvents]", "filter[actorId]", "filter[endTimestamp]", "filter[startTimestamp]",
+                                                     "filter[subjectId]", "filter[type]", "limit"], fields: nil) { return bad }
             guard query["filter[startTimestamp]"] != nil, query["filter[endTimestamp]"] != nil else {
                 return Self.error(400, "PARAMETER_ERROR.REQUIRED", "A parameter is required", "filter[startTimestamp] and filter[endTimestamp] are required.",
                                   parameter: "filter[startTimestamp]")
@@ -255,14 +282,18 @@ public final class AppleStub: Transport, Sendable {
         let start = query["cursor"].flatMap(Int.init) ?? 0
         let slice = items.dropFirst(start).prefix(limit)
         var links: JSONObject = ["self": .string(url.absoluteString)]
+        var paging: JSONObject = ["limit": .number(String(limit))]
         if start + slice.count < items.count {
+            // As Apple's example: the next link carries the cursor alone (get-org-devices.response.json).
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            components.queryItems = (components.queryItems ?? []).filter { $0.name != "cursor" } + [URLQueryItem(name: "cursor", value: String(start + slice.count))]
+            components.queryItems = [URLQueryItem(name: "cursor", value: String(start + slice.count))]
             links["next"] = .string(components.url!.absoluteString)
+            paging["nextCursor"] = .string(String(start + slice.count))
         }
+        if state.withLock({ $0.reportsTotal }) { paging["total"] = .number(String(items.count)) }
         let data = slice.map { linkagesOnly ? JSONValue.object(["type": .string($0.type), "id": .string($0.id)]) : $0.asJSON }
         return (200, [:], Self.json(["data": .array(Array(data)), "links": .object(links),
-                                     "meta": .object(["paging": .object(["limit": .number(String(limit)), "total": .number(String(items.count))])])]))
+                                     "meta": .object(["paging": .object(paging)])]))
     }
 
     // MARK: validation and bodies

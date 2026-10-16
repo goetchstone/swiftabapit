@@ -27,6 +27,20 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-16 — "Stubs fail like the APIs" was read as "refuse like the APIs"
+- **What happened:** Phase 1a's strict stub refused every request Apple would refuse, and could not
+  produce a dropped connection, a revoked account, a short-lived token or an oversized body. 13 of the
+  reviewer's 14 mutants survived, and one header crashed the app (failure-log 2026-10-16, "the stub could
+  not fail").
+- **Invariant in force:** #5 (stubs fail like the APIs) and #7 (bounded).
+- **Why it didn't hold:** wrong reading: the invariant's text covers it, but "strict" pulled the work toward
+  validating requests. Bounds (#7) were written and never exercised, so they held only by inspection.
+- **Would a rule have caught it?** yes, if stated as a check: every failure branch in a client has a stub
+  switch that drives it, and a test that uses the switch.
+- **Enforcement home if changed:** skill (`pre-commit`: "for each retry, refresh, cap and fallback in the
+  diff, name the test that drives it") and the review brief. CLAUDE.md invariant 5 gains "and has a switch
+  for each failure the client handles".
+
 ## 2026-10-16 — A check's own author picked its mutants, and the review broke eight checks
 - **What happened:** Phase 0's checks each passed their author's mutants and fell to the reviewer's (failure-log
   2026-10-16, "the gate checked names, not values"): a sandbox entitlement of another type, a second

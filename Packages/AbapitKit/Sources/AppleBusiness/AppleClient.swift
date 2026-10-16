@@ -36,10 +36,10 @@ public actor AppleClient {
     private let pageCap: Int
 
     public init(account: TokenBroker.Account, vault: Vault, transport: any Transport, limiter: RateLimiter,
-                pageCap: Int = AppleClient.defaultPageCap, now: @escaping @Sendable () -> Date = { Date() },
+                pageCap: Int = AppleClient.defaultPageCap, bodyLimit: Int = HTTPClient.bodyLimit, now: @escaping @Sendable () -> Date = { Date() },
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.account = account
-        let http = HTTPClient(transport: transport, limiter: limiter, sleep: sleep, clock: now)
+        let http = HTTPClient(transport: transport, limiter: limiter, bodyLimit: bodyLimit, sleep: sleep, clock: now)
         self.http = http
         broker = TokenBroker(account: account, vault: vault, http: http, now: now)
         self.pageCap = pageCap
@@ -74,21 +74,38 @@ public actor AppleClient {
     /// The service the device is assigned to; nil when it is unassigned (Apple answers 404).
     public func assignedService(_ serial: String) async throws -> MDMService? {
         guard let read = AppleRead.assignedService(scope, serial: serial) else { throw AppleAPIError.notFound }
+        let document: Document
         do {
-            return try await MDMService(resource: one(read))
+            document = try await documentOf(read)
         } catch AppleAPIError.notFound {
             return nil
         }
+        if case .null? = document.data { return nil }
+        guard let resource = document.resource, resource.type == MDMService.resourceType, !resource.id.isEmpty else {
+            throw AppleAPIError.malformed("an assigned server")
+        }
+        return MDMService(resource: resource)
     }
 
     /// The assigned service's id alone (a linkage); nil when unassigned.
+    /// The assigned service's id alone (a linkage); nil when unassigned: a 404, or an explicit `"data": null`.
+    /// Anything else that isn't an `mdmServers` linkage throws: the Guard re-validates assignments with this read.
     public func assignedServiceID(_ serial: String) async throws -> String? {
         guard let read = AppleRead.assignedServiceID(scope, serial: serial) else { throw AppleAPIError.notFound }
+        let document: Document
         do {
-            let document = try await documentOf(read)
-            return document.data.flatMap(Linkage.init)?.id
+            document = try await documentOf(read)
         } catch AppleAPIError.notFound {
             return nil
+        }
+        switch document.data {
+        case .null?: return nil
+        case let value?:
+            guard let linkage = Linkage(value), linkage.type == "mdmServers", !linkage.id.isEmpty else {
+                throw AppleAPIError.malformed("an assigned-server linkage")
+            }
+            return linkage.id
+        case nil: throw AppleAPIError.malformed("an assigned-server linkage")
         }
     }
 
@@ -148,6 +165,7 @@ public actor AppleClient {
         case .badRequest: "error 400"
         case .rateLimited: "error 429"
         case .server(let status), .unexpected(let status): "error \(status)"
+        case .malformed: "error malformed"
         default: "error"
         }
     }
@@ -170,8 +188,12 @@ public actor AppleClient {
         }
     }
 
+    /// The single resource a `GET …/{id}` returns. A 2xx without one is malformed, never "not found": only Apple's
+    /// 404 says that.
     private func one(_ read: ReadRequest) async throws -> Resource {
-        guard let resource = try await documentOf(read).resource else { throw AppleAPIError.notFound }
+        guard let resource = try await documentOf(read).resource, !resource.id.isEmpty else {
+            throw AppleAPIError.malformed("a single \(read.template)")
+        }
         return resource
     }
 
@@ -208,7 +230,8 @@ public actor AppleClient {
             guard more, !capped else { return }
             number += 1
             if let next = document.next, let url = URL(string: next) {
-                response = try await http.read(next: url, on: first.host, template: first.template, authorizer: broker)
+                response = try await http.read(next: url, on: first.host, template: first.template,
+                                               keeping: first.query.first { $0.name == "limit" }?.value, authorizer: broker)
             } else if let cursor = document.nextCursor {
                 response = try await http.read(first.setting("cursor", to: cursor), authorizer: broker)
             } else {

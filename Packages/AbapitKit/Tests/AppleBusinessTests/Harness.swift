@@ -23,7 +23,7 @@ struct Harness {
     static let keyID = "00000000-0000-4000-8000-0000000000aa"
 
     init(scope: Scope = .business, teamID: String = "", devices: Int = 0, pageCap: Int = AppleClient.defaultPageCap,
-         registerKey: P256.Signing.PrivateKey? = nil) async throws {
+         registerKey: P256.Signing.PrivateKey? = nil, bodyLimit: Int = HTTPClient.bodyLimit) async throws {
         let key = P256.Signing.PrivateKey()
         stub = AppleStub()
         stub.register(AppleStub.Account(clientID: Self.clientID, keyID: Self.keyID, teamID: teamID, scope: scope.rawValue,
@@ -35,7 +35,7 @@ struct Harness {
         self.sleeps = sleeps
         limiter = RateLimiter(readsPerMinute: 600, sleep: { _ in })
         client = AppleClient(account: TokenBroker.Account(org: "acme", scope: scope, clientID: Self.clientID, keyID: Self.keyID, teamID: teamID),
-                             vault: vault, transport: stub, limiter: limiter, pageCap: pageCap,
+                             vault: vault, transport: stub, limiter: limiter, pageCap: pageCap, bodyLimit: bodyLimit,
                              sleep: { duration in sleeps.value.withLock { $0.append(duration) } })
         stub.add(devices: (0..<devices).map(Self.device))
     }

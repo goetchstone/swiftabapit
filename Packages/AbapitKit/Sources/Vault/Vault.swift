@@ -74,11 +74,15 @@ public actor Vault {
 
     /// Stores a parsed Apple key (`KeyImport`), replacing the org's old one.
     public func storeKey(_ key: ImportedKey, as item: VaultItem) async throws {
+        guard item.kind.isKey else { throw VaultError.wrongKind(item.kind) }
+        beginUse()
         try await offMainThread { [store] in try store.storeKey(key.key, as: item) }
     }
 
-    /// Creates or replaces one secret.
+    /// Creates or replaces one secret (never a key: those go through `storeKey`).
     public func store(_ secret: Secret, as item: VaultItem) async throws {
+        guard !item.kind.isKey else { throw VaultError.wrongKind(item.kind) }
+        beginUse()
         try await offMainThread { [store] in try store.write(secret.bytes, as: item) }
     }
 
@@ -89,6 +93,7 @@ public actor Vault {
     public func replaceSet(_ set: [VaultItem.Kind: Secret?], for org: String) async throws {
         let items = try set.keys.sorted().map { kind in
             guard let item = VaultItem(org: org, kind: kind) else { throw VaultError.keyNotUsable }
+            guard !kind.isKey else { throw VaultError.wrongKind(kind) }
             return (item, set[kind] ?? nil)
         }
         do {
@@ -100,11 +105,19 @@ public actor Vault {
                 }
             }
         } catch {
+            // Every kind of the set is removed, each tried even when another is refused, so what stays is at most
+            // the refused items, never old and new mixed (Phase 1a's review). The first refusal is thrown, since
+            // something is still stored; else the write's own error.
+            var refused: (any Error)?
             for kind in VaultItem.Kind.removalOrder where set.keys.contains(kind) {
                 guard let item = VaultItem(org: org, kind: kind) else { continue }
-                try await offMainThread { [store] in try store.delete(item) }
+                do {
+                    try await offMainThread { [store] in try store.delete(item) }
+                } catch {
+                    refused = refused ?? error
+                }
             }
-            throw error
+            throw refused ?? error
         }
     }
 
@@ -112,7 +125,8 @@ public actor Vault {
     /// meanwhile keeps its new value. Returns whether it replaced anything.
     @discardableResult
     package func refresh(_ secret: Secret, as item: VaultItem, replacing original: Secret) async throws -> Bool {
-        try await offMainThread { [store] in try store.replace(secret.bytes, as: item, ifCurrent: original.bytes) }
+        beginUse()
+        return try await offMainThread { [store] in try store.replace(secret.bytes, as: item, ifCurrent: original.bytes) }
     }
 
     /// What each org has stored, by kind: names only, never a prompt.

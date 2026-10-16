@@ -73,6 +73,57 @@ struct OrgStoreTests {
         #expect(again["next"]?.provider == .unknown("jamf"))
     }
 
+    /// Review findings on the store: each one a load, an edit or a save that lost or mixed something.
+    @Test func anIDIsUsedOnceAndAStoredOrgsIDIsNotReused() throws {
+        var store = OrgStore()
+        try store.add(Self.apple(store, "Acme", client: "BUSINESSAPI.1"))
+        let twin = OrgProfile(id: "acme", name: "Acme again", provider: .mosyle)
+        #expect(throws: OrgStore.Failure.duplicateID("acme")) { try store.add(twin) }
+        // "acme-2" was removed from the file but its Keychain items are still there: a new org doesn't inherit them.
+        #expect(store.uniqueID(for: "Acme", avoiding: ["acme-2", "acme-3"]) == "acme-4")
+        #expect(store.uniqueID(for: "Acme", avoiding: ["acme-2"]) == "acme-3")
+    }
+
+    @Test func clientIDsCompareTrimmedAndCaseInsensitive() throws {
+        var store = OrgStore()
+        try store.add(Self.apple(store, "One", client: "BUSINESSAPI.abc"))
+        for spelling in ["businessapi.ABC", " BUSINESSAPI.abc\n", "BUSINESSAPI.ABC"] {
+            let trimmed = spelling.trimmingCharacters(in: .whitespacesAndNewlines)
+            #expect(throws: OrgStore.Failure.duplicateClientID(trimmed)) { try store.add(Self.apple(store, "Two", client: spelling)) }
+        }
+        var mosyle = OrgProfile(id: "m", name: "M", provider: .mosyle)
+        mosyle.clientID = "BUSINESSAPI.abc"
+        try store.add(mosyle)
+    }
+
+    @Test func whatThisVersionCantReadSurvivesASave() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let text = #"{"version": 1, "active": "acme", "sync": {"every": 5}, "orgs": [{"id": "acme", "name": "Acme", "provider": "apple"}, {"name": "no id"}, 7]}"#
+        try Data(text.utf8).write(to: dir.appending(path: OrgStore.fileName))
+        var store = try OrgStore.load(from: dir)
+        #expect(store.orgs.map(\.id) == ["acme"])
+        try store.add(Self.apple(store, "Beta", client: "BUSINESSAPI.2"))
+        try store.save(to: dir)
+        let saved = try #require(JSONValue.parse(String(contentsOf: dir.appending(path: OrgStore.fileName), encoding: .utf8))?.object)
+        #expect(saved["sync"] == .object(["every": .number("5")]))
+        let orgs = try #require(saved["orgs"]?.array)
+        #expect(orgs.contains(.object(["name": .string("no id")])))
+        #expect(orgs.contains(.number("7")))
+        #expect(try OrgStore.load(from: dir).orgs.map(\.id) == ["acme", "beta"])
+    }
+
+    @Test func aLearnedRateIsAlwaysAFiniteNumber() {
+        var profile = OrgProfile(id: "a", name: "A", provider: .apple)
+        for rate in [Double.nan, .infinity, -.infinity, -3, 0] {
+            profile.learnedReadsPerMinute = rate
+            #expect(profile.raw["learned_reads_per_minute"] == nil, "\(rate)")
+            #expect(profile.learnedReadsPerMinute == 0)
+        }
+        profile.learnedReadsPerMinute = 42.5
+        #expect(profile.learnedReadsPerMinute == 42.5)
+    }
+
     @Test func aFileFromANewerVersionIsNeverWrittenOver() throws {
         let dir = try Self.folder()
         defer { try? FileManager.default.removeItem(at: dir) }

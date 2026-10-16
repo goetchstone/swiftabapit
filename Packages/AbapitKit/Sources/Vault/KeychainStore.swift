@@ -155,12 +155,17 @@ public final class KeychainStore: SecretStore {
         add[kSecAttrIsPermanent] = true
         add[kSecAttrLabel] = "abapit: \(item.org) Apple API key"
         let query = keyQuery(item)
-        let status = context.withLock { _ -> OSStatus in
+        let (removed, added) = context.withLock { _ -> (OSStatus, OSStatus) in
             let removed = SecItemDelete(query as CFDictionary)
-            guard removed == errSecSuccess || removed == errSecItemNotFound else { return removed }
-            return SecItemAdd(add as CFDictionary, nil)
+            guard removed == errSecSuccess || removed == errSecItemNotFound else { return (removed, errSecSuccess) }
+            return (removed, SecItemAdd(add as CFDictionary, nil))
         }
-        try Self.check(status)
+        try Self.check(removed == errSecItemNotFound ? errSecSuccess : removed)
+        guard added == errSecSuccess else {
+            // The old key is gone and the new one isn't stored: the index must not list a key that isn't there.
+            try? unindex(item)
+            throw VaultError.keychain(added)
+        }
     }
 
     package func sign(_ message: Data, with item: VaultItem) throws -> Data? {
