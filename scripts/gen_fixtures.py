@@ -12,6 +12,9 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
   - serials: uppercase ASCII letters only (Python's str.upper() follows its Unicode version; a serial is
     ASCII, and a non-ASCII token matches no device either way);
   - csv: a dict or nested list cell is JSON (sorted keys), not Python's repr;
+  - csv: the formula guard also catches the full-width triggers (U+FF1D, U+FF0B, U+FF0D, U+FF20) and a
+    trigger after leading blanks (Unicode Zs and Cf, tab, CR, LF), which abapit let through (Phase 1b
+    review, LOW);
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
   - mosyle adapt_device: no `activation_bypass*` key (defect 1);
   - mosyle compliance timestamps (`01:00 PM - 03/12/2024`, no zone) parse as local time (defect 5).
@@ -307,6 +310,50 @@ def audit_events(rng: random.Random, count: int) -> list[dict]:
     return events
 
 
+def stats_edges() -> list[list[dict]]:
+    """Hand-written device_stats fleets for what the drawn ones never reach (Phase 1b review, LOW): more than
+    ten models, values Python's `or "Unknown"` reads (null, numbers, booleans), a month read in a timestamp's
+    own offset across a month boundary, and the exact 30- and 90-day boundaries. Literals only, so the drawn
+    cases don't move. A field never mixes `True` with `1` or a string "True" (Python's Counter merges the
+    first pair and Swift's names the second the same), so no case needs a deviation."""
+    def dev(index: int, **attrs) -> dict:
+        serial = f"TESTSTAT{index:04d}"
+        return {"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial, **attrs}}
+
+    # Thirteen models, ties across the tenth place: the cap, then first-seen order among equals.
+    counts = [7, 6, 5, 5, 4, 3, 3, 2, 2, 2, 2, 1, 1]
+    models, left = [], list(counts)
+    while any(left):
+        for k, n in enumerate(left):
+            if n:
+                models.append(f"Model {k + 1:02d}")
+                left[k] -= 1
+    top = [dev(i, deviceModel=name, productFamily=FAMILIES[i % len(FAMILIES)], status="ASSIGNED")
+           for i, name in enumerate(models)]
+
+    odd = [None, True, False, 0, 0.0, 5, 2.5, -1, "0", "", "Mac", "False"]
+    unknown = [dev(i, productFamily=odd[i % len(odd)], status=odd[(i + 3) % len(odd)],
+                   deviceModel=odd[(i + 7) % len(odd)]) for i in range(2 * len(odd))] + [dev(99)]
+
+    # The month is the one the timestamp was written in. Each stamp below falls in another month in UTC, and
+    # unevenly, so a UTC reading changes the counts; two leave the 12-month window in one reading only.
+    offsets = [("2026-09-30T23:30:00-05:00", 3), ("2025-12-31T23:00:00-02:00", 2), ("2026-08-01T02:00:00+05:30", 1),
+               ("2025-11-01T00:30:00+01:00", 1), ("2025-10-31T22:00:00-03:00", 2), ("2026-11-01T00:30:00+14:00", 1)]
+    months = [dev(100 + i, addedToOrgDateTime=stamp, deviceModel="Mac mini (M4)", productFamily="Mac", status="UNASSIGNED")
+              for i, stamp in enumerate(stamp for stamp, n in offsets for _ in range(n))]
+
+    def ago(days: int, delta: timedelta = timedelta(0), hours: int = 0) -> str:
+        return (FIXED_NOW - timedelta(days=days) + delta).astimezone(timezone(timedelta(hours=hours))).isoformat()
+
+    edges = [ago(30), ago(30, hours=2), ago(30, timedelta(seconds=-1)), ago(30, timedelta(microseconds=-1)),
+             ago(30, timedelta(microseconds=1)), ago(90), ago(90, hours=-7), ago(90, timedelta(seconds=-1)),
+             ago(0), ago(-1)]
+    edges = [stamp.replace("+00:00", "Z") if i % 2 == 0 else stamp for i, stamp in enumerate(edges)]
+    boundary = [dev(200 + i, addedToOrgDateTime=stamp, deviceModel="iPhone 16", productFamily="iPhone", status="ASSIGNED")
+                for i, stamp in enumerate(edges)]
+    return [top, unknown, months, boundary, top + unknown + months + boundary]
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
@@ -319,6 +366,10 @@ def gen_reports(m: dict) -> None:
     for _ in range(25):
         devices = fleet(rng, 0, 40)
         add("device_stats", {"devices": devices}, lambda: reports.device_stats(devices))
+    for devices in stats_edges():
+        add("device_stats", {"devices": devices}, lambda: reports.device_stats(devices))
+        if "ok" not in cases[-1]["expected"]:
+            raise SystemExit(f"device_stats refused a hand-written case: {cases[-1]['expected']}")
     for _ in range(20):
         devices = fleet(rng, 0, 20)
         svcs = servers(rng, rng.randint(0, 3))
@@ -404,8 +455,25 @@ def corrected_cell(value) -> str:
     return str(value)
 
 
-def corrected_csv(m: dict, items: list[dict]) -> str:
-    reports = m["reports"]
+# abapit's triggers and their full-width forms, which a spreadsheet may also read as a formula.
+CSV_TRIGGERS = "=+-@\uff1d\uff0b\uff0d\uff20"
+
+
+def csv_blank(char: str) -> bool:
+    """What may stand before a trigger unseen: Unicode spaces (Zs), format characters (Cf), tab, CR, LF."""
+    return char in "\t\r\n" or unicodedata.category(char) in ("Zs", "Cf")
+
+
+def corrected_safe(value: str) -> str:
+    """abapit's _csv_safe (a tab or CR first, or a trigger first), extended (a listed deviation): a full-width
+    trigger, and a trigger after leading blanks, are guarded too."""
+    if value and value[0] in "\t\r":
+        return "'" + value
+    lead = next((char for char in value if not csv_blank(char)), "")
+    return "'" + value if lead and lead in CSV_TRIGGERS else value
+
+
+def corrected_csv(items: list[dict], abapit_safe) -> str:
     columns: list[str] = []
     for item in items:
         for key in item.get("attributes", {}):
@@ -413,11 +481,54 @@ def corrected_csv(m: dict, items: list[dict]) -> str:
                 columns.append(key)
     rows = [["id"] + columns] + [[item.get("id", "")] + [corrected_cell(item.get("attributes", {}).get(c)) for c in columns]
                                  for item in items]
+    for cell in (cell for row in rows for cell in row):
+        if abapit_safe(cell) != cell and corrected_safe(cell) != abapit_safe(cell):
+            raise SystemExit(f"the corrected guard dropped abapit's own rule for {cell!r}")
+    rows = [[corrected_safe(cell) for cell in row] for row in rows]
     import csv as pycsv
     buffer = io.StringIO()
-    writer = pycsv.writer(buffer)
-    writer.writerows([[reports._csv_safe(cell) for cell in row] for row in rows])
-    return buffer.getvalue()
+    pycsv.writer(buffer).writerows(rows)
+    text = buffer.getvalue()
+    # Read back as a spreadsheet's importer would: every cell intact (none split, none joined), and none whose
+    # first visible character is a trigger. The Phase 1b review's H1 rows read back as an extra `=2+5` cell.
+    read = list(pycsv.reader(io.StringIO(text, newline="")))
+    if read != rows:
+        raise SystemExit(f"csv round trip changed the cells: {rows!r} -> {read!r}")
+    for cell in (cell for row in read for cell in row):
+        lead = next((char for char in cell if not csv_blank(char)), "")
+        if lead and lead in CSV_TRIGGERS:
+            raise SystemExit(f"csv cell reads as a formula: {cell!r}")
+    return text
+
+
+def csv_edges() -> list[list[dict]]:
+    """Hand-written CSV cases (Phase 1b review H1 and LOW), after the drawn ones so those don't move."""
+    def item(id_: str, attrs: dict) -> dict:
+        return {"type": "orgDevices", "id": id_, "attributes": attrs}
+
+    marks = ["\u0301", "\u20dd", "\ufe0f"]   # a combining acute, an enclosing circle, an emoji presentation selector
+    return [
+        # H1: a quote then a combining mark is one Character in Swift but still a quote to Python's csv. The
+        # Character-level replace left it single, the field closed early, and the rest was a new, unguarded cell.
+        [item("C02X", {"serverName": 'Mosyle"\u0301,=HYPERLINK("https://example.com/x","x")'})],
+        [item("C02X", {"notes": 'x"\u0301,=2+5,"\u0301'})],
+        [item("TEST1", {f"k{i}": f'a"{mark},b' for i, mark in enumerate(marks)} | {"lone": '"\u0301'})],
+        [item('"\u0301,=1', {'"\u20dd,=cmd': "x", "plain": "y"})],
+        # CR LF is one Character in Swift: a field holding it is still quoted, and one starting with it guarded
+        # (abapit's own rule, a CR first). So is a trigger carrying a combining mark.
+        [item("TEST1", {"notes": "crlf\r\nfield", "lead": "\r\n=1", "mark": "=\u0301x", "plus": "+\u20dd1"}),
+         item("\r\nid", {"notes": "\r\n", "lead": "a\r\n=1"})],
+        # The extended guard (a listed deviation): full-width triggers, and triggers after leading blanks.
+        [item("TEST1", {"fw_eq": "\uff1d1+1", "fw_plus": "\uff0bx", "fw_minus": "\uff0d1", "fw_at": "\uff20cmd"}),
+         item("TEST2", {"fw_eq": " \uff1d1", "fw_plus": "\u3000\uff0b1", "fw_minus": "x\uff0d1", "fw_at": "\uff20"})],
+        [item("TEST1", {"space": " =1", "nbsp": "\u00a0=1", "em": "\u2003-1", "ideographic": "\u3000+1",
+                        "bom": "\ufeff=1", "zwsp": "\u200b=1", "lrm": "\u200e@x", "joiner": "\u2060=1",
+                        "lf": "\n=1", "tab_space": "\t =1", "mixed": "\r\n\u200b =1", "list": [" =1", "x"]})],
+        [item(" =id", {" =key": "\u200bplain", "\u00a0@key": "\n plain", "lead": " lead"})],
+        # Columns and JSON keys by code point: NFC and NFD spellings are two keys, as in Python.
+        [item("TEST1", {"\u00e9": "nfc", "e\u0301": "nfd", "meta": {"\u00e9": 1, "e\u0301": 2}}),
+         item("TEST2", {"e\u0301": "nfd only"})],
+    ]
 
 
 def gen_csv(m: dict) -> None:
@@ -447,13 +558,18 @@ def gen_csv(m: dict) -> None:
                 else:
                     attrs[key] = [{"id": "x", "n": 1}, "y"]
             items.append({"type": "orgDevices", "id": rng.choice(["", "TEST1", "=id", f"TEST{i}"]), "attributes": attrs})
-        abapit = m["reports"].items_to_csv(items)
-        expected = corrected_csv(m, items)
-        case = {"input": items, "expected": expected}
-        if abapit != expected:
-            case["abapit"] = abapit
-        cases.append(case)
+        cases.append(csv_case(m, items))
+    cases += [csv_case(m, items) for items in csv_edges()]
     write("csv", {**header(1005), "cases": cases})
+
+
+def csv_case(m: dict, items: list[dict]) -> dict:
+    abapit = m["reports"].items_to_csv(items)
+    expected = corrected_csv(items, m["reports"]._csv_safe)
+    case = {"input": items, "expected": expected}
+    if abapit != expected:
+        case["abapit"] = abapit
+    return case
 
 
 # -- snapshot diffs --------------------------------------------------------------------------------

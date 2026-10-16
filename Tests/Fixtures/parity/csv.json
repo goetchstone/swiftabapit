@@ -2527,6 +2527,174 @@
    ],
    "expected": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n",
    "abapit": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{'id': 'x', 'n': 1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "C02X",
+     "attributes": {
+      "serverName": "Mosyle\"\u0301,=HYPERLINK(\"https://example.com/x\",\"x\")"
+     }
+    }
+   ],
+   "expected": "id,serverName\r\nC02X,\"Mosyle\"\"\u0301,=HYPERLINK(\"\"https://example.com/x\"\",\"\"x\"\")\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "C02X",
+     "attributes": {
+      "notes": "x\"\u0301,=2+5,\"\u0301"
+     }
+    }
+   ],
+   "expected": "id,notes\r\nC02X,\"x\"\"\u0301,=2+5,\"\"\u0301\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "k0": "a\"\u0301,b",
+      "k1": "a\"\u20dd,b",
+      "k2": "a\"\ufe0f,b",
+      "lone": "\"\u0301"
+     }
+    }
+   ],
+   "expected": "id,k0,k1,k2,lone\r\nTEST1,\"a\"\"\u0301,b\",\"a\"\"\u20dd,b\",\"a\"\"\ufe0f,b\",\"\"\"\u0301\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "\"\u0301,=1",
+     "attributes": {
+      "\"\u20dd,=cmd": "x",
+      "plain": "y"
+     }
+    }
+   ],
+   "expected": "id,\"\"\"\u20dd,=cmd\",plain\r\n\"\"\"\u0301,=1\",x,y\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "notes": "crlf\r\nfield",
+      "lead": "\r\n=1",
+      "mark": "=\u0301x",
+      "plus": "+\u20dd1"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "\r\nid",
+     "attributes": {
+      "notes": "\r\n",
+      "lead": "a\r\n=1"
+     }
+    }
+   ],
+   "expected": "id,notes,lead,mark,plus\r\nTEST1,\"crlf\r\nfield\",\"'\r\n=1\",'=\u0301x,'+\u20dd1\r\n\"'\r\nid\",\"'\r\n\",\"a\r\n=1\",,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "fw_eq": "\uff1d1+1",
+      "fw_plus": "\uff0bx",
+      "fw_minus": "\uff0d1",
+      "fw_at": "\uff20cmd"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "fw_eq": " \uff1d1",
+      "fw_plus": "\u3000\uff0b1",
+      "fw_minus": "x\uff0d1",
+      "fw_at": "\uff20"
+     }
+    }
+   ],
+   "expected": "id,fw_eq,fw_plus,fw_minus,fw_at\r\nTEST1,'\uff1d1+1,'\uff0bx,'\uff0d1,'\uff20cmd\r\nTEST2,' \uff1d1,'\u3000\uff0b1,x\uff0d1,'\uff20\r\n",
+   "abapit": "id,fw_eq,fw_plus,fw_minus,fw_at\r\nTEST1,\uff1d1+1,\uff0bx,\uff0d1,\uff20cmd\r\nTEST2, \uff1d1,\u3000\uff0b1,x\uff0d1,\uff20\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "space": " =1",
+      "nbsp": "\u00a0=1",
+      "em": "\u2003-1",
+      "ideographic": "\u3000+1",
+      "bom": "\ufeff=1",
+      "zwsp": "\u200b=1",
+      "lrm": "\u200e@x",
+      "joiner": "\u2060=1",
+      "lf": "\n=1",
+      "tab_space": "\t =1",
+      "mixed": "\r\n\u200b =1",
+      "list": [
+       " =1",
+       "x"
+      ]
+     }
+    }
+   ],
+   "expected": "id,space,nbsp,em,ideographic,bom,zwsp,lrm,joiner,lf,tab_space,mixed,list\r\nTEST1,' =1,'\u00a0=1,'\u2003-1,'\u3000+1,'\ufeff=1,'\u200b=1,'\u200e@x,'\u2060=1,\"'\n=1\",'\t =1,\"'\r\n\u200b =1\",' =1; x\r\n",
+   "abapit": "id,space,nbsp,em,ideographic,bom,zwsp,lrm,joiner,lf,tab_space,mixed,list\r\nTEST1, =1,\u00a0=1,\u2003-1,\u3000+1,\ufeff=1,\u200b=1,\u200e@x,\u2060=1,\"\n=1\",'\t =1,\"'\r\n\u200b =1\", =1; x\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": " =id",
+     "attributes": {
+      " =key": "\u200bplain",
+      "\u00a0@key": "\n plain",
+      "lead": " lead"
+     }
+    }
+   ],
+   "expected": "id,' =key,'\u00a0@key,lead\r\n' =id,\u200bplain,\"\n plain\", lead\r\n",
+   "abapit": "id, =key,\u00a0@key,lead\r\n =id,\u200bplain,\"\n plain\", lead\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "\u00e9": "nfc",
+      "e\u0301": "nfd",
+      "meta": {
+       "\u00e9": 1,
+       "e\u0301": 2
+      }
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "e\u0301": "nfd only"
+     }
+    }
+   ],
+   "expected": "id,\u00e9,e\u0301,meta\r\nTEST1,nfc,nfd,\"{\"\"e\u0301\"\":2,\"\"\u00e9\"\":1}\"\r\nTEST2,,nfd only,\r\n",
+   "abapit": "id,\u00e9,e\u0301,meta\r\nTEST1,nfc,nfd,\"{'\u00e9': 1, 'e\u0301': 2}\"\r\nTEST2,,nfd only,\r\n"
   }
  ]
 }

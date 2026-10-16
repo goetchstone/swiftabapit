@@ -9440,6 +9440,2480 @@
    }
   },
   {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0000",
+      "attributes": {
+       "serialNumber": "TESTSTAT0000",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0001",
+      "attributes": {
+       "serialNumber": "TESTSTAT0001",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0002",
+      "attributes": {
+       "serialNumber": "TESTSTAT0002",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0003",
+      "attributes": {
+       "serialNumber": "TESTSTAT0003",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0004",
+      "attributes": {
+       "serialNumber": "TESTSTAT0004",
+       "deviceModel": "Model 05",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0005",
+      "attributes": {
+       "serialNumber": "TESTSTAT0005",
+       "deviceModel": "Model 06",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0006",
+      "attributes": {
+       "serialNumber": "TESTSTAT0006",
+       "deviceModel": "Model 07",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0007",
+      "attributes": {
+       "serialNumber": "TESTSTAT0007",
+       "deviceModel": "Model 08",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0008",
+      "attributes": {
+       "serialNumber": "TESTSTAT0008",
+       "deviceModel": "Model 09",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0009",
+      "attributes": {
+       "serialNumber": "TESTSTAT0009",
+       "deviceModel": "Model 10",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0010",
+      "attributes": {
+       "serialNumber": "TESTSTAT0010",
+       "deviceModel": "Model 11",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0011",
+      "attributes": {
+       "serialNumber": "TESTSTAT0011",
+       "deviceModel": "Model 12",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0012",
+      "attributes": {
+       "serialNumber": "TESTSTAT0012",
+       "deviceModel": "Model 13",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0013",
+      "attributes": {
+       "serialNumber": "TESTSTAT0013",
+       "deviceModel": "Model 01",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0014",
+      "attributes": {
+       "serialNumber": "TESTSTAT0014",
+       "deviceModel": "Model 02",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0015",
+      "attributes": {
+       "serialNumber": "TESTSTAT0015",
+       "deviceModel": "Model 03",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0016",
+      "attributes": {
+       "serialNumber": "TESTSTAT0016",
+       "deviceModel": "Model 04",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0017",
+      "attributes": {
+       "serialNumber": "TESTSTAT0017",
+       "deviceModel": "Model 05",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0018",
+      "attributes": {
+       "serialNumber": "TESTSTAT0018",
+       "deviceModel": "Model 06",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0019",
+      "attributes": {
+       "serialNumber": "TESTSTAT0019",
+       "deviceModel": "Model 07",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0020",
+      "attributes": {
+       "serialNumber": "TESTSTAT0020",
+       "deviceModel": "Model 08",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0021",
+      "attributes": {
+       "serialNumber": "TESTSTAT0021",
+       "deviceModel": "Model 09",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0022",
+      "attributes": {
+       "serialNumber": "TESTSTAT0022",
+       "deviceModel": "Model 10",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0023",
+      "attributes": {
+       "serialNumber": "TESTSTAT0023",
+       "deviceModel": "Model 11",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0024",
+      "attributes": {
+       "serialNumber": "TESTSTAT0024",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0025",
+      "attributes": {
+       "serialNumber": "TESTSTAT0025",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0026",
+      "attributes": {
+       "serialNumber": "TESTSTAT0026",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0027",
+      "attributes": {
+       "serialNumber": "TESTSTAT0027",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0028",
+      "attributes": {
+       "serialNumber": "TESTSTAT0028",
+       "deviceModel": "Model 05",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0029",
+      "attributes": {
+       "serialNumber": "TESTSTAT0029",
+       "deviceModel": "Model 06",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0030",
+      "attributes": {
+       "serialNumber": "TESTSTAT0030",
+       "deviceModel": "Model 07",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0031",
+      "attributes": {
+       "serialNumber": "TESTSTAT0031",
+       "deviceModel": "Model 01",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0032",
+      "attributes": {
+       "serialNumber": "TESTSTAT0032",
+       "deviceModel": "Model 02",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0033",
+      "attributes": {
+       "serialNumber": "TESTSTAT0033",
+       "deviceModel": "Model 03",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0034",
+      "attributes": {
+       "serialNumber": "TESTSTAT0034",
+       "deviceModel": "Model 04",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0035",
+      "attributes": {
+       "serialNumber": "TESTSTAT0035",
+       "deviceModel": "Model 05",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0036",
+      "attributes": {
+       "serialNumber": "TESTSTAT0036",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0037",
+      "attributes": {
+       "serialNumber": "TESTSTAT0037",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0038",
+      "attributes": {
+       "serialNumber": "TESTSTAT0038",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0039",
+      "attributes": {
+       "serialNumber": "TESTSTAT0039",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0040",
+      "attributes": {
+       "serialNumber": "TESTSTAT0040",
+       "deviceModel": "Model 01",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0041",
+      "attributes": {
+       "serialNumber": "TESTSTAT0041",
+       "deviceModel": "Model 02",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0042",
+      "attributes": {
+       "serialNumber": "TESTSTAT0042",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 43,
+     "by_family": [
+      [
+       "Mac",
+       8
+      ],
+      [
+       "iPhone",
+       7
+      ],
+      [
+       "iPad",
+       7
+      ],
+      [
+       "AppleTV",
+       7
+      ],
+      [
+       "Watch",
+       7
+      ],
+      [
+       "Vision",
+       7
+      ]
+     ],
+     "by_status": [
+      [
+       "ASSIGNED",
+       43
+      ]
+     ],
+     "top_models": [
+      [
+       "Model 01",
+       7
+      ],
+      [
+       "Model 02",
+       6
+      ],
+      [
+       "Model 03",
+       5
+      ],
+      [
+       "Model 04",
+       5
+      ],
+      [
+       "Model 05",
+       4
+      ],
+      [
+       "Model 06",
+       3
+      ],
+      [
+       "Model 07",
+       3
+      ],
+      [
+       "Model 08",
+       2
+      ],
+      [
+       "Model 09",
+       2
+      ],
+      [
+       "Model 10",
+       2
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 8
+    }
+   }
+  },
+  {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0000",
+      "attributes": {
+       "serialNumber": "TESTSTAT0000",
+       "productFamily": null,
+       "status": 0,
+       "deviceModel": -1
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0001",
+      "attributes": {
+       "serialNumber": "TESTSTAT0001",
+       "productFamily": true,
+       "status": 0.0,
+       "deviceModel": "0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0002",
+      "attributes": {
+       "serialNumber": "TESTSTAT0002",
+       "productFamily": false,
+       "status": 5,
+       "deviceModel": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0003",
+      "attributes": {
+       "serialNumber": "TESTSTAT0003",
+       "productFamily": 0,
+       "status": 2.5,
+       "deviceModel": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0004",
+      "attributes": {
+       "serialNumber": "TESTSTAT0004",
+       "productFamily": 0.0,
+       "status": -1,
+       "deviceModel": "False"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0005",
+      "attributes": {
+       "serialNumber": "TESTSTAT0005",
+       "productFamily": 5,
+       "status": "0",
+       "deviceModel": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0006",
+      "attributes": {
+       "serialNumber": "TESTSTAT0006",
+       "productFamily": 2.5,
+       "status": "",
+       "deviceModel": true
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0007",
+      "attributes": {
+       "serialNumber": "TESTSTAT0007",
+       "productFamily": -1,
+       "status": "Mac",
+       "deviceModel": false
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0008",
+      "attributes": {
+       "serialNumber": "TESTSTAT0008",
+       "productFamily": "0",
+       "status": "False",
+       "deviceModel": 0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0009",
+      "attributes": {
+       "serialNumber": "TESTSTAT0009",
+       "productFamily": "",
+       "status": null,
+       "deviceModel": 0.0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0010",
+      "attributes": {
+       "serialNumber": "TESTSTAT0010",
+       "productFamily": "Mac",
+       "status": true,
+       "deviceModel": 5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0011",
+      "attributes": {
+       "serialNumber": "TESTSTAT0011",
+       "productFamily": "False",
+       "status": false,
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0012",
+      "attributes": {
+       "serialNumber": "TESTSTAT0012",
+       "productFamily": null,
+       "status": 0,
+       "deviceModel": -1
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0013",
+      "attributes": {
+       "serialNumber": "TESTSTAT0013",
+       "productFamily": true,
+       "status": 0.0,
+       "deviceModel": "0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0014",
+      "attributes": {
+       "serialNumber": "TESTSTAT0014",
+       "productFamily": false,
+       "status": 5,
+       "deviceModel": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0015",
+      "attributes": {
+       "serialNumber": "TESTSTAT0015",
+       "productFamily": 0,
+       "status": 2.5,
+       "deviceModel": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0016",
+      "attributes": {
+       "serialNumber": "TESTSTAT0016",
+       "productFamily": 0.0,
+       "status": -1,
+       "deviceModel": "False"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0017",
+      "attributes": {
+       "serialNumber": "TESTSTAT0017",
+       "productFamily": 5,
+       "status": "0",
+       "deviceModel": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0018",
+      "attributes": {
+       "serialNumber": "TESTSTAT0018",
+       "productFamily": 2.5,
+       "status": "",
+       "deviceModel": true
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0019",
+      "attributes": {
+       "serialNumber": "TESTSTAT0019",
+       "productFamily": -1,
+       "status": "Mac",
+       "deviceModel": false
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0020",
+      "attributes": {
+       "serialNumber": "TESTSTAT0020",
+       "productFamily": "0",
+       "status": "False",
+       "deviceModel": 0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0021",
+      "attributes": {
+       "serialNumber": "TESTSTAT0021",
+       "productFamily": "",
+       "status": null,
+       "deviceModel": 0.0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0022",
+      "attributes": {
+       "serialNumber": "TESTSTAT0022",
+       "productFamily": "Mac",
+       "status": true,
+       "deviceModel": 5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0023",
+      "attributes": {
+       "serialNumber": "TESTSTAT0023",
+       "productFamily": "False",
+       "status": false,
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0099",
+      "attributes": {
+       "serialNumber": "TESTSTAT0099"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 25,
+     "by_family": [
+      [
+       "Unknown",
+       11
+      ],
+      [
+       true,
+       2
+      ],
+      [
+       5,
+       2
+      ],
+      [
+       2.5,
+       2
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       "0",
+       2
+      ],
+      [
+       "Mac",
+       2
+      ],
+      [
+       "False",
+       2
+      ]
+     ],
+     "by_status": [
+      [
+       "Unknown",
+       11
+      ],
+      [
+       5,
+       2
+      ],
+      [
+       2.5,
+       2
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       "0",
+       2
+      ],
+      [
+       "Mac",
+       2
+      ],
+      [
+       "False",
+       2
+      ],
+      [
+       true,
+       2
+      ]
+     ],
+     "top_models": [
+      [
+       "Unknown",
+       11
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       "0",
+       2
+      ],
+      [
+       "Mac",
+       2
+      ],
+      [
+       "False",
+       2
+      ],
+      [
+       true,
+       2
+      ],
+      [
+       5,
+       2
+      ],
+      [
+       2.5,
+       2
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 11
+    }
+   }
+  },
+  {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0100",
+      "attributes": {
+       "serialNumber": "TESTSTAT0100",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0101",
+      "attributes": {
+       "serialNumber": "TESTSTAT0101",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0102",
+      "attributes": {
+       "serialNumber": "TESTSTAT0102",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0103",
+      "attributes": {
+       "serialNumber": "TESTSTAT0103",
+       "addedToOrgDateTime": "2025-12-31T23:00:00-02:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0104",
+      "attributes": {
+       "serialNumber": "TESTSTAT0104",
+       "addedToOrgDateTime": "2025-12-31T23:00:00-02:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0105",
+      "attributes": {
+       "serialNumber": "TESTSTAT0105",
+       "addedToOrgDateTime": "2026-08-01T02:00:00+05:30",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0106",
+      "attributes": {
+       "serialNumber": "TESTSTAT0106",
+       "addedToOrgDateTime": "2025-11-01T00:30:00+01:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0107",
+      "attributes": {
+       "serialNumber": "TESTSTAT0107",
+       "addedToOrgDateTime": "2025-10-31T22:00:00-03:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0108",
+      "attributes": {
+       "serialNumber": "TESTSTAT0108",
+       "addedToOrgDateTime": "2025-10-31T22:00:00-03:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0109",
+      "attributes": {
+       "serialNumber": "TESTSTAT0109",
+       "addedToOrgDateTime": "2026-11-01T00:30:00+14:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 10,
+     "by_family": [
+      [
+       "Mac",
+       10
+      ]
+     ],
+     "by_status": [
+      [
+       "UNASSIGNED",
+       10
+      ]
+     ],
+     "top_models": [
+      [
+       "Mac mini (M4)",
+       10
+      ]
+     ],
+     "added_30": 4,
+     "added_90": 5,
+     "added_by_month": [
+      [
+       "2025-11",
+       1
+      ],
+      [
+       "2025-12",
+       2
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       1
+      ],
+      [
+       "2026-09",
+       3
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 3,
+     "family_max": 10
+    }
+   }
+  },
+  {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0200",
+      "attributes": {
+       "serialNumber": "TESTSTAT0200",
+       "addedToOrgDateTime": "2026-09-16T12:00:00Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0201",
+      "attributes": {
+       "serialNumber": "TESTSTAT0201",
+       "addedToOrgDateTime": "2026-09-16T14:00:00+02:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0202",
+      "attributes": {
+       "serialNumber": "TESTSTAT0202",
+       "addedToOrgDateTime": "2026-09-16T11:59:59Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0203",
+      "attributes": {
+       "serialNumber": "TESTSTAT0203",
+       "addedToOrgDateTime": "2026-09-16T11:59:59.999999+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0204",
+      "attributes": {
+       "serialNumber": "TESTSTAT0204",
+       "addedToOrgDateTime": "2026-09-16T12:00:00.000001Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0205",
+      "attributes": {
+       "serialNumber": "TESTSTAT0205",
+       "addedToOrgDateTime": "2026-07-18T12:00:00+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0206",
+      "attributes": {
+       "serialNumber": "TESTSTAT0206",
+       "addedToOrgDateTime": "2026-07-18T05:00:00-07:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0207",
+      "attributes": {
+       "serialNumber": "TESTSTAT0207",
+       "addedToOrgDateTime": "2026-07-18T11:59:59+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0208",
+      "attributes": {
+       "serialNumber": "TESTSTAT0208",
+       "addedToOrgDateTime": "2026-10-16T12:00:00Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0209",
+      "attributes": {
+       "serialNumber": "TESTSTAT0209",
+       "addedToOrgDateTime": "2026-10-17T12:00:00+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 10,
+     "by_family": [
+      [
+       "iPhone",
+       10
+      ]
+     ],
+     "by_status": [
+      [
+       "ASSIGNED",
+       10
+      ]
+     ],
+     "top_models": [
+      [
+       "iPhone 16",
+       10
+      ]
+     ],
+     "added_30": 5,
+     "added_90": 9,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       3
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       5
+      ],
+      [
+       "2026-10",
+       2
+      ]
+     ],
+     "month_max": 5,
+     "family_max": 10
+    }
+   }
+  },
+  {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0000",
+      "attributes": {
+       "serialNumber": "TESTSTAT0000",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0001",
+      "attributes": {
+       "serialNumber": "TESTSTAT0001",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0002",
+      "attributes": {
+       "serialNumber": "TESTSTAT0002",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0003",
+      "attributes": {
+       "serialNumber": "TESTSTAT0003",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0004",
+      "attributes": {
+       "serialNumber": "TESTSTAT0004",
+       "deviceModel": "Model 05",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0005",
+      "attributes": {
+       "serialNumber": "TESTSTAT0005",
+       "deviceModel": "Model 06",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0006",
+      "attributes": {
+       "serialNumber": "TESTSTAT0006",
+       "deviceModel": "Model 07",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0007",
+      "attributes": {
+       "serialNumber": "TESTSTAT0007",
+       "deviceModel": "Model 08",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0008",
+      "attributes": {
+       "serialNumber": "TESTSTAT0008",
+       "deviceModel": "Model 09",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0009",
+      "attributes": {
+       "serialNumber": "TESTSTAT0009",
+       "deviceModel": "Model 10",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0010",
+      "attributes": {
+       "serialNumber": "TESTSTAT0010",
+       "deviceModel": "Model 11",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0011",
+      "attributes": {
+       "serialNumber": "TESTSTAT0011",
+       "deviceModel": "Model 12",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0012",
+      "attributes": {
+       "serialNumber": "TESTSTAT0012",
+       "deviceModel": "Model 13",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0013",
+      "attributes": {
+       "serialNumber": "TESTSTAT0013",
+       "deviceModel": "Model 01",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0014",
+      "attributes": {
+       "serialNumber": "TESTSTAT0014",
+       "deviceModel": "Model 02",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0015",
+      "attributes": {
+       "serialNumber": "TESTSTAT0015",
+       "deviceModel": "Model 03",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0016",
+      "attributes": {
+       "serialNumber": "TESTSTAT0016",
+       "deviceModel": "Model 04",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0017",
+      "attributes": {
+       "serialNumber": "TESTSTAT0017",
+       "deviceModel": "Model 05",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0018",
+      "attributes": {
+       "serialNumber": "TESTSTAT0018",
+       "deviceModel": "Model 06",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0019",
+      "attributes": {
+       "serialNumber": "TESTSTAT0019",
+       "deviceModel": "Model 07",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0020",
+      "attributes": {
+       "serialNumber": "TESTSTAT0020",
+       "deviceModel": "Model 08",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0021",
+      "attributes": {
+       "serialNumber": "TESTSTAT0021",
+       "deviceModel": "Model 09",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0022",
+      "attributes": {
+       "serialNumber": "TESTSTAT0022",
+       "deviceModel": "Model 10",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0023",
+      "attributes": {
+       "serialNumber": "TESTSTAT0023",
+       "deviceModel": "Model 11",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0024",
+      "attributes": {
+       "serialNumber": "TESTSTAT0024",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0025",
+      "attributes": {
+       "serialNumber": "TESTSTAT0025",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0026",
+      "attributes": {
+       "serialNumber": "TESTSTAT0026",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0027",
+      "attributes": {
+       "serialNumber": "TESTSTAT0027",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0028",
+      "attributes": {
+       "serialNumber": "TESTSTAT0028",
+       "deviceModel": "Model 05",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0029",
+      "attributes": {
+       "serialNumber": "TESTSTAT0029",
+       "deviceModel": "Model 06",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0030",
+      "attributes": {
+       "serialNumber": "TESTSTAT0030",
+       "deviceModel": "Model 07",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0031",
+      "attributes": {
+       "serialNumber": "TESTSTAT0031",
+       "deviceModel": "Model 01",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0032",
+      "attributes": {
+       "serialNumber": "TESTSTAT0032",
+       "deviceModel": "Model 02",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0033",
+      "attributes": {
+       "serialNumber": "TESTSTAT0033",
+       "deviceModel": "Model 03",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0034",
+      "attributes": {
+       "serialNumber": "TESTSTAT0034",
+       "deviceModel": "Model 04",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0035",
+      "attributes": {
+       "serialNumber": "TESTSTAT0035",
+       "deviceModel": "Model 05",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0036",
+      "attributes": {
+       "serialNumber": "TESTSTAT0036",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0037",
+      "attributes": {
+       "serialNumber": "TESTSTAT0037",
+       "deviceModel": "Model 02",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0038",
+      "attributes": {
+       "serialNumber": "TESTSTAT0038",
+       "deviceModel": "Model 03",
+       "productFamily": "iPad",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0039",
+      "attributes": {
+       "serialNumber": "TESTSTAT0039",
+       "deviceModel": "Model 04",
+       "productFamily": "AppleTV",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0040",
+      "attributes": {
+       "serialNumber": "TESTSTAT0040",
+       "deviceModel": "Model 01",
+       "productFamily": "Watch",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0041",
+      "attributes": {
+       "serialNumber": "TESTSTAT0041",
+       "deviceModel": "Model 02",
+       "productFamily": "Vision",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0042",
+      "attributes": {
+       "serialNumber": "TESTSTAT0042",
+       "deviceModel": "Model 01",
+       "productFamily": "Mac",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0000",
+      "attributes": {
+       "serialNumber": "TESTSTAT0000",
+       "productFamily": null,
+       "status": 0,
+       "deviceModel": -1
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0001",
+      "attributes": {
+       "serialNumber": "TESTSTAT0001",
+       "productFamily": true,
+       "status": 0.0,
+       "deviceModel": "0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0002",
+      "attributes": {
+       "serialNumber": "TESTSTAT0002",
+       "productFamily": false,
+       "status": 5,
+       "deviceModel": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0003",
+      "attributes": {
+       "serialNumber": "TESTSTAT0003",
+       "productFamily": 0,
+       "status": 2.5,
+       "deviceModel": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0004",
+      "attributes": {
+       "serialNumber": "TESTSTAT0004",
+       "productFamily": 0.0,
+       "status": -1,
+       "deviceModel": "False"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0005",
+      "attributes": {
+       "serialNumber": "TESTSTAT0005",
+       "productFamily": 5,
+       "status": "0",
+       "deviceModel": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0006",
+      "attributes": {
+       "serialNumber": "TESTSTAT0006",
+       "productFamily": 2.5,
+       "status": "",
+       "deviceModel": true
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0007",
+      "attributes": {
+       "serialNumber": "TESTSTAT0007",
+       "productFamily": -1,
+       "status": "Mac",
+       "deviceModel": false
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0008",
+      "attributes": {
+       "serialNumber": "TESTSTAT0008",
+       "productFamily": "0",
+       "status": "False",
+       "deviceModel": 0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0009",
+      "attributes": {
+       "serialNumber": "TESTSTAT0009",
+       "productFamily": "",
+       "status": null,
+       "deviceModel": 0.0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0010",
+      "attributes": {
+       "serialNumber": "TESTSTAT0010",
+       "productFamily": "Mac",
+       "status": true,
+       "deviceModel": 5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0011",
+      "attributes": {
+       "serialNumber": "TESTSTAT0011",
+       "productFamily": "False",
+       "status": false,
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0012",
+      "attributes": {
+       "serialNumber": "TESTSTAT0012",
+       "productFamily": null,
+       "status": 0,
+       "deviceModel": -1
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0013",
+      "attributes": {
+       "serialNumber": "TESTSTAT0013",
+       "productFamily": true,
+       "status": 0.0,
+       "deviceModel": "0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0014",
+      "attributes": {
+       "serialNumber": "TESTSTAT0014",
+       "productFamily": false,
+       "status": 5,
+       "deviceModel": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0015",
+      "attributes": {
+       "serialNumber": "TESTSTAT0015",
+       "productFamily": 0,
+       "status": 2.5,
+       "deviceModel": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0016",
+      "attributes": {
+       "serialNumber": "TESTSTAT0016",
+       "productFamily": 0.0,
+       "status": -1,
+       "deviceModel": "False"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0017",
+      "attributes": {
+       "serialNumber": "TESTSTAT0017",
+       "productFamily": 5,
+       "status": "0",
+       "deviceModel": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0018",
+      "attributes": {
+       "serialNumber": "TESTSTAT0018",
+       "productFamily": 2.5,
+       "status": "",
+       "deviceModel": true
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0019",
+      "attributes": {
+       "serialNumber": "TESTSTAT0019",
+       "productFamily": -1,
+       "status": "Mac",
+       "deviceModel": false
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0020",
+      "attributes": {
+       "serialNumber": "TESTSTAT0020",
+       "productFamily": "0",
+       "status": "False",
+       "deviceModel": 0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0021",
+      "attributes": {
+       "serialNumber": "TESTSTAT0021",
+       "productFamily": "",
+       "status": null,
+       "deviceModel": 0.0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0022",
+      "attributes": {
+       "serialNumber": "TESTSTAT0022",
+       "productFamily": "Mac",
+       "status": true,
+       "deviceModel": 5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0023",
+      "attributes": {
+       "serialNumber": "TESTSTAT0023",
+       "productFamily": "False",
+       "status": false,
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0099",
+      "attributes": {
+       "serialNumber": "TESTSTAT0099"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0100",
+      "attributes": {
+       "serialNumber": "TESTSTAT0100",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0101",
+      "attributes": {
+       "serialNumber": "TESTSTAT0101",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0102",
+      "attributes": {
+       "serialNumber": "TESTSTAT0102",
+       "addedToOrgDateTime": "2026-09-30T23:30:00-05:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0103",
+      "attributes": {
+       "serialNumber": "TESTSTAT0103",
+       "addedToOrgDateTime": "2025-12-31T23:00:00-02:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0104",
+      "attributes": {
+       "serialNumber": "TESTSTAT0104",
+       "addedToOrgDateTime": "2025-12-31T23:00:00-02:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0105",
+      "attributes": {
+       "serialNumber": "TESTSTAT0105",
+       "addedToOrgDateTime": "2026-08-01T02:00:00+05:30",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0106",
+      "attributes": {
+       "serialNumber": "TESTSTAT0106",
+       "addedToOrgDateTime": "2025-11-01T00:30:00+01:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0107",
+      "attributes": {
+       "serialNumber": "TESTSTAT0107",
+       "addedToOrgDateTime": "2025-10-31T22:00:00-03:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0108",
+      "attributes": {
+       "serialNumber": "TESTSTAT0108",
+       "addedToOrgDateTime": "2025-10-31T22:00:00-03:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0109",
+      "attributes": {
+       "serialNumber": "TESTSTAT0109",
+       "addedToOrgDateTime": "2026-11-01T00:30:00+14:00",
+       "deviceModel": "Mac mini (M4)",
+       "productFamily": "Mac",
+       "status": "UNASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0200",
+      "attributes": {
+       "serialNumber": "TESTSTAT0200",
+       "addedToOrgDateTime": "2026-09-16T12:00:00Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0201",
+      "attributes": {
+       "serialNumber": "TESTSTAT0201",
+       "addedToOrgDateTime": "2026-09-16T14:00:00+02:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0202",
+      "attributes": {
+       "serialNumber": "TESTSTAT0202",
+       "addedToOrgDateTime": "2026-09-16T11:59:59Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0203",
+      "attributes": {
+       "serialNumber": "TESTSTAT0203",
+       "addedToOrgDateTime": "2026-09-16T11:59:59.999999+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0204",
+      "attributes": {
+       "serialNumber": "TESTSTAT0204",
+       "addedToOrgDateTime": "2026-09-16T12:00:00.000001Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0205",
+      "attributes": {
+       "serialNumber": "TESTSTAT0205",
+       "addedToOrgDateTime": "2026-07-18T12:00:00+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0206",
+      "attributes": {
+       "serialNumber": "TESTSTAT0206",
+       "addedToOrgDateTime": "2026-07-18T05:00:00-07:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0207",
+      "attributes": {
+       "serialNumber": "TESTSTAT0207",
+       "addedToOrgDateTime": "2026-07-18T11:59:59+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0208",
+      "attributes": {
+       "serialNumber": "TESTSTAT0208",
+       "addedToOrgDateTime": "2026-10-16T12:00:00Z",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0209",
+      "attributes": {
+       "serialNumber": "TESTSTAT0209",
+       "addedToOrgDateTime": "2026-10-17T12:00:00+00:00",
+       "deviceModel": "iPhone 16",
+       "productFamily": "iPhone",
+       "status": "ASSIGNED"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 88,
+     "by_family": [
+      [
+       "Mac",
+       20
+      ],
+      [
+       "iPhone",
+       17
+      ],
+      [
+       "Unknown",
+       11
+      ],
+      [
+       "iPad",
+       7
+      ],
+      [
+       "AppleTV",
+       7
+      ],
+      [
+       "Watch",
+       7
+      ],
+      [
+       "Vision",
+       7
+      ],
+      [
+       true,
+       2
+      ],
+      [
+       5,
+       2
+      ],
+      [
+       2.5,
+       2
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       "0",
+       2
+      ],
+      [
+       "False",
+       2
+      ]
+     ],
+     "by_status": [
+      [
+       "ASSIGNED",
+       53
+      ],
+      [
+       "Unknown",
+       11
+      ],
+      [
+       "UNASSIGNED",
+       10
+      ],
+      [
+       5,
+       2
+      ],
+      [
+       2.5,
+       2
+      ],
+      [
+       -1,
+       2
+      ],
+      [
+       "0",
+       2
+      ],
+      [
+       "Mac",
+       2
+      ],
+      [
+       "False",
+       2
+      ],
+      [
+       true,
+       2
+      ]
+     ],
+     "top_models": [
+      [
+       "Unknown",
+       11
+      ],
+      [
+       "Mac mini (M4)",
+       10
+      ],
+      [
+       "iPhone 16",
+       10
+      ],
+      [
+       "Model 01",
+       7
+      ],
+      [
+       "Model 02",
+       6
+      ],
+      [
+       "Model 03",
+       5
+      ],
+      [
+       "Model 04",
+       5
+      ],
+      [
+       "Model 05",
+       4
+      ],
+      [
+       "Model 06",
+       3
+      ],
+      [
+       "Model 07",
+       3
+      ]
+     ],
+     "added_30": 9,
+     "added_90": 14,
+     "added_by_month": [
+      [
+       "2025-11",
+       1
+      ],
+      [
+       "2025-12",
+       2
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       3
+      ],
+      [
+       "2026-08",
+       1
+      ],
+      [
+       "2026-09",
+       8
+      ],
+      [
+       "2026-10",
+       2
+      ]
+     ],
+     "month_max": 8,
+     "family_max": 20
+    }
+   }
+  },
+  {
    "function": "assignment_summary",
    "input": {
     "devices": [

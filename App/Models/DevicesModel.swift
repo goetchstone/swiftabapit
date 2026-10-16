@@ -146,6 +146,6 @@ final class DevicesModel {
 
     /// The CSV of what the table shows, every attribute Apple sent that may leave the app, in Apple's order.
     func csv() -> String {
-        CSV.text(shown.map { CSV.Item($0.device.resource) }, allowing: ExportPolicy.allowing())
+        CSV.text(shown.map { CSV.Item($0.device.resource) }, columns: ExportPolicy.devices)
     }
 }

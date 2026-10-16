@@ -7,10 +7,27 @@ import Foundation
 /// (abapit matched the Python repr of the list, so an exact IMEI never matched exactly).
 public enum Find {
     public static func matches(_ query: String, in devices: [OrgDevice]) -> [OrgDevice] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let needle = strip(query).lowercased()
         guard !needle.isEmpty else { return [] }
         let identified = devices.map { (device: $0, values: ([$0.id] + $0.identifiers).map { $0.lowercased() }) }
         let exact = identified.filter { $0.values.contains(needle) }
         return (exact.isEmpty ? identified.filter { $0.values.contains { $0.contains(needle) } } : exact).map(\.device)
+    }
+
+    /// Python's whitespace (`str.isspace()`, which abapit's `q.strip()` trims), as the serials golden lists it.
+    /// A paste brings a tab, a line break or a no-break space with it (Phase 1b review: a spaces-only trim
+    /// survived); Foundation's `.whitespacesAndNewlines` also misses U+001C to U+001F, which Python trims.
+    static let pythonWhitespace: Set<UInt32> = [
+        0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x85, 0xA0, 0x1680,
+        0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+        0x2028, 0x2029, 0x202F, 0x205F, 0x3000,
+    ]
+
+    /// `str.strip()`: Python's whitespace off both ends, by scalar.
+    static func strip(_ text: String) -> String {
+        let scalars = text.unicodeScalars
+        guard let start = scalars.firstIndex(where: { !pythonWhitespace.contains($0.value) }),
+              let end = scalars.lastIndex(where: { !pythonWhitespace.contains($0.value) }) else { return "" }
+        return String(scalars[start...end])
     }
 }
