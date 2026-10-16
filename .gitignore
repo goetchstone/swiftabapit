@@ -1,0 +1,38 @@
+# Xcode / SwiftPM build output
+DerivedData/
+.build/
+.swiftpm/
+*.xcresult
+xcuserdata/
+*.xcuserstate
+build/
+
+# Secrets and local runtime state must never be committed (bare names too). Apple API keys arrive as
+# .pem files; abapit's own config held Mosyle passwords in config.json (plan §2.3 defect 10).
+*.pem
+*.p8
+*.p12
+config.json
+tokens.json
+history.sqlite
+*.local
+
+# Local agent tooling: settings, hooks and the private-terms list stay local; shared skills and agents
+# are tracked (docs/FRAMEWORK.md §2).
+.claude/*
+!.claude/skills/
+!.claude/agents/
+
+# Python caches from the dev-time scripts
+__pycache__/
+*.py[cod]
+.venv/
+
+# macOS
+.DS_Store
+
+# Per-developer signing team (see Config/Base.xcconfig)
+Config/Local.xcconfig
+
+# libFuzzer crash inputs (scripts/fuzz.sh in CI)
+fuzz-crash/
