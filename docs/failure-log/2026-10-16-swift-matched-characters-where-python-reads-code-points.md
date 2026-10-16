@@ -27,3 +27,16 @@
   `history` runbook's gotchas say: port single-character logic through `unicodeScalars`, and use the
   golden's Python whitespace, not `.whitespacesAndNewlines`. Still unverified: how Excel and Numbers treat a
   leading blank or a full-width sign (no spreadsheet run).
+- **Verifier round 1** (two independent verifiers, 68cddbf): the fix held, and 10 more mutants survived, all
+  low. Find still compared by `Character` (`String`'s `==` and `contains`), the same class as H1. The
+  generator joined a list inside a list where Swift wrote JSON, and no golden had one. Nothing tested the
+  denylist with `includeNotByDefault: true`, the fold's order, a `passwd` key, the whole Devices list, a row
+  of several empty fields, JSON keys past the BMP, a whitespace-only or NFD name in `device_stats`, or
+  Python's `Counter` merging `True` with `1`. Fixed: Find matches UTF-8 bytes; `Columns` can only be made in
+  Reports; the fold is NFKD, lowercase, letters and numbers; the guard skips every invisible lead and
+  catches look-alike triggers, with both sets in the golden; the `Counter` quirk is a listed deviation.
+  Grepping the module for the class then found two more nobody had flagged: `AssignmentSummary` kept
+  serials in a `Set<String>` (NFC and NFD spellings were one device), and the denylist found a stem with
+  `String.contains` (a prepended U+0D4E hid `token`). The lesson for the next port: a review fixes the
+  instance, so grep the module for the class (`==`, `contains`, `first`, `Set<String>` and `String` keys on
+  ported data) before calling it done.

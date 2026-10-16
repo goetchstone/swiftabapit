@@ -5,13 +5,19 @@ import Foundation
 /// number or a MAC address — case-insensitive exact matches first, else substring matches. One hit opens the
 /// device; several filter the table. One deliberate difference: each IMEI and MEID is matched on its own
 /// (abapit matched the Python repr of the list, so an exact IMEI never matched exactly).
+///
+/// Matched by code point, as Python's `==` and `in` compare (verifier round 1): `String`'s `==` and
+/// `contains(_:)` compare `Character`s under canonical equivalence, so U+00C9 matched `E` + U+0301 exactly, and
+/// `e` wasn't found in `e` + U+0301. UTF-8 bytes stand in for code points: a valid UTF-8 needle matches only at a
+/// scalar boundary. One gap left: Swift's `lowercased()` has no final-sigma rule and Python's `lower()` does.
 public enum Find {
     public static func matches(_ query: String, in devices: [OrgDevice]) -> [OrgDevice] {
-        let needle = strip(query).lowercased()
+        let needle = Array(strip(query).lowercased().utf8)
         guard !needle.isEmpty else { return [] }
-        let identified = devices.map { (device: $0, values: ([$0.id] + $0.identifiers).map { $0.lowercased() }) }
+        let identified = devices.map { (device: $0, values: ([$0.id] + $0.identifiers).map { Array($0.lowercased().utf8) }) }
         let exact = identified.filter { $0.values.contains(needle) }
-        return (exact.isEmpty ? identified.filter { $0.values.contains { $0.contains(needle) } } : exact).map(\.device)
+        let hits = exact.isEmpty ? identified.filter { $0.values.contains { $0.firstRange(of: needle) != nil } } : exact
+        return hits.map(\.device)
     }
 
     /// Python's whitespace (`str.isspace()`, which abapit's `q.strip()` trims), as the serials golden lists it.

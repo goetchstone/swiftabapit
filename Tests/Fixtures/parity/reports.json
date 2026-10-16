@@ -11914,6 +11914,421 @@
    }
   },
   {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0300",
+      "attributes": {
+       "serialNumber": "TESTSTAT0300",
+       "deviceModel": "Caf\u00e9",
+       "productFamily": " ",
+       "status": "\u3000"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0301",
+      "attributes": {
+       "serialNumber": "TESTSTAT0301",
+       "deviceModel": "Cafe\u0301",
+       "productFamily": " ",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0302",
+      "attributes": {
+       "serialNumber": "TESTSTAT0302",
+       "deviceModel": "Caf\u00e9",
+       "productFamily": "\t",
+       "status": "e\u0301"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0303",
+      "attributes": {
+       "serialNumber": "TESTSTAT0303",
+       "deviceModel": " ",
+       "productFamily": "Mac",
+       "status": "\u00e9"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0304",
+      "attributes": {
+       "serialNumber": "TESTSTAT0304",
+       "deviceModel": "\u00a0",
+       "productFamily": "Mac",
+       "status": "\u00e9"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0305",
+      "attributes": {
+       "serialNumber": "TESTSTAT0305",
+       "deviceModel": " ",
+       "productFamily": "Mac",
+       "status": "e\u0301"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 6,
+     "by_family": [
+      [
+       "Mac",
+       3
+      ],
+      [
+       " ",
+       2
+      ],
+      [
+       "\t",
+       1
+      ]
+     ],
+     "by_status": [
+      [
+       "e\u0301",
+       2
+      ],
+      [
+       "\u00e9",
+       2
+      ],
+      [
+       "\u3000",
+       1
+      ],
+      [
+       "ASSIGNED",
+       1
+      ]
+     ],
+     "top_models": [
+      [
+       "Caf\u00e9",
+       2
+      ],
+      [
+       " ",
+       2
+      ],
+      [
+       "Cafe\u0301",
+       1
+      ],
+      [
+       "\u00a0",
+       1
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 3
+    }
+   }
+  },
+  {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0400",
+      "attributes": {
+       "serialNumber": "TESTSTAT0400",
+       "productFamily": true,
+       "status": "5",
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0401",
+      "attributes": {
+       "serialNumber": "TESTSTAT0401",
+       "productFamily": 1,
+       "status": 5,
+       "deviceModel": "2.5"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0402",
+      "attributes": {
+       "serialNumber": "TESTSTAT0402",
+       "productFamily": true,
+       "status": 5,
+       "deviceModel": 2.5
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0403",
+      "attributes": {
+       "serialNumber": "TESTSTAT0403",
+       "productFamily": "True",
+       "status": "5",
+       "deviceModel": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0404",
+      "attributes": {
+       "serialNumber": "TESTSTAT0404",
+       "productFamily": 1.0,
+       "status": "5",
+       "deviceModel": 0
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 5,
+     "by_family": [
+      [
+       "True",
+       3
+      ],
+      [
+       "1",
+       1
+      ],
+      [
+       "1.0",
+       1
+      ]
+     ],
+     "by_status": [
+      [
+       "5",
+       5
+      ]
+     ],
+     "top_models": [
+      [
+       "2.5",
+       3
+      ],
+      [
+       "Unknown",
+       2
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 3
+    }
+   },
+   "abapit": {
+    "ok": {
+     "total": 5,
+     "by_family": [
+      [
+       true,
+       4
+      ],
+      [
+       "True",
+       1
+      ]
+     ],
+     "by_status": [
+      [
+       "5",
+       3
+      ],
+      [
+       5,
+       2
+      ]
+     ],
+     "top_models": [
+      [
+       2.5,
+       2
+      ],
+      [
+       "Unknown",
+       2
+      ],
+      [
+       "2.5",
+       1
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 4
+    }
+   }
+  },
+  {
    "function": "assignment_summary",
    "input": {
     "devices": [
@@ -15384,6 +15799,98 @@
       "TESTYD0XYUX5"
      ],
      "assigned_count": 0
+    }
+   }
+  },
+  {
+   "function": "assignment_summary",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "C02\u00c9X",
+      "attributes": {
+       "serialNumber": "C02\u00c9X"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02E\u0301X",
+      "attributes": {
+       "serialNumber": "C02E\u0301X"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "",
+      "attributes": {
+       "serialNumber": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TEST1",
+      "attributes": {
+       "serialNumber": "TEST1"
+      }
+     }
+    ],
+    "servers": [
+     {
+      "type": "mdmServers",
+      "id": "SVC1",
+      "attributes": {
+       "serverName": "Mosyle"
+      }
+     },
+     {
+      "type": "mdmServers",
+      "id": "SVC2",
+      "attributes": {
+       "serverName": "Jamf"
+      }
+     }
+    ],
+    "server_device_ids": {
+     "SVC1": [
+      "C02E\u0301X",
+      "C02E\u0301X",
+      "TEST1"
+     ],
+     "SVC2": [
+      "C02E\u0301X",
+      "GONE1"
+     ]
+    }
+   },
+   "expected": {
+    "ok": {
+     "per_server": [
+      {
+       "server": {
+        "type": "mdmServers",
+        "id": "SVC1",
+        "attributes": {
+         "serverName": "Mosyle"
+        }
+       },
+       "count": 2
+      },
+      {
+       "server": {
+        "type": "mdmServers",
+        "id": "SVC2",
+        "attributes": {
+         "serverName": "Jamf"
+        }
+       },
+       "count": 2
+      }
+     ],
+     "unassigned": [
+      "C02\u00c9X"
+     ],
+     "assigned_count": 2
     }
    }
   },

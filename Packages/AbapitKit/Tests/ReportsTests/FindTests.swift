@@ -52,4 +52,16 @@ struct FindTests {
         // Inner whitespace stays: "O-100", a no-break space, "0" is nobody's order.
         #expect(Find.matches("O-100\u{A0}0", in: Self.fleet).isEmpty)
     }
+
+    /// abapit compares code points (`value.lower() == needle`, `needle in value.lower()`), so canonically
+    /// equivalent spellings are different identifiers (verifier round 1: `String`'s `==` and `contains` matched
+    /// U+00C9 to `E` + U+0301, and missed `e` inside `e` + U+0301).
+    @Test func identifiersAreMatchedByCodePoint() {
+        let fleet = [Self.device("C02XA1", order: "E\u{301}X-1"), Self.device("C02XB2", order: "\u{C9}Y-2")]
+        #expect(Find.matches("e", in: fleet).map(\.id) == ["C02XA1"])
+        #expect(Find.matches("\u{E9}", in: fleet).map(\.id) == ["C02XB2"])
+        #expect(Find.matches("\u{C9}X-1", in: fleet).isEmpty)
+        #expect(Find.matches("e\u{301}x-1", in: fleet).map(\.id) == ["C02XA1"])
+        #expect(Find.matches("\u{301}x", in: fleet).map(\.id) == ["C02XA1"])
+    }
 }
