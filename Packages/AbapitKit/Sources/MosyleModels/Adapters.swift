@@ -31,6 +31,28 @@ public enum MosyleAdapter {
     /// The raw columns to request: the sources above, plus the two that pick the family.
     public static let deviceColumns: [String] = fields.map(\.source) + dates.map(\.source) + ["os", "device_type"]
 
+    /// Phase 7a review L1 (invariant 11): users and groups pass an allowlist too. abapit's `adapt_user` and
+    /// `adapt_group` kept every raw field (its tables and its CSV showed them all), so a password, a token or a
+    /// bypass code sent on a user reached the page and the export. Kept: abapit's own names, then the raw fields
+    /// those are read from, the only Mosyle user and group fields with a source here (`Contracts/mosyle/` has none
+    /// yet). A field to show joins with its source; the golden's `allowlists` case pins these.
+    public static let userAttributes = ["name", "email", "identifier", "userType", "iduser", "id", "managedappleid", "type", "usertype"]
+    public static let groupAttributes = ["name", "identifier", "memberCount", "os", "idusergroup", "iddevicegroup", "id",
+                                         "device_numbers", "idusers_primary", "members"]
+
+    /// What abapit deduplicated devices by, `raw.get("serial_number") or raw.get("deviceudid")`, compared as its
+    /// `set` compared them (Phase 7a review L4): a numeric serial by value (`123` and `123.0` are one key, `true`
+    /// and `1` another; `"123"` is a third), a string by its code points.
+    public struct DeviceKey: Hashable, Sendable {
+        let bytes: [UInt8]
+    }
+
+    /// The device's dedupe key; nil when it has none, so it is always kept. A list or an object is no key here:
+    /// abapit raised `TypeError` (unhashable) and lost the whole device list.
+    public static func deviceKey(_ raw: JSONObject) -> DeviceKey? {
+        [raw["serial_number"], raw["deviceudid"]].lazy.compactMap { $0 }.first(where: Python.truthy).flatMap(Python.key).map(DeviceKey.init)
+    }
+
     static let osFamily = ["mac": "Mac", "macos": "Mac", "osx": "Mac", "tvos": "AppleTV", "atv": "AppleTV", "watchos": "Watch", "visionos": "Vision"]
 
     /// abapit's `adapt_device`, as an allowlist: the same names and values for what it maps, nothing else.
@@ -46,14 +68,15 @@ public enum MosyleAdapter {
         return Resource(type: "orgDevices", id: firstTruthy(raw, "serial_number", "deviceudid"), attributes: attributes)
     }
 
-    /// abapit's `_family`: the `os` first, then the model and device type's words, then iOS means iPhone.
+    /// abapit's `_family`: the `os` first, then the model and device type's words (by code points, as Python's
+    /// `in`), then iOS means iPhone.
     static func family(_ raw: JSONObject) -> String {
         let os = Python.truthy(raw["os"]) ? Python.str(raw["os"]).lowercased() : ""
         if let mapped = osFamily[os] { return mapped }
         let model = firstTruthy(raw, "device_model", "model_name", "device_model_name").lowercased()
         let type = Python.truthy(raw["device_type"]) ? Python.str(raw["device_type"]).lowercased() : ""
-        if model.contains("ipad") || type.contains("ipad") { return "iPad" }
-        if model.contains("iphone") || type.contains("iphone") { return "iPhone" }
+        if Python.contains(model, "ipad") || Python.contains(type, "ipad") { return "iPad" }
+        if Python.contains(model, "iphone") || Python.contains(type, "iphone") { return "iPhone" }
         return os == "ios" ? "iPhone" : ""
     }
 
@@ -62,7 +85,7 @@ public enum MosyleAdapter {
         keys.lazy.compactMap { raw[$0] }.first(where: Python.truthy).map(Python.str) ?? ""
     }
 
-    /// abapit's `adapt_user`: the four names it reads, then every other field as Mosyle sent it.
+    /// abapit's `adapt_user`: the four names it reads, then the raw fields on `userAttributes` as Mosyle sent them.
     public static func user(_ raw: JSONObject) -> Resource {
         var attributes: JSONObject = [
             "name": raw["name"] ?? .string(""),
@@ -70,11 +93,12 @@ public enum MosyleAdapter {
             "identifier": raw["identifier"] ?? .string(""),
             "userType": Python.truthy(raw["type"]) ? raw["type"]! : (raw["usertype"] ?? .string("")),
         ]
-        for (key, value) in raw where attributes[key] == nil { attributes[key] = value }
+        for (key, value) in raw where attributes[key] == nil && userAttributes.contains(key) { attributes[key] = value }
         return Resource(type: "mosyleUsers", id: firstTruthy(raw, "iduser", "id", "identifier"), attributes: attributes)
     }
 
-    /// abapit's `adapt_group`, for user groups (`userGroups`) and device groups (`deviceGroups`).
+    /// abapit's `adapt_group`, for user groups (`userGroups`) and device groups (`deviceGroups`), cut to
+    /// `groupAttributes`.
     public static func group(_ raw: JSONObject, kind: String) -> Resource {
         var members = raw["device_numbers"]
         if members == nil || members == .null {
@@ -82,7 +106,7 @@ public enum MosyleAdapter {
         }
         var attributes: JSONObject = ["name": raw["name"] ?? .string(""), "identifier": raw["identifier"] ?? .string(""),
                                       "memberCount": members ?? .null, "os": raw["os"] ?? .string("")]
-        for (key, value) in raw where attributes[key] == nil { attributes[key] = value }
+        for (key, value) in raw where attributes[key] == nil && groupAttributes.contains(key) { attributes[key] = value }
         return Resource(type: kind, id: firstTruthy(raw, "idusergroup", "iddevicegroup", "id"), attributes: attributes)
     }
 }

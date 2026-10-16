@@ -43,6 +43,26 @@
   for each failure the client handles (`failTransport`, `revoke`, `expireLoginsOnce`, `jwtLifetime`, `queue`,
   `failEnvelope`, `ignorePaging`, `ignoreColumns`, `sendRowsAsStrings`), and a test drives each.
 
+## Parity notes (MosyleModels)
+- **Users and groups pass an allowlist too** (Phase 7a review L1, invariant 11): `MosyleAdapter.userAttributes` and
+  `groupAttributes`, abapit's own names plus the raw fields they are read from. abapit kept every raw field, so a
+  password or a token sent on a user reached its page and its CSV. The golden records the cut as a deviation and
+  pins both lists. **Check live (Phase 7):** which other user and group fields Mosyle sends that are worth showing;
+  each joins its list with its source.
+- **`Python.swift` is abapit's Python, exactly** (Phase 7a review L4), each rule held by `py_str`, `py_truthy`,
+  `to_iso` and `dedupe_devices` cases: `str()` of a float is `repr()` (`1e+20`, `1000.0`, positional from 1e-4 up
+  to 1e16), of a list or dict its `repr()`; `int()` of a string reads any script's decimal digits and strips only
+  ASCII whitespace (U+001C refuses); `str.isdigit()`, `in` and set keys go by code points, never Swift's canonical
+  equivalence; dates are computed proleptic Gregorian (Foundation's Gregorian calendar is Julian before
+  1582-10-15). Unicode tables are Swift's, possibly a version past the golden's `unicode`.
+- **A number passed through keeps Mosyle's text** (`battery: 1e3` stays `1e3`); abapit's pages and CSV printed its
+  `str()` (`1000.0`). Only the fields abapit `str()`'d (ids, the family's words, a log's stamp) use the Python rule.
+- **The device dedupe key** is `MosyleAdapter.deviceKey`: by value for a number (`123` = `123.0` = `1.23e2`, `true`
+  = `1`; `"123"` differs), by code points for a string; a list or an object is no key (abapit raised `TypeError`).
+  `MosyleClient.devices()` still keys on string serials only, and is to switch to it.
+- **Compliance stamps** are ASCII, hour 1 to 12, a real proleptic Gregorian date; anything else stays raw, as abapit
+  showed it. A log entry that isn't an object is skipped (abapit raised `AttributeError` and lost the page).
+
 ## Gotchas / stub-lies traps
 - **`Duration.seconds` traps past about 1.7e20.** A JWT `exp` is clamped as a number before it becomes a `Duration`
   (`exp: 1e300` or `1e999` is the 23 h fallback; a past one is zero).

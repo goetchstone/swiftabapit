@@ -13,8 +13,14 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
     ASCII, and a non-ASCII token matches no device either way);
   - csv: a dict or nested list cell is JSON (sorted keys), not Python's repr;
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
-  - mosyle adapt_device: no `activation_bypass*` key (defect 1);
-  - mosyle compliance timestamps (`01:00 PM - 03/12/2024`, no zone) parse as local time (defect 5).
+  - mosyle adapt_device: no `activation_bypass*` key (defect 1); a serial that isn't a string gives the id its
+    `str()` (abapit's id is the raw number or boolean; a Resource's id is a string);
+  - mosyle adapt_user / adapt_group: cut to an allowlist (invariant 11; abapit kept every raw key, a password or a
+    token included);
+  - mosyle device dedupe: a list or an object serial is no key, so the device is kept (abapit raised TypeError and
+    lost the whole list);
+  - mosyle compliance timestamps (`01:00 PM - 03/12/2024`, no zone) parse as local time (defect 5), with an hour
+    of 1 to 12 and a proleptic Gregorian date.
 
 Inputs come only from `random.Random(seed)` and literals here — no Hypothesis, so an unrelated edit to
 this file can't move a drawn case (SwiftGamGui RULE-FEEDBACK 2026-10-08). Run it with abapit's venv
@@ -32,12 +38,14 @@ import copy
 import importlib
 import io
 import json
+import math
 import os
 import platform
 import random
 import re
 import shutil
 import string
+import struct
 import subprocess
 import sys
 import tarfile
@@ -568,20 +576,129 @@ def gen_keys_and_claims(m: dict) -> None:
 
 # -- Mosyle adapters -------------------------------------------------------------------------------
 
-COMPLIANCE = re.compile(r"^(\d{1,2}):(\d{2}) (AM|PM) - (\d{2})/(\d{2})/(\d{4})$")
+# Defect 5's parser. abapit left the stamp unparsed, so this is the spec rather than abapit's behaviour: the whole
+# string (`fullmatch`: `$` also matches before a final newline), ASCII digits only (`\d` alone takes any script's),
+# an hour of 1 to 12 (Phase 7a review L4: `13:00 PM` and `00:30 PM` read as times), and a real date in the
+# proleptic Gregorian calendar Python's datetime keeps (`02/29/1500` is not one).
+COMPLIANCE = re.compile(r"(\d{1,2}):(\d{2}) (AM|PM) - (\d{2})/(\d{2})/(\d{4})", re.ASCII)
 
 
 def compliance_time(value) -> str | None:
     """Defect 5: Mosyle's compliance timestamp, no zone given, read as local time (no suffix)."""
-    match = COMPLIANCE.match(value) if isinstance(value, str) else None
+    match = COMPLIANCE.fullmatch(value) if isinstance(value, str) else None
     if not match:
         return None
-    hour, minute, half, month, day, year = match.groups()
-    hour = int(hour) % 12 + (12 if half == "PM" else 0)
+    hour, minute, half, month, day, year = (int(part) if part.isdigit() else part for part in match.groups())
+    if not 1 <= hour <= 12:
+        return None
     try:
-        return datetime(int(year), int(month), int(day), hour, int(minute)).strftime("%Y-%m-%dT%H:%M:%S")
+        stamp = datetime(year, month, day, hour % 12 + (12 if half == "PM" else 0), minute)
     except ValueError:
         return None
+    return f"{stamp.year:04d}-{stamp.month:02d}-{stamp.day:02d}T{stamp.hour:02d}:{stamp.minute:02d}:00"
+
+
+# Phase 7a review L1 (invariant 11): users and groups pass an allowlist, as devices do. abapit's adapt_user and
+# adapt_group kept every raw key (its generic tables and its CSV showed them all), so a password or a bypass code
+# sent on a user reached the page and the export. Kept: abapit's own names and the raw fields they read, the only
+# Mosyle user and group fields with a source here. MosyleAdapter.userAttributes and groupAttributes equal these
+# (the "allowlists" case pins them).
+USER_ATTRIBUTES = ["name", "email", "identifier", "userType", "iduser", "id", "managedappleid", "type", "usertype"]
+GROUP_ATTRIBUTES = ["name", "identifier", "memberCount", "os", "idusergroup", "iddevicegroup", "id", "device_numbers",
+                    "idusers_primary", "members"]
+
+
+def allowlisted(case: dict, abapit: dict, allowed: list) -> dict:
+    """The case with abapit's item cut to `allowed` as `expected`, and abapit's own beside it when they differ."""
+    expected = copy.deepcopy(abapit)
+    expected["attributes"] = {k: v for k, v in expected["attributes"].items() if k in allowed}
+    case["expected"] = expected
+    if expected != abapit:
+        case["abapit"] = abapit
+    return case
+
+
+def sensitive_extras(rng: random.Random) -> dict:
+    """What must not get past the user and group allowlist: a bypass code, a password, tokens, an unknown field."""
+    keys = {"activation_bypass": "TESTBYPASS-" + "".join(rng.choices(string.ascii_uppercase, k=8)),
+            "password": "TESTPASSWORD", "token": "TESTTOKEN", "apikey": "TESTAPIKEY", "custom_field": "x"}
+    return {k: v for k, v in keys.items() if rng.random() < 0.3}
+
+
+def json_case(function: str, text: str, call) -> dict:
+    """A case whose input is the JSON text Mosyle would send (`input_json`). Swift parses it as abapit's httpx
+    did, so a number reaches the code as written (`1e20`), not as Python writes it back (`1e+20`)."""
+    return {"function": function, "input_json": text, "expected": jsonable(call(json.loads(text)))}
+
+
+def logs_without_junk(block):
+    """The response with each `Logs` that isn't a list emptied and each of its entries that isn't an object taken
+    out: the corrected reading. abapit called `.get` on them and raised AttributeError, losing the whole page.
+    Only the containers are walked, never a log entry itself."""
+    if not isinstance(block, dict):
+        return block
+    return {key: ([entry for entry in value if isinstance(entry, dict)] if isinstance(value, list) else []) if key == "Logs"
+            else logs_without_junk(value) for key, value in block.items()}
+
+
+def logs_case(mosyle, response: dict, text: str | None = None) -> dict:
+    """normalize_logs, with defect 5's correction: compliance stamps parsed, then newest first again."""
+    try:
+        abapit = jsonable(mosyle.normalize_logs(response))
+    except AttributeError:
+        abapit = "AttributeError"
+    expected = jsonable(mosyle.normalize_logs(logs_without_junk(response)))
+    if abapit != "AttributeError" and expected != abapit:
+        raise SystemExit(f"taking out the junk changed a log abapit read: {response}")
+    for event in expected:
+        if event["kind"] == "compliance":
+            event["when"] = compliance_time(event["when"]) or event["when"]
+    expected.sort(key=lambda e: e["when"], reverse=True)
+    case = {"function": "normalize_logs", **({"input_json": text} if text else {"input": response}), "expected": expected}
+    if expected != abapit:
+        case["abapit"] = abapit
+    return case
+
+
+def corrected_device_key(raw: dict):
+    """abapit's dedupe key, `raw.get("serial_number") or raw.get("deviceudid")`, except that a list or an object is
+    no key: abapit raised TypeError on one (unhashable) and lost the whole device list; here that device is kept."""
+    key = raw.get("serial_number") or raw.get("deviceudid")
+    return None if isinstance(key, (list, dict)) else key
+
+
+def dedupe_case(m: dict, text: str) -> dict:
+    """abapit's own MosyleClient.devices() over one page of devices (JSON text, parsed as httpx parses it), with
+    `_post` answering in place of the network: which rows survive its dedupe, by their `custom_index`."""
+    client = m["mosyle"].MosyleClient(m["config"].Org(name="parity", scope="business", client_id="", key_id="",
+                                                      private_key_path="", provider="mosyle"))
+
+    def post(path, operation, options=None):
+        if options.get("os") == "ios":
+            return {"status": "OK", "response": [{"devices": json.loads(text)}]}
+        return {"status": "OK", "response": [{"status": "DEVICES_NOTFOUND"}]}
+
+    client._post = post
+    try:
+        abapit = [device["attributes"]["custom_index"] for device in client.devices()]
+    except TypeError:
+        abapit = "TypeError"
+    finally:
+        client.close()
+    seen, expected = set(), []
+    for raw in json.loads(text):
+        key = corrected_device_key(raw)
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        expected.append(raw["custom_index"])
+    if abapit != "TypeError" and abapit != expected:
+        raise SystemExit(f"the corrected dedupe drifted from abapit's on {text}")
+    case = {"function": "dedupe_devices", "input_json": text, "expected": expected}
+    if abapit != expected:
+        case["abapit"] = abapit
+    return case
 
 
 def raw_mosyle_device(rng: random.Random) -> dict:
@@ -612,12 +729,24 @@ def raw_mosyle_device(rng: random.Random) -> dict:
 def gen_mosyle(m: dict) -> None:
     mosyle = m["mosyle"]
     rng = random.Random(1007)
+    # Draws added after the first golden use their own generators, so the cases drawn from `rng` never move.
+    extras = random.Random(1008)
     cases = []
-    for _ in range(60):
-        raw = raw_mosyle_device(rng)
+    devices = [raw_mosyle_device(rng) for _ in range(60)]
+    # Phase 7a review L4: a serial that isn't a string (abapit's id is the raw value; a Resource's id is a string,
+    # Python's `str()` of it), a family read by code points ("iPad" + U+0301 holds "ipad" for Python, not for
+    # Swift's Character comparison), and a falsy 0.0 model name.
+    devices += [{"serial_number": 123, "deviceudid": "u1", "os": "ios"}, {"serial_number": 1000.0, "os": "mac"},
+                {"serial_number": True, "os": "mac"},
+                {"serial_number": "", "deviceudid": "u2", "device_model": "iPad\u0301", "os": ""},
+                {"serial_number": "TESTPAD00001", "device_model_name": 0.0, "device_model": "iPad12,1"},
+                {"serial_number": "TESTPHONE001", "device_type": "IPHONE\u0301", "model_name": "x"}]
+    for raw in devices:
         abapit = jsonable(mosyle.adapt_device(raw))
         expected = copy.deepcopy(abapit)
         expected["attributes"] = {k: v for k, v in expected["attributes"].items() if not k.startswith("activation_bypass")}
+        if not isinstance(expected["id"], str):
+            expected["id"] = str(raw.get("serial_number") or raw.get("deviceudid"))
         case = {"function": "adapt_device", "input": raw, "expected": expected}
         if expected != abapit:
             case["abapit"] = abapit
@@ -629,7 +758,14 @@ def gen_mosyle(m: dict) -> None:
                                  "managedappleid": rng.choice(["avery@appleid.example.com", None]),
                                  "type": rng.choice(["student", "teacher", None]), "usertype": rng.choice(["admin", None])}.items()
                if v is not None}
-        cases.append({"function": "adapt_user", "input": raw, "expected": jsonable(mosyle.adapt_user(raw))})
+        raw.update(sensitive_extras(extras))
+        cases.append(allowlisted({"function": "adapt_user", "input": raw}, jsonable(mosyle.adapt_user(raw)), USER_ATTRIBUTES))
+    for raw in [{"iduser": "U1", "name": "Avery Chen", "email": "avery@example.com",
+                 "activation_bypass": "TESTBYPASS-USER", "activation_bypass_mdm": "TESTBYPASSMDM-USER",
+                 "password": "TESTPASSWORD", "token": "TESTTOKEN", "apikey": "TESTAPIKEY", "accessToken": "TESTACCESS",
+                 "secret": "TESTSECRET", "custom_field": "x"},
+                {"id": 7, "identifier": "kai", "type": 0.0, "usertype": "admin", "Password": "TESTPASSWORD2"}]:
+        cases.append(allowlisted({"function": "adapt_user", "input": raw}, jsonable(mosyle.adapt_user(raw)), USER_ATTRIBUTES))
     for _ in range(25):
         raw = {k: v for k, v in {"idusergroup": rng.choice(["7", None]), "iddevicegroup": rng.choice(["9", 9, None]),
                                  "id": rng.choice(["11", None]), "name": rng.choice(["Sales", ""]),
@@ -638,16 +774,99 @@ def gen_mosyle(m: dict) -> None:
                                  "members": rng.choice([5, None]), "os": rng.choice(["ios", "mac", None])}.items()
                if v is not None}
         kind = rng.choice(["userGroups", "deviceGroups"])
-        cases.append({"function": "adapt_group", "input": {"raw": raw, "kind": kind},
-                      "expected": jsonable(mosyle.adapt_group(raw, kind))})
+        raw.update(sensitive_extras(extras))
+        cases.append(allowlisted({"function": "adapt_group", "input": {"raw": raw, "kind": kind}},
+                                 jsonable(mosyle.adapt_group(raw, kind)), GROUP_ATTRIBUTES))
+    for raw, kind in [({"idusergroup": "G1", "name": "Staff", "idusers_primary": ["U1"], "activation_bypass": "TESTBYPASS-G",
+                        "password": "TESTPASSWORD", "token": "TESTTOKEN", "apikey": "TESTAPIKEY", "unknown": {"nested": "x"}},
+                       "userGroups"),
+                      ({"iddevicegroup": 9, "name": "Carts", "device_numbers": None, "members": 4, "os": "ios",
+                        "token": "TESTTOKEN"}, "deviceGroups")]:
+        cases.append(allowlisted({"function": "adapt_group", "input": {"raw": raw, "kind": kind}},
+                                 jsonable(mosyle.adapt_group(raw, kind)), GROUP_ATTRIBUTES))
+    cases.append({"function": "allowlists", "input": None, "expected": {"user": USER_ATTRIBUTES, "group": GROUP_ATTRIBUTES}})
+    # Phase 7a review L4: the range's ends and the calendar before 1582 (Python's datetime is proleptic Gregorian;
+    # Foundation's Gregorian calendar turns Julian there), int()'s underscores, Unicode digits and whitespace (any
+    # script's decimal digits; U+001C to U+001F are str.isspace() but not int()'s), and str.isdigit()'s wider set
+    # for the "already a date" test, whose `"-" in value` is by code points (a `-` with a combining mark counts).
+    # Year 1 is `0001` because abapit's `%Y` is macOS's strftime, which pads (abapit ran there, and so does this).
     for value in [None, "", "1700000000", 1700000000, " 1700000000", "+1700000000", "0", "-1", "1.5", "abc",
                   "99999999999999999999", "2024-03-12", "2024-03-12 10:00:00", "2024-3-12", "01:00 PM - 03/12/2024",
-                  "12:30 AM - 01/02/2025", "1e9", True, 3.7]:
-        abapit = mosyle._to_iso(value)
-        cases.append({"function": "to_iso", "input": {"value": value}, "expected": abapit})
+                  "12:30 AM - 01/02/2025", "1e9", True, 3.7,
+                  -62135596800, -62135596801, 253402300799, 253402300800, -12219292801, -12219292800, -30610224000,
+                  -2208988800, 951782400, 4107542400, "-62135596800", "253402300800", False,
+                  "1_700_000_000", "1__700", "_1700", "1700_", "+_1", "-0", "+0", "+-1", "+ 1", "1 2", "0x10", " ", "\u00a0",
+                  "\u0661\u0662", "1\u0661", "\uff11\uff12", "\U0001d7ce\U0001d7cf", "\u0967\u0968", "\u0661_\u0662", "\u00b2",
+                  "\x1c12", "12\x1f", "\x8512", "\u300012\u3000", " \t12\n", "\x0b12\x0c", "12\x00",
+                  "\u0661\u0669\u0667\u0660-01-01", "\u00b2\u00b2\u00b2\u00b2-01", "\u2460\u2461\u2462\u2463-", "12-", "2024-\u0301"]:
+        cases.append({"function": "to_iso", "input": {"value": value}, "expected": mosyle._to_iso(value)})
+    for text in ['{"value": 1e3}', '{"value": 1E3}', '{"value": -0.5}', '{"value": -0}', '{"value": 0.0}', '{"value": 1e20}',
+                 '{"value": 9.2e18}', '{"value": NaN}', '{"value": Infinity}', '{"value": -Infinity}', '{"value": 1700000000.9}',
+                 '{"value": 253402300799.5}', '{"value": -62135596800.9}', '{"value": -62135596801.5}', '{"value": []}',
+                 '{"value": {}}', '{"value": 123456789012345678901234567890}']:
+        cases.append(json_case("to_iso", text, lambda parsed: mosyle._to_iso(parsed["value"])))
     for value in ["01:00 PM - 03/12/2024", "12:30 AM - 01/02/2025", "12:05 PM - 12/31/2023", "13:00 PM - 03/12/2024",
-                  "01:00 PM - 02/30/2024", "1:07 AM - 07/04/2026", "01:00 pm - 03/12/2024", "", None]:
+                  "01:00 PM - 02/30/2024", "1:07 AM - 07/04/2026", "01:00 pm - 03/12/2024", "", None,
+                  "99:59 PM - 03/12/2024", "00:30 PM - 03/12/2024", "00:00 AM - 03/12/2024", "12:00 PM - 03/12/2024",
+                  "12:00 AM - 03/12/2024", "01:00 AM - 03/12/2024", "11:59 PM - 12/31/9999", "01:00 PM - 01/01/0001",
+                  "01:00 PM - 03/12/0000", "01:00 PM - 02/29/1500", "01:00 PM - 02/29/1600", "01:00 PM - 02/29/1900",
+                  "01:00 PM - 02/29/2000", "01:00 PM - 02/29/2023", "01:00 PM - 02/29/2024", "01:00 PM - 10/10/1582",
+                  "01:00 PM - 00/12/2024", "01:00 PM - 13/12/2024", "01:00 PM - 03/00/2024", "01:00 PM - 03/32/2024",
+                  "01:00 PM - 04/31/2024", "01:60 PM - 03/12/2024", "1:5 PM - 03/12/2024", "001:00 PM - 03/12/2024",
+                  "01:00 PM - 03/12/2024\n", " 01:00 PM - 03/12/2024", "01:00  PM - 03/12/2024",
+                  "\u0661:00 PM - 03/12/2024", "01:00 PM - 03/12/2024\u0301", 1700000000]:
         cases.append({"function": "compliance_time", "input": {"value": value}, "expected": compliance_time(value)})
+    # Phase 7a review L4: Python's str() and bool() of what json.loads made of Mosyle's text. A JSON integer is an
+    # int (exact, `-0` is 0); anything with a fraction or an exponent is a float, written by repr(): the shortest
+    # digits that read back, positional from 1e-4 up to 1e16, else `1e+16` and `1e-05`. A list or a dict is its
+    # repr(). The floats below are written to 17 digits, so the shortest form has to be found, not copied.
+    texts = ["1e20", "1e3", "1E3", "0.1", "-0.0", "1e16", "1e15", "9.5e15", "123456789012345680.0", "5e-324", "1e-5",
+             "0.0001", "0.00012", "100", "-0", "0", "-12", "12345678901234567890123", "1.5", "2.5e-7", "1e999", "-1e999",
+             "1e-999", "NaN", "Infinity", "-Infinity", "9007199254740993", "9007199254740993.0", "1.7976931348623157e308",
+             "4.9e-324", "0.30000000000000004", "1e22", "1e21", "123e-20", "1.0", "1.50", "-1.5e+300", "true", "false",
+             "null", '"x"', '""', "[]", "{}", '[1, "a", null, true, false, 1e3, -0.0, [], {}]',
+             '["it\'s", "say \\"hi\\"", "both \' and \\"", "back\\\\slash"]',
+             '["\\u00e9", "\\u200b", "\\u0085", "\\u00a0", "\\t\\n\\r", "\\u0007", "\\u007f", "\\ud83d\\ude00", '
+             '"\\udb40\\udc01", "\\u2028", "\\ue000", "\\u0378", "\\u00ff", "\\u0100"]',
+             '{"a": [1, {"b": null}], "k\'": "v", "": 1.25}']
+    floats = random.Random(1009)
+    for _ in range(300):
+        value = struct.unpack("<d", struct.pack("<Q", floats.getrandbits(64)))[0]
+        if math.isfinite(value):
+            texts.append(f"{value:.17g}")
+    for _ in range(150):
+        texts.append(f"{floats.uniform(-1e6, 1e6):.17g}")
+        texts.append(f"{round(floats.uniform(-1e4, 1e4), floats.randint(0, 6)):.17g}")
+        texts.append(f"{floats.uniform(1e15, 1e17):.17g}")
+        texts.append(f"{floats.uniform(1e-5, 1e-3):.17g}")
+    for text in texts:
+        cases.append(json_case("py_str", f'{{"value": {text}}}', lambda parsed: str(parsed["value"])))
+    for text in ["0", "0.0", "-0.0", "-0", "0e5", "0E-3", "1e-400", "1", "0.5", "5e-324", "1e400", "NaN", "Infinity",
+                 "-Infinity", '""', '"0"', '" "', "[]", "[0]", "{}", '{"a": 0}', "true", "false", "null"]:
+        cases.append(json_case("py_truthy", f'{{"value": {text}}}', lambda parsed: bool(parsed["value"])))
+    # Phase 7a review L4: a numeric serial is deduplicated as abapit's set compared it: by value (123, 123.0 and
+    # 1.23e2 are one key; "123" is another; True is 1), a string by its code points, a NaN matching the NaN json
+    # hands out every time, and a list or an object refused (abapit's TypeError, the corrected key above).
+    # Each row as Mosyle would write it; `custom_index` (first) names it in the expected list.
+    for rows in [['{"serial_number": 123, "deviceudid": "a"}', '{"serial_number": 123, "deviceudid": "b"}',
+                  '{"serial_number": "123", "deviceudid": "c"}', '{"serial_number": 123.0}', '{"serial_number": 1.23e2}'],
+                 ['{"serial_number": true}', '{"serial_number": 1}', '{"serial_number": 1.0}', '{"serial_number": "1"}'],
+                 ['{"serial_number": "", "deviceudid": "U"}', '{"serial_number": 0, "deviceudid": "U"}',
+                  '{"serial_number": null, "deviceudid": "U"}', '{"serial_number": false, "deviceudid": "V"}',
+                  '{"serial_number": 0.0, "deviceudid": ""}', '{"serial_number": "", "deviceudid": ""}', '{}'],
+                 ['{"serial_number": "\\u00e9"}', '{"serial_number": "e\\u0301"}', '{"serial_number": "\\u00e9"}'],
+                 ['{"serial_number": 9007199254740993}', '{"serial_number": 9007199254740992.0}',
+                  '{"serial_number": 9007199254740992}', '{"serial_number": 1e20}', '{"serial_number": 100000000000000000000}'],
+                 ['{"serial_number": 1e300}', f'{{"serial_number": {int(1e300)}}}', f'{{"serial_number": 1{"0" * 300}}}'],
+                 ['{"serial_number": NaN}', '{"serial_number": NaN}', '{"serial_number": Infinity}',
+                  '{"serial_number": 1e999}', '{"serial_number": -Infinity}'],
+                 ['{"serial_number": 0.1}', '{"serial_number": 0.10000000000000001}', '{"serial_number": 0.2}',
+                  '{"serial_number": -5}', '{"serial_number": -5.0}', '{"serial_number": -0.5}'],
+                 ['{"serial_number": ["A"]}', '{"serial_number": "A"}', '{"serial_number": "A"}'],
+                 ['{"serial_number": {"a": 1}, "deviceudid": "U"}', '{"deviceudid": "U"}']]:
+        text = "[" + ", ".join(f'{{"custom_index": {i}' + (", " + row[1:] if row != "{}" else "}")
+                               for i, row in enumerate(rows)) + "]"
+        cases.append(dedupe_case(m, text))
     for _ in range(30):
         def logs(kind):
             out = []
@@ -675,16 +894,21 @@ def gen_mosyle(m: dict) -> None:
             response["dns"] = rng.choice([logs("dns"), {"Logs": logs("dns")}])
         if rng.random() < 0.4:
             response["av"] = {"Logs": logs("av")}
-        abapit = jsonable(mosyle.normalize_logs(response))
-        expected = copy.deepcopy(abapit)
-        for event in expected:
-            if event["kind"] == "compliance":
-                event["when"] = compliance_time(event["when"]) or event["when"]
-        expected.sort(key=lambda e: e["when"], reverse=True)
-        case = {"function": "normalize_logs", "input": response, "expected": expected}
-        if expected != abapit:
-            case["abapit"] = abapit
-        cases.append(case)
+        cases.append(logs_case(mosyle, response))
+    # Phase 7a review L4: a stamp that is a number as Mosyle wrote it, so its str() is Python's (`1e+20`).
+    for text in ['{"dns": [{"Timestamp": 1e20, "Domain": "a.example.com"}]}',
+                 '{"dns": [{"Timestamp": 1e15, "Domain": "b.example.com"}, {"Timestamp": 0.0, "Domain": "c.example.com"}]}',
+                 '{"av": {"Logs": [{"Timestamp": 1e3, "FileName": "x.exe"}]}}',
+                 '{"action_logs": {"Logs": [{"ActionDate": NaN, "Action": "A"}, {"ActionDate": ["x", 1e3], "Action": "B"}]}}',
+                 '{"compliance": {"mac": {"Logs": [{"Timestamp": "13:00 PM - 03/12/2024", "RuleName": "R"},'
+                 ' {"Timestamp": "01:00 PM - 02/29/1500", "RuleName": "S"}]}}}',
+                 '{"zero_trust": {"Logs": [{"Timestamp": -62135596800, "Application": "App"},'
+                 ' {"Timestamp": -12219292801, "Application": "Old"}]}}',
+                 # Junk where a log belongs: abapit raised AttributeError, here it is skipped.
+                 '{"compliance": {"mac": {"Logs": ["x", {"Timestamp": "1700000000", "RuleName": "R"}]}, "ios": "x"}}',
+                 '{"action_logs": {"Logs": {"a": 1}}, "dns": [{"Timestamp": "1700000001", "Domain": "d"}, "x"]}',
+                 '{"zero_trust": {"Events": {"Logs": ["x"]}, "Logs": [{"Timestamp": "1700000002", "Application": "Z"}]}}']:
+        cases.append(logs_case(mosyle, json.loads(text), text))
     write("mosyle", {**header(1007), "cases": cases})
 
 
