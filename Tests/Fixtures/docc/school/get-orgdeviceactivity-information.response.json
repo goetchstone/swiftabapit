@@ -1,0 +1,19 @@
+{
+  "data": {
+    "attributes": {
+      "completedDateTime": "2025-05-01T18:22:38.894Z",
+      "createdDateTime": "2025-05-01T18:22:27.106Z",
+      "downloadUrl": "https://store.blobstore.apple.com/4a7f73ecd1/1317ef485b3aea95ac80/9b5c028726eacaa1f3e2/ccfa60f6114198d48cc5/88c579b1995efc28cd36?response-content-disposition=attachment%3Bfilename%3D%22ABM-ActivityLog_May-1-2025_14-22-40.csv%22&response-content-type=application%2Foctet-stream&iCloudAccessKeyId=MACOSX_SU_ACCESS_KEY&Expires=1746123820&Signature=wrYW2gn7UZDM9aO3KOMqT8YWCBo%3D",
+      "status": "COMPLETED",
+      "subStatus": "COMPLETED_WITH_SUCCESS"
+    },
+    "id": "84d7f133-b4a4-41be-ad0a-c2e4e53ea624",
+    "links": {
+      "self": "https://api-school.apple.com/v1/orgDeviceActivities/84d7f133-b4a4-41be-ad0a-c2e4e53ea624"
+    },
+    "type": "orgDeviceActivities"
+  },
+  "links": {
+    "self": "https://api-school.apple.com/v1/orgDeviceActivities/84d7f133-b4a4-41be-ad0a-c2e4e53ea624"
+  }
+}

@@ -1,0 +1,2532 @@
+{
+ "abapit": "9875ee762b3db990a3498b88d96a4c3ba2eaf7d3",
+ "cases": [
+  {
+   "abapit": "id,meta,ratio,'@at\r\n,plain,1e+16,\"a,b\"\r\nTEST1,,'quoted,\r\n,,\"{'b': 'a,b', 'a': 1e+16}\",\"{'id': 'x', 'n': 1}; y\"\r\n'=id,\"{'id': 'x', 'n': 1}; y\",\u00e9t\u00e9; y,'=\r\n",
+   "expected": "id,meta,ratio,'@at\r\n,plain,1e+16,\"a,b\"\r\nTEST1,,'quoted,\r\n,,\"{\"\"a\"\":1e+16,\"\"b\"\":\"\"a,b\"\"}\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n'=id,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\u00e9t\u00e9; y,'=\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": "a,b",
+      "meta": "plain",
+      "ratio": 1e+16
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "meta": null,
+      "ratio": "'quoted"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "ratio": {
+       "a": 1e+16,
+       "b": "a,b"
+      }
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": "=",
+      "meta": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "ratio": [
+       "\u00e9t\u00e9",
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,deviceModel,serialNumber,notes,meta\r\n,\"a,b\",2.5,False,\r\nTEST1,'\tx,\u65e5\u672c, lead,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": "a,b",
+      "notes": false,
+      "serialNumber": 2.5
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": "\tx",
+      "meta": "",
+      "notes": " lead",
+      "serialNumber": "\u65e5\u672c"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "abapit": "id,notes,'@at,status\r\n,\"say \"\"hi\"\"\",\"{'id': 'x', 'n': 1}; y\",'-3\r\n,0.81, lead,\r\nTEST2,,False,\"a,b\"\r\nTEST1,'-3,\"cr\rlf\",1e-05\r\n,,\"{'b': '\\tx', 'a': False}\",'@cmd\r\n'=id,\"say \"\"hi\"\"\",,1e+16\r\n",
+   "expected": "id,notes,'@at,status\r\n,\"say \"\"hi\"\"\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'-3\r\n,0.81, lead,\r\nTEST2,,False,\"a,b\"\r\nTEST1,'-3,\"cr\rlf\",1e-05\r\n,,\"{\"\"a\"\":false,\"\"b\"\":\"\"\\tx\"\"}\",'@cmd\r\n'=id,\"say \"\"hi\"\"\",,1e+16\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "notes": "say \"hi\"",
+      "status": -3
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": " lead",
+      "notes": 0.81
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": false,
+      "status": "a,b"
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": "cr\rlf",
+      "notes": -3,
+      "status": 1e-05
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": {
+       "a": false,
+       "b": "\tx"
+      },
+      "status": "@cmd"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "notes": "say \"hi\"",
+      "status": 1e+16
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,status,meta,name\r\n,\"a,b\",\"cr\rlf\",\r\n'=id,'+1,\u65e5\u672c; y,2.5\r\nTEST1,,'quoted,'-3\r\n'=id,'=,plain,64.0\r\n",
+   "input": [
+    {
+     "attributes": {
+      "meta": "cr\rlf",
+      "status": "a,b"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "meta": [
+       "\u65e5\u672c",
+       "y"
+      ],
+      "name": 2.5,
+      "status": "+1"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "meta": "'quoted",
+      "name": -3
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "meta": "plain",
+      "name": 64.0,
+      "status": "="
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,serialNumber\r\nTEST0,'\tx; -1\r\nTEST1,64.0\r\nTEST1,\"{'b': '\\rx', 'a': 0}\"\r\n",
+   "expected": "id,serialNumber\r\nTEST0,'\tx; -1\r\nTEST1,64.0\r\nTEST1,\"{\"\"a\"\":0,\"\"b\"\":\"\"\\rx\"\"}\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "serialNumber": [
+       "\tx",
+       "-1"
+      ]
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "serialNumber": 64.0
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "serialNumber": {
+       "a": 0,
+       "b": "\rx"
+      }
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\nTEST1\r\n'=id\r\nTEST2\r\nTEST3\r\nTEST4\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST3",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST4",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,status,serialNumber\r\nTEST1,True,\"'\rx\"\r\nTEST1,\"{'id': 'x', 'n': 1}; y\",\r\n",
+   "expected": "id,status,serialNumber\r\nTEST1,True,\"'\rx\"\r\nTEST1,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\r\n",
+   "input": [
+    {
+     "attributes": {
+      "serialNumber": "\rx",
+      "status": true
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "status": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,meta,count\r\n,,\"say \"\"hi\"\"\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": "say \"hi\"",
+      "meta": null
+     },
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "abapit": "id,notes\r\n,'@cmd\r\n'=id,\"{'id': 'x', 'n': 1}; y\"\r\n'=id,\"{'b': '\u65e5\u672c', 'a': 64.0}\"\r\n",
+   "expected": "id,notes\r\n,'@cmd\r\n'=id,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n'=id,\"{\"\"a\"\":64.0,\"\"b\"\":\"\"\u65e5\u672c\"\"}\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "notes": [
+       "@cmd"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "notes": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "notes": {
+       "a": 64.0,
+       "b": "\u65e5\u672c"
+      }
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,'=formula,ratio,status\r\nTEST0,'=SUM(A1);  lead,2.5,\"{'b': 'line\\nbreak', 'a': 1e-05}\"\r\n'=id,plain,'-3,y; y\r\n'=id,\"say \"\"hi\"\"; \u00e9t\u00e9\",2.5,\"say \"\"hi\"\"\"\r\n'=id,\"a,b\",True,\u00e9t\u00e9\r\n",
+   "expected": "id,'=formula,ratio,status\r\nTEST0,'=SUM(A1);  lead,2.5,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\"line\\nbreak\"\"}\"\r\n'=id,plain,'-3,y; y\r\n'=id,\"say \"\"hi\"\"; \u00e9t\u00e9\",2.5,\"say \"\"hi\"\"\"\r\n'=id,\"a,b\",True,\u00e9t\u00e9\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": [
+       "=SUM(A1)",
+       " lead"
+      ],
+      "ratio": 2.5,
+      "status": {
+       "a": 1e-05,
+       "b": "line\nbreak"
+      }
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "plain",
+      "ratio": -3,
+      "status": [
+       "y",
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       "say \"hi\"",
+       "\u00e9t\u00e9"
+      ],
+      "ratio": 2.5,
+      "status": "say \"hi\""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "a,b",
+      "ratio": true,
+      "status": "\u00e9t\u00e9"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id,serialNumber\r\nTEST1,\r\nTEST1,\"line\nbreak\"\r\n'=id,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "serialNumber": []
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "serialNumber": "line\nbreak"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "serialNumber": ""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,deviceModel\r\nTEST0,\"{'id': 'x', 'n': 1}; y\"\r\n",
+   "expected": "id,deviceModel\r\nTEST0,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,name,'@at,status,notes,'=formula,serialNumber\r\nTEST1,'=,\"{'b': '=', 'a': 1e+16}\",,\"line\nbreak\",1e+16,\"'\tx; say \"\"hi\"\"; -1\"\r\n",
+   "expected": "id,name,'@at,status,notes,'=formula,serialNumber\r\nTEST1,'=,\"{\"\"a\"\":1e+16,\"\"b\"\":\"\"=\"\"}\",,\"line\nbreak\",1e+16,\"'\tx; say \"\"hi\"\"; -1\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": 1e+16,
+      "@at": {
+       "a": 1e+16,
+       "b": "="
+      },
+      "name": "=",
+      "notes": "line\nbreak",
+      "serialNumber": [
+       "\tx",
+       "say \"hi\"",
+       "-1"
+      ],
+      "status": []
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,meta,ratio,'@at,'=formula,tags,deviceModel\r\n'=id,'=SUM(A1),,0,5,,\r\nTEST1,\"{'id': 'x', 'n': 1}; y\",,5,\"{'b': '=SUM(A1)', 'a': True}\",\u65e5\u672c,\"{'b': '+1', 'a': 1e-05}\"\r\n",
+   "expected": "id,meta,ratio,'@at,'=formula,tags,deviceModel\r\n'=id,'=SUM(A1),,0,5,,\r\nTEST1,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",,5,\"{\"\"a\"\":true,\"\"b\"\":\"\"=SUM(A1)\"\"}\",\u65e5\u672c,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\"+1\"\"}\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": 5,
+      "@at": 0,
+      "meta": "=SUM(A1)",
+      "ratio": [],
+      "tags": ""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": {
+       "a": true,
+       "b": "=SUM(A1)"
+      },
+      "@at": 5,
+      "deviceModel": {
+       "a": 1e-05,
+       "b": "+1"
+      },
+      "meta": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "tags": "\u65e5\u672c"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,meta,deviceModel\r\n,\"{'id': 'x', 'n': 1}; y\",'=SUM(A1)\r\n'=id,1e+16,\"{'b': '\\rx', 'a': 1e+16}\"\r\nTEST2,,'@cmd\r\n'=id,,True\r\nTEST4,,'-3\r\n'=id,\"{'b': ' lead', 'a': 1e-05}\",1e+16\r\n",
+   "expected": "id,meta,deviceModel\r\n,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'=SUM(A1)\r\n'=id,1e+16,\"{\"\"a\"\":1e+16,\"\"b\"\":\"\"\\rx\"\"}\"\r\nTEST2,,'@cmd\r\n'=id,,True\r\nTEST4,,'-3\r\n'=id,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\" lead\"\"}\",1e+16\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": "=SUM(A1)",
+      "meta": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": {
+       "a": 1e+16,
+       "b": "\rx"
+      },
+      "meta": 1e+16
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": "@cmd"
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": true
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": -3,
+      "meta": []
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": 1e+16,
+      "meta": {
+       "a": 1e-05,
+       "b": " lead"
+      }
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n'=id\r\n'=id\r\n\"\"\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,count,'@at,serialNumber,name,status,ratio\r\nTEST0,0,plain,'quoted,\"{'b': '\u00e9t\u00e9', 'a': 1e-05}\",,\r\nTEST1,\"{'b': '@cmd', 'a': 5}\",\"{'b': '@cmd', 'a': 1e+16}\",\u00e9t\u00e9,\"cr\rlf\",plain,\r\n,5,\"{'id': 'x', 'n': 1}; y\",,'quoted,\"a,b\",\"cr\rlf\"\r\nTEST1,,,\"'\rx\",,\"{'b': 'a,b', 'a': 0}\",'=SUM(A1)\r\n'=id,y,,5,\"{'b': '\\rx', 'a': True}\",1e-05,\"'\rx\"\r\n",
+   "expected": "id,count,'@at,serialNumber,name,status,ratio\r\nTEST0,0,plain,'quoted,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\"\u00e9t\u00e9\"\"}\",,\r\nTEST1,\"{\"\"a\"\":5,\"\"b\"\":\"\"@cmd\"\"}\",\"{\"\"a\"\":1e+16,\"\"b\"\":\"\"@cmd\"\"}\",\u00e9t\u00e9,\"cr\rlf\",plain,\r\n,5,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",,'quoted,\"a,b\",\"cr\rlf\"\r\nTEST1,,,\"'\rx\",,\"{\"\"a\"\":0,\"\"b\"\":\"\"a,b\"\"}\",'=SUM(A1)\r\n'=id,y,,5,\"{\"\"a\"\":true,\"\"b\"\":\"\"\\rx\"\"}\",1e-05,\"'\rx\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": "plain",
+      "count": 0,
+      "name": {
+       "a": 1e-05,
+       "b": "\u00e9t\u00e9"
+      },
+      "serialNumber": "'quoted"
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": {
+       "a": 1e+16,
+       "b": "@cmd"
+      },
+      "count": {
+       "a": 5,
+       "b": "@cmd"
+      },
+      "name": "cr\rlf",
+      "ratio": [],
+      "serialNumber": [
+       "\u00e9t\u00e9"
+      ],
+      "status": "plain"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "count": 5,
+      "name": "'quoted",
+      "ratio": "cr\rlf",
+      "serialNumber": [],
+      "status": "a,b"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": [],
+      "name": null,
+      "ratio": [
+       "=SUM(A1)"
+      ],
+      "serialNumber": "\rx",
+      "status": {
+       "a": 0,
+       "b": "a,b"
+      }
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": null,
+      "count": [
+       "y"
+      ],
+      "name": {
+       "a": true,
+       "b": "\rx"
+      },
+      "ratio": "\rx",
+      "serialNumber": 5,
+      "status": 1e-05
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,count,notes,deviceModel\r\nTEST1,trail ; ,'@cmd,\r\n'=id,\"x; line\nbreak; x\",1e+16,\"{'id': 'x', 'n': 1}; y\"\r\n,\"{'id': 'x', 'n': 1}; y\", lead,5\r\n,'@cmd,trail ,\"{'id': 'x', 'n': 1}; y\"\r\n'=id,plain,,\r\n",
+   "expected": "id,count,notes,deviceModel\r\nTEST1,trail ; ,'@cmd,\r\n'=id,\"x; line\nbreak; x\",1e+16,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\", lead,5\r\n,'@cmd,trail ,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n'=id,plain,,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": [
+       "trail ",
+       ""
+      ],
+      "notes": "@cmd"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       "x",
+       "line\nbreak",
+       "x"
+      ],
+      "deviceModel": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "notes": 1e+16
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "deviceModel": 5,
+      "notes": " lead"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "@cmd",
+      "deviceModel": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "notes": "trail "
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "plain",
+      "deviceModel": []
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "abapit": "id,status,'=formula\r\n'=id,'=,\r\nTEST1,2.5,\"{'b': ' lead', 'a': None}\"\r\n,trail ,64.0\r\n'=id,\"{'id': 'x', 'n': 1}; y\",64.0\r\nTEST1,\"{'b': '-1', 'a': 1e-05}\",\r\n'=id,,\u65e5\u672c\r\n",
+   "expected": "id,status,'=formula\r\n'=id,'=,\r\nTEST1,2.5,\"{\"\"a\"\":null,\"\"b\"\":\"\" lead\"\"}\"\r\n,trail ,64.0\r\n'=id,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",64.0\r\nTEST1,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\"-1\"\"}\",\r\n'=id,,\u65e5\u672c\r\n",
+   "input": [
+    {
+     "attributes": {
+      "status": "="
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": {
+       "a": null,
+       "b": " lead"
+      },
+      "status": 2.5
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 64.0,
+      "status": "trail "
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 64.0,
+      "status": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "status": {
+       "a": 1e-05,
+       "b": "-1"
+      }
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "\u65e5\u672c"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\nTEST1\r\nTEST1\r\n\"\"\r\nTEST1\r\nTEST4\r\nTEST5\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST5",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,meta,serialNumber,count\r\nTEST1,\"a,b\",1e+16,1e+16\r\n,\u00e9t\u00e9,,\"a,b\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": 1e+16,
+      "meta": "a,b",
+      "serialNumber": 1e+16
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "a,b",
+      "meta": "\u00e9t\u00e9"
+     },
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\nTEST0\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "TEST0",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n'=id\r\nTEST1\r\nTEST1\r\n'=id\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,deviceModel,ratio,count\r\n'=id,\"cr\rlf\",\"{'id': 'x', 'n': 1}; y\",\r\nTEST1,0.81,0.81,\"{'b': '+1', 'a': 0}\"\r\n,0,trail ,trail \r\n, lead,,plain; 'quoted; y\r\nTEST4,,,0\r\nTEST5,0.81,,\r\n",
+   "expected": "id,deviceModel,ratio,count\r\n'=id,\"cr\rlf\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\r\nTEST1,0.81,0.81,\"{\"\"a\"\":0,\"\"b\"\":\"\"+1\"\"}\"\r\n,0,trail ,trail \r\n, lead,,plain; 'quoted; y\r\nTEST4,,,0\r\nTEST5,0.81,,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": null,
+      "deviceModel": "cr\rlf",
+      "ratio": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": {
+       "a": 0,
+       "b": "+1"
+      },
+      "deviceModel": 0.81,
+      "ratio": 0.81
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "trail ",
+      "deviceModel": 0,
+      "ratio": "trail "
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       "plain",
+       "'quoted",
+       "y"
+      ],
+      "deviceModel": " lead",
+      "ratio": []
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": 0
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [],
+      "deviceModel": 0.81
+     },
+     "id": "TEST5",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n'=id\r\nTEST1\r\nTEST2\r\nTEST1\r\nTEST1\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,meta,tags,serialNumber,name,'@at,notes\r\n,0.81,1e+16,1e+16,'\tx,,\r\n'=id,'@cmd,\"{'id': 'x', 'n': 1}; y\",,\u00e9t\u00e9,\"{'b': '\u65e5\u672c', 'a': 0}\",'-1\r\n",
+   "expected": "id,meta,tags,serialNumber,name,'@at,notes\r\n,0.81,1e+16,1e+16,'\tx,,\r\n'=id,'@cmd,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",,\u00e9t\u00e9,\"{\"\"a\"\":0,\"\"b\"\":\"\"\u65e5\u672c\"\"}\",'-1\r\n",
+   "input": [
+    {
+     "attributes": {
+      "meta": 0.81,
+      "name": "\tx",
+      "serialNumber": 1e+16,
+      "tags": 1e+16
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": {
+       "a": 0,
+       "b": "\u65e5\u672c"
+      },
+      "meta": "@cmd",
+      "name": "\u00e9t\u00e9",
+      "notes": "-1",
+      "tags": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,deviceModel,count,name,serialNumber,notes,ratio\r\nTEST0,'@cmd,\"cr\rlf\",\u00e9t\u00e9,1e-05,\"say \"\"hi\"\"\",\r\n'=id,\"{'b': '@cmd', 'a': 0}\",\"line\nbreak\",\u65e5\u672c,\u00e9t\u00e9;  lead,,\r\n'=id,'=,,True,trail ,,\r\n'=id,,,'+1,, lead,1e-05\r\n,,\"{'id': 'x', 'n': 1}; y\",False,'-1,\"line\nbreak\",\r\n,trail ,'@cmd,1e-05,\"a,b\",1e+16,\"line\nbreak\"\r\n",
+   "expected": "id,deviceModel,count,name,serialNumber,notes,ratio\r\nTEST0,'@cmd,\"cr\rlf\",\u00e9t\u00e9,1e-05,\"say \"\"hi\"\"\",\r\n'=id,\"{\"\"a\"\":0,\"\"b\"\":\"\"@cmd\"\"}\",\"line\nbreak\",\u65e5\u672c,\u00e9t\u00e9;  lead,,\r\n'=id,'=,,True,trail ,,\r\n'=id,,,'+1,, lead,1e-05\r\n,,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",False,'-1,\"line\nbreak\",\r\n,trail ,'@cmd,1e-05,\"a,b\",1e+16,\"line\nbreak\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": "cr\rlf",
+      "deviceModel": [
+       "@cmd"
+      ],
+      "name": "\u00e9t\u00e9",
+      "notes": [
+       "say \"hi\""
+      ],
+      "serialNumber": 1e-05
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "line\nbreak",
+      "deviceModel": {
+       "a": 0,
+       "b": "@cmd"
+      },
+      "name": "\u65e5\u672c",
+      "serialNumber": [
+       "\u00e9t\u00e9",
+       " lead"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [],
+      "deviceModel": "=",
+      "name": true,
+      "serialNumber": "trail "
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "name": "+1",
+      "notes": " lead",
+      "ratio": 1e-05
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "name": false,
+      "notes": "line\nbreak",
+      "serialNumber": [
+       "-1"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "@cmd",
+      "deviceModel": "trail ",
+      "name": 1e-05,
+      "notes": 1e+16,
+      "ratio": "line\nbreak",
+      "serialNumber": "a,b"
+     },
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n\"\"\r\nTEST1\r\n\"\"\r\nTEST1\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,deviceModel,'@at,serialNumber,'=formula\r\nTEST1,\"say \"\"hi\"\"\",'quoted,0.81,\r\n,2.5,,64.0,\u65e5\u672c\r\n'=id,\"say \"\"hi\"\"\",\"{'id': 'x', 'n': 1}; y\",'@cmd,plain\r\nTEST1,,\"{'b': '+1', 'a': 5}\", lead,'\tx\r\n",
+   "expected": "id,deviceModel,'@at,serialNumber,'=formula\r\nTEST1,\"say \"\"hi\"\"\",'quoted,0.81,\r\n,2.5,,64.0,\u65e5\u672c\r\n'=id,\"say \"\"hi\"\"\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'@cmd,plain\r\nTEST1,,\"{\"\"a\"\":5,\"\"b\"\":\"\"+1\"\"}\", lead,'\tx\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": "'quoted",
+      "deviceModel": "say \"hi\"",
+      "serialNumber": 0.81
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "\u65e5\u672c",
+      "deviceModel": 2.5,
+      "serialNumber": 64.0
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "plain",
+      "@at": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "deviceModel": "say \"hi\"",
+      "serialNumber": "@cmd"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "\tx",
+      "@at": {
+       "a": 5,
+       "b": "+1"
+      },
+      "serialNumber": " lead"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,serialNumber,tags,deviceModel,'=formula\r\nTEST1,,\"'\rx\",x,\"cr\rlf\"\r\n'=id,0,'quoted,\"a,b\",\u65e5\u672c\r\nTEST2,5,plain,trail ,'@cmd\r\n'=id,,,'\tx; 'quoted; 'quoted,5\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": "cr\rlf",
+      "deviceModel": [
+       "x"
+      ],
+      "serialNumber": null,
+      "tags": "\rx"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       "\u65e5\u672c"
+      ],
+      "deviceModel": "a,b",
+      "serialNumber": 0,
+      "tags": "'quoted"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "@cmd",
+      "deviceModel": "trail ",
+      "serialNumber": 5,
+      "tags": "plain"
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 5,
+      "deviceModel": [
+       "\tx",
+       "'quoted",
+       "'quoted"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,count,name,'@at\r\nTEST1,'+1,\"{'id': 'x', 'n': 1}; y\",'-1; y\r\nTEST1,'=,'-1,\"{'b': 'trail ', 'a': False}\"\r\n'=id,,\"{'b': '=SUM(A1)', 'a': 5}\",trail \r\n'=id,\"a,b\",,1e+16\r\n",
+   "expected": "id,count,name,'@at\r\nTEST1,'+1,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'-1; y\r\nTEST1,'=,'-1,\"{\"\"a\"\":false,\"\"b\"\":\"\"trail \"\"}\"\r\n'=id,,\"{\"\"a\"\":5,\"\"b\"\":\"\"=SUM(A1)\"\"}\",trail \r\n'=id,\"a,b\",,1e+16\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": [
+       "-1",
+       "y"
+      ],
+      "count": "+1",
+      "name": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": {
+       "a": false,
+       "b": "trail "
+      },
+      "count": "=",
+      "name": [
+       "-1"
+      ]
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": "trail ",
+      "count": null,
+      "name": {
+       "a": 5,
+       "b": "=SUM(A1)"
+      }
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": 1e+16,
+      "count": "a,b",
+      "name": ""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,tags,status,'=formula,meta,ratio\r\nTEST0,0.81,\"{'b': '@cmd', 'a': False}\",,,\r\n,,\"{'b': '\u65e5\u672c', 'a': False}\",\"a,b\",\"{'id': 'x', 'n': 1}; y\",\"{'id': 'x', 'n': 1}; y\"\r\n,2.5,5,,64.0,\"{'id': 'x', 'n': 1}; y\"\r\nTEST1,\"y; cr\rlf; \rx\",'-1,\"cr\rlf\",2.5,\"{'b': '+1', 'a': None}\"\r\nTEST1,'=SUM(A1),0,'quoted,,trail \r\n",
+   "expected": "id,tags,status,'=formula,meta,ratio\r\nTEST0,0.81,\"{\"\"a\"\":false,\"\"b\"\":\"\"@cmd\"\"}\",,,\r\n,,\"{\"\"a\"\":false,\"\"b\"\":\"\"\u65e5\u672c\"\"}\",\"a,b\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n,2.5,5,,64.0,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\nTEST1,\"y; cr\rlf; \rx\",'-1,\"cr\rlf\",2.5,\"{\"\"a\"\":null,\"\"b\"\":\"\"+1\"\"}\"\r\nTEST1,'=SUM(A1),0,'quoted,,trail \r\n",
+   "input": [
+    {
+     "attributes": {
+      "status": {
+       "a": false,
+       "b": "@cmd"
+      },
+      "tags": 0.81
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "a,b",
+      "meta": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "ratio": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "status": {
+       "a": false,
+       "b": "\u65e5\u672c"
+      },
+      "tags": []
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": null,
+      "meta": 64.0,
+      "ratio": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "status": 5,
+      "tags": 2.5
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "cr\rlf",
+      "meta": 2.5,
+      "ratio": {
+       "a": null,
+       "b": "+1"
+      },
+      "status": "-1",
+      "tags": [
+       "y",
+       "cr\rlf",
+       "\rx"
+      ]
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "'quoted",
+      "ratio": "trail ",
+      "status": 0,
+      "tags": "=SUM(A1)"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,serialNumber,name,deviceModel\r\nTEST0,,trail ; \u65e5\u672c,\r\n'=id,,'-3,\u65e5\u672c\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": null,
+      "name": [
+       "trail ",
+       "\u65e5\u672c"
+      ],
+      "serialNumber": []
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": "\u65e5\u672c",
+      "name": -3
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n\"\"\r\nTEST1\r\n'=id\r\n\"\"\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,meta,tags,deviceModel,name,serialNumber\r\nTEST0,,\"{'b': '\u00e9t\u00e9', 'a': 5}\",5,\"'\rx\",\"'\rx; say \"\"hi\"\"; plain\"\r\n,\"say \"\"hi\"\"\",,\u65e5\u672c,\"line\nbreak\",'-1; y; 'quoted\r\nTEST2,,\"'\rx\",,\"say \"\"hi\"\"\",\r\n,True,\"say \"\"hi\"\"\",,,'=\r\nTEST4,\u00e9t\u00e9,False,,,\u65e5\u672c\r\n",
+   "expected": "id,meta,tags,deviceModel,name,serialNumber\r\nTEST0,,\"{\"\"a\"\":5,\"\"b\"\":\"\"\u00e9t\u00e9\"\"}\",5,\"'\rx\",\"'\rx; say \"\"hi\"\"; plain\"\r\n,\"say \"\"hi\"\"\",,\u65e5\u672c,\"line\nbreak\",'-1; y; 'quoted\r\nTEST2,,\"'\rx\",,\"say \"\"hi\"\"\",\r\n,True,\"say \"\"hi\"\"\",,,'=\r\nTEST4,\u00e9t\u00e9,False,,,\u65e5\u672c\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": 5,
+      "meta": "",
+      "name": "\rx",
+      "serialNumber": [
+       "\rx",
+       "say \"hi\"",
+       "plain"
+      ],
+      "tags": {
+       "a": 5,
+       "b": "\u00e9t\u00e9"
+      }
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": "\u65e5\u672c",
+      "meta": "say \"hi\"",
+      "name": "line\nbreak",
+      "serialNumber": [
+       "-1",
+       "y",
+       "'quoted"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": [],
+      "meta": [],
+      "name": "say \"hi\"",
+      "tags": "\rx"
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "meta": true,
+      "serialNumber": "=",
+      "tags": "say \"hi\""
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": [],
+      "meta": [
+       "\u00e9t\u00e9"
+      ],
+      "serialNumber": "\u65e5\u672c",
+      "tags": false
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,notes\r\nTEST0,\"say \"\"hi\"\"\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "notes": "say \"hi\""
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,ratio,'=formula,count,meta\r\n'=id,plain; x, lead; @cmd,plain,\r\nTEST1,\"say \"\"hi\"\"\",\"{'b': ' lead', 'a': -3}\",1e+16, lead\r\n",
+   "expected": "id,ratio,'=formula,count,meta\r\n'=id,plain; x, lead; @cmd,plain,\r\nTEST1,\"say \"\"hi\"\"\",\"{\"\"a\"\":-3,\"\"b\"\":\"\" lead\"\"}\",1e+16, lead\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": [
+       " lead",
+       "@cmd"
+      ],
+      "count": [
+       "plain"
+      ],
+      "ratio": [
+       "plain",
+       "x"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": {
+       "a": -3,
+       "b": " lead"
+      },
+      "count": 1e+16,
+      "meta": " lead",
+      "ratio": "say \"hi\""
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,tags,serialNumber,deviceModel,name,count\r\n'=id,\"line\nbreak\",,\"{'b': 'plain', 'a': 2.5}\",\"{'id': 'x', 'n': 1}; y\",\r\n'=id,\"{'b': '\u65e5\u672c', 'a': True}\",'-3,trail ,,'@cmd\r\n",
+   "expected": "id,tags,serialNumber,deviceModel,name,count\r\n'=id,\"line\nbreak\",,\"{\"\"a\"\":2.5,\"\"b\"\":\"\"plain\"\"}\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\r\n'=id,\"{\"\"a\"\":true,\"\"b\"\":\"\"\u65e5\u672c\"\"}\",'-3,trail ,,'@cmd\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": {
+       "a": 2.5,
+       "b": "plain"
+      },
+      "name": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "serialNumber": null,
+      "tags": "line\nbreak"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "@cmd",
+      "deviceModel": "trail ",
+      "serialNumber": -3,
+      "tags": {
+       "a": true,
+       "b": "\u65e5\u672c"
+      }
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,status,deviceModel,notes\r\nTEST1,'quoted,plain,\r\nTEST1,'\tx,\"{'id': 'x', 'n': 1}; y\",\"{'id': 'x', 'n': 1}; y\"\r\n",
+   "expected": "id,status,deviceModel,notes\r\nTEST1,'quoted,plain,\r\nTEST1,'\tx,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": "plain",
+      "status": "'quoted"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "notes": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "status": "\tx"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,serialNumber,'@at,notes,'=formula\r\nTEST1,plain,\"a,b\",0,False\r\n'=id,'@cmd,'\tx,'-1,0.81\r\nTEST1,5,,,1e+16\r\n'=id,,,'\tx,\"{'id': 'x', 'n': 1}; y\"\r\nTEST4,trail ,trail ,2.5,\"line\nbreak\"\r\n'=id,\"say \"\"hi\"\"\",64.0,False,\r\n",
+   "expected": "id,serialNumber,'@at,notes,'=formula\r\nTEST1,plain,\"a,b\",0,False\r\n'=id,'@cmd,'\tx,'-1,0.81\r\nTEST1,5,,,1e+16\r\n'=id,,,'\tx,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\nTEST4,trail ,trail ,2.5,\"line\nbreak\"\r\n'=id,\"say \"\"hi\"\"\",64.0,False,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": false,
+      "@at": "a,b",
+      "notes": 0,
+      "serialNumber": "plain"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 0.81,
+      "@at": "\tx",
+      "notes": "-1",
+      "serialNumber": "@cmd"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 1e+16,
+      "@at": [],
+      "notes": null,
+      "serialNumber": 5
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "@at": [],
+      "notes": [
+       "\tx"
+      ],
+      "serialNumber": ""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "line\nbreak",
+      "@at": "trail ",
+      "notes": 2.5,
+      "serialNumber": "trail "
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": 64.0,
+      "notes": false,
+      "serialNumber": "say \"hi\""
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,meta,deviceModel,name,notes\r\nTEST0,,,\"{'b': '=SUM(A1)', 'a': False}\",\r\n,\"say \"\"hi\"\"\",'=; plain; x,,'-3\r\n,5,\"{'id': 'x', 'n': 1}; y\",\u00e9t\u00e9,64.0\r\n",
+   "expected": "id,meta,deviceModel,name,notes\r\nTEST0,,,\"{\"\"a\"\":false,\"\"b\"\":\"\"=SUM(A1)\"\"}\",\r\n,\"say \"\"hi\"\"\",'=; plain; x,,'-3\r\n,5,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\u00e9t\u00e9,64.0\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": "",
+      "meta": [],
+      "name": {
+       "a": false,
+       "b": "=SUM(A1)"
+      }
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": [
+       "=",
+       "plain",
+       "x"
+      ],
+      "meta": "say \"hi\"",
+      "name": null,
+      "notes": -3
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "meta": 5,
+      "name": "\u00e9t\u00e9",
+      "notes": 64.0
+     },
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,notes,ratio,deviceModel,status,count,'=formula\r\nTEST0,\"a,b\",64.0,\"line\nbreak\",\"{'id': 'x', 'n': 1}; y\",'quoted,'quoted\r\n",
+   "expected": "id,notes,ratio,deviceModel,status,count,'=formula\r\nTEST0,\"a,b\",64.0,\"line\nbreak\",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'quoted,'quoted\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": "'quoted",
+      "count": "'quoted",
+      "deviceModel": "line\nbreak",
+      "notes": "a,b",
+      "ratio": 64.0,
+      "status": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,serialNumber,tags,'@at,count,'=formula,meta\r\nTEST1,'=SUM(A1),'-1,\"say \"\"hi\"\"\",,,\r\n'=id,'=,0.81,'=,\"{'id': 'x', 'n': 1}; y\",\"{'b': '=', 'a': None}\",\r\n'=id,,\"say \"\"hi\"\"; -1\",trail ; \u65e5\u672c;  lead,'+1,\"a,b; cr\rlf; trail \",\"{'id': 'x', 'n': 1}; y\"\r\nTEST3,'quoted,2.5,,,,'-3\r\nTEST4,,\"{'b': '=SUM(A1)', 'a': 5}\",\"{'b': '', 'a': 64.0}\",\u00e9t\u00e9; \tx; =,'@cmd,\"'\rx\"\r\nTEST5,plain,\"a,b\",\"{'b': '\u65e5\u672c', 'a': -3}\",plain,\"{'id': 'x', 'n': 1}; y\",'=; trail ; \u00e9t\u00e9\r\n",
+   "expected": "id,serialNumber,tags,'@at,count,'=formula,meta\r\nTEST1,'=SUM(A1),'-1,\"say \"\"hi\"\"\",,,\r\n'=id,'=,0.81,'=,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\"{\"\"a\"\":null,\"\"b\"\":\"\"=\"\"}\",\r\n'=id,,\"say \"\"hi\"\"; -1\",trail ; \u65e5\u672c;  lead,'+1,\"a,b; cr\rlf; trail \",\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\nTEST3,'quoted,2.5,,,,'-3\r\nTEST4,,\"{\"\"a\"\":5,\"\"b\"\":\"\"=SUM(A1)\"\"}\",\"{\"\"a\"\":64.0,\"\"b\"\":\"\"\"\"}\",\u00e9t\u00e9; \tx; =,'@cmd,\"'\rx\"\r\nTEST5,plain,\"a,b\",\"{\"\"a\"\":-3,\"\"b\"\":\"\"\u65e5\u672c\"\"}\",plain,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",'=; trail ; \u00e9t\u00e9\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": [
+       "say \"hi\""
+      ],
+      "serialNumber": "=SUM(A1)",
+      "tags": "-1"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": {
+       "a": null,
+       "b": "="
+      },
+      "@at": "=",
+      "count": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "serialNumber": "=",
+      "tags": 0.81
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       "a,b",
+       "cr\rlf",
+       "trail "
+      ],
+      "@at": [
+       "trail ",
+       "\u65e5\u672c",
+       " lead"
+      ],
+      "count": "+1",
+      "meta": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "tags": [
+       "say \"hi\"",
+       "-1"
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "",
+      "meta": -3,
+      "serialNumber": "'quoted",
+      "tags": 2.5
+     },
+     "id": "TEST3",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "@cmd",
+      "@at": {
+       "a": 64.0,
+       "b": ""
+      },
+      "count": [
+       "\u00e9t\u00e9",
+       "\tx",
+       "="
+      ],
+      "meta": "\rx",
+      "tags": {
+       "a": 5,
+       "b": "=SUM(A1)"
+      }
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "@at": {
+       "a": -3,
+       "b": "\u65e5\u672c"
+      },
+      "count": "plain",
+      "meta": [
+       "=",
+       "trail ",
+       "\u00e9t\u00e9"
+      ],
+      "serialNumber": [
+       "plain"
+      ],
+      "tags": "a,b"
+     },
+     "id": "TEST5",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,name,status,'@at,ratio,count,serialNumber\r\nTEST0,\"a,b\",'=,2.5,'\tx,\"'quoted; a,b; plain\",True\r\n,,\"'\tx; line\nbreak; \tx\",'-3,,0.81,\u00e9t\u00e9\r\nTEST1,\"cr\rlf\",,False,\"'\rx\", lead,\"cr\rlf\"\r\nTEST1,2.5,'@cmd,,\u00e9t\u00e9; @cmd,,True\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": 2.5,
+      "count": [
+       "'quoted",
+       "a,b",
+       "plain"
+      ],
+      "name": "a,b",
+      "ratio": "\tx",
+      "serialNumber": true,
+      "status": "="
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": -3,
+      "count": 0.81,
+      "serialNumber": "\u00e9t\u00e9",
+      "status": [
+       "\tx",
+       "line\nbreak",
+       "\tx"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": false,
+      "count": [
+       " lead"
+      ],
+      "name": "cr\rlf",
+      "ratio": "\rx",
+      "serialNumber": "cr\rlf",
+      "status": ""
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": [],
+      "count": [],
+      "name": 2.5,
+      "ratio": [
+       "\u00e9t\u00e9",
+       "@cmd"
+      ],
+      "serialNumber": true,
+      "status": "@cmd"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n'=id\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,'@at,notes\r\nTEST1,'=SUM(A1),\r\n,'=,\"{'id': 'x', 'n': 1}; y\"\r\n",
+   "expected": "id,'@at,notes\r\nTEST1,'=SUM(A1),\r\n,'=,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "@at": "=SUM(A1)"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "@at": "=",
+      "notes": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,'=formula,meta,serialNumber,ratio\r\nTEST0,0,\"line\nbreak\",'-1,5\r\n,\"{'b': '\u65e5\u672c', 'a': 5}\",,trail ,\r\nTEST2,\"{'id': 'x', 'n': 1}; y\",,\"'\rx; =SUM(A1); say \"\"hi\"\"\",plain\r\nTEST1,'+1,\"cr\rlf\",\"say \"\"hi\"\"\",\"a,b\"\r\n",
+   "expected": "id,'=formula,meta,serialNumber,ratio\r\nTEST0,0,\"line\nbreak\",'-1,5\r\n,\"{\"\"a\"\":5,\"\"b\"\":\"\"\u65e5\u672c\"\"}\",,trail ,\r\nTEST2,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",,\"'\rx; =SUM(A1); say \"\"hi\"\"\",plain\r\nTEST1,'+1,\"cr\rlf\",\"say \"\"hi\"\"\",\"a,b\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": 0,
+      "meta": "line\nbreak",
+      "ratio": 5,
+      "serialNumber": "-1"
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": {
+       "a": 5,
+       "b": "\u65e5\u672c"
+      },
+      "ratio": null,
+      "serialNumber": "trail "
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "meta": "",
+      "ratio": "plain",
+      "serialNumber": [
+       "\rx",
+       "=SUM(A1)",
+       "say \"hi\""
+      ]
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "+1",
+      "meta": "cr\rlf",
+      "ratio": "a,b",
+      "serialNumber": "say \"hi\""
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,ratio,'=formula,count\r\nTEST1,'=SUM(A1); @cmd,\u00e9t\u00e9,\"a,b; say \"\"hi\"\"\"\r\n,\"line\nbreak\",0,\"say \"\"hi\"\"\"\r\n'=id,2.5,\"a,b\",\"'\rx\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": "\u00e9t\u00e9",
+      "count": [
+       "a,b",
+       "say \"hi\""
+      ],
+      "ratio": [
+       "=SUM(A1)",
+       "@cmd"
+      ]
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 0,
+      "count": "say \"hi\"",
+      "ratio": "line\nbreak"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "a,b",
+      "count": "\rx",
+      "ratio": 2.5
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,name,'=formula\r\nTEST0,trail ; trail ; y,64.0\r\n'=id,'-1,\"'\rx\"\r\n'=id,\"a,b\",64.0\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": 64.0,
+      "name": [
+       "trail ",
+       "trail ",
+       "y"
+      ]
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "\rx",
+      "name": "-1"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": 64.0,
+      "name": "a,b"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,count,tags\r\nTEST0,\"{'b': ' lead', 'a': -3}\",\"a,b; =; 'quoted\"\r\nTEST1,'+1,\"{'b': 'say \"\"hi\"\"', 'a': 0}\"\r\n,\"{'b': '@cmd', 'a': None}\",\"'\rx\"\r\nTEST3,2.5,0.81\r\nTEST4,\"'\rx\",\r\n'=id,\"'\tx; cr\rlf\",\"x; 'quoted; say \"\"hi\"\"\"\r\n",
+   "expected": "id,count,tags\r\nTEST0,\"{\"\"a\"\":-3,\"\"b\"\":\"\" lead\"\"}\",\"a,b; =; 'quoted\"\r\nTEST1,'+1,\"{\"\"a\"\":0,\"\"b\"\":\"\"say \\\"\"hi\\\"\"\"\"}\"\r\n,\"{\"\"a\"\":null,\"\"b\"\":\"\"@cmd\"\"}\",\"'\rx\"\r\nTEST3,2.5,0.81\r\nTEST4,\"'\rx\",\r\n'=id,\"'\tx; cr\rlf\",\"x; 'quoted; say \"\"hi\"\"\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": {
+       "a": -3,
+       "b": " lead"
+      },
+      "tags": [
+       "a,b",
+       "=",
+       "'quoted"
+      ]
+     },
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "+1",
+      "tags": {
+       "a": 0,
+       "b": "say \"hi\""
+      }
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": {
+       "a": null,
+       "b": "@cmd"
+      },
+      "tags": "\rx"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": 2.5,
+      "tags": 0.81
+     },
+     "id": "TEST3",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": "\rx",
+      "tags": null
+     },
+     "id": "TEST4",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       "\tx",
+       "cr\rlf"
+      ],
+      "tags": [
+       "x",
+       "'quoted",
+       "say \"hi\""
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\nTEST0\r\nTEST1\r\nTEST1\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "TEST0",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id\r\n",
+   "input": []
+  },
+  {
+   "expected": "id,notes,count,meta,name,tags\r\n,2.5,\"'\rx\",'-3,\u65e5\u672c,\r\nTEST1,'=,5,\"line\nbreak; cr\rlf; \u65e5\u672c\",\u65e5\u672c,\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": "\rx",
+      "meta": -3,
+      "name": "\u65e5\u672c",
+      "notes": 2.5
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": 5,
+      "meta": [
+       "line\nbreak",
+       "cr\rlf",
+       "\u65e5\u672c"
+      ],
+      "name": "\u65e5\u672c",
+      "notes": "=",
+      "tags": ""
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,name,deviceModel,serialNumber\r\n,True,'-1,'-1; 'quoted; =\r\nTEST1,\"{'b': 'a,b', 'a': 1e-05}\",'@cmd,\"{'b': 'a,b', 'a': 64.0}\"\r\nTEST2,,1e-05,'-1\r\n",
+   "expected": "id,name,deviceModel,serialNumber\r\n,True,'-1,'-1; 'quoted; =\r\nTEST1,\"{\"\"a\"\":1e-05,\"\"b\"\":\"\"a,b\"\"}\",'@cmd,\"{\"\"a\"\":64.0,\"\"b\"\":\"\"a,b\"\"}\"\r\nTEST2,,1e-05,'-1\r\n",
+   "input": [
+    {
+     "attributes": {
+      "deviceModel": "-1",
+      "name": true,
+      "serialNumber": [
+       "-1",
+       "'quoted",
+       "="
+      ]
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": "@cmd",
+      "name": {
+       "a": 1e-05,
+       "b": "a,b"
+      },
+      "serialNumber": {
+       "a": 64.0,
+       "b": "a,b"
+      }
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "deviceModel": 1e-05,
+      "serialNumber": "-1"
+     },
+     "id": "TEST2",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n'=id\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,name,count,ratio,notes,status,tags\r\n'=id,\"{'id': 'x', 'n': 1}; y\",\"line\nbreak\",0,'-3,'@cmd,\r\nTEST1,1e+16,2.5,'=SUM(A1),,\"say \"\"hi\"\"\",\"say \"\"hi\"\"\"\r\nTEST1,,plain; \u00e9t\u00e9; x,,\"a,b\",\"'=SUM(A1); say \"\"hi\"\"; say \"\"hi\"\"\",\u65e5\u672c\r\nTEST3,,,\"a,b\",False,,\"'\rx\"\r\n",
+   "expected": "id,name,count,ratio,notes,status,tags\r\n'=id,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\",\"line\nbreak\",0,'-3,'@cmd,\r\nTEST1,1e+16,2.5,'=SUM(A1),,\"say \"\"hi\"\"\",\"say \"\"hi\"\"\"\r\nTEST1,,plain; \u00e9t\u00e9; x,,\"a,b\",\"'=SUM(A1); say \"\"hi\"\"; say \"\"hi\"\"\",\u65e5\u672c\r\nTEST3,,,\"a,b\",False,,\"'\rx\"\r\n",
+   "input": [
+    {
+     "attributes": {
+      "count": "line\nbreak",
+      "name": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "notes": -3,
+      "ratio": 0,
+      "status": "@cmd"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": 2.5,
+      "name": 1e+16,
+      "ratio": "=SUM(A1)",
+      "status": "say \"hi\"",
+      "tags": "say \"hi\""
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "count": [
+       "plain",
+       "\u00e9t\u00e9",
+       "x"
+      ],
+      "notes": "a,b",
+      "ratio": "",
+      "status": [
+       "=SUM(A1)",
+       "say \"hi\"",
+       "say \"hi\""
+      ],
+      "tags": "\u65e5\u672c"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "notes": false,
+      "ratio": "a,b",
+      "tags": "\rx"
+     },
+     "id": "TEST3",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id,'=formula,serialNumber\r\n'=id,\u65e5\u672c,\u65e5\u672c\r\n,\u65e5\u672c,\"a,b\"\r\n,trail ,0\r\n'=id,'=SUM(A1),\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": "\u65e5\u672c",
+      "serialNumber": "\u65e5\u672c"
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "\u65e5\u672c",
+      "serialNumber": "a,b"
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "trail ",
+      "serialNumber": 0
+     },
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": "=SUM(A1)",
+      "serialNumber": []
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "expected": "id\r\n'=id\r\n\"\"\r\n\"\"\r\n",
+   "input": [
+    {
+     "attributes": {},
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {},
+     "id": "",
+     "type": "orgDevices"
+    }
+   ]
+  },
+  {
+   "abapit": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{'id': 'x', 'n': 1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n",
+   "expected": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n",
+   "input": [
+    {
+     "attributes": {
+      "=formula": "-1",
+      "count": "",
+      "notes": 2.5,
+      "serialNumber": [
+       "\rx",
+       "\tx"
+      ],
+      "status": [
+       {
+        "id": "x",
+        "n": 1
+       },
+       "y"
+      ],
+      "tags": [
+       " lead",
+       " lead",
+       ""
+      ]
+     },
+     "id": "=id",
+     "type": "orgDevices"
+    },
+    {
+     "attributes": {
+      "=formula": -3,
+      "count": "\tx",
+      "notes": "\tx",
+      "serialNumber": "",
+      "status": [
+       "",
+       "say \"hi\"",
+       " lead"
+      ],
+      "tags": "plain"
+     },
+     "id": "TEST1",
+     "type": "orgDevices"
+    }
+   ]
+  }
+ ],
+ "generator": "scripts/gen_fixtures.py",
+ "now": "2026-10-16T12:00:00+00:00",
+ "python": "3.12.13",
+ "seed": 1005,
+ "unicode": "15.0.0"
+}

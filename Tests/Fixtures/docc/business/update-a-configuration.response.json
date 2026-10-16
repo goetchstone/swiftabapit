@@ -1,0 +1,26 @@
+{
+  "data": {
+    "attributes": {
+      "configuredForPlatforms": [
+        "PLATFORM_IOS",
+        "PLATFORM_MACOS"
+      ],
+      "createdDateTime": "2024-01-15T10:30:00Z",
+      "customSettingsValues": {
+        "configurationProfile": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>...",
+        "filename": "WiFi-Updated.mobileconfig"
+      },
+      "name": "Updated Wi-Fi Configuration",
+      "type": "CUSTOM_SETTING",
+      "updatedDateTime": "2024-06-15T14:22:00Z"
+    },
+    "id": "config-12345",
+    "links": {
+      "self": "https://api-business.apple.com/v1/configurations/config-12345"
+    },
+    "type": "configurations"
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/configurations/config-12345"
+  }
+}

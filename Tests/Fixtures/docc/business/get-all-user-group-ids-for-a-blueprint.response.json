@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "e0484524-fff2-4132-ad29-fe7c6258ce53",
+      "type": "userGroups"
+    }
+  ],
+  "links": {
+    "self": "https://api-business.apple.com/v1/blueprints/blueprint-12345/relationships/userGroups"
+  },
+  "meta": {
+    "paging": {
+      "limit": 100
+    }
+  }
+}

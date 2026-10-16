@@ -1,0 +1,18 @@
+{
+  "data": {
+    "attributes": {
+      "activityType": "RELEASE_DEVICES"
+    },
+    "relationships": {
+      "devices": {
+        "data": [
+          {
+            "id": "XABC123X0ABC123X0",
+            "type": "orgDevices"
+          }
+        ]
+      }
+    },
+    "type": "orgDeviceActivities"
+  }
+}

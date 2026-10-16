@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Ad-hoc and CI builds. The App Sandbox, outgoing HTTPS only (no listener: plan L2) and files the operator
+     picks (a key to import, a CSV to save, abapit's history to import). Adding a key here is a reviewed
+     change: scripts/check_app.sh diffs the signed app against this exact list (plan §3.9). -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

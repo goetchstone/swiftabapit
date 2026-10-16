@@ -1,0 +1,17 @@
+{
+  "data": {
+    "attributes": {
+      "configuredForPlatforms": [
+        "PLATFORM_IOS",
+        "PLATFORM_MACOS"
+      ],
+      "customSettingsValues": {
+        "configurationProfile": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>...",
+        "filename": "WiFi-Updated.mobileconfig"
+      },
+      "name": "Updated Wi-Fi Configuration"
+    },
+    "id": "config-12345",
+    "type": "configurations"
+  }
+}

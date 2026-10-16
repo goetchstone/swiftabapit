@@ -1,0 +1,16 @@
+{
+  "data": {
+    "attributes": {
+      "configuredForPlatforms": [
+        "PLATFORM_IOS"
+      ],
+      "customSettingsValues": {
+        "configurationProfile": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>PayloadContent</key><array><dict><key>AccessType</key><string>WIFI_ONLY</string><key>PayloadType</key><string>com.apple.airplay.security</string></dict></array></dict></plist>",
+        "filename": "Airplay.mobileconfig"
+      },
+      "name": "AirPlay Security Settings",
+      "type": "CUSTOM_SETTING"
+    },
+    "type": "configurations"
+  }
+}

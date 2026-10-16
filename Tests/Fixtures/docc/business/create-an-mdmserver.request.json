@@ -1,0 +1,13 @@
+{
+  "data": {
+    "attributes": {
+      "enableMdmDisownFlag": true,
+      "serverCertificate": {
+        "data": "MIIDXTCCAkWgAwIBAgIJALxxxxxxx...",
+        "name": "marketing-mdm.cer"
+      },
+      "serverName": "Marketing Team MDM"
+    },
+    "type": "mdmServers"
+  }
+}

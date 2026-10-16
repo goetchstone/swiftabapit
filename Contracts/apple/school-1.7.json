@@ -1,0 +1,2944 @@
+{
+ "source": "https://developer.apple.com/documentation/appleschoolmanagerapi",
+ "scope": "school",
+ "version": "1.7",
+ "generator": "scripts/apple_contracts.py",
+ "counts": {
+  "endpoints": 11,
+  "objects": 51,
+  "enums": 7
+ },
+ "endpoints": [
+  {
+   "title": "Get Device Management Services",
+   "slug": "get-device-management-services",
+   "abstract": "Get a list of device management services in an organization.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/mdmServers",
+   "parameters": [
+    {
+     "name": "fields[mdmServers]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "serverName",
+      "enableMdmDisownFlag",
+      "defaultProductFamilies",
+      "status",
+      "serverType",
+      "deviceCount",
+      "lastConnectedDateTime",
+      "lastConnectedIp",
+      "createdDateTime",
+      "updatedDateTime",
+      "devices"
+     ],
+     "description": "The fields to return for included related types."
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000",
+     "description": "The number of included related resources to return."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "MdmServersResponse",
+      "types": [
+       "MdmServersResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get Device Management Service Information",
+   "slug": "get-mdmserver-information",
+   "abstract": "Get the information for a specific device management service.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/mdmServers/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "fields[mdmServers]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "serverName",
+      "enableMdmDisownFlag",
+      "defaultProductFamilies",
+      "status",
+      "serverType",
+      "deviceCount",
+      "lastConnectedDateTime",
+      "lastConnectedIp",
+      "createdDateTime",
+      "updatedDateTime",
+      "devices"
+     ],
+     "description": "The fields to return for the resource."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "MdmServerResponse",
+      "types": [
+       "MdmServerResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get All Device IDs for a Device Management Service",
+   "slug": "get-all-device-ids-for-a-device-management-service",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/mdmServers/{id}/relationships/devices",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000"
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "MdmServerDevicesLinkagesResponse",
+      "types": [
+       "MdmServerDevicesLinkagesResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": []
+  },
+  {
+   "title": "Assign or Unassign Devices to a Device Management Service",
+   "slug": "create-an-orgdeviceactivity",
+   "abstract": "Assign or unassign devices to a device management service, or manage a device management service for devices.",
+   "introducedAt": "1.7",
+   "method": "POST",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDeviceActivities",
+   "parameters": [],
+   "body": {
+    "mimeType": "application/json",
+    "type": {
+     "text": "OrgDeviceActivityCreateRequest",
+     "types": [
+      "OrgDeviceActivityCreateRequest"
+     ]
+    },
+    "parameters": []
+   },
+   "responses": [
+    {
+     "status": 201,
+     "reason": "Created",
+     "type": {
+      "text": "OrgDeviceActivityResponse",
+      "types": [
+       "OrgDeviceActivityResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 409,
+     "reason": "Conflict",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 422,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "request",
+    "response"
+   ]
+  },
+  {
+   "title": "Get Organization Device Activity Information",
+   "slug": "get-orgdeviceactivity-information",
+   "abstract": "Get information for an organization device activity that a device management action, such as assigning or unassigning, creates.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDeviceActivities/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "fields[orgDeviceActivities]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "status",
+      "subStatus",
+      "createdDateTime",
+      "completedDateTime",
+      "downloadUrl"
+     ],
+     "description": "The fields to return for included related types."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "OrgDeviceActivityResponse",
+      "types": [
+       "OrgDeviceActivityResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get Organization Devices",
+   "slug": "get-org-devices",
+   "abstract": "Get a list of devices in an organization that enroll using Automated Device Enrollment.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices",
+   "parameters": [
+    {
+     "name": "fields[orgDevices]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "serialNumber",
+      "addedToOrgDateTime",
+      "releasedFromOrgDateTime",
+      "updatedDateTime",
+      "deviceModel",
+      "productFamily",
+      "productType",
+      "deviceCapacity",
+      "partNumber",
+      "orderNumber",
+      "color",
+      "status",
+      "orderDateTime",
+      "imei",
+      "meid",
+      "eid",
+      "wifiMacAddress",
+      "bluetoothMacAddress",
+      "ethernetMacAddress",
+      "purchaseSourceId",
+      "purchaseSourceType",
+      "assignedServer",
+      "appleCareCoverage"
+     ],
+     "description": "The fields to return for included related types."
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000",
+     "description": "The number of included related resources to return."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "OrgDevicesResponse",
+      "types": [
+       "OrgDevicesResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get Device Information",
+   "slug": "get-orgdevice-information",
+   "abstract": "Get information about a device in an organization.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "fields[orgDevices]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "serialNumber",
+      "addedToOrgDateTime",
+      "releasedFromOrgDateTime",
+      "updatedDateTime",
+      "deviceModel",
+      "productFamily",
+      "productType",
+      "deviceCapacity",
+      "partNumber",
+      "orderNumber",
+      "color",
+      "status",
+      "orderDateTime",
+      "imei",
+      "meid",
+      "eid",
+      "wifiMacAddress",
+      "bluetoothMacAddress",
+      "ethernetMacAddress",
+      "purchaseSourceId",
+      "purchaseSourceType",
+      "assignedServer",
+      "appleCareCoverage"
+     ],
+     "description": "The fields to return for included related types."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "OrgDeviceResponse",
+      "types": [
+       "OrgDeviceResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get the Activation Lock Status for a Device",
+   "slug": "get-the-activation-lock-status-information-for-an-orgdevice",
+   "abstract": "Get the Activation Lock status of an organization device.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices/{id}/activationLockStatus",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource. For example, the device\u2019s serial number."
+    },
+    {
+     "name": "fields[activationLockStatus]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "isLocked",
+      "lockType"
+     ],
+     "description": "The fields to return for included related types."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "ActivationLockStatusResponse",
+      "types": [
+       "ActivationLockStatusResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get AppleCare Coverage Information for a Device",
+   "slug": "get-all-applecare-coverage-for-an-orgdevice",
+   "abstract": "Get a list of AppleCare coverage resources for an organization device.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices/{id}/appleCareCoverage",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource. For example, the device\u2019s serial number."
+    },
+    {
+     "name": "fields[appleCareCoverage]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "status",
+      "paymentType",
+      "description",
+      "agreementNumber",
+      "startDateTime",
+      "endDateTime",
+      "isRenewable",
+      "isCanceled",
+      "contractCancelDateTime"
+     ],
+     "description": "The fields to return for included related types."
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000",
+     "description": "The number of included related resources to return."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "AppleCareCoverageResponse",
+      "types": [
+       "AppleCareCoverageResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get the Assigned Device Management Service Information for a Device",
+   "slug": "get-the-assigned-device-management-service-information-for-an-orgdevice",
+   "abstract": "Get the assigned device management service information for a device.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices/{id}/assignedServer",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "fields[mdmServers]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "serverName",
+      "serverType",
+      "createdDateTime",
+      "updatedDateTime",
+      "devices"
+     ],
+     "description": "The fields to return for included related types."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "MdmServerResponse",
+      "types": [
+       "MdmServerResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Get the Assigned Device Management Service ID for a Device",
+   "slug": "get-the-assigned-device-management-service-id-for-an-orgdevice",
+   "abstract": "Get the assigned device management service ID information for a device.",
+   "introducedAt": "1.7",
+   "method": "GET",
+   "baseURL": "https://api-school.apple.com/",
+   "path": "/v1/orgDevices/{id}/relationships/assignedServer",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "OrgDeviceAssignedServerLinkageResponse",
+      "types": [
+       "OrgDeviceAssignedServerLinkageResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  }
+ ],
+ "objects": {
+  "ActivationLockStatus": {
+   "title": "ActivationLockStatus",
+   "slug": "activationlockstatus",
+   "abstract": "The data structure that represents the Activation Lock status of an organization device.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "ActivationLockStatus.Attributes",
+      "types": [
+       "ActivationLockStatus.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "activationLockStatus"
+     ]
+    }
+   ]
+  },
+  "ActivationLockStatus.Attributes": {
+   "title": "ActivationLockStatus.Attributes",
+   "slug": "activationlockstatus/attributes-data.dictionary",
+   "abstract": "Attributes for an organization device\u2019s Activation Lock status.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "isLocked",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "lockType",
+     "required": false,
+     "type": {
+      "text": "ActivationLockType",
+      "types": [
+       "ActivationLockType"
+      ]
+     }
+    }
+   ]
+  },
+  "ActivationLockStatusResponse": {
+   "title": "ActivationLockStatusResponse",
+   "slug": "activationlockstatusresponse",
+   "abstract": "A response that contains the Activation Lock status of an organization device.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "ActivationLockStatus",
+      "types": [
+       "ActivationLockStatus"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "ActivityTypeMetadata": {
+   "title": "ActivityTypeMetadata",
+   "slug": "activitytypemetadata",
+   "abstract": "Additional metadata for an organization device activity, used by device management service migration activity types.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "mdmMigrationDeadlineDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    }
+   ]
+  },
+  "AppleCareCoverage": {
+   "title": "AppleCareCoverage",
+   "slug": "applecarecoverage",
+   "abstract": "The data structure that represents an AppleCare coverage resource that belongs to an organization device.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "AppleCareCoverage.Attributes",
+      "types": [
+       "AppleCareCoverage.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "appleCareCoverage"
+     ]
+    }
+   ]
+  },
+  "AppleCareCoverage.Attributes": {
+   "title": "AppleCareCoverage.Attributes",
+   "slug": "applecarecoverage/attributes-data.dictionary",
+   "abstract": "Attributes for an organization device\u2019s AppleCare coverage resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "agreementNumber",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "contractCancelDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "description",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "endDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "isCanceled",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "isRenewable",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "paymentType",
+     "required": false,
+     "type": {
+      "text": "AppleCareCoveragePaymentType",
+      "types": [
+       "AppleCareCoveragePaymentType"
+      ]
+     }
+    },
+    {
+     "name": "startDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "status",
+     "required": false,
+     "type": {
+      "text": "AppleCareCoverageStatus",
+      "types": [
+       "AppleCareCoverageStatus"
+      ]
+     }
+    }
+   ]
+  },
+  "AppleCareCoverageResponse": {
+   "title": "AppleCareCoverageResponse",
+   "slug": "applecarecoverageresponse",
+   "abstract": "A response that contains a list of AppleCare coverage resources that belongs to an organization device.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[AppleCareCoverage]",
+      "types": [
+       "AppleCareCoverage"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "DocumentLinks": {
+   "title": "DocumentLinks",
+   "slug": "documentlinks",
+   "abstract": "Self-links to documents that can contain information for one or more resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "self",
+     "required": true,
+     "type": {
+      "text": "uri-reference"
+     }
+    }
+   ]
+  },
+  "ErrorLinks": {
+   "title": "ErrorLinks",
+   "slug": "errorlinks",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "about",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "associated",
+     "required": false,
+     "type": {
+      "text": "(uri-reference | ErrorLinks.Associated)",
+      "types": [
+       "ErrorLinks.Associated"
+      ]
+     },
+     "allowedTypes": [
+      "uri-reference",
+      "ErrorLinks.Associated"
+     ]
+    }
+   ]
+  },
+  "ErrorLinks.Associated": {
+   "title": "ErrorLinks.Associated",
+   "slug": "errorlinks/associated-data.dictionary",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "href",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "ErrorLinks.Associated.Meta",
+      "types": [
+       "ErrorLinks.Associated.Meta"
+      ]
+     }
+    }
+   ]
+  },
+  "ErrorLinks.Associated.Meta": {
+   "title": "ErrorLinks.Associated.Meta",
+   "slug": "errorlinks/associated-data.dictionary/meta-data.dictionary",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "source",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "ErrorResponse": {
+   "title": "ErrorResponse",
+   "slug": "errorresponse",
+   "abstract": "The error details that an API returns in the response body whenever the API request isn\u2019t successful.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "errors",
+     "required": false,
+     "type": {
+      "text": "[ErrorResponse.Errors]",
+      "types": [
+       "ErrorResponse.Errors"
+      ]
+     }
+    }
+   ]
+  },
+  "ErrorResponse.Errors": {
+   "title": "ErrorResponse.Errors",
+   "slug": "errorresponse/errors-data.dictionary",
+   "abstract": "The details about an error that returns when an API request isn\u2019t successful.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "code",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "detail",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "id",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "ErrorLinks",
+      "types": [
+       "ErrorLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "ErrorResponse.Errors.Meta",
+      "types": [
+       "ErrorResponse.Errors.Meta"
+      ]
+     }
+    },
+    {
+     "name": "source",
+     "required": false,
+     "type": {
+      "text": "(JsonPointer | Parameter)",
+      "types": [
+       "JsonPointer",
+       "Parameter"
+      ]
+     },
+     "allowedTypes": [
+      "JsonPointer",
+      "Parameter"
+     ]
+    },
+    {
+     "name": "status",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "title",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "ErrorResponse.Errors.Meta": {
+   "title": "ErrorResponse.Errors.Meta",
+   "slug": "errorresponse/errors-data.dictionary/meta-data.dictionary",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "Any Key",
+     "required": false,
+     "type": {
+      "text": "ErrorResponse.Errors.Meta.Any Key",
+      "types": [
+       "ErrorResponse.Errors.Meta.Any Key"
+      ]
+     }
+    }
+   ]
+  },
+  "JsonPointer": {
+   "title": "JsonPointer",
+   "slug": "jsonpointer",
+   "abstract": "An object that contains the JSON pointer that indicates the location of the error.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "pointer",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "MdmServer": {
+   "title": "MdmServer",
+   "slug": "mdmserver",
+   "abstract": "The data structure that represents device management services in organizations.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "MdmServer.Attributes",
+      "types": [
+       "MdmServer.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "ResourceLinks",
+      "types": [
+       "ResourceLinks"
+      ]
+     }
+    },
+    {
+     "name": "relationships",
+     "required": false,
+     "type": {
+      "text": "MdmServer.Relationships",
+      "types": [
+       "MdmServer.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "mdmServers"
+     ]
+    }
+   ]
+  },
+  "MdmServer.Attributes": {
+   "title": "MdmServer.Attributes",
+   "slug": "mdmserver/attributes-data.dictionary",
+   "abstract": "Attributes that describe a device management service resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "createdDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "defaultProductFamilies",
+     "required": false,
+     "type": {
+      "text": "[MdmServerProductFamily]",
+      "types": [
+       "MdmServerProductFamily"
+      ]
+     }
+    },
+    {
+     "name": "deviceCount",
+     "required": false,
+     "type": {
+      "text": "integer"
+     }
+    },
+    {
+     "name": "enableMdmDisownFlag",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "lastConnectedDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "lastConnectedIp",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "serverName",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "serverType",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "status",
+     "required": false,
+     "type": {
+      "text": "MdmServerStatus",
+      "types": [
+       "MdmServerStatus"
+      ]
+     }
+    },
+    {
+     "name": "updatedDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    }
+   ]
+  },
+  "MdmServer.Relationships": {
+   "title": "MdmServer.Relationships",
+   "slug": "mdmserver/relationships-data.dictionary",
+   "abstract": "The relationships you include in the request, and those that you can operate on.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "devices",
+     "required": false,
+     "type": {
+      "text": "MdmServer.Relationships.Devices",
+      "types": [
+       "MdmServer.Relationships.Devices"
+      ]
+     }
+    }
+   ]
+  },
+  "MdmServer.Relationships.Devices": {
+   "title": "MdmServer.Relationships.Devices",
+   "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary",
+   "abstract": "The data and links that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": false,
+     "type": {
+      "text": "[MdmServer.Relationships.Devices.Data]",
+      "types": [
+       "MdmServer.Relationships.Devices.Data"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "MdmServer.Relationships.Devices.Data": {
+   "title": "MdmServer.Relationships.Devices.Data",
+   "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDevices"
+     ]
+    }
+   ]
+  },
+  "MdmServerDevicesLinkagesResponse": {
+   "title": "MdmServerDevicesLinkagesResponse",
+   "slug": "mdmserverdeviceslinkagesresponse",
+   "abstract": "The data and links that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[MdmServerDevicesLinkagesResponse.Data]",
+      "types": [
+       "MdmServerDevicesLinkagesResponse.Data"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "MdmServerDevicesLinkagesResponse.Data": {
+   "title": "MdmServerDevicesLinkagesResponse.Data",
+   "slug": "mdmserverdeviceslinkagesresponse/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDevices"
+     ]
+    }
+   ]
+  },
+  "MdmServerResponse": {
+   "title": "MdmServerResponse",
+   "slug": "mdmserverresponse",
+   "abstract": "A response that contains a single device management service resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "MdmServer",
+      "types": [
+       "MdmServer"
+      ]
+     }
+    },
+    {
+     "name": "included",
+     "required": false,
+     "type": {
+      "text": "[OrgDevice]",
+      "types": [
+       "OrgDevice"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "MdmServersResponse": {
+   "title": "MdmServersResponse",
+   "slug": "mdmserversresponse",
+   "abstract": "A response that contains a list of device management service resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[MdmServer]",
+      "types": [
+       "MdmServer"
+      ]
+     }
+    },
+    {
+     "name": "included",
+     "required": false,
+     "type": {
+      "text": "[OrgDevice]",
+      "types": [
+       "OrgDevice"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDevice": {
+   "title": "OrgDevice",
+   "slug": "orgdevice",
+   "abstract": "The data structure that represents an organization device resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "OrgDevice.Attributes",
+      "types": [
+       "OrgDevice.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "ResourceLinks",
+      "types": [
+       "ResourceLinks"
+      ]
+     }
+    },
+    {
+     "name": "relationships",
+     "required": false,
+     "type": {
+      "text": "OrgDevice.Relationships",
+      "types": [
+       "OrgDevice.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDevices"
+     ]
+    }
+   ]
+  },
+  "OrgDevice.Attributes": {
+   "title": "OrgDevice.Attributes",
+   "slug": "orgdevice/attributes-data.dictionary",
+   "abstract": "Attributes that describe an organization device resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "addedToOrgDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "bluetoothMacAddress",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "color",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "deviceCapacity",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "deviceModel",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "eid",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "ethernetMacAddress",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     }
+    },
+    {
+     "name": "imei",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     }
+    },
+    {
+     "name": "isMdmMigrationCapable",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "mdmMigrationDeadlineDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "mdmMigrationStatus",
+     "required": false,
+     "type": {
+      "text": "MdmMigrationStatus",
+      "types": [
+       "MdmMigrationStatus"
+      ]
+     }
+    },
+    {
+     "name": "meid",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     }
+    },
+    {
+     "name": "orderDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "orderNumber",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "partNumber",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "productFamily",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "productType",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "purchaseSourceId",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "purchaseSourceType",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "releasedFromOrgDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "serialNumber",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "status",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "updatedDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "wifiMacAddress",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "OrgDevice.Relationships": {
+   "title": "OrgDevice.Relationships",
+   "slug": "orgdevice/relationships-data.dictionary",
+   "abstract": "The relationships you include in the request, and those that you can operate on.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "activationLockStatus",
+     "required": false,
+     "type": {
+      "text": "OrgDevice.Relationships.ActivationLockStatus",
+      "types": [
+       "OrgDevice.Relationships.ActivationLockStatus"
+      ]
+     }
+    },
+    {
+     "name": "appleCareCoverage",
+     "required": false,
+     "type": {
+      "text": "OrgDevice.Relationships.AppleCareCoverage",
+      "types": [
+       "OrgDevice.Relationships.AppleCareCoverage"
+      ]
+     }
+    },
+    {
+     "name": "assignedServer",
+     "required": false,
+     "type": {
+      "text": "OrgDevice.Relationships.AssignedServer",
+      "types": [
+       "OrgDevice.Relationships.AssignedServer"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDevice.Relationships.ActivationLockStatus": {
+   "title": "OrgDevice.Relationships.ActivationLockStatus",
+   "slug": "orgdevice/relationships-data.dictionary/activationlockstatus-data.dictionary",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDevice.Relationships.AppleCareCoverage": {
+   "title": "OrgDevice.Relationships.AppleCareCoverage",
+   "slug": "orgdevice/relationships-data.dictionary/applecarecoverage-data.dictionary",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDevice.Relationships.AssignedServer": {
+   "title": "OrgDevice.Relationships.AssignedServer",
+   "slug": "orgdevice/relationships-data.dictionary/assignedserver-data.dictionary",
+   "abstract": "The links that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivity": {
+   "title": "OrgDeviceActivity",
+   "slug": "orgdeviceactivity",
+   "abstract": "The data structure that represents an organization device activity resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "OrgDeviceActivity.Attributes",
+      "types": [
+       "OrgDeviceActivity.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "ResourceLinks",
+      "types": [
+       "ResourceLinks"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDeviceActivities"
+     ]
+    }
+   ]
+  },
+  "OrgDeviceActivity.Attributes": {
+   "title": "OrgDeviceActivity.Attributes",
+   "slug": "orgdeviceactivity/attributes-data.dictionary",
+   "abstract": "Attributes that describe an organization device activity resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "completedDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "createdDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "downloadUrl",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "status",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "subStatus",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest": {
+   "title": "OrgDeviceActivityCreateRequest",
+   "slug": "orgdeviceactivitycreaterequest",
+   "abstract": "The request body you use to update the device management service for a device.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data": {
+   "title": "OrgDeviceActivityCreateRequest.Data",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary",
+   "abstract": "The data element of the request body.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data.Attributes",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "relationships",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data.Relationships",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDeviceActivities"
+     ]
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Attributes": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Attributes",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/attributes-data.dictionary",
+   "abstract": "Attributes with values that you\u2019re changing as part of the create request.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "activityType",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityType",
+      "types": [
+       "OrgDeviceActivityType"
+      ]
+     }
+    },
+    {
+     "name": "activityTypeMetadata",
+     "required": false,
+     "type": {
+      "text": "ActivityTypeMetadata",
+      "types": [
+       "ActivityTypeMetadata"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Relationships": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Relationships",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary",
+   "abstract": "The relationships you include in the request, and those that you can operate on.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "devices",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Relationships.Devices"
+      ]
+     }
+    },
+    {
+     "name": "mdmServer",
+     "required": false,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Relationships.Devices": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary",
+   "abstract": "The data that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data]",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "orgDevices"
+     ]
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary",
+   "abstract": "The data that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data",
+      "types": [
+       "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data": {
+   "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data",
+   "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "mdmServers"
+     ]
+    }
+   ]
+  },
+  "OrgDeviceActivityResponse": {
+   "title": "OrgDeviceActivityResponse",
+   "slug": "orgdeviceactivityresponse",
+   "abstract": "A response that contains a single organization device activity resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceActivity",
+      "types": [
+       "OrgDeviceActivity"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceAssignedServerLinkageResponse": {
+   "title": "OrgDeviceAssignedServerLinkageResponse",
+   "slug": "orgdeviceassignedserverlinkageresponse",
+   "abstract": "The data and links that describe the relationship between the resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "OrgDeviceAssignedServerLinkageResponse.Data",
+      "types": [
+       "OrgDeviceAssignedServerLinkageResponse.Data"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDeviceAssignedServerLinkageResponse.Data": {
+   "title": "OrgDeviceAssignedServerLinkageResponse.Data",
+   "slug": "orgdeviceassignedserverlinkageresponse/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "mdmServers"
+     ]
+    }
+   ]
+  },
+  "OrgDeviceResponse": {
+   "title": "OrgDeviceResponse",
+   "slug": "orgdeviceresponse",
+   "abstract": "A response that contains a single organization device resource.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "OrgDevice",
+      "types": [
+       "OrgDevice"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "OrgDevicesResponse": {
+   "title": "OrgDevicesResponse",
+   "slug": "orgdevicesresponse",
+   "abstract": "A response that contains a list of organization device resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[OrgDevice]",
+      "types": [
+       "OrgDevice"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "PagedDocumentLinks": {
+   "title": "PagedDocumentLinks",
+   "slug": "pageddocumentlinks",
+   "abstract": "Links related to the response document, including paging links.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "first",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "next",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "self",
+     "required": true,
+     "type": {
+      "text": "uri-reference"
+     }
+    }
+   ]
+  },
+  "PagingInformation": {
+   "title": "PagingInformation",
+   "slug": "paginginformation",
+   "abstract": "Paging information for data responses.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "paging",
+     "required": true,
+     "type": {
+      "text": "PagingInformation.Paging",
+      "types": [
+       "PagingInformation.Paging"
+      ]
+     }
+    }
+   ]
+  },
+  "PagingInformation.Paging": {
+   "title": "PagingInformation.Paging",
+   "slug": "paginginformation/paging-data.dictionary",
+   "abstract": "Paging details, such as the total number of resources and the per-page limit.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "limit",
+     "required": true,
+     "type": {
+      "text": "integer"
+     }
+    },
+    {
+     "name": "nextCursor",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "total",
+     "required": false,
+     "type": {
+      "text": "integer"
+     }
+    }
+   ]
+  },
+  "Parameter": {
+   "title": "Parameter",
+   "slug": "parameter",
+   "abstract": "An object that contains the query parameter that produces the error.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "parameter",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "RelationshipLinks": {
+   "title": "RelationshipLinks",
+   "slug": "relationshiplinks",
+   "abstract": "Links related to the response document, including self-links.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "include",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "related",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    },
+    {
+     "name": "self",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    }
+   ]
+  },
+  "ResourceLinks": {
+   "title": "ResourceLinks",
+   "slug": "resourcelinks",
+   "abstract": "Self-links to requested resources.",
+   "introducedAt": "1.7",
+   "properties": [
+    {
+     "name": "self",
+     "required": false,
+     "type": {
+      "text": "uri-reference"
+     }
+    }
+   ]
+  }
+ },
+ "enums": {
+  "ActivationLockType": {
+   "title": "ActivationLockType",
+   "slug": "activationlocktype",
+   "abstract": "Strings that represent the type of Activation Lock on a device.",
+   "introducedAt": "1.7",
+   "values": [
+    "MDM",
+    "USER",
+    "NONE"
+   ]
+  },
+  "AppleCareCoveragePaymentType": {
+   "title": "AppleCareCoveragePaymentType",
+   "slug": "applecarecoveragepaymenttype",
+   "abstract": "Strings that represent AppleCare coverage payment types.",
+   "introducedAt": "1.7",
+   "values": [
+    "ABE_SUBSCRIPTION",
+    "PAID_UP_FRONT",
+    "SUBSCRIPTION",
+    "NONE"
+   ]
+  },
+  "AppleCareCoverageStatus": {
+   "title": "AppleCareCoverageStatus",
+   "slug": "applecarecoveragestatus",
+   "abstract": "Strings that represent AppleCare coverage status.",
+   "introducedAt": "1.7",
+   "values": [
+    "ACTIVE",
+    "INACTIVE"
+   ]
+  },
+  "MdmMigrationStatus": {
+   "title": "MdmMigrationStatus",
+   "slug": "mdmmigrationstatus",
+   "abstract": "Strings that represent the state of a device\u2019s device management service migration.",
+   "introducedAt": "1.7",
+   "values": [
+    "REQUESTED",
+    "STARTED",
+    "SUCCESS",
+    "FAILED"
+   ]
+  },
+  "MdmServerProductFamily": {
+   "title": "MdmServerProductFamily",
+   "slug": "mdmserverproductfamily",
+   "abstract": "Strings that represent a product family that can be assigned as a default to a device management service.",
+   "introducedAt": "1.7",
+   "values": [
+    "APPLE_TV",
+    "IPAD",
+    "IPHONE",
+    "IPOD",
+    "MAC",
+    "VISION",
+    "WATCH"
+   ]
+  },
+  "MdmServerStatus": {
+   "title": "MdmServerStatus",
+   "slug": "mdmserverstatus",
+   "abstract": "Strings that represent the operational status of a device management service.",
+   "introducedAt": "1.7",
+   "values": [
+    "ACTIVE",
+    "DELETED",
+    "INACTIVE"
+   ]
+  },
+  "OrgDeviceActivityType": {
+   "title": "OrgDeviceActivityType",
+   "slug": "orgdeviceactivitytype",
+   "abstract": "Strings that represent organization device activities.",
+   "introducedAt": "1.7",
+   "values": [
+    "ASSIGN_DEVICES",
+    "UNASSIGN_DEVICES",
+    "ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE",
+    "UPDATE_MDM_MIGRATION_DEADLINE",
+    "CANCEL_MDM_MIGRATION"
+   ]
+  }
+ }
+}

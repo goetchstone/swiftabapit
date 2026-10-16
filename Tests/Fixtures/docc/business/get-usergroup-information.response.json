@@ -1,0 +1,28 @@
+{
+  "data": {
+    "attributes": {
+      "createdDateTime": "2023-03-15T10:00:00Z",
+      "name": "Engineering Team",
+      "ouId": "OU789012",
+      "status": "ACTIVE",
+      "totalMemberCount": 25,
+      "type": "STANDARD",
+      "updatedDateTime": "2024-06-01T14:30:00Z"
+    },
+    "id": "UG123456",
+    "links": {
+      "self": "https://api-business.apple.com/v1/userGroups/UG123456"
+    },
+    "relationships": {
+      "users": {
+        "links": {
+          "self": "https://api-business.apple.com/v1/userGroups/UG123456/relationships/users"
+        }
+      }
+    },
+    "type": "userGroups"
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/userGroups/UG123456"
+  }
+}

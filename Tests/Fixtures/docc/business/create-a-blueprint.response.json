@@ -1,0 +1,58 @@
+{
+  "data": {
+    "attributes": {
+      "appLicenseDeficient": false,
+      "createdDateTime": "2024-06-15T10:30:00Z",
+      "description": "Apps and settings for marketing team members",
+      "name": "Marketing Team Blueprint",
+      "status": "ACTIVE",
+      "updatedDateTime": "2024-06-15T10:30:00Z"
+    },
+    "id": "blueprint-new-123",
+    "links": {
+      "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123"
+    },
+    "relationships": {
+      "apps": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=apps",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/apps"
+        }
+      },
+      "configurations": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=configurations",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/configurations"
+        }
+      },
+      "orgDevices": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=orgDevices",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/orgDevices"
+        }
+      },
+      "packages": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=packages",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/packages"
+        }
+      },
+      "userGroups": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=userGroups",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/userGroups"
+        }
+      },
+      "users": {
+        "links": {
+          "include": "https://api-business.apple.com/v1/blueprints/blueprint-new-123?include=users",
+          "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123/relationships/users"
+        }
+      }
+    },
+    "type": "blueprints"
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/blueprints/blueprint-new-123"
+  }
+}

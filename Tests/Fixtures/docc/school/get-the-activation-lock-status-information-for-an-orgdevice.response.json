@@ -1,0 +1,13 @@
+{
+  "data": {
+    "attributes": {
+      "isLocked": true,
+      "lockType": "MDM"
+    },
+    "id": "C39J8W1H3VG5",
+    "type": "activationLockStatus"
+  },
+  "links": {
+    "self": "https://api-school.apple.com/v1/orgDevices/C39J8W1H3VG5/activationLockStatus"
+  }
+}

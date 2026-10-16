@@ -1,0 +1,10363 @@
+{
+ "abapit": "9875ee762b3db990a3498b88d96a4c3ba2eaf7d3",
+ "cases": [
+  {
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "extra",
+          "new": "e",
+          "old": 1.5
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": 1
+         },
+         {
+          "field": "extra",
+          "new": false,
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "devices": {},
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-1": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "devices": {
+      "id-0": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      },
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-1": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-5"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": null
+         },
+         {
+          "field": "extra",
+          "new": 1.5,
+          "old": "e"
+         },
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": null,
+          "old": 1
+         },
+         {
+          "field": "extra",
+          "new": null,
+          "old": "e"
+         },
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "C"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x",
+           "y"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-4"
+       }
+      ],
+      "removed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "C",
+          "old": "B"
+         }
+        ],
+        "id": "id-11"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-1": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-11": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": []
+      },
+      "id-2": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-2": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-10": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-3": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "extra": "e",
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "extra": 1.5,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "extra": "e",
+       "name": "A",
+       "tags": []
+      }
+     },
+     "assignments": {
+      "id-11": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-11": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-5"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": []
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-1"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "devices": {
+      "id-10": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-2": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-10": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-2": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-10": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-0"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "devices": {
+      "id-10": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-2": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "devices": {
+      "id-0": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-6"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "extra",
+          "new": 1.5,
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         }
+        ],
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "extra",
+          "new": null,
+          "old": "e"
+         },
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "B"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": 1
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-8"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-5"
+       }
+      ]
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-5"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": null,
+          "old": 2
+         },
+         {
+          "field": "extra",
+          "new": "e",
+          "old": false
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-2"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-4"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-10": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      },
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": []
+      },
+      "id-7": {
+       "count": 1,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-9": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-0": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-1": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-2": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "mdm_servers": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "mdm_servers": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": []
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         }
+        ],
+        "id": "id-2"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-0": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-6": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "assignments": {
+      "id-0": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-6": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": []
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-6"
+       }
+      ],
+      "removed": []
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "extra",
+          "new": null,
+          "old": 1.5
+         },
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x",
+           "y"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": null
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x",
+           "y"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       }
+      ]
+     },
+     "users": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-6"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-10": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-11": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "Z",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-1": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": []
+      },
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-11": {
+       "count": 2,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "assignments": {},
+     "devices": {
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ]
+     },
+     "devices": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "C"
+         }
+        ],
+        "id": "id-3"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-4": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-1": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-11"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       }
+      ]
+     },
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-2"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       }
+      ]
+     },
+     "users": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-1": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-10": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "assignments": {
+      "id-1": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-2": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-10": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "B"
+         }
+        ],
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-10": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-10": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-0": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-9": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": []
+      },
+      "id-7": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ]
+     },
+     "users": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-3"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {},
+    "old": {
+     "assignments": {
+      "id-1": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": []
+      },
+      "id-3": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-7": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "devices": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         }
+        ],
+        "id": "id-0"
+       }
+      ],
+      "removed": []
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         }
+        ],
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-3": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "extra",
+          "new": false,
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         }
+        ],
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": 1
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x"
+          ]
+         }
+        ],
+        "id": "id-3"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-4": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-7": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-11": {
+       "count": 1,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-10": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "users": {
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": []
+      },
+      "id-3": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-6": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      }
+     }
+    },
+    "old": {}
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": []
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": 1,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "Z",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {}
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": []
+     },
+     "devices": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-8"
+       }
+      ],
+      "removed": []
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-6"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-0": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "Z",
+       "tags": []
+      },
+      "id-6": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "Z",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": null,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "Z",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-0": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": null,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "C"
+         }
+        ],
+        "id": "id-2"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {}
+    },
+    "old": {
+     "assignments": {
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "name": "B",
+       "tags": []
+      },
+      "id-4": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {}
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {
+     "mdm_servers": {}
+    },
+    "old": {
+     "mdm_servers": {}
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": []
+     },
+     "mdm_servers": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         }
+        ],
+        "id": "id-6"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "assignments": {
+      "id-2": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-6": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "assignments": {
+      "id-2": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": 1,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-6": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": []
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "C"
+         }
+        ],
+        "id": "id-3"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-8"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-7": {
+       "count": null,
+       "name": "Z",
+       "tags": []
+      }
+     },
+     "assignments": {
+      "id-3": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-7": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "assignments": {
+      "id-3": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {
+     "applecare": {},
+     "devices": {
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "applecare": {},
+     "devices": {
+      "id-10": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       }
+      ]
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-6"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         }
+        ],
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": null,
+          "old": 1
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-4"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "extra",
+          "new": false,
+          "old": "e"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-10"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-8": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-4": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-9": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "assignments": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-11": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-3": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-10": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-5": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "assignments": {
+      "id-5": {
+       "count": 2,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {},
+    "old": {}
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-7"
+       }
+      ]
+     },
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x",
+           "y"
+          ],
+          "old": []
+         }
+        ],
+        "id": "id-4"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-6"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "users": {
+      "id-4": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-6": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": null,
+       "extra": "e",
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": []
+      },
+      "id-11": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 2,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "extra",
+          "new": "e",
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-7"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-6"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": 1
+         },
+         {
+          "field": "extra",
+          "new": null,
+          "old": 1.5
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "A"
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x"
+          ]
+         }
+        ],
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         }
+        ],
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 2,
+          "old": null
+         },
+         {
+          "field": "extra",
+          "new": null,
+          "old": false
+         },
+         {
+          "field": "name",
+          "new": "C",
+          "old": "A"
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x"
+          ]
+         }
+        ],
+        "id": "id-6"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "extra": false,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-1": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-1": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-2": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-3": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-8": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      }
+     }
+    },
+    "old": {
+     "devices": {
+      "id-0": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "users": {
+      "id-0": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {},
+    "old": {}
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-7"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-8"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "devices": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-0"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-8"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {},
+     "devices": {
+      "id-0": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-1": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "extra": false,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-8": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": null,
+          "old": 2
+         },
+         {
+          "field": "extra",
+          "new": "e",
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "A",
+          "old": "C"
+         }
+        ],
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "C",
+          "old": "A"
+         },
+         {
+          "field": "tags",
+          "new": [
+           "x"
+          ],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-5"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-6"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": false,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-8"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-1"
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-0"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-0": {
+       "count": null,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-1": {
+       "count": null,
+       "extra": false,
+       "name": "C",
+       "tags": []
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {},
+     "users": {
+      "id-0": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-0": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-5": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "C",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": null,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-2": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-7"
+       }
+      ],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": 1.5,
+         "name": "B",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": null
+         },
+         {
+          "field": "extra",
+          "new": 1.5,
+          "old": null
+         },
+         {
+          "field": "name",
+          "new": "B",
+          "old": "C"
+         },
+         {
+          "field": "tags",
+          "new": [],
+          "old": [
+           "x",
+           "y"
+          ]
+         }
+        ],
+        "id": "id-4"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": false,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-9"
+       }
+      ]
+     },
+     "assignments": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "extra": false,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-8"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       }
+      ],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "C",
+         "tags": []
+        },
+        "id": "id-4"
+       }
+      ]
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-4": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "assignments": {
+      "id-2": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-4": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-7": {
+       "count": 1,
+       "extra": false,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "name": "B",
+       "tags": []
+      },
+      "id-11": {
+       "count": 1,
+       "extra": false,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-8": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-9": {
+       "count": null,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "mdm_servers": {
+      "id-11": {
+       "count": 1,
+       "extra": "e",
+       "name": "A",
+       "tags": []
+      },
+      "id-2": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-5": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": null,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-2": {
+       "count": 2,
+       "extra": false,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": null,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "mdm_servers": {
+      "id-4": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "C",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-10": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {}
+    },
+    "old": {
+     "assignments": {
+      "id-10": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 2,
+       "extra": "e",
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     },
+     "devices": {}
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": []
+        },
+        "id": "id-10"
+       }
+      ],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-2"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-11"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-10": {
+       "count": 1,
+       "name": "Z",
+       "tags": []
+      }
+     },
+     "users": {
+      "id-11": {
+       "count": 2,
+       "extra": "e",
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-2": {
+       "count": 1,
+       "name": "B",
+       "tags": []
+      }
+     },
+     "devices": {}
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-0"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "applecare": {
+      "id-10": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-0": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-10": {
+       "count": null,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "assignments": {
+      "id-0": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": null,
+         "extra": 1.5,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-5"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-9"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "users": {
+      "id-0": {
+       "count": null,
+       "extra": 1.5,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-5": {
+       "count": 1,
+       "name": "A",
+       "tags": []
+      },
+      "id-7": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "applecare": {
+      "id-0": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {}
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "assignments": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": []
+        },
+        "fields": [
+         {
+          "field": "count",
+          "new": 1,
+          "old": 2
+         },
+         {
+          "field": "name",
+          "new": "C",
+          "old": "A"
+         }
+        ],
+        "id": "id-0"
+       }
+      ],
+      "removed": [
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-1"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "C",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-4"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": []
+        },
+        "id": "id-8"
+       }
+      ]
+     },
+     "devices": {
+      "added": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": 1.5,
+         "name": "B",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-10"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "id": "id-11"
+       },
+       {
+        "attributes": {
+         "count": 2,
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-2"
+       },
+       {
+        "attributes": {
+         "count": null,
+         "name": "A",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-6"
+       }
+      ],
+      "changed": [],
+      "removed": [
+       {
+        "attributes": {
+         "count": 2,
+         "extra": "e",
+         "name": "B",
+         "tags": []
+        },
+        "id": "id-1"
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "attributes": {
+         "count": 1,
+         "extra": "e",
+         "name": "B",
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "id-0"
+       }
+      ],
+      "changed": [],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "assignments": {
+      "id-0": {
+       "count": 1,
+       "name": "C",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-10": {
+       "count": 2,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-11": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-2": {
+       "count": 2,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      }
+     },
+     "mdm_servers": {},
+     "users": {
+      "id-0": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      }
+     }
+    },
+    "old": {
+     "assignments": {
+      "id-0": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      },
+      "id-1": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-10": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": null,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "A",
+       "tags": []
+      }
+     },
+     "devices": {
+      "id-1": {
+       "count": 2,
+       "extra": "e",
+       "name": "B",
+       "tags": []
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {
+     "users": {
+      "added": [],
+      "changed": [
+       {
+        "attributes": {
+         "count": 1,
+         "name": "A",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "A",
+          "old": "B"
+         }
+        ],
+        "id": "id-3"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": [
+          "x"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "A"
+         }
+        ],
+        "id": "id-7"
+       },
+       {
+        "attributes": {
+         "count": 1,
+         "name": "Z",
+         "tags": [
+          "x",
+          "y"
+         ]
+        },
+        "fields": [
+         {
+          "field": "name",
+          "new": "Z",
+          "old": "C"
+         }
+        ],
+        "id": "id-9"
+       }
+      ],
+      "removed": []
+     }
+    }
+   },
+   "input": {
+    "new": {
+     "users": {
+      "id-11": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 1,
+       "name": "Z",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "Z",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    },
+    "old": {
+     "users": {
+      "id-11": {
+       "count": 1,
+       "extra": "e",
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-3": {
+       "count": 1,
+       "name": "B",
+       "tags": [
+        "x",
+        "y"
+       ]
+      },
+      "id-4": {
+       "count": 2,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-6": {
+       "count": 1,
+       "extra": 1.5,
+       "name": "B",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-7": {
+       "count": 1,
+       "name": "A",
+       "tags": [
+        "x"
+       ]
+      },
+      "id-8": {
+       "count": 2,
+       "name": "C",
+       "tags": []
+      },
+      "id-9": {
+       "count": 1,
+       "name": "C",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "expected": {
+    "ok": {}
+   },
+   "input": {
+    "new": {},
+    "old": {}
+   }
+  }
+ ],
+ "generator": "scripts/gen_fixtures.py",
+ "now": "2026-10-16T12:00:00+00:00",
+ "python": "3.12.13",
+ "seed": 1006,
+ "unicode": "15.0.0"
+}

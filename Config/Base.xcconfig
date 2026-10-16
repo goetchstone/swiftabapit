@@ -1,0 +1,19 @@
+// Shared signing defaults for the abapit target. Adapted from SwiftGamGui Config/Base.xcconfig @ bfdb494.
+// Builds sign ad-hoc ("Sign to Run Locally") unless a gitignored Config/Local.xcconfig sets a team, e.g.:
+//
+//     DEVELOPMENT_TEAM = ABCDE12345
+//     CODE_SIGN_IDENTITY = Apple Development
+//     CODE_SIGN_ENTITLEMENTS = Config/abapit-Team.entitlements
+//
+// Ad-hoc builds can't use the data-protection Keychain (errSecMissingEntitlement, -34018), so the app
+// needs a team — a free Personal Team works — plus the team entitlements (a keychain access group,
+// which makes Xcode provision the app) before it can store a key. Both entitlement files carry the
+// App Sandbox, outgoing connections and user-selected files: scripts/check_app.sh holds the exact lists.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_ENTITLEMENTS = Config/abapit.entitlements
+// Xcode otherwise adds get-task-allow to every locally signed build, Release included, and a debuggable
+// app holding credentials lets a same-user process read them from its memory. Debug keeps it.
+CODE_SIGN_INJECT_BASE_ENTITLEMENTS[config=Release] = NO
+
+#include? "Local.xcconfig"

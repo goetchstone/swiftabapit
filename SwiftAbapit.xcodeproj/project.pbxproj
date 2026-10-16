@@ -1,0 +1,343 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5AB000000000000000000100 /* Vault in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000200 /* Vault */; };
+		5AB000000000000000000101 /* AppleBusiness in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000201 /* AppleBusiness */; };
+		5AB000000000000000000102 /* Mosyle in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000202 /* Mosyle */; };
+		5AB000000000000000000103 /* History in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000203 /* History */; };
+		5AB000000000000000000104 /* Reports in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000204 /* Reports */; };
+		5AB000000000000000000105 /* Planners in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000205 /* Planners */; };
+		5AB000000000000000000106 /* ChangeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000206 /* ChangeCore */; };
+		5AB000000000000000000107 /* Assist in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000207 /* Assist */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5AB000000000000000000001 /* abapit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = abapit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AB000000000000000000002 /* abapit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = abapit.entitlements; sourceTree = "<group>"; };
+		5AB000000000000000000003 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		5AB000000000000000000004 /* abapit-Team.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "abapit-Team.entitlements"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		5AB000000000000000000010 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5AB000000000000000000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AB000000000000000000100 /* Vault in Frameworks */,
+				5AB000000000000000000101 /* AppleBusiness in Frameworks */,
+				5AB000000000000000000102 /* Mosyle in Frameworks */,
+				5AB000000000000000000103 /* History in Frameworks */,
+				5AB000000000000000000104 /* Reports in Frameworks */,
+				5AB000000000000000000105 /* Planners in Frameworks */,
+				5AB000000000000000000106 /* ChangeCore in Frameworks */,
+				5AB000000000000000000107 /* Assist in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5AB000000000000000000030 = {
+			isa = PBXGroup;
+			children = (
+				5AB000000000000000000010 /* App */,
+				5AB000000000000000000032 /* Config */,
+				5AB000000000000000000031 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5AB000000000000000000031 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5AB000000000000000000001 /* abapit.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5AB000000000000000000032 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				5AB000000000000000000003 /* Base.xcconfig */,
+				5AB000000000000000000002 /* abapit.entitlements */,
+				5AB000000000000000000004 /* abapit-Team.entitlements */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5AB000000000000000000040 /* abapit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AB000000000000000000070 /* Build configuration list for PBXNativeTarget "abapit" */;
+			buildPhases = (
+				5AB000000000000000000050 /* Sources */,
+				5AB000000000000000000020 /* Frameworks */,
+				5AB000000000000000000051 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5AB000000000000000000010 /* App */,
+			);
+			name = abapit;
+			packageProductDependencies = (
+				5AB000000000000000000200 /* Vault */,
+				5AB000000000000000000201 /* AppleBusiness */,
+				5AB000000000000000000202 /* Mosyle */,
+				5AB000000000000000000203 /* History */,
+				5AB000000000000000000204 /* Reports */,
+				5AB000000000000000000205 /* Planners */,
+				5AB000000000000000000206 /* ChangeCore */,
+				5AB000000000000000000207 /* Assist */,
+			);
+			productName = abapit;
+			productReference = 5AB000000000000000000001 /* abapit.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5AB000000000000000000060 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					5AB000000000000000000040 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = 5AB000000000000000000071 /* Build configuration list for PBXProject "SwiftAbapit" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5AB000000000000000000030;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5AB000000000000000000300 /* XCLocalSwiftPackageReference "Packages/AbapitKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5AB000000000000000000031 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5AB000000000000000000040 /* abapit */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5AB000000000000000000051 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5AB000000000000000000050 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5AB000000000000000000080 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		5AB000000000000000000081 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		5AB000000000000000000082 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5AB000000000000000000003 /* Base.xcconfig */;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = abapit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "MIT License — swiftabapit contributors";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.goetchstone.swiftabapit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		5AB000000000000000000083 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5AB000000000000000000003 /* Base.xcconfig */;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = abapit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "MIT License — swiftabapit contributors";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.goetchstone.swiftabapit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5AB000000000000000000070 /* Build configuration list for PBXNativeTarget "abapit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AB000000000000000000082 /* Debug */,
+				5AB000000000000000000083 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AB000000000000000000071 /* Build configuration list for PBXProject "SwiftAbapit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AB000000000000000000080 /* Debug */,
+				5AB000000000000000000081 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5AB000000000000000000300 /* XCLocalSwiftPackageReference "Packages/AbapitKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AbapitKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5AB000000000000000000200 /* Vault */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Vault;
+		};
+		5AB000000000000000000201 /* AppleBusiness */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppleBusiness;
+		};
+		5AB000000000000000000202 /* Mosyle */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Mosyle;
+		};
+		5AB000000000000000000203 /* History */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = History;
+		};
+		5AB000000000000000000204 /* Reports */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Reports;
+		};
+		5AB000000000000000000205 /* Planners */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Planners;
+		};
+		5AB000000000000000000206 /* ChangeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ChangeCore;
+		};
+		5AB000000000000000000207 /* Assist */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Assist;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5AB000000000000000000060 /* Project object */;
+}

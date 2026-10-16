@@ -1,0 +1,57 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "agreementNumber": null,
+        "contractCancelDateTime": null,
+        "description": "Limited Warranty",
+        "endDateTime": "2026-02-02T00:00:00Z",
+        "isCanceled": false,
+        "isRenewable": false,
+        "paymentType": "NONE",
+        "startDateTime": "2025-02-02T00:00:00Z",
+        "status": "ACTIVE"
+      },
+      "id": "XABC123X0ABC123X0",
+      "type": "appleCareCoverage"
+    },
+    {
+      "attributes": {
+        "agreementNumber": "0000000001",
+        "contractCancelDateTime": null,
+        "description": "AppleCare+",
+        "endDateTime": "2026-04-17T00:00:00Z",
+        "isCanceled": false,
+        "isRenewable": true,
+        "paymentType": "SUBSCRIPTION",
+        "startDateTime": "2025-04-17T00:00:00Z",
+        "status": "ACTIVE"
+      },
+      "id": "0000000001",
+      "type": "appleCareCoverage"
+    },
+    {
+      "attributes": {
+        "agreementNumber": null,
+        "contractCancelDateTime": null,
+        "description": "AppleCare+ for Business",
+        "endDateTime": null,
+        "isCanceled": false,
+        "isRenewable": true,
+        "paymentType": "ABE_SUBSCRIPTION",
+        "startDateTime": "2025-04-17T00:00:00Z",
+        "status": "ACTIVE"
+      },
+      "id": "abe-XABC123X0ABC123X0",
+      "type": "appleCareCoverage"
+    }
+  ],
+  "links": {
+    "self": "https://api-business.apple.com/v1/orgDevices/XABC123X0ABC123X0/appleCareCoverage"
+  },
+  "meta": {
+    "paging": {
+      "limit": 100
+    }
+  }
+}

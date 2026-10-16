@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "createdDateTime": "2025-05-01T03:21:44.685Z",
+        "serverName": "Test Device Management Service",
+        "serverType": "MDM",
+        "updatedDateTime": "2025-05-01T03:21:46.284Z"
+      },
+      "id": "1F97349736CF4614A94F624E705841AD",
+      "relationships": {
+        "devices": {
+          "links": {
+            "self": "https://api-business.apple.com/v1/mdmServers/1F97349736CF4614A94F624E705841AD/relationships/devices"
+          }
+        }
+      },
+      "type": "mdmServers"
+    }
+  ],
+  "links": {
+    "self": "https://api-business.apple.com/v1/mdmServers"
+  },
+  "meta": {
+    "paging": {
+      "limit": 100
+    }
+  }
+}

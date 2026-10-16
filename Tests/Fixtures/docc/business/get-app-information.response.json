@@ -1,0 +1,24 @@
+{
+  "data": {
+    "attributes": {
+      "appStoreUrl": "https://apps.apple.com/app/pages/id361309726",
+      "bundleId": "com.apple.Pages",
+      "isCustomApp": false,
+      "name": "Pages",
+      "supportedOS": [
+        "SUPPORTED_OS_IOS",
+        "SUPPORTED_OS_MACOS"
+      ],
+      "version": "14.0",
+      "websiteUrl": "https://www.apple.com/pages/"
+    },
+    "id": "361309726",
+    "links": {
+      "self": "https://api-business.apple.com/v1/apps/361309726"
+    },
+    "type": "apps"
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/apps/361309726"
+  }
+}
