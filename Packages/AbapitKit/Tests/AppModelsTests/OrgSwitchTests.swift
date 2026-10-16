@@ -109,6 +109,30 @@ struct OrgSwitchTests {
         #expect(world.devices.rows.count == 3500)
     }
 
+    /// The same for a failure: a walk that failed just before Refresh hands its error to a loop that is already
+    /// cancelled, and the old load's "failed" must not land on the new one.
+    @Test func aFailureAlreadyOnItsWayWhenRefreshedIsDropped() async throws {
+        let world = try await World.make(devices: ["a": 2500, "b": 0])
+        let gate = world.gates["a"]!
+        gate.hold("later", Gate.laterDevicePages)
+        world.devices.load()
+        await eventually("a's first page") { world.devices.rows.count == 1000 }
+        world.stubs["a"]!.failTransport(5)
+        let answered = gate.answered
+        gate.release("later")
+        // Hold the main actor while page two fails five times (the client's retries) and the error is handed on.
+        let clock = ContinuousClock(), end = clock.now + .seconds(20)
+        while gate.answered < answered + 5, clock.now < end { usleep(500) }
+        usleep(200_000)
+        gate.hold("all", Gate.devicePages)
+        world.devices.load(force: true)
+        await world.settled(3)
+        #expect(world.devices.state == .loading(count: 0), "the cancelled read's failure landed on the new one: \(world.devices.state)")
+        gate.release("all")
+        await world.settled(4)
+        #expect(world.devices.rows.count == 2500)
+    }
+
     /// The page cap stops the list and says so; a refresh during that load keeps its own flag.
     @Test func aListCutAtThePageCapSaysSoAfterARefresh() async throws {
         let world = try await World.make(devices: ["a": 2500, "b": 0], pageCap: 2)
