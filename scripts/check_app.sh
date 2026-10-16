@@ -66,7 +66,7 @@ if plutil -extract NSAppTransportSecurity raw -o - "$PLIST" >/dev/null 2>&1; the
 # No debug-only code in Release: the spike and snapshot switches, and TestSupport's strict stubs and demo fleet
 # (compiled out under #if DEBUG; linking alone would keep them, through Swift's conformance records).
 if strings -a "$BINARY" | grep -qE 'ABAPIT_(SPIKE|SNAPSHOT|DEMO)|stub-token-|Example Business \(demo\)'; then fail "debug-only code or strings are in the binary"; fi
-if nm "$BINARY" 2>/dev/null | grep -qE 'TestSupport|AppleStub|DemoFleet|DemoOrg|MemoryStore'; then fail "test or demo code is linked into the binary"; fi
+if nm "$BINARY" 2>/dev/null | grep -qE 'TestSupport|AppleStub|MosyleStub|DemoFleet|DemoOrg|MemoryStore'; then fail "test or demo code is linked into the binary"; fi
 
 [ "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "$BUNDLE_ID" ] || fail "bundle identifier"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "$(basename "$APP" .app)" ] \

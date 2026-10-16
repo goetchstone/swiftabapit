@@ -21,13 +21,36 @@ struct RouteTests {
     @Test func onlyTheReadBuildersMakeAReadRequest() throws {
         // Every spelling of the initializer, `.init(host:` included (Phase 1a's review evaded `ReadRequest(`).
         let makers = try SourceScan.files(in: Self.sources, matching: ["ReadRequest(", "ReadRequest.init", ".init(host:"])
-        #expect(makers == ["\(Self.sources)/AppleBusiness/AppleRead.swift", "\(Self.sources)/Wire/Requests.swift"], "\(makers)")
+        #expect(makers == ["\(Self.sources)/AppleBusiness/AppleRead.swift", "\(Self.sources)/Mosyle/MosyleRead.swift",
+                           "\(Self.sources)/Wire/Requests.swift"], "\(makers)")
         #expect(try SourceScan.files(in: "App", matching: ["ReadRequest(", "AuthRequest("]).isEmpty)
     }
 
-    /// A credential exchange carries a secret: only the token broker builds one (Mosyle's session joins in Phase 7).
+    /// A credential exchange carries a secret: only Apple's token broker and Mosyle's session build one.
     @Test func onlyTheBrokersMakeACredentialExchange() throws {
-        #expect(try SourceScan.files(in: Self.sources, matching: ["AuthRequest("]) == ["\(Self.sources)/AppleBusiness/TokenBroker.swift"])
+        let makers = try SourceScan.files(in: Self.sources, matching: ["AuthRequest(", "AuthRequest.init"])
+        #expect(makers == ["\(Self.sources)/AppleBusiness/TokenBroker.swift", "\(Self.sources)/Mosyle/MosyleSession.swift"], "\(makers)")
+    }
+
+    /// Mosyle's reads are POSTs, so the method can't tell a read from a write (invariant 2): every Mosyle read is on
+    /// `MosyleRead.allowed`, and that list holds no operation that changes anything.
+    @Test func everyMosyleReadIsOnTheAllowlist() throws {
+        let writes = ["update", "assign", "change", "create", "delete", "remove", "wipe", "lock", "restart", "shutdown", "clear",
+                      "enable", "disable", "play", "request", "bulk", "set", "add"]
+        let file = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/Mosyle").first { $0.path.hasSuffix("MosyleRead.swift") })
+        let text = file.lines.joined(separator: "\n")
+        let start = try #require(text.range(of: "allowed: Set<String> = ["))
+        let end = try #require(text[start.upperBound...].range(of: "]"))
+        let entries = text[start.upperBound..<end.lowerBound].split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        #expect(entries.count == 8, "\(entries)")
+        for entry in entries {
+            let operation = entry.split(separator: "#").last.map(String.init)?.lowercased() ?? ""
+            #expect(!writes.contains { operation.contains($0) } || operation == "list_custom_device_attributes", "\(entry)")
+        }
+        // The only builders in the file go through `read(_:_:_:)` or the Logs Stream's own; both check the list.
+        #expect(text.components(separatedBy: "ReadRequest(").count - 1 == 2)
+        #expect(text.components(separatedBy: "precondition(allowed.contains").count - 1 == 2)
     }
 
     /// Only the Vault touches the Keychain (invariant 3); the app's spike uses throwaway items only.

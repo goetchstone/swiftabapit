@@ -342,8 +342,9 @@ job (§6.6).
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, Vault(public API only)}
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
-AppleBusiness → {HTTPCore, Wire, Vault, AppleModels, JSONAPI}
-Mosyle → {HTTPCore, Wire, Vault, MosyleModels}
+AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
+Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
+MosyleModels → {JSONAPI}
 HTTPCore → {Wire}
 History → {AppleModels, MosyleModels, Reports}
 Planners → {AppleModels, MosyleModels, JSONAPI, Wire}  (builds WireOperation via package init)
