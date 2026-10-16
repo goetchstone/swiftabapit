@@ -38,13 +38,35 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   - `meta.paging.total`: absent in Apple's example; the stub sends it only when a test asks.
 - **Only a 404 or `"data": null` is unassigned.** A 403, a 500 or a malformed 200 (`{}`, `[]`, a linkage of
   another type) throws `.malformed` or its error: Phase 4's Guard re-validates assignments with this read.
-- **A probe says what failed**: `forbidden`, `ok`, or `error <status>`; never `ok` for a failure (invariant 8).
+- **A list page is a list.** A 2xx list page (a probe's too) whose `data` isn't an array of resources (`{}`,
+  `null`, one object, an item without `type` or `id`, an `errors` body sent with 200) is
+  `.malformed("a page of <template>")`, never an empty page: read as one, the device list said "none" and the
+  acceptance pass printed `ok, 0 items` (Phase 1b verifier round 1; the same shape as Phase 1a's malformed
+  "unassigned"). The stub sends such a body with `queue(200, for:, body:)`.
+- **A probe says what failed**: `forbidden`, `ok`, or `error <status>` (Settings' `probeReads` says a bare `error`
+  when no HTTP status came back: offline, too large, the token or the Keychain); never `ok` for a failure
+  (invariant 8).
 - **The acceptance pass says `ok` only for a read that ran and fully succeeded** (Phase 1b review M5: a
   forbidden device list left five per-device lines `ok … 0`). Otherwise `forbidden`, `truncated` (the page cap
-  cut a list; the count is what was read), `skipped: <why>` (a read it needs failed or found nothing, so it
-  isn't sent) or `error <status>`. Every per-device read covers the whole sample, capped at
-  `acceptanceSampleLimit` (20) whatever the caller asks. Its notes carry counts and Apple's `code` only, never
-  `detail` (it may echo an identifier) or `AppleAPIError.message` (which quotes it). `AcceptancePassTests`.
+  cut a list, or the list it walks stopped short: the services' device lists say `covers only the N services
+  mdmServers read`; the count is what was read), `skipped: <why>` (a read it needs failed or found nothing, or
+  the pass was cancelled, so it isn't sent) or `error <status>`. The probes run as checks, so a probe's failure
+  reads like a read's (`error transport -1005`, not a bare `error`). Every per-device read covers the whole
+  sample, capped at `acceptanceSampleLimit` (20) whatever the caller asks. Its notes carry counts, where a loop
+  stopped, Apple's `code` only when it is words of letters joined by `_` or `.`, `source.parameter` only when it
+  names a parameter (`limit`, `fields[orgDevices]`), the token endpoint's code, this app's words for a malformed
+  answer and the Vault's guidance: never `detail` (it may echo an identifier), `AppleAPIError.message` (which
+  quotes it), or anything shaped like an identifier (a digit, a `-`, a single word). `AcceptancePassTests`,
+  `AcceptanceFailureTests`.
+- **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing.** The pass checks for
+  cancellation after each check, so a walk cut short reads `error cancelled` and every later line `skipped: the
+  pass was cancelled`, with nothing more sent (verifier round 1: it read `ok, 0 items`, and the per-device reads
+  said the org had no device).
+- **The stub's switches for these** (invariant 5): `queue(_:for:headers:body:)` sends a given body (a malformed
+  200, bytes that aren't JSON, an `ErrorResponse` whose `code` or `parameter` is prose or a serial), and a `path`
+  that goes on into the query (`/v1/orgDevices?cursor=`) fails a later page and not the first;
+  `failNextToken(_:error:)` sets the OAuth `error`. Cancellation mid-walk is a test transport around the stub
+  (`Interceptor`), since it is the caller's, not Apple's.
 - **A Keychain refusal while signing is `AppleAPIError.vault(guidance)`** (Touch ID cancelled, a locked Mac,
   no key stored): nothing is sent, and the next read signs again. `MemoryStore.failNext(.sign, with:)` drives it.
 - School has no people, content or audit endpoints: `AppleSection.businessOnly`, and the stub fails a School

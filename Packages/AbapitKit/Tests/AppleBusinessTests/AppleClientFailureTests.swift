@@ -118,6 +118,17 @@ struct AppleClientFailureTests {
         #expect(results.first { $0.section == .apps }?.status == "error 404")
     }
 
+    /// Phase 1b verifier round 1: a 2xx list page that wasn't a list (`{}`, one object) was read as an empty page, so as
+    /// "none", and a probe answered `{}` read "ok". Both are malformed now, and the next read is whole.
+    @Test func aListPageThatIsntAListIsMalformedNotNone() async throws {
+        let harness = try await Harness(devices: 1)
+        harness.stub.queue(200, for: "/v1/orgDevices", body: "{}")
+        await #expect(throws: AppleAPIError.malformed("a page of /v1/orgDevices")) { _ = try await harness.allDevices() }
+        harness.stub.queue(200, for: "/v1/users", body: #"{"data":{"type":"users","id":"U1"}}"#)
+        #expect(await harness.client.probeReads().first { $0.section == .users }?.status == "error malformed")
+        #expect(try await harness.allDevices().count == 1)
+    }
+
     /// Review M6: pages past the first follow Apple's cursor-only next link at the size the first page asked for.
     @Test func laterPagesKeepTheirSize() async throws {
         let harness = try await Harness(devices: 2_100)
