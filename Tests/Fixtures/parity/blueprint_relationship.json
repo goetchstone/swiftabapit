@@ -1,11 +1,45 @@
 {
+ "generator": "scripts/gen_fixtures.py",
  "abapit": "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f",
+ "python": "3.12.13",
+ "unicode": "15.0.0",
+ "seed": 1003,
+ "now": "2026-10-16T12:00:00+00:00",
  "cases": [
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-14",
+     "id-28",
+     "id-36",
+     "id-28",
+     "id-48",
+     "id-50"
+    ],
+    "current_ids": [
+     "id-14",
+     "id-35",
+     "id-28",
+     "id-36",
+     "id-23",
+     "id-34"
+    ],
+    "catalog": {
+     "id-35": "Item 35",
+     "id-23": "Item 23",
+     "id-14": "Item 14",
+     "id-29": "Item 29",
+     "id-28": "Item 28",
+     "id-34": "Item 34",
+     "id-36": "Item 36"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-14",
@@ -23,48 +57,43 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-48",
       "id-50"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-14": "Item 14",
-     "id-23": "Item 23",
-     "id-28": "Item 28",
-     "id-29": "Item 29",
-     "id-34": "Item 34",
-     "id-35": "Item 35",
-     "id-36": "Item 36"
-    },
-    "current_ids": [
-     "id-14",
-     "id-35",
-     "id-28",
-     "id-36",
-     "id-23",
-     "id-34"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-14",
-     "id-28",
-     "id-36",
-     "id-28",
-     "id-48",
-     "id-50"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-20",
+     "id-34",
+     "id-0",
+     "id-25",
+     "id-42"
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-14": "Item 14",
+     "id-34": "Item 34",
+     "id-38": "Item 38",
+     "id-3": "Item 3",
+     "id-20": "Item 20",
+     "id-39": "Item 39",
+     "id-0": "Item 0",
+     "id-8": "Item 8",
+     "id-25": "Item 25",
+     "id-10": "Item 10"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-20",
@@ -87,59 +116,19 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
      "unknown": [
       "id-42"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-10": "Item 10",
-     "id-14": "Item 14",
-     "id-20": "Item 20",
-     "id-25": "Item 25",
-     "id-3": "Item 3",
-     "id-34": "Item 34",
-     "id-38": "Item 38",
-     "id-39": "Item 39",
-     "id-8": "Item 8"
-    },
-    "current_ids": [],
-    "op": "remove",
-    "selected_ids": [
-     "id-20",
-     "id-34",
-     "id-0",
-     "id-25",
-     "id-42"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": [
-      "id-43"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-12": "Item 12",
-     "id-16": "Item 16",
-     "id-27": "Item 27",
-     "id-29": "Item 29",
-     "id-37": "Item 37",
-     "id-38": "Item 38"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-43"
+    ],
     "current_ids": [
      "id-38",
      "id-16",
@@ -148,15 +137,62 @@
      "id-29",
      "id-12"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-43"
-    ]
+    "catalog": {
+     "id-27": "Item 27",
+     "id-12": "Item 12",
+     "id-38": "Item 38",
+     "id-16": "Item 16",
+     "id-29": "Item 29",
+     "id-37": "Item 37"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-43"
+     ],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-32",
+     "id-32",
+     "id-3",
+     "id-46",
+     "id-49"
+    ],
+    "current_ids": [
+     "id-23",
+     "id-6",
+     "id-27",
+     "id-35",
+     "id-22",
+     "id-12"
+    ],
+    "catalog": {
+     "id-23": "Item 23",
+     "id-9": "Item 9",
+     "id-35": "Item 35",
+     "id-32": "Item 32",
+     "id-27": "Item 27",
+     "id-24": "Item 24",
+     "id-6": "Item 6",
+     "id-12": "Item 12",
+     "id-3": "Item 3",
+     "id-22": "Item 22"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-32",
@@ -167,6 +203,12 @@
        "label": "Item 3"
       }
      ],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-46",
+      "id-49"
+     ],
      "changes": [
       {
        "id": "id-32",
@@ -176,52 +218,46 @@
        "id": "id-3",
        "label": "Item 3"
       }
-     ],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-46",
-      "id-49"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-12": "Item 12",
-     "id-22": "Item 22",
-     "id-23": "Item 23",
-     "id-24": "Item 24",
-     "id-27": "Item 27",
-     "id-3": "Item 3",
-     "id-32": "Item 32",
-     "id-35": "Item 35",
-     "id-6": "Item 6",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-23",
-     "id-6",
-     "id-27",
-     "id-35",
-     "id-22",
-     "id-12"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-32",
-     "id-32",
-     "id-3",
-     "id-46",
-     "id-49"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-39",
+     "id-3",
+     "id-32",
+     "id-32",
+     "id-32",
+     "id-15",
+     "id-41"
+    ],
+    "current_ids": [
+     "id-32",
+     "id-39",
+     "id-3",
+     "id-21",
+     "id-0",
+     "id-29"
+    ],
+    "catalog": {
+     "id-0": "Item 0",
+     "id-32": "Item 32",
+     "id-29": "Item 29",
+     "id-39": "Item 39",
+     "id-3": "Item 3",
+     "id-21": "Item 21",
+     "id-10": "Item 10",
+     "id-15": "Item 15"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-39",
        "label": "Item 39"
@@ -242,8 +278,10 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [
+      "id-41"
+     ],
+     "changes": [
       {
        "id": "id-39",
        "label": "Item 39"
@@ -256,75 +294,17 @@
        "id": "id-32",
        "label": "Item 32"
       }
-     ],
-     "unknown": [
-      "id-41"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-10": "Item 10",
-     "id-15": "Item 15",
-     "id-21": "Item 21",
-     "id-29": "Item 29",
-     "id-3": "Item 3",
-     "id-32": "Item 32",
-     "id-39": "Item 39"
-    },
-    "current_ids": [
-     "id-32",
-     "id-39",
-     "id-3",
-     "id-21",
-     "id-0",
-     "id-29"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-39",
-     "id-3",
-     "id-32",
-     "id-32",
-     "id-32",
-     "id-15",
-     "id-41"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-3",
-       "label": "Item 3"
-      }
-     ],
-     "noops": [],
-     "op": "remove",
-     "remove": [
-      {
-       "id": "id-3",
-       "label": "Item 3"
-      }
-     ],
-     "unknown": []
-    }
-   },
    "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-2": "Item 2",
-     "id-20": "Item 20",
-     "id-23": "Item 23",
-     "id-3": "Item 3",
-     "id-31": "Item 31",
-     "id-38": "Item 38",
-     "id-6": "Item 6"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-3",
+     "id-3"
+    ],
     "current_ids": [
      "id-20",
      "id-2",
@@ -335,18 +315,61 @@
      "id-31",
      "id-6"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-3",
-     "id-3"
-    ]
+    "catalog": {
+     "id-20": "Item 20",
+     "id-3": "Item 3",
+     "id-2": "Item 2",
+     "id-23": "Item 23",
+     "id-0": "Item 0",
+     "id-31": "Item 31",
+     "id-38": "Item 38",
+     "id-6": "Item 6"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [
+      {
+       "id": "id-3",
+       "label": "Item 3"
+      }
+     ],
+     "noops": [],
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-3",
+       "label": "Item 3"
+      }
+     ]
+    }
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-21",
+     "id-24",
+     "id-41"
+    ],
+    "current_ids": [
+     "id-9"
+    ],
+    "catalog": {
+     "id-38": "Item 38",
+     "id-21": "Item 21",
+     "id-9": "Item 9",
+     "id-24": "Item 24"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-21",
@@ -359,34 +382,36 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
      "unknown": [
       "id-41"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-21": "Item 21",
-     "id-24": "Item 24",
-     "id-38": "Item 38",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-9"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-21",
-     "id-24",
-     "id-41"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-21",
+     "id-2",
+     "id-2",
+     "id-2",
+     "id-21"
+    ],
+    "current_ids": [
+     "id-3"
+    ],
+    "catalog": {
+     "id-14": "Item 14",
+     "id-21": "Item 21",
+     "id-3": "Item 3",
+     "id-2": "Item 2"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-21",
@@ -397,6 +422,9 @@
        "label": "Item 2"
       }
      ],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
      "changes": [
       {
        "id": "id-21",
@@ -406,38 +434,36 @@
        "id": "id-2",
        "label": "Item 2"
       }
-     ],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-14": "Item 14",
-     "id-2": "Item 2",
-     "id-21": "Item 21",
-     "id-3": "Item 3"
-    },
-    "current_ids": [
-     "id-3"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-21",
-     "id-2",
-     "id-2",
-     "id-2",
-     "id-21"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-23",
+     "id-35",
+     "id-35",
+     "id-23",
+     ""
+    ],
+    "current_ids": [
+     "id-23",
+     "id-4",
+     "id-35"
+    ],
+    "catalog": {
+     "id-4": "Item 4",
+     "id-23": "Item 23",
+     "id-35": "Item 35"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-23",
@@ -450,37 +476,36 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-23": "Item 23",
-     "id-35": "Item 35",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-23",
-     "id-4",
-     "id-35"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-23",
-     "id-35",
-     "id-35",
-     "id-23",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-21",
+     "id-48",
+     "id-40",
+     ""
+    ],
+    "current_ids": [
+     "id-21",
+     "id-34",
+     "id-12"
+    ],
+    "catalog": {
+     "id-34": "Item 34",
+     "id-12": "Item 12",
+     "id-21": "Item 21"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-21",
@@ -488,39 +513,45 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-48",
       "id-40"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-12": "Item 12",
-     "id-21": "Item 21",
-     "id-34": "Item 34"
-    },
-    "current_ids": [
-     "id-21",
-     "id-34",
-     "id-12"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-21",
-     "id-48",
-     "id-40",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-1",
+     "id-46",
+     "id-45"
+    ],
+    "current_ids": [
+     "id-15",
+     "id-13",
+     "id-4"
+    ],
+    "catalog": {
+     "id-25": "Item 25",
+     "id-29": "Item 29",
+     "id-1": "Item 1",
+     "id-15": "Item 15",
+     "id-19": "Item 19",
+     "id-22": "Item 22",
+     "id-13": "Item 13",
+     "id-23": "Item 23",
+     "id-4": "Item 4",
+     "id-21": "Item 21"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-1",
@@ -528,69 +559,16 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
      "unknown": [
       "id-46",
       "id-45"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-13": "Item 13",
-     "id-15": "Item 15",
-     "id-19": "Item 19",
-     "id-21": "Item 21",
-     "id-22": "Item 22",
-     "id-23": "Item 23",
-     "id-25": "Item 25",
-     "id-29": "Item 29",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-15",
-     "id-13",
-     "id-4"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-1",
-     "id-46",
-     "id-45"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [
-      {
-       "id": "id-33",
-       "label": "Item 33",
-       "reason": "already attached"
-      }
-     ],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-41",
-      "id-49"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-20": "Item 20",
-     "id-33": "Item 33"
-    },
-    "current_ids": [
-     "id-33",
-     "id-20"
-    ],
     "op": "add",
     "selected_ids": [
      "id-33",
@@ -599,12 +577,73 @@
      "id-33",
      "id-41",
      "id-49"
-    ]
+    ],
+    "current_ids": [
+     "id-33",
+     "id-20"
+    ],
+    "catalog": {
+     "id-33": "Item 33",
+     "id-20": "Item 20"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
+     "add": [],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-33",
+       "label": "Item 33",
+       "reason": "already attached"
+      }
+     ],
+     "unknown": [
+      "id-41",
+      "id-49"
+     ],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-26",
+     "id-21",
+     "id-4",
+     "id-23",
+     "id-29",
+     "id-23",
+     "id-46",
+     "id-48"
+    ],
+    "current_ids": [
+     "id-4",
+     "id-29",
+     "id-25",
+     "id-34",
+     "id-27",
+     "id-0",
+     "id-21"
+    ],
+    "catalog": {
+     "id-34": "Item 34",
+     "id-0": "Item 0",
+     "id-23": "Item 23",
+     "id-21": "Item 21",
+     "id-25": "Item 25",
+     "id-26": "Item 26",
+     "id-29": "Item 29",
+     "id-27": "Item 27",
+     "id-4": "Item 4"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-26",
@@ -615,16 +654,7 @@
        "label": "Item 23"
       }
      ],
-     "changes": [
-      {
-       "id": "id-26",
-       "label": "Item 26"
-      },
-      {
-       "id": "id-23",
-       "label": "Item 23"
-      }
-     ],
+     "remove": [],
      "noops": [
       {
        "id": "id-21",
@@ -642,53 +672,52 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-46",
       "id-48"
+     ],
+     "changes": [
+      {
+       "id": "id-26",
+       "label": "Item 26"
+      },
+      {
+       "id": "id-23",
+       "label": "Item 23"
+      }
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-21": "Item 21",
-     "id-23": "Item 23",
-     "id-25": "Item 25",
-     "id-26": "Item 26",
-     "id-27": "Item 27",
-     "id-29": "Item 29",
-     "id-34": "Item 34",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-4",
-     "id-29",
-     "id-25",
-     "id-34",
-     "id-27",
-     "id-0",
-     "id-21"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-26",
-     "id-21",
-     "id-4",
-     "id-23",
-     "id-29",
-     "id-23",
-     "id-46",
-     "id-48"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-23",
+     "id-25",
+     "id-16",
+     "id-16",
+     "id-47",
+     "id-42"
+    ],
+    "current_ids": [
+     "id-20"
+    ],
+    "catalog": {
+     "id-20": "Item 20",
+     "id-2": "Item 2",
+     "id-16": "Item 16",
+     "id-8": "Item 8",
+     "id-39": "Item 39",
+     "id-25": "Item 25",
+     "id-23": "Item 23"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-23",
@@ -706,43 +735,37 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
      "unknown": [
       "id-47",
       "id-42"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-16": "Item 16",
-     "id-2": "Item 2",
-     "id-20": "Item 20",
-     "id-23": "Item 23",
-     "id-25": "Item 25",
-     "id-39": "Item 39",
-     "id-8": "Item 8"
-    },
-    "current_ids": [
-     "id-20"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-23",
-     "id-25",
-     "id-16",
-     "id-16",
-     "id-47",
-     "id-42"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-34",
+     "id-3",
+     "id-34",
+     "id-44",
+     "id-43"
+    ],
+    "current_ids": [
+     "id-3"
+    ],
+    "catalog": {
+     "id-3": "Item 3",
+     "id-34": "Item 34"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-3",
        "label": "Item 3"
@@ -755,42 +778,50 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [
+      "id-44",
+      "id-43"
+     ],
+     "changes": [
       {
        "id": "id-3",
        "label": "Item 3"
       }
-     ],
-     "unknown": [
-      "id-44",
-      "id-43"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-3": "Item 3",
-     "id-34": "Item 34"
-    },
-    "current_ids": [
-     "id-3"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-34",
-     "id-3",
-     "id-34",
-     "id-44",
-     "id-43"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-21",
+     "id-4",
+     "id-25",
+     "id-22",
+     "id-25",
+     "id-50",
+     "id-46"
+    ],
+    "current_ids": [
+     "id-28",
+     "id-21",
+     "id-25",
+     "id-22"
+    ],
+    "catalog": {
+     "id-25": "Item 25",
+     "id-21": "Item 21",
+     "id-4": "Item 4",
+     "id-22": "Item 22",
+     "id-28": "Item 28"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-21",
        "label": "Item 21"
@@ -811,8 +842,11 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [
+      "id-50",
+      "id-46"
+     ],
+     "changes": [
       {
        "id": "id-21",
        "label": "Item 21"
@@ -825,78 +859,75 @@
        "id": "id-22",
        "label": "Item 22"
       }
-     ],
-     "unknown": [
-      "id-50",
-      "id-46"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-21": "Item 21",
-     "id-22": "Item 22",
-     "id-25": "Item 25",
-     "id-28": "Item 28",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-28",
-     "id-21",
-     "id-25",
-     "id-22"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-21",
-     "id-4",
-     "id-25",
-     "id-22",
-     "id-25",
-     "id-50",
-     "id-46"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-42"
-     ]
-    }
-   },
    "input": {
-    "catalog": {},
-    "current_ids": [],
     "op": "add",
     "selected_ids": [
      "id-42",
      "id-42",
      ""
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {}
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-42"
+     ],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-28",
+     "id-32",
+     "id-28",
+     "id-6"
+    ],
+    "current_ids": [
+     "id-12",
+     "id-32",
+     "id-25",
+     "id-6",
+     "id-10"
+    ],
+    "catalog": {
+     "id-12": "Item 12",
+     "id-1": "Item 1",
+     "id-6": "Item 6",
+     "id-21": "Item 21",
+     "id-22": "Item 22",
+     "id-18": "Item 18",
+     "id-32": "Item 32",
+     "id-28": "Item 28",
+     "id-10": "Item 10",
+     "id-25": "Item 25",
+     "id-7": "Item 7",
+     "id-39": "Item 39"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-28",
        "label": "Item 28"
       }
      ],
-     "changes": [
-      {
-       "id": "id-28",
-       "label": "Item 28"
-      }
-     ],
+     "remove": [],
      "noops": [
       {
        "id": "id-32",
@@ -909,57 +940,45 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-28",
+       "label": "Item 28"
+      }
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-10": "Item 10",
-     "id-12": "Item 12",
-     "id-18": "Item 18",
-     "id-21": "Item 21",
-     "id-22": "Item 22",
-     "id-25": "Item 25",
-     "id-28": "Item 28",
-     "id-32": "Item 32",
-     "id-39": "Item 39",
-     "id-6": "Item 6",
-     "id-7": "Item 7"
-    },
-    "current_ids": [
-     "id-12",
-     "id-32",
-     "id-25",
-     "id-6",
-     "id-10"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-28",
-     "id-32",
-     "id-28",
-     "id-6"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-39",
+     "id-39",
+     "id-13",
+     ""
+    ],
+    "current_ids": [
+     "id-27",
+     "id-39"
+    ],
+    "catalog": {
+     "id-13": "Item 13",
+     "id-27": "Item 27",
+     "id-39": "Item 39"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-13",
        "label": "Item 13"
       }
      ],
-     "changes": [
-      {
-       "id": "id-13",
-       "label": "Item 13"
-      }
-     ],
+     "remove": [],
      "noops": [
       {
        "id": "id-39",
@@ -967,50 +986,43 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-13",
+       "label": "Item 13"
+      }
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-13": "Item 13",
-     "id-27": "Item 27",
-     "id-39": "Item 39"
-    },
-    "current_ids": [
-     "id-27",
-     "id-39"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-39",
-     "id-39",
-     "id-13",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-2",
+     "id-15",
+     "id-28",
+     "id-2",
+     "id-40"
+    ],
+    "current_ids": [
+     "id-18",
+     "id-15",
+     "id-28",
+     "id-2"
+    ],
+    "catalog": {
+     "id-18": "Item 18",
+     "id-15": "Item 15",
+     "id-2": "Item 2",
+     "id-28": "Item 28"
+    }
+   },
    "expected": {
     "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-2",
-       "label": "Item 2"
-      },
-      {
-       "id": "id-15",
-       "label": "Item 15"
-      },
-      {
-       "id": "id-28",
-       "label": "Item 28"
-      }
-     ],
-     "noops": [],
      "op": "remove",
+     "add": [],
      "remove": [
       {
        "id": "id-2",
@@ -1025,94 +1037,104 @@
        "label": "Item 28"
       }
      ],
+     "noops": [],
      "unknown": [
       "id-40"
+     ],
+     "changes": [
+      {
+       "id": "id-2",
+       "label": "Item 2"
+      },
+      {
+       "id": "id-15",
+       "label": "Item 15"
+      },
+      {
+       "id": "id-28",
+       "label": "Item 28"
+      }
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-15": "Item 15",
-     "id-18": "Item 18",
-     "id-2": "Item 2",
-     "id-28": "Item 28"
-    },
-    "current_ids": [
-     "id-18",
-     "id-15",
-     "id-28",
-     "id-2"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-2",
-     "id-15",
-     "id-28",
-     "id-2",
-     "id-40"
-    ]
    }
   },
   {
-   "expected": {
-    "error": "ValueError",
-    "message": "op must be one of ('add', 'remove')"
-   },
    "input": {
-    "catalog": {
-     "id-26": "Item 26",
-     "id-27": "Item 27",
-     "id-3": "Item 3",
-     "id-33": "Item 33",
-     "id-34": "Item 34",
-     "id-38": "Item 38"
-    },
-    "current_ids": [
-     "id-38",
-     "id-26"
-    ],
     "op": "replace",
     "selected_ids": [
      "id-34",
      "id-27",
      "id-3",
      "id-43"
-    ]
-   }
-  },
-  {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
+    ],
+    "current_ids": [
+     "id-38",
+     "id-26"
+    ],
+    "catalog": {
+     "id-38": "Item 38",
+     "id-27": "Item 27",
+     "id-34": "Item 34",
+     "id-33": "Item 33",
+     "id-26": "Item 26",
+     "id-3": "Item 3"
     }
    },
-   "input": {
-    "catalog": {},
-    "current_ids": [],
-    "op": "remove",
-    "selected_ids": []
+   "expected": {
+    "error": "ValueError",
+    "message": "op must be one of ('add', 'remove')"
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [],
+    "current_ids": [],
+    "catalog": {}
+   },
    "expected": {
     "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
+     "changes": []
+    }
+   }
+  },
+  {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-0",
+     "id-1",
+     "id-0"
+    ],
+    "current_ids": [
+     "id-29",
+     "id-7",
+     "id-1"
+    ],
+    "catalog": {
+     "id-12": "Item 12",
+     "id-29": "Item 29",
+     "id-19": "Item 19",
+     "id-0": "Item 0",
+     "id-1": "Item 1",
+     "id-7": "Item 7"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-0",
        "label": "Item 0"
       }
      ],
-     "changes": [
-      {
-       "id": "id-0",
-       "label": "Item 0"
-      }
-     ],
+     "remove": [],
      "noops": [
       {
        "id": "id-1",
@@ -1120,38 +1142,43 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-0",
+       "label": "Item 0"
+      }
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-1": "Item 1",
-     "id-12": "Item 12",
-     "id-19": "Item 19",
-     "id-29": "Item 29",
-     "id-7": "Item 7"
-    },
-    "current_ids": [
-     "id-29",
-     "id-7",
-     "id-1"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-0",
-     "id-1",
-     "id-0"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-33",
+     "id-13",
+     "id-1",
+     "id-7",
+     "id-7"
+    ],
+    "current_ids": [
+     "id-31",
+     "id-13"
+    ],
+    "catalog": {
+     "id-33": "Item 33",
+     "id-7": "Item 7",
+     "id-13": "Item 13",
+     "id-1": "Item 1",
+     "id-31": "Item 31"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-13",
        "label": "Item 13"
@@ -1174,149 +1201,97 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [],
+     "changes": [
       {
        "id": "id-13",
        "label": "Item 13"
       }
-     ],
-     "unknown": []
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-13": "Item 13",
-     "id-31": "Item 31",
-     "id-33": "Item 33",
-     "id-7": "Item 7"
-    },
-    "current_ids": [
-     "id-31",
-     "id-13"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-33",
-     "id-13",
-     "id-1",
-     "id-7",
-     "id-7"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
-    }
-   },
    "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-1": "Item 1",
-     "id-10": "Item 10",
-     "id-11": "Item 11",
-     "id-17": "Item 17",
-     "id-22": "Item 22",
-     "id-32": "Item 32",
-     "id-35": "Item 35",
-     "id-5": "Item 5"
-    },
+    "op": "remove",
+    "selected_ids": [],
     "current_ids": [
      "id-35",
      "id-22",
      "id-1",
      "id-10"
     ],
-    "op": "remove",
-    "selected_ids": []
+    "catalog": {
+     "id-1": "Item 1",
+     "id-11": "Item 11",
+     "id-10": "Item 10",
+     "id-5": "Item 5",
+     "id-0": "Item 0",
+     "id-32": "Item 32",
+     "id-17": "Item 17",
+     "id-22": "Item 22",
+     "id-35": "Item 35"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-33",
-       "label": "Item 33"
-      }
-     ],
-     "noops": [],
-     "op": "remove",
-     "remove": [
-      {
-       "id": "id-33",
-       "label": "Item 33"
-      }
-     ],
-     "unknown": [
-      "id-45",
-      "id-41"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-21": "Item 21",
-     "id-33": "Item 33"
-    },
-    "current_ids": [
-     "id-33"
-    ],
     "op": "remove",
     "selected_ids": [
      "id-33",
      "id-45",
      "id-41"
-    ]
-   }
-  },
-  {
+    ],
+    "current_ids": [
+     "id-33"
+    ],
+    "catalog": {
+     "id-33": "Item 33",
+     "id-21": "Item 21"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
-       "id": "id-29",
-       "label": "Item 29"
+       "id": "id-33",
+       "label": "Item 33"
       }
      ],
      "noops": [],
-     "op": "remove",
-     "remove": [
-      {
-       "id": "id-29",
-       "label": "Item 29"
-      }
-     ],
      "unknown": [
-      "id-50",
-      "id-43"
+      "id-45",
+      "id-41"
+     ],
+     "changes": [
+      {
+       "id": "id-33",
+       "label": "Item 33"
+      }
      ]
     }
-   },
+   }
+  },
+  {
    "input": {
-    "catalog": {
-     "id-14": "Item 14",
-     "id-20": "Item 20",
-     "id-22": "Item 22",
-     "id-25": "Item 25",
-     "id-28": "Item 28",
-     "id-29": "Item 29",
-     "id-35": "Item 35",
-     "id-39": "Item 39",
-     "id-4": "Item 4",
-     "id-5": "Item 5",
-     "id-7": "Item 7"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-29",
+     "id-50",
+     "id-43"
+    ],
     "current_ids": [
      "id-39",
      "id-28",
@@ -1329,17 +1304,71 @@
      "id-4",
      "id-25"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-29",
-     "id-50",
-     "id-43"
-    ]
+    "catalog": {
+     "id-39": "Item 39",
+     "id-28": "Item 28",
+     "id-5": "Item 5",
+     "id-4": "Item 4",
+     "id-25": "Item 25",
+     "id-20": "Item 20",
+     "id-14": "Item 14",
+     "id-7": "Item 7",
+     "id-22": "Item 22",
+     "id-35": "Item 35",
+     "id-29": "Item 29"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [
+      {
+       "id": "id-29",
+       "label": "Item 29"
+      }
+     ],
+     "noops": [],
+     "unknown": [
+      "id-50",
+      "id-43"
+     ],
+     "changes": [
+      {
+       "id": "id-29",
+       "label": "Item 29"
+      }
+     ]
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-37",
+     "id-27",
+     "id-27",
+     "id-11",
+     "id-27",
+     "id-2",
+     "id-41",
+     "id-43"
+    ],
+    "current_ids": [
+     "id-11"
+    ],
+    "catalog": {
+     "id-2": "Item 2",
+     "id-37": "Item 37",
+     "id-11": "Item 11",
+     "id-8": "Item 8",
+     "id-27": "Item 27"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-37",
@@ -1354,6 +1383,18 @@
        "label": "Item 2"
       }
      ],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-11",
+       "label": "Item 11",
+       "reason": "already attached"
+      }
+     ],
+     "unknown": [
+      "id-41",
+      "id-43"
+     ],
      "changes": [
       {
        "id": "id-37",
@@ -1367,87 +1408,12 @@
        "id": "id-2",
        "label": "Item 2"
       }
-     ],
-     "noops": [
-      {
-       "id": "id-11",
-       "label": "Item 11",
-       "reason": "already attached"
-      }
-     ],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-41",
-      "id-43"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-11": "Item 11",
-     "id-2": "Item 2",
-     "id-27": "Item 27",
-     "id-37": "Item 37",
-     "id-8": "Item 8"
-    },
-    "current_ids": [
-     "id-11"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-37",
-     "id-27",
-     "id-27",
-     "id-11",
-     "id-27",
-     "id-2",
-     "id-41",
-     "id-43"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-1",
-       "label": "Item 1"
-      },
-      {
-       "id": "id-39",
-       "label": "Item 39"
-      }
-     ],
-     "noops": [],
-     "op": "remove",
-     "remove": [
-      {
-       "id": "id-1",
-       "label": "Item 1"
-      },
-      {
-       "id": "id-39",
-       "label": "Item 39"
-      }
-     ],
-     "unknown": [
-      "id-45",
-      "id-49"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-39": "Item 39"
-    },
-    "current_ids": [
-     "id-39",
-     "id-1"
-    ],
     "op": "remove",
     "selected_ids": [
      "id-1",
@@ -1458,43 +1424,104 @@
      "id-39",
      "id-45",
      "id-49"
-    ]
-   }
-  },
-  {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
+    ],
+    "current_ids": [
+     "id-39",
+     "id-1"
+    ],
+    "catalog": {
+     "id-1": "Item 1",
+     "id-39": "Item 39"
     }
    },
-   "input": {
-    "catalog": {
-     "id-10": "Item 10",
-     "id-13": "Item 13",
-     "id-16": "Item 16",
-     "id-22": "Item 22",
-     "id-23": "Item 23",
-     "id-27": "Item 27",
-     "id-30": "Item 30",
-     "id-34": "Item 34",
-     "id-35": "Item 35",
-     "id-38": "Item 38"
-    },
-    "current_ids": [],
-    "op": "remove",
-    "selected_ids": []
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [
+      {
+       "id": "id-1",
+       "label": "Item 1"
+      },
+      {
+       "id": "id-39",
+       "label": "Item 39"
+      }
+     ],
+     "noops": [],
+     "unknown": [
+      "id-45",
+      "id-49"
+     ],
+     "changes": [
+      {
+       "id": "id-1",
+       "label": "Item 1"
+      },
+      {
+       "id": "id-39",
+       "label": "Item 39"
+      }
+     ]
+    }
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [],
+    "current_ids": [],
+    "catalog": {
+     "id-22": "Item 22",
+     "id-38": "Item 38",
+     "id-35": "Item 35",
+     "id-27": "Item 27",
+     "id-13": "Item 13",
+     "id-23": "Item 23",
+     "id-16": "Item 16",
+     "id-34": "Item 34",
+     "id-30": "Item 30",
+     "id-10": "Item 10"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
+     "changes": []
+    }
+   }
+  },
+  {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-17",
+     "id-40"
+    ],
+    "current_ids": [
+     "id-24",
+     "id-20"
+    ],
+    "catalog": {
+     "id-24": "Item 24",
+     "id-31": "Item 31",
+     "id-34": "Item 34",
+     "id-20": "Item 20",
+     "id-8": "Item 8",
+     "id-17": "Item 17",
+     "id-7": "Item 7",
+     "id-16": "Item 16"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-17",
@@ -1502,40 +1529,40 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
      "unknown": [
       "id-40"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-16": "Item 16",
-     "id-17": "Item 17",
-     "id-20": "Item 20",
-     "id-24": "Item 24",
-     "id-31": "Item 31",
-     "id-34": "Item 34",
-     "id-7": "Item 7",
-     "id-8": "Item 8"
-    },
-    "current_ids": [
-     "id-24",
-     "id-20"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-17",
-     "id-40"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-18",
+     "id-18",
+     "id-21",
+     "id-18",
+     "id-18",
+     "id-49"
+    ],
+    "current_ids": [
+     "id-18",
+     "id-21"
+    ],
+    "catalog": {
+     "id-10": "Item 10",
+     "id-4": "Item 4",
+     "id-18": "Item 18",
+     "id-21": "Item 21"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-18",
@@ -1548,40 +1575,38 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-49"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-10": "Item 10",
-     "id-18": "Item 18",
-     "id-21": "Item 21",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-18",
-     "id-21"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-18",
-     "id-18",
-     "id-21",
-     "id-18",
-     "id-18",
-     "id-49"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-32",
+     "id-13",
+     "id-32",
+     "id-44",
+     "id-44"
+    ],
+    "current_ids": [
+     "id-32",
+     "id-13"
+    ],
+    "catalog": {
+     "id-13": "Item 13",
+     "id-36": "Item 36",
+     "id-32": "Item 32"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-32",
@@ -1594,55 +1619,15 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-44"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-13": "Item 13",
-     "id-32": "Item 32",
-     "id-36": "Item 36"
-    },
-    "current_ids": [
-     "id-32",
-     "id-13"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-32",
-     "id-13",
-     "id-32",
-     "id-44",
-     "id-44"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [
-      {
-       "id": "id-9",
-       "label": "Item 9",
-       "reason": "not attached"
-      }
-     ],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
-    }
-   },
    "input": {
-    "catalog": {
-     "id-9": "Item 9"
-    },
-    "current_ids": [],
     "op": "remove",
     "selected_ids": [
      "id-9",
@@ -1651,55 +1636,55 @@
      "id-9",
      "id-9",
      ""
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-9": "Item 9"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-9",
+       "label": "Item 9",
+       "reason": "not attached"
+      }
+     ],
+     "unknown": [],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": [
-      "id-49",
-      "id-44"
-     ]
-    }
-   },
    "input": {
-    "catalog": {},
-    "current_ids": [],
     "op": "remove",
     "selected_ids": [
      "id-49",
      "id-44"
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {}
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-49",
+      "id-44"
+     ],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [
-      {
-       "id": "id-11",
-       "label": "Item 11",
-       "reason": "not attached"
-      }
-     ],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
-    }
-   },
    "input": {
-    "catalog": {
-     "id-11": "Item 11"
-    },
-    "current_ids": [],
     "op": "remove",
     "selected_ids": [
      "id-11",
@@ -1707,14 +1692,62 @@
      "id-11",
      "id-11",
      "id-11"
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-11": "Item 11"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-11",
+       "label": "Item 11",
+       "reason": "not attached"
+      }
+     ],
+     "unknown": [],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-4",
+     "id-25",
+     "id-25",
+     "id-49"
+    ],
+    "current_ids": [
+     "id-34",
+     "id-4",
+     "id-22",
+     "id-24",
+     "id-25",
+     "id-14"
+    ],
+    "catalog": {
+     "id-22": "Item 22",
+     "id-34": "Item 34",
+     "id-14": "Item 14",
+     "id-4": "Item 4",
+     "id-24": "Item 24",
+     "id-37": "Item 37",
+     "id-25": "Item 25",
+     "id-17": "Item 17"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-4",
@@ -1727,115 +1760,61 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-49"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-14": "Item 14",
-     "id-17": "Item 17",
-     "id-22": "Item 22",
-     "id-24": "Item 24",
-     "id-25": "Item 25",
-     "id-34": "Item 34",
-     "id-37": "Item 37",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-34",
-     "id-4",
-     "id-22",
-     "id-24",
-     "id-25",
-     "id-14"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-4",
-     "id-25",
-     "id-25",
-     "id-49"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [
-      {
-       "id": "id-7",
-       "label": "Item 7"
-      }
-     ],
-     "changes": [
-      {
-       "id": "id-7",
-       "label": "Item 7"
-      }
-     ],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-48"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-18": "Item 18",
-     "id-22": "Item 22",
-     "id-29": "Item 29",
-     "id-3": "Item 3",
-     "id-31": "Item 31",
-     "id-32": "Item 32",
-     "id-33": "Item 33",
-     "id-7": "Item 7",
-     "id-8": "Item 8",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-9"
-    ],
     "op": "add",
     "selected_ids": [
      "id-7",
      "id-48"
-    ]
-   }
-  },
-  {
+    ],
+    "current_ids": [
+     "id-9"
+    ],
+    "catalog": {
+     "id-8": "Item 8",
+     "id-7": "Item 7",
+     "id-33": "Item 33",
+     "id-31": "Item 31",
+     "id-3": "Item 3",
+     "id-22": "Item 22",
+     "id-32": "Item 32",
+     "id-29": "Item 29",
+     "id-18": "Item 18",
+     "id-9": "Item 9"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
-       "id": "id-14",
-       "label": "Item 14"
+       "id": "id-7",
+       "label": "Item 7"
       }
+     ],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-48"
      ],
      "changes": [
       {
-       "id": "id-14",
-       "label": "Item 14"
+       "id": "id-7",
+       "label": "Item 7"
       }
-     ],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-45"
      ]
     }
-   },
+   }
+  },
+  {
    "input": {
-    "catalog": {
-     "id-14": "Item 14"
-    },
-    "current_ids": [],
     "op": "add",
     "selected_ids": [
      "id-14",
@@ -1844,35 +1823,41 @@
      "id-14",
      "id-14",
      "id-45"
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-14": "Item 14"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
+     "add": [
+      {
+       "id": "id-14",
+       "label": "Item 14"
+      }
+     ],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-45"
+     ],
+     "changes": [
+      {
+       "id": "id-14",
+       "label": "Item 14"
+      }
+     ]
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": []
-    }
-   },
    "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-15": "Item 15",
-     "id-18": "Item 18",
-     "id-22": "Item 22",
-     "id-23": "Item 23",
-     "id-26": "Item 26",
-     "id-28": "Item 28",
-     "id-3": "Item 3",
-     "id-31": "Item 31",
-     "id-35": "Item 35",
-     "id-5": "Item 5",
-     "id-9": "Item 9"
-    },
+    "op": "add",
+    "selected_ids": [
+     ""
+    ],
     "current_ids": [
      "id-18",
      "id-28",
@@ -1881,34 +1866,68 @@
      "id-9",
      "id-0"
     ],
-    "op": "add",
-    "selected_ids": [
-     ""
-    ]
+    "catalog": {
+     "id-23": "Item 23",
+     "id-35": "Item 35",
+     "id-5": "Item 5",
+     "id-22": "Item 22",
+     "id-26": "Item 26",
+     "id-15": "Item 15",
+     "id-3": "Item 3",
+     "id-0": "Item 0",
+     "id-9": "Item 9",
+     "id-28": "Item 28",
+     "id-31": "Item 31",
+     "id-18": "Item 18"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-8",
+     "id-1",
+     "id-5",
+     "id-1",
+     "id-5",
+     "id-40",
+     "id-49"
+    ],
+    "current_ids": [
+     "id-5",
+     "id-24",
+     "id-8",
+     "id-35",
+     "id-36",
+     "id-12"
+    ],
+    "catalog": {
+     "id-8": "Item 8",
+     "id-12": "Item 12",
+     "id-1": "Item 1",
+     "id-5": "Item 5",
+     "id-0": "Item 0",
+     "id-24": "Item 24",
+     "id-35": "Item 35",
+     "id-9": "Item 9",
+     "id-36": "Item 36"
+    }
+   },
    "expected": {
     "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-8",
-       "label": "Item 8"
-      },
-      {
-       "id": "id-5",
-       "label": "Item 5"
-      }
-     ],
-     "noops": [
-      {
-       "id": "id-1",
-       "label": "Item 1",
-       "reason": "not attached"
-      }
-     ],
      "op": "remove",
+     "add": [],
      "remove": [
       {
        "id": "id-8",
@@ -1919,47 +1938,61 @@
        "label": "Item 5"
       }
      ],
+     "noops": [
+      {
+       "id": "id-1",
+       "label": "Item 1",
+       "reason": "not attached"
+      }
+     ],
      "unknown": [
       "id-40",
       "id-49"
+     ],
+     "changes": [
+      {
+       "id": "id-8",
+       "label": "Item 8"
+      },
+      {
+       "id": "id-5",
+       "label": "Item 5"
+      }
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-1": "Item 1",
-     "id-12": "Item 12",
-     "id-24": "Item 24",
-     "id-35": "Item 35",
-     "id-36": "Item 36",
-     "id-5": "Item 5",
-     "id-8": "Item 8",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-5",
-     "id-24",
-     "id-8",
-     "id-35",
-     "id-36",
-     "id-12"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-8",
-     "id-1",
-     "id-5",
-     "id-1",
-     "id-5",
-     "id-40",
-     "id-49"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-33",
+     "id-25",
+     "id-5",
+     ""
+    ],
+    "current_ids": [
+     "id-22",
+     "id-25"
+    ],
+    "catalog": {
+     "id-34": "Item 34",
+     "id-35": "Item 35",
+     "id-36": "Item 36",
+     "id-25": "Item 25",
+     "id-33": "Item 33",
+     "id-28": "Item 28",
+     "id-38": "Item 38",
+     "id-18": "Item 18",
+     "id-3": "Item 3",
+     "id-22": "Item 22",
+     "id-21": "Item 21",
+     "id-5": "Item 5"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-33",
@@ -1970,6 +2003,15 @@
        "label": "Item 5"
       }
      ],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-25",
+       "label": "Item 25",
+       "reason": "already attached"
+      }
+     ],
+     "unknown": [],
      "changes": [
       {
        "id": "id-33",
@@ -1979,52 +2021,43 @@
        "id": "id-5",
        "label": "Item 5"
       }
-     ],
-     "noops": [
-      {
-       "id": "id-25",
-       "label": "Item 25",
-       "reason": "already attached"
-      }
-     ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-18": "Item 18",
-     "id-21": "Item 21",
-     "id-22": "Item 22",
-     "id-25": "Item 25",
-     "id-28": "Item 28",
-     "id-3": "Item 3",
-     "id-33": "Item 33",
-     "id-34": "Item 34",
-     "id-35": "Item 35",
-     "id-36": "Item 36",
-     "id-38": "Item 38",
-     "id-5": "Item 5"
-    },
-    "current_ids": [
-     "id-22",
-     "id-25"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-33",
-     "id-25",
-     "id-5",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-1",
+     "id-4"
+    ],
+    "current_ids": [
+     "id-31",
+     "id-25",
+     "id-22",
+     "id-28",
+     "id-9"
+    ],
+    "catalog": {
+     "id-22": "Item 22",
+     "id-25": "Item 25",
+     "id-1": "Item 1",
+     "id-36": "Item 36",
+     "id-37": "Item 37",
+     "id-4": "Item 4",
+     "id-15": "Item 15",
+     "id-31": "Item 31",
+     "id-9": "Item 9",
+     "id-28": "Item 28",
+     "id-30": "Item 30"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-1",
@@ -2037,63 +2070,18 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-15": "Item 15",
-     "id-22": "Item 22",
-     "id-25": "Item 25",
-     "id-28": "Item 28",
-     "id-30": "Item 30",
-     "id-31": "Item 31",
-     "id-36": "Item 36",
-     "id-37": "Item 37",
-     "id-4": "Item 4",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-31",
-     "id-25",
-     "id-22",
-     "id-28",
-     "id-9"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-1",
-     "id-4"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": [
-      "id-41"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-10": "Item 10",
-     "id-18": "Item 18",
-     "id-27": "Item 27",
-     "id-37": "Item 37",
-     "id-4": "Item 4",
-     "id-5": "Item 5",
-     "id-6": "Item 6",
-     "id-9": "Item 9"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-41",
+     ""
+    ],
     "current_ids": [
      "id-10",
      "id-6",
@@ -2102,18 +2090,64 @@
      "id-18",
      "id-37"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-41",
-     ""
-    ]
+    "catalog": {
+     "id-27": "Item 27",
+     "id-10": "Item 10",
+     "id-5": "Item 5",
+     "id-9": "Item 9",
+     "id-18": "Item 18",
+     "id-6": "Item 6",
+     "id-4": "Item 4",
+     "id-37": "Item 37"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-41"
+     ],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-19",
+     "id-16",
+     "id-23",
+     "id-4",
+     ""
+    ],
+    "current_ids": [
+     "id-15",
+     "id-23",
+     "id-19",
+     "id-16",
+     "id-4",
+     "id-29",
+     "id-1"
+    ],
+    "catalog": {
+     "id-1": "Item 1",
+     "id-29": "Item 29",
+     "id-4": "Item 4",
+     "id-15": "Item 15",
+     "id-19": "Item 19",
+     "id-16": "Item 16",
+     "id-23": "Item 23"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-19",
@@ -2136,45 +2170,47 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-15": "Item 15",
-     "id-16": "Item 16",
-     "id-19": "Item 19",
-     "id-23": "Item 23",
-     "id-29": "Item 29",
-     "id-4": "Item 4"
-    },
-    "current_ids": [
-     "id-15",
-     "id-23",
-     "id-19",
-     "id-16",
-     "id-4",
-     "id-29",
-     "id-1"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-19",
-     "id-16",
-     "id-23",
-     "id-4",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-20",
+     "id-31",
+     "id-40"
+    ],
+    "current_ids": [
+     "id-18",
+     "id-33",
+     "id-26",
+     "id-31",
+     "id-39",
+     "id-10"
+    ],
+    "catalog": {
+     "id-24": "Item 24",
+     "id-35": "Item 35",
+     "id-3": "Item 3",
+     "id-33": "Item 33",
+     "id-18": "Item 18",
+     "id-37": "Item 37",
+     "id-31": "Item 31",
+     "id-26": "Item 26",
+     "id-22": "Item 22",
+     "id-39": "Item 39",
+     "id-20": "Item 20",
+     "id-10": "Item 10"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-31",
        "label": "Item 31"
@@ -2187,54 +2223,40 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [
+      "id-40"
+     ],
+     "changes": [
       {
        "id": "id-31",
        "label": "Item 31"
       }
-     ],
-     "unknown": [
-      "id-40"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-10": "Item 10",
-     "id-18": "Item 18",
-     "id-20": "Item 20",
-     "id-22": "Item 22",
-     "id-24": "Item 24",
-     "id-26": "Item 26",
-     "id-3": "Item 3",
-     "id-31": "Item 31",
-     "id-33": "Item 33",
-     "id-35": "Item 35",
-     "id-37": "Item 37",
-     "id-39": "Item 39"
-    },
-    "current_ids": [
-     "id-18",
-     "id-33",
-     "id-26",
-     "id-31",
-     "id-39",
-     "id-10"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-20",
-     "id-31",
-     "id-40"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-0",
+     "id-4"
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-0": "Item 0",
+     "id-4": "Item 4",
+     "id-22": "Item 22",
+     "id-13": "Item 13",
+     "id-6": "Item 6",
+     "id-32": "Item 32"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-0",
@@ -2247,82 +2269,89 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-13": "Item 13",
-     "id-22": "Item 22",
-     "id-32": "Item 32",
-     "id-4": "Item 4",
-     "id-6": "Item 6"
-    },
-    "current_ids": [],
-    "op": "remove",
-    "selected_ids": [
-     "id-0",
-     "id-4"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-9",
-       "label": "Item 9"
-      }
-     ],
-     "noops": [],
-     "op": "remove",
-     "remove": [
-      {
-       "id": "id-9",
-       "label": "Item 9"
-      }
-     ],
-     "unknown": [
-      "id-45"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-9"
-    ],
     "op": "remove",
     "selected_ids": [
      "id-9",
      "id-9",
      "id-9",
      "id-45"
-    ]
+    ],
+    "current_ids": [
+     "id-9"
+    ],
+    "catalog": {
+     "id-9": "Item 9"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [
+      {
+       "id": "id-9",
+       "label": "Item 9"
+      }
+     ],
+     "noops": [],
+     "unknown": [
+      "id-45"
+     ],
+     "changes": [
+      {
+       "id": "id-9",
+       "label": "Item 9"
+      }
+     ]
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-37",
+     "id-7",
+     "id-30"
+    ],
+    "current_ids": [
+     "id-17",
+     "id-7",
+     "id-35",
+     "id-8",
+     "id-37"
+    ],
+    "catalog": {
+     "id-17": "Item 17",
+     "id-37": "Item 37",
+     "id-36": "Item 36",
+     "id-12": "Item 12",
+     "id-35": "Item 35",
+     "id-24": "Item 24",
+     "id-13": "Item 13",
+     "id-8": "Item 8",
+     "id-7": "Item 7",
+     "id-15": "Item 15",
+     "id-30": "Item 30"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-30",
        "label": "Item 30"
       }
      ],
-     "changes": [
-      {
-       "id": "id-30",
-       "label": "Item 30"
-      }
-     ],
+     "remove": [],
      "noops": [
       {
        "id": "id-37",
@@ -2335,43 +2364,48 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
-     "unknown": []
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-30",
+       "label": "Item 30"
+      }
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-12": "Item 12",
-     "id-13": "Item 13",
-     "id-15": "Item 15",
-     "id-17": "Item 17",
-     "id-24": "Item 24",
-     "id-30": "Item 30",
-     "id-35": "Item 35",
-     "id-36": "Item 36",
-     "id-37": "Item 37",
-     "id-7": "Item 7",
-     "id-8": "Item 8"
-    },
-    "current_ids": [
-     "id-17",
-     "id-7",
-     "id-35",
-     "id-8",
-     "id-37"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-37",
-     "id-7",
-     "id-30"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-34",
+     "id-4",
+     "id-8",
+     "id-34",
+     "id-4",
+     "id-34",
+     "id-42"
+    ],
+    "current_ids": [
+     "id-27",
+     "id-21",
+     "id-34",
+     "id-3"
+    ],
+    "catalog": {
+     "id-8": "Item 8",
+     "id-27": "Item 27",
+     "id-6": "Item 6",
+     "id-4": "Item 4",
+     "id-34": "Item 34",
+     "id-30": "Item 30",
+     "id-3": "Item 3",
+     "id-21": "Item 21"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-4",
@@ -2382,6 +2416,17 @@
        "label": "Item 8"
       }
      ],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-34",
+       "label": "Item 34",
+       "reason": "already attached"
+      }
+     ],
+     "unknown": [
+      "id-42"
+     ],
      "changes": [
       {
        "id": "id-4",
@@ -2391,55 +2436,47 @@
        "id": "id-8",
        "label": "Item 8"
       }
-     ],
-     "noops": [
-      {
-       "id": "id-34",
-       "label": "Item 34",
-       "reason": "already attached"
-      }
-     ],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-42"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-21": "Item 21",
-     "id-27": "Item 27",
-     "id-3": "Item 3",
-     "id-30": "Item 30",
-     "id-34": "Item 34",
-     "id-4": "Item 4",
-     "id-6": "Item 6",
-     "id-8": "Item 8"
-    },
-    "current_ids": [
-     "id-27",
-     "id-21",
-     "id-34",
-     "id-3"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-34",
-     "id-4",
-     "id-8",
-     "id-34",
-     "id-4",
-     "id-34",
-     "id-42"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-5",
+     "id-35",
+     "id-36",
+     "id-20",
+     "id-5",
+     "id-39",
+     "id-48",
+     "id-46"
+    ],
+    "current_ids": [
+     "id-35",
+     "id-39",
+     "id-20",
+     "id-5",
+     "id-36",
+     "id-1",
+     "id-13"
+    ],
+    "catalog": {
+     "id-20": "Item 20",
+     "id-39": "Item 39",
+     "id-13": "Item 13",
+     "id-35": "Item 35",
+     "id-36": "Item 36",
+     "id-1": "Item 1",
+     "id-5": "Item 5"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-5",
@@ -2467,49 +2504,44 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-48",
       "id-46"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-13": "Item 13",
-     "id-20": "Item 20",
-     "id-35": "Item 35",
-     "id-36": "Item 36",
-     "id-39": "Item 39",
-     "id-5": "Item 5"
-    },
-    "current_ids": [
-     "id-35",
-     "id-39",
-     "id-20",
-     "id-5",
-     "id-36",
-     "id-1",
-     "id-13"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-5",
-     "id-35",
-     "id-36",
-     "id-20",
-     "id-5",
-     "id-39",
-     "id-48",
-     "id-46"
-    ]
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-8",
+     "id-9",
+     "id-26",
+     "id-22",
+     "id-49",
+     ""
+    ],
+    "current_ids": [
+     "id-9",
+     "id-33"
+    ],
+    "catalog": {
+     "id-26": "Item 26",
+     "id-32": "Item 32",
+     "id-33": "Item 33",
+     "id-9": "Item 9",
+     "id-22": "Item 22",
+     "id-8": "Item 8",
+     "id-34": "Item 34",
+     "id-11": "Item 11",
+     "id-7": "Item 7"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [
       {
        "id": "id-8",
@@ -2524,6 +2556,17 @@
        "label": "Item 22"
       }
      ],
+     "remove": [],
+     "noops": [
+      {
+       "id": "id-9",
+       "label": "Item 9",
+       "reason": "already attached"
+      }
+     ],
+     "unknown": [
+      "id-49"
+     ],
      "changes": [
       {
        "id": "id-8",
@@ -2537,93 +2580,84 @@
        "id": "id-22",
        "label": "Item 22"
       }
-     ],
-     "noops": [
-      {
-       "id": "id-9",
-       "label": "Item 9",
-       "reason": "already attached"
-      }
-     ],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-49"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-11": "Item 11",
-     "id-22": "Item 22",
-     "id-26": "Item 26",
-     "id-32": "Item 32",
-     "id-33": "Item 33",
-     "id-34": "Item 34",
-     "id-7": "Item 7",
-     "id-8": "Item 8",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-9",
-     "id-33"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-8",
-     "id-9",
-     "id-26",
-     "id-22",
-     "id-49",
-     ""
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-5"
+    ],
+    "current_ids": [
+     "id-5",
+     "id-18",
+     "id-29"
+    ],
+    "catalog": {
+     "id-18": "Item 18",
+     "id-29": "Item 29",
+     "id-5": "Item 5",
+     "id-19": "Item 19",
+     "id-28": "Item 28"
+    }
+   },
    "expected": {
     "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-5",
-       "label": "Item 5"
-      }
-     ],
-     "noops": [],
      "op": "remove",
+     "add": [],
      "remove": [
       {
        "id": "id-5",
        "label": "Item 5"
       }
      ],
-     "unknown": []
+     "noops": [],
+     "unknown": [],
+     "changes": [
+      {
+       "id": "id-5",
+       "label": "Item 5"
+      }
+     ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-18": "Item 18",
-     "id-19": "Item 19",
-     "id-28": "Item 28",
-     "id-29": "Item 29",
-     "id-5": "Item 5"
-    },
-    "current_ids": [
-     "id-5",
-     "id-18",
-     "id-29"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-5"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-35",
+     "id-16",
+     "id-18",
+     "id-20",
+     "id-2",
+     "id-35",
+     "id-46"
+    ],
+    "current_ids": [
+     "id-35",
+     "id-2",
+     "id-36"
+    ],
+    "catalog": {
+     "id-17": "Item 17",
+     "id-29": "Item 29",
+     "id-35": "Item 35",
+     "id-24": "Item 24",
+     "id-2": "Item 2",
+     "id-16": "Item 16",
+     "id-18": "Item 18",
+     "id-36": "Item 36",
+     "id-20": "Item 20"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "remove",
      "add": [],
-     "changes": [
+     "remove": [
       {
        "id": "id-35",
        "label": "Item 35"
@@ -2650,8 +2684,10 @@
        "reason": "not attached"
       }
      ],
-     "op": "remove",
-     "remove": [
+     "unknown": [
+      "id-46"
+     ],
+     "changes": [
       {
        "id": "id-35",
        "label": "Item 35"
@@ -2660,164 +2696,153 @@
        "id": "id-2",
        "label": "Item 2"
       }
-     ],
-     "unknown": [
-      "id-46"
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-16": "Item 16",
-     "id-17": "Item 17",
-     "id-18": "Item 18",
-     "id-2": "Item 2",
-     "id-20": "Item 20",
-     "id-24": "Item 24",
-     "id-29": "Item 29",
-     "id-35": "Item 35",
-     "id-36": "Item 36"
-    },
-    "current_ids": [
-     "id-35",
-     "id-2",
-     "id-36"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-35",
-     "id-16",
-     "id-18",
-     "id-20",
-     "id-2",
-     "id-35",
-     "id-46"
-    ]
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": [
-      "id-50"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-1": "Item 1",
-     "id-11": "Item 11",
-     "id-17": "Item 17",
-     "id-19": "Item 19",
-     "id-20": "Item 20",
-     "id-21": "Item 21",
-     "id-26": "Item 26",
-     "id-33": "Item 33"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-50"
+    ],
     "current_ids": [
      "id-26",
      "id-19",
      "id-1"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-50"
-    ]
+    "catalog": {
+     "id-17": "Item 17",
+     "id-33": "Item 33",
+     "id-21": "Item 21",
+     "id-20": "Item 20",
+     "id-1": "Item 1",
+     "id-11": "Item 11",
+     "id-26": "Item 26",
+     "id-19": "Item 19"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-50"
+     ],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": []
-    }
-   },
    "input": {
+    "op": "remove",
+    "selected_ids": [],
+    "current_ids": [],
     "catalog": {
      "id-11": "Item 11"
-    },
-    "current_ids": [],
-    "op": "remove",
-    "selected_ids": []
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "remove",
-     "remove": [],
-     "unknown": [
-      "id-47"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-12": "Item 12",
-     "id-13": "Item 13",
-     "id-14": "Item 14",
-     "id-21": "Item 21",
-     "id-24": "Item 24",
-     "id-30": "Item 30",
-     "id-33": "Item 33",
-     "id-38": "Item 38",
-     "id-39": "Item 39",
-     "id-4": "Item 4"
-    },
+    "op": "remove",
+    "selected_ids": [
+     "id-47",
+     ""
+    ],
     "current_ids": [
      "id-13",
      "id-24",
      "id-14",
      "id-30"
     ],
-    "op": "remove",
-    "selected_ids": [
-     "id-47",
-     ""
-    ]
+    "catalog": {
+     "id-33": "Item 33",
+     "id-14": "Item 14",
+     "id-4": "Item 4",
+     "id-24": "Item 24",
+     "id-12": "Item 12",
+     "id-21": "Item 21",
+     "id-13": "Item 13",
+     "id-38": "Item 38",
+     "id-39": "Item 39",
+     "id-30": "Item 30"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "remove",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-47"
+     ],
+     "changes": []
+    }
    }
   },
   {
-   "expected": {
-    "ok": {
-     "add": [],
-     "changes": [],
-     "noops": [],
-     "op": "add",
-     "remove": [],
-     "unknown": [
-      "id-45"
-     ]
-    }
-   },
    "input": {
-    "catalog": {
-     "id-28": "Item 28"
-    },
-    "current_ids": [],
     "op": "add",
     "selected_ids": [
      "id-45"
-    ]
+    ],
+    "current_ids": [],
+    "catalog": {
+     "id-28": "Item 28"
+    }
+   },
+   "expected": {
+    "ok": {
+     "op": "add",
+     "add": [],
+     "remove": [],
+     "noops": [],
+     "unknown": [
+      "id-45"
+     ],
+     "changes": []
+    }
    }
   },
   {
+   "input": {
+    "op": "add",
+    "selected_ids": [
+     "id-9",
+     "id-28",
+     "id-48",
+     "id-42"
+    ],
+    "current_ids": [
+     "id-28",
+     "id-18",
+     "id-9"
+    ],
+    "catalog": {
+     "id-18": "Item 18",
+     "id-28": "Item 28",
+     "id-9": "Item 9"
+    }
+   },
    "expected": {
     "ok": {
+     "op": "add",
      "add": [],
-     "changes": [],
+     "remove": [],
      "noops": [
       {
        "id": "id-9",
@@ -2830,50 +2855,49 @@
        "reason": "already attached"
       }
      ],
-     "op": "add",
-     "remove": [],
      "unknown": [
       "id-48",
       "id-42"
-     ]
+     ],
+     "changes": []
     }
-   },
-   "input": {
-    "catalog": {
-     "id-18": "Item 18",
-     "id-28": "Item 28",
-     "id-9": "Item 9"
-    },
-    "current_ids": [
-     "id-28",
-     "id-18",
-     "id-9"
-    ],
-    "op": "add",
-    "selected_ids": [
-     "id-9",
-     "id-28",
-     "id-48",
-     "id-42"
-    ]
    }
   },
   {
+   "input": {
+    "op": "remove",
+    "selected_ids": [
+     "id-22",
+     "id-10",
+     "id-41",
+     "id-47"
+    ],
+    "current_ids": [
+     "id-18",
+     "id-10",
+     "id-3",
+     "id-22",
+     "id-0",
+     "id-39"
+    ],
+    "catalog": {
+     "id-14": "Item 14",
+     "id-18": "Item 18",
+     "id-15": "Item 15",
+     "id-21": "Item 21",
+     "id-39": "Item 39",
+     "id-22": "Item 22",
+     "id-2": "Item 2",
+     "id-10": "Item 10",
+     "id-0": "Item 0",
+     "id-1": "Item 1",
+     "id-3": "Item 3"
+    }
+   },
    "expected": {
     "ok": {
-     "add": [],
-     "changes": [
-      {
-       "id": "id-22",
-       "label": "Item 22"
-      },
-      {
-       "id": "id-10",
-       "label": "Item 10"
-      }
-     ],
-     "noops": [],
      "op": "remove",
+     "add": [],
      "remove": [
       {
        "id": "id-22",
@@ -2884,47 +2908,23 @@
        "label": "Item 10"
       }
      ],
+     "noops": [],
      "unknown": [
       "id-41",
       "id-47"
+     ],
+     "changes": [
+      {
+       "id": "id-22",
+       "label": "Item 22"
+      },
+      {
+       "id": "id-10",
+       "label": "Item 10"
+      }
      ]
     }
-   },
-   "input": {
-    "catalog": {
-     "id-0": "Item 0",
-     "id-1": "Item 1",
-     "id-10": "Item 10",
-     "id-14": "Item 14",
-     "id-15": "Item 15",
-     "id-18": "Item 18",
-     "id-2": "Item 2",
-     "id-21": "Item 21",
-     "id-22": "Item 22",
-     "id-3": "Item 3",
-     "id-39": "Item 39"
-    },
-    "current_ids": [
-     "id-18",
-     "id-10",
-     "id-3",
-     "id-22",
-     "id-0",
-     "id-39"
-    ],
-    "op": "remove",
-    "selected_ids": [
-     "id-22",
-     "id-10",
-     "id-41",
-     "id-47"
-    ]
    }
   }
- ],
- "generator": "scripts/gen_fixtures.py",
- "now": "2026-10-16T12:00:00+00:00",
- "python": "3.12.13",
- "seed": 1003,
- "unicode": "15.0.0"
+ ]
 }

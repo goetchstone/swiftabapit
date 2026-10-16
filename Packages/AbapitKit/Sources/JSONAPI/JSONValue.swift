@@ -96,6 +96,9 @@ public enum JSONValue: Equatable, Sendable {
         }
     }
 
+    /// The value as JSON text (`json.dumps`), for showing a nested attribute.
+    public var jsonText: String { Self.dumps(self) }
+
     static func quoted(_ text: String) -> String {
         var out = "\""
         for scalar in text.unicodeScalars {

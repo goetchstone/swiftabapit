@@ -1,3 +1,6 @@
+#if DEBUG
+// Test and demo code only: compiled out of a Release build, so the app's Release binary carries no stub
+// (scripts/check_app.sh holds that).
 import CryptoKit
 import Foundation
 import HTTPCore
@@ -349,3 +352,4 @@ public final class AppleStub: Transport, Sendable {
 
     static func json(_ object: JSONObject) -> Data { Data(JSONValue.dumps(.object(object)).utf8) }
 }
+#endif

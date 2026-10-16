@@ -1,4 +1,8 @@
+#if DEBUG
+// Test and demo code only: compiled out of a Release build, so the app's Release binary carries no stub
+// (scripts/check_app.sh holds that).
 import Foundation
+import JSONAPI
 
 /// The repo's shared fixtures (`Tests/Fixtures`), found from this source file's location, so the package
 /// tests and any app-level test read the same files. Adapted from SwiftGamGui
@@ -23,6 +27,15 @@ public enum Fixtures {
     /// golden `"\u{FEFF}ab"` was tested as `ab` on both sides (Phase 0's review).
     public static func parity(_ name: String) throws -> Data {
         try Data(contentsOf: parity.appending(path: "\(name).json"))
+    }
+
+    /// A parity golden as `JSONValue`: keys in the order the generator wrote them (abapit's CSV columns depend
+    /// on it), strings and numbers as exact text.
+    public static func parityValue(_ name: String) throws -> JSONValue {
+        guard let value = JSONValue.parse(String(decoding: try parity(name), as: UTF8.self)) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return value
     }
 }
 
@@ -110,3 +123,4 @@ public enum SourceScan {
         return out.split(separator: " ").map(String.init)
     }
 }
+#endif

@@ -34,7 +34,7 @@ EDGES = {
     "MosyleModels": set(),
     "Wire": set(),
     "Planners": {"AppleModels", "MosyleModels", "JSONAPI", "Wire"},
-    "Reports": {"AppleModels", "MosyleModels"},
+    "Reports": {"AppleModels", "MosyleModels", "JSONAPI"},
     "ProfileSchema": set(),
     "Orgs": {"JSONAPI"},
     "Vault": set(),

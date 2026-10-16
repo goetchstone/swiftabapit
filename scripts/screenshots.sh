@@ -20,8 +20,9 @@ status=0
 # name:section[:selected[:window]] — the narrow-* runs open a section in the smallest window with the
 # sidebar dragged to its widest, where SwiftGamGui's narrow-window layout loop crashed AppKit (its
 # failure-log 2026-10-10): they fail when the pane has too little room to spare, and on any non-zero exit.
-for spec in overview:overview devices:devices people:people content:content activity:activity \
-            reports:reports settings:settings narrow-overview:overview::smallest; do
+# The demo org: seeded fleet, strict stub. `first` selects the first device so the inspector shows.
+for spec in overview:overview devices:devices device-inspector:devices:first services:services settings:settings \
+            people:people narrow-overview:overview::smallest narrow-device-inspector:devices:first:smallest; do
   IFS=: read -r name section selected window <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"

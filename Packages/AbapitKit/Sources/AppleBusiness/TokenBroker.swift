@@ -81,7 +81,13 @@ public actor TokenBroker: Authorizer {
         mints += 1
         guard let key = VaultItem(org: account.org, kind: .appleKey) else { throw AppleAPIError.token(.notConfigured) }
         let claims = ClientAssertion.Claims(clientID: account.clientID, keyID: account.keyID, teamID: account.teamID, now: now())
-        let assertion = try await ClientAssertion.sign(claims, with: key, vault: vault)
+        let assertion: Secret
+        do {
+            assertion = try await ClientAssertion.sign(claims, with: key, vault: vault)
+        } catch let error as VaultError {
+            // The client's errors are one type: the Vault's guidance travels in it (a missing key, a locked Mac).
+            throw AppleAPIError.vault(error.guidance)
+        }
         let form: [(String, String)] = [
             ("grant_type", "client_credentials"), ("client_id", account.clientID),
             ("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"),

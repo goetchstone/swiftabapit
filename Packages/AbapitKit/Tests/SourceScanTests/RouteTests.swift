@@ -11,9 +11,10 @@ struct RouteTests {
 
     /// Only the transport opens connections (invariant 4: one door, one allowlist).
     @Test func onlyTheTransportNamesURLSession() throws {
-        let networking = ["URLSession", "NSURLConnection", "CFStream", "nw_connection", "NWConnection", "Network.", "CFSocket", "socket("]
-        #expect(try SourceScan.files(in: Self.sources, matching: networking) == ["\(Self.sources)/HTTPCore/Transport.swift"])
-        #expect(try SourceScan.files(in: "App", matching: networking).isEmpty)
+        // URLSession as a whole word: constructing the allowed `URLSessionTransport` is not opening a connection.
+        let networking = ["NSURLConnection", "CFStream", "nw_connection", "NWConnection", "Network.", "CFSocket", "socket("]
+        #expect(try SourceScan.files(in: Self.sources, matching: networking, orWord: "URLSession") == ["\(Self.sources)/HTTPCore/Transport.swift"])
+        #expect(try SourceScan.files(in: "App", matching: networking, orWord: "URLSession").isEmpty)
     }
 
     /// Only the read builders make a read (invariant 2); `Wire` defines it and its `setting` copy.

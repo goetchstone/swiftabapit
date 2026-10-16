@@ -93,7 +93,9 @@ def header(seed: int | None) -> dict:
 
 def write(name: str, payload: dict) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=True, default=str) + "\n"
+    # Insertion order, never sorted: abapit's CSV columns are its attributes' first-seen order, so an input's
+    # key order is part of the case. The generation is seeded, so the order is as deterministic as the values.
+    text = json.dumps(payload, indent=1, ensure_ascii=True, default=str) + "\n"
     (OUT / f"{name}.json").write_text(text)
     print(f"{name}: {len(payload.get('cases', []))} cases", file=sys.stderr)
 

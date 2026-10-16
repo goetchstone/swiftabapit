@@ -347,7 +347,7 @@ Mosyle → {HTTPCore, Wire, Vault, MosyleModels}
 HTTPCore → {Wire}
 History → {AppleModels, MosyleModels, Reports}
 Planners → {AppleModels, MosyleModels, JSONAPI, Wire}  (builds WireOperation via package init)
-Reports → {AppleModels, MosyleModels}
+Reports → {AppleModels, MosyleModels, JSONAPI}
 Assist → {Planners, Reports}                            never a client, HTTPCore or ChangeCore
 ```
 

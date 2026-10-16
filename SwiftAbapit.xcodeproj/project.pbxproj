@@ -15,6 +15,10 @@
 		5AB000000000000000000105 /* Planners in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000205 /* Planners */; };
 		5AB000000000000000000106 /* ChangeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000206 /* ChangeCore */; };
 		5AB000000000000000000107 /* Assist in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000207 /* Assist */; };
+		5AB000000000000000000108 /* Orgs in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000208 /* Orgs */; };
+		5AB000000000000000000109 /* AppleModels in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000209 /* AppleModels */; };
+		5AB000000000000000000110 /* JSONAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000210 /* JSONAPI */; };
+		5AB000000000000000000111 /* TestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB000000000000000000211 /* TestSupport */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +49,10 @@
 				5AB000000000000000000105 /* Planners in Frameworks */,
 				5AB000000000000000000106 /* ChangeCore in Frameworks */,
 				5AB000000000000000000107 /* Assist in Frameworks */,
+				5AB000000000000000000108 /* Orgs in Frameworks */,
+				5AB000000000000000000109 /* AppleModels in Frameworks */,
+				5AB000000000000000000110 /* JSONAPI in Frameworks */,
+				5AB000000000000000000111 /* TestSupport in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,6 +114,10 @@
 				5AB000000000000000000205 /* Planners */,
 				5AB000000000000000000206 /* ChangeCore */,
 				5AB000000000000000000207 /* Assist */,
+				5AB000000000000000000208 /* Orgs */,
+				5AB000000000000000000209 /* AppleModels */,
+				5AB000000000000000000210 /* JSONAPI */,
+				5AB000000000000000000211 /* TestSupport */,
 			);
 			productName = abapit;
 			productReference = 5AB000000000000000000001 /* abapit.app */;
@@ -336,6 +348,22 @@
 		5AB000000000000000000207 /* Assist */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Assist;
+		};
+		5AB000000000000000000208 /* Orgs */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Orgs;
+		};
+		5AB000000000000000000209 /* AppleModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppleModels;
+		};
+		5AB000000000000000000210 /* JSONAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JSONAPI;
+		};
+		5AB000000000000000000211 /* TestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TestSupport;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

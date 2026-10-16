@@ -21,6 +21,11 @@ public struct ProbeResult: Sendable, Equatable {
     public let section: AppleSection
     public let status: String
 
+    public init(section: AppleSection, status: String) {
+        self.section = section
+        self.status = status
+    }
+
     public static let ok = "ok", forbidden = "forbidden"
 }
 
@@ -43,6 +48,16 @@ public actor AppleClient {
         self.http = http
         broker = TokenBroker(account: account, vault: vault, http: http, now: now)
         self.pageCap = pageCap
+    }
+
+    /// The app's client: Apple over `URLSession`, at the rate this org learned before (`OrgProfile`).
+    public init(account: TokenBroker.Account, vault: Vault, readsPerMinute: Double? = nil) {
+        self.init(account: account, vault: vault, transport: URLSessionTransport(), limiter: RateLimiter(readsPerMinute: readsPerMinute))
+    }
+
+    /// A client over another transport: the demo org's `AppleStub`.
+    public init(account: TokenBroker.Account, vault: Vault, transport: any Transport) {
+        self.init(account: account, vault: vault, transport: transport, limiter: RateLimiter())
     }
 
     var scope: Scope { account.scope }
