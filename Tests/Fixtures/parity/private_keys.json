@@ -1,398 +1,398 @@
 {
+ "generator": "scripts/gen_fixtures.py",
  "abapit": "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f",
+ "python": "3.12.13",
+ "unicode": "15.0.0",
+ "seed": null,
+ "now": "2026-10-16T12:00:00+00:00",
  "cases": [
   {
-   "expected": {
-    "accepted": true,
-    "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
-   },
+   "name": "sec1",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\nAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\nEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\n-----END EC PRIVATE KEY-----\n",
-   "name": "sec1",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-crlf",
    "input": "-----BEGIN EC PRIVATE KEY-----\r\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\r\nAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\r\nEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\r\n-----END EC PRIVATE KEY-----\r\n",
-   "name": "sec1-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-cr",
    "input": "-----BEGIN EC PRIVATE KEY-----\rMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\rAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\rEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\r-----END EC PRIVATE KEY-----\r",
-   "name": "sec1-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-mislabelled",
    "input": "-----BEGIN PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\nAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\nEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\n-----END PRIVATE KEY-----\n",
-   "name": "sec1-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-padded",
    "input": "\n\n  -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\nAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\nEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\n-----END EC PRIVATE KEY-----  \n\n",
-   "name": "sec1-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-no-newline",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERoAoGCCqGSM49\nAwEHoUQDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYjOZ4SEaEPKz0cBc8w6AJ2d7y5\nEpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\n-----END EC PRIVATE KEY-----",
-   "name": "sec1-no-newline",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8",
    "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n",
-   "name": "pkcs8",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-crlf",
    "input": "-----BEGIN PRIVATE KEY-----\r\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\r\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\r\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\r\n-----END PRIVATE KEY-----\r\n",
-   "name": "pkcs8-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-cr",
    "input": "-----BEGIN PRIVATE KEY-----\rMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\rAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\rnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\r-----END PRIVATE KEY-----\r",
-   "name": "pkcs8-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-mislabelled",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END EC PRIVATE KEY-----\n",
-   "name": "pkcs8-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-padded",
    "input": "\n\n  -----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----  \n\n",
-   "name": "pkcs8-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
-   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----",
-   "name": "pkcs8-no-newline",
    "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
   },
   {
+   "name": "pkcs8-no-newline",
+   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----",
    "expected": {
     "accepted": true,
-    "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
+    "scalar": "0000000000000000000000000000000000000000000000000000000000001111"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERGhRANCAAQNzHZIx4oxGPJhKGb+g+8Z9AME9iM5\nnhIRoQ8rPRwFzzDoAnZ3vLkSlD6Z/3EUDqm8JHE74bdcMf9AVHJMT50A\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\nAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\nJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\n-----END EC PRIVATE KEY-----\n",
-   "name": "sec1",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-crlf",
    "input": "-----BEGIN EC PRIVATE KEY-----\r\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\r\nAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\r\nJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\r\n-----END EC PRIVATE KEY-----\r\n",
-   "name": "sec1-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-cr",
    "input": "-----BEGIN EC PRIVATE KEY-----\rMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\rAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\rJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\r-----END EC PRIVATE KEY-----\r",
-   "name": "sec1-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-mislabelled",
    "input": "-----BEGIN PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\nAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\nJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\n-----END PRIVATE KEY-----\n",
-   "name": "sec1-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-padded",
    "input": "\n\n  -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\nAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\nJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\n-----END EC PRIVATE KEY-----  \n\n",
-   "name": "sec1-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-no-newline",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMEArv/uoAoGCCqGSM49\nAwEHoUQDQgAE1+Cl2VBW6iqGdU6a3e0kZobZlYGZE+SaUqMstnjtXrIcG5/cKtt0\nJpGw4EzvHwNOg3x9BxSJ9QcGo7tTbl8Fiw==\n-----END EC PRIVATE KEY-----",
-   "name": "sec1-no-newline",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8",
    "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n",
-   "name": "pkcs8",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-crlf",
    "input": "-----BEGIN PRIVATE KEY-----\r\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\r\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\r\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\r\n-----END PRIVATE KEY-----\r\n",
-   "name": "pkcs8-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-cr",
    "input": "-----BEGIN PRIVATE KEY-----\rMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\rAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\r5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\r-----END PRIVATE KEY-----\r",
-   "name": "pkcs8-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-mislabelled",
    "input": "-----BEGIN EC PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END EC PRIVATE KEY-----\n",
-   "name": "pkcs8-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-padded",
    "input": "\n\n  -----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----  \n\n",
-   "name": "pkcs8-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
-  },
-  {
    "expected": {
     "accepted": true,
     "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
    },
-   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----",
-   "name": "pkcs8-no-newline",
    "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
   },
   {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----\n",
-   "name": "sec1",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\r\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\r\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\r\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\r\n-----END EC PRIVATE KEY-----\r\n",
-   "name": "sec1-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\rMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\rAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\rqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\r-----END EC PRIVATE KEY-----\r",
-   "name": "sec1-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END PRIVATE KEY-----\n",
-   "name": "sec1-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "\n\n  -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----  \n\n",
-   "name": "sec1-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----",
-   "name": "sec1-no-newline",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n",
-   "name": "pkcs8",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN PRIVATE KEY-----\r\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\r\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\r\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\r\n-----END PRIVATE KEY-----\r\n",
-   "name": "pkcs8-crlf",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN PRIVATE KEY-----\rMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\r/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\rkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\r-----END PRIVATE KEY-----\r",
-   "name": "pkcs8-cr",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END EC PRIVATE KEY-----\n",
-   "name": "pkcs8-mislabelled",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "\n\n  -----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----  \n\n",
-   "name": "pkcs8-padded",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
-  },
-  {
-   "expected": {
-    "accepted": true,
-    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
-   },
-   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----",
    "name": "pkcs8-no-newline",
+   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----",
+   "expected": {
+    "accepted": true,
+    "scalar": "000000000000000000000000000000000000000000000000000000c100aeffee"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAwQCu/+6hRANCAATX4KXZUFbqKoZ1Tprd7SRmhtmVgZkT\n5JpSoyy2eO1eshwbn9wq23QmkbDgTO8fA06DfH0HFIn1Bwaju1NuXwWL\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1",
+   "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
    "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
   },
   {
-   "abapit": {
-    "accepted": true
-   },
+   "name": "sec1-crlf",
+   "input": "-----BEGIN EC PRIVATE KEY-----\r\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\r\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\r\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\r\n-----END EC PRIVATE KEY-----\r\n",
    "expected": {
-    "accepted": false,
-    "scalar": null
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
    },
-   "input": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n",
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-cr",
+   "input": "-----BEGIN EC PRIVATE KEY-----\rMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\rAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\rqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\r-----END EC PRIVATE KEY-----\r",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-mislabelled",
+   "input": "-----BEGIN PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END PRIVATE KEY-----\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-padded",
+   "input": "\n\n  -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----  \n\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "sec1-no-newline",
+   "input": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIH/////////////////////////////////////////toAoGCCqGSM49\nAwEHoUQDQgAEf0Zo0XE7cpgDaBVBPBe6UoZojDnCwZK18i2WrIt/wf2ZLaSsupFR\nqL5lIDeBQVbEO8LZa86O21mtd8+Uwyd5tQ==\n-----END EC PRIVATE KEY-----",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8",
+   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-crlf",
+   "input": "-----BEGIN PRIVATE KEY-----\r\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\r\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\r\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\r\n-----END PRIVATE KEY-----\r\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-cr",
+   "input": "-----BEGIN PRIVATE KEY-----\rMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\r/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\rkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\r-----END PRIVATE KEY-----\r",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-mislabelled",
+   "input": "-----BEGIN EC PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END EC PRIVATE KEY-----\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-padded",
+   "input": "\n\n  -----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----  \n\n",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
+   "name": "pkcs8-no-newline",
+   "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----",
+   "expected": {
+    "accepted": true,
+    "scalar": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgf///////////////\n/////////////////////////+2hRANCAAR/RmjRcTtymANoFUE8F7pShmiMOcLB\nkrXyLZasi3/B/ZktpKy6kVGovmUgN4FBVsQ7wtlrzo7bWa13z5TDJ3m1\n-----END PRIVATE KEY-----\n"
+  },
+  {
    "name": "p384",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n"
-  },
-  {
+   "input": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n",
+   "expected": {
+    "accepted": false,
+    "scalar": null
+   },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n",
    "abapit": {
     "accepted": true
-   },
-   "expected": {
-    "accepted": false,
-    "scalar": null
-   },
-   "input": "-----BEGIN EC PRIVATE KEY-----\nMIGkAgEBBDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAIiKgBwYFK4EEACKhZANiAATcV2p+4ED9InhiSyaFMs5sfqrH3IK4He45\nI0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1od9DXZ/KhWgS75KGvlDbC2Kr\n0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END EC PRIVATE KEY-----\n",
+   }
+  },
+  {
    "name": "p384-sec1",
-   "normalized": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n"
-  },
-  {
+   "input": "-----BEGIN EC PRIVATE KEY-----\nMIGkAgEBBDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAIiKgBwYFK4EEACKhZANiAATcV2p+4ED9InhiSyaFMs5sfqrH3IK4He45\nI0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1od9DXZ/KhWgS75KGvlDbC2Kr\n0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END EC PRIVATE KEY-----\n",
    "expected": {
     "accepted": false,
     "scalar": null
    },
+   "normalized": "-----BEGIN PRIVATE KEY-----\nMIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiKhZANiAATcV2p+4ED9\nInhiSyaFMs5sfqrH3IK4He45I0EqWgw3EXVKvIzXRgQu3NRPdyX2XdbMai26ubK1\nod9DXZ/KhWgS75KGvlDbC2Kr0q+CGgpHAaqi5wFu/ZL2YE9J6xBD0wE=\n-----END PRIVATE KEY-----\n",
+   "abapit": {
+    "accepted": true
+   }
+  },
+  {
+   "name": "empty",
    "input": "",
-   "name": "empty"
-  },
-  {
    "expected": {
     "accepted": false,
     "scalar": null
-   },
+   }
+  },
+  {
+   "name": "garbage",
    "input": "-----BEGIN PRIVATE KEY-----\nnot base64\n-----END PRIVATE KEY-----\n",
-   "name": "garbage"
-  },
-  {
    "expected": {
     "accepted": false,
     "scalar": null
-   },
+   }
+  },
+  {
+   "name": "public",
    "input": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDcx2SMeKMRjyYShm/oPvGfQDBPYj\nOZ4SEaEPKz0cBc8w6AJ2d7y5EpQ+mf9xFA6pvCRxO+G3XDH/QFRyTE+dAA==\n-----END PUBLIC KEY-----\n",
-   "name": "public"
-  },
-  {
    "expected": {
     "accepted": false,
     "scalar": null
-   },
+   }
+  },
+  {
+   "name": "truncated",
    "input": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAERG\n-----END PRIVATE KEY-----\n",
-   "name": "truncated"
-  },
-  {
    "expected": {
     "accepted": false,
     "scalar": null
-   },
+   }
+  },
+  {
+   "name": "encrypted-label",
    "input": "-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIGHAgEAMBMG\n-----END ENCRYPTED PRIVATE KEY-----\n",
-   "name": "encrypted-label"
+   "expected": {
+    "accepted": false,
+    "scalar": null
+   }
   }
- ],
- "generator": "scripts/gen_fixtures.py",
- "now": "2026-10-16T12:00:00+00:00",
- "python": "3.12.13",
- "seed": null,
- "unicode": "15.0.0"
+ ]
 }

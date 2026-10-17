@@ -19,7 +19,7 @@ struct PackageGraphTests {
         "MosyleModels": [],
         "Wire": [],
         "Planners": ["AppleModels", "MosyleModels", "JSONAPI", "Wire"],
-        "Reports": ["AppleModels", "MosyleModels"],
+        "Reports": ["AppleModels", "MosyleModels", "JSONAPI"],
         "ProfileSchema": [],
         "Orgs": ["JSONAPI"],
         "Vault": [],
@@ -109,6 +109,23 @@ struct PackageGraphTests {
         """
         let found = SourceScan.imports(of: SourceScan.File(path: "x.swift", text: text))
         #expect(found == ["ChangeCore", "HTTPCore", "Security", "Vault", "Network", "Wire"])
+    }
+
+    /// The app imports the planned modules (plan §3.2, plus Orgs, AppleModels and JSONAPI for Phase 1's screens)
+    /// and the system frameworks it uses; `TestSupport` (the stubs and the demo) only under `#if DEBUG`.
+    @Test func theAppImportsOnlyThePlannedModules() throws {
+        let package: Set = ["ChangeCore", "AppleBusiness", "AppleModels", "Mosyle", "History", "Reports", "Planners", "Assist", "Vault",
+                            "Orgs", "JSONAPI", "TestSupport"]
+        let system: Set = ["SwiftUI", "AppKit", "Foundation", "Charts", "Observation", "UniformTypeIdentifiers", "CryptoKit",
+                           "LocalAuthentication", "Security", "Synchronization", "FoundationModels", "Dispatch", "AppIntents", "os"]
+        for file in try SourceScan.swiftFiles(in: "App") {
+            let extra = Set(SourceScan.imports(of: file)).subtracting(package).subtracting(system)
+            #expect(extra.isEmpty, "\(file.path) imports \(extra.sorted())")
+            let lines = file.text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+            for (index, line) in lines.enumerated() where line == "import TestSupport" {
+                #expect(index > 0 && lines[index - 1] == "#if DEBUG", "\(file.path): TestSupport is imported outside #if DEBUG")
+            }
+        }
     }
 
     /// The app reaches the package through its public API only: `@testable` would reopen every route.

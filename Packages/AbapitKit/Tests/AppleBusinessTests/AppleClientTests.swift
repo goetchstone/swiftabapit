@@ -134,3 +134,21 @@ struct AppleClientTests {
         await #expect(throws: AppleAPIError.token(.rateLimited)) { _ = try await harness.allDevices() }
     }
 }
+
+@Suite("Acceptance pass")
+struct AcceptancePassTests {
+    @Test func itReportsCountsAndWhatThisVersionDoesntKnowButNoData() async throws {
+        let harness = try await Harness(devices: 3)
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: "TESTNEW00001", attributes: [
+            "serialNumber": .string("TESTNEW00001"), "productFamily": .string("Glasses"), "brandNewField": .string("secret-ish")])])
+        harness.stub.add(services: [Harness.service("SVC1", name: "Mosyle")])
+        for index in 0..<4 { harness.stub.setLock(index < 3 ? String(format: "TESTD%07d", index) : "TESTNEW00001", isLocked: false, lockType: "NONE") }
+        let report = await harness.client.acceptancePass(sample: 4)
+        let devices = try #require(report.lines.first { $0.resource == "orgDevices" })
+        #expect(devices.ok && devices.count == 4)
+        #expect(devices.unknownKeys == ["brandNewField"])
+        #expect(devices.unknownValues == ["productFamily=Glasses"])
+        #expect(!report.text.contains("secret-ish") && !report.text.contains("TESTNEW00001"))
+        #expect(report.lines.filter { !$0.ok }.isEmpty, "\(report.text)")
+    }
+}

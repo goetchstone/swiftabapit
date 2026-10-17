@@ -33,6 +33,9 @@ let package = Package(
         .library(name: "History", targets: ["History"]),
         .library(name: "ChangeCore", targets: ["ChangeCore"]),
         .library(name: "Assist", targets: ["Assist"]),
+        // The strict stubs and the demo fleet: the app links it for its DEBUG demo org only (dead-stripped from
+        // Release, which never references it; scripts/check_app.sh refuses the demo switch in a Release binary).
+        .library(name: "TestSupport", targets: ["TestSupport"]),
     ],
     targets: [
         // Pure (Foundation only).
@@ -41,7 +44,7 @@ let package = Package(
         .target(name: "MosyleModels", swiftSettings: settings),
         .target(name: "Wire", swiftSettings: settings),
         .target(name: "Planners", dependencies: ["AppleModels", "MosyleModels", "JSONAPI", "Wire"], swiftSettings: settings),
-        .target(name: "Reports", dependencies: ["AppleModels", "MosyleModels"], swiftSettings: settings),
+        .target(name: "Reports", dependencies: ["AppleModels", "MosyleModels", "JSONAPI"], swiftSettings: settings),
         .target(name: "ProfileSchema", swiftSettings: settings),
         // Platform.
         .target(name: "Orgs", dependencies: ["JSONAPI"], swiftSettings: settings),
@@ -61,7 +64,7 @@ let package = Package(
         .testTarget(name: "WireTests", dependencies: ["Wire", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "PlannersTests", dependencies: ["Planners", "AppleModels", "MosyleModels", "JSONAPI", "Wire", "TestSupport"],
                     swiftSettings: settings),
-        .testTarget(name: "ReportsTests", dependencies: ["Reports", "AppleModels", "MosyleModels", "TestSupport"], swiftSettings: settings),
+        .testTarget(name: "ReportsTests", dependencies: ["Reports", "AppleModels", "MosyleModels", "JSONAPI", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "ProfileSchemaTests", dependencies: ["ProfileSchema", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "OrgsTests", dependencies: ["Orgs", "JSONAPI", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "VaultTests", dependencies: ["Vault", "TestSupport"], swiftSettings: settings),
