@@ -37,7 +37,7 @@ struct MosyleParityTests {
     /// Unicode version (verifier round 1).
     @Test func timestampsMatchTheGolden() throws {
         let cases = try Self.cases("to_iso")
-        #expect(cases.count == 121)
+        #expect(cases.count == 129)
         for item in cases {
             let input = try Self.input(item)?["value"]
             #expect(Self.same(MosyleTime.iso(input).map(JSONValue.string) ?? .null, item["expected"] ?? .null), "\(Self.describe(item))")
@@ -47,7 +47,7 @@ struct MosyleParityTests {
     /// The hour is 1 to 12 and the date is a proleptic Gregorian one (`02/29/1500` is not): Phase 7a review L4.
     @Test func complianceStampsMatchTheGolden() throws {
         let cases = try Self.cases("compliance_time")
-        #expect(cases.count == 39)
+        #expect(cases.count == 70)
         for item in cases {
             let input = try Self.input(item)?["value"]
             #expect(Self.same(MosyleTime.compliance(input).map(JSONValue.string) ?? .null, item["expected"] ?? .null), "\(Self.describe(item))")
@@ -58,7 +58,7 @@ struct MosyleParityTests {
     /// log's stamp lean on them (Phase 7a review L4: `1e20` was `1e20`, Python's is `1e+20`; `1e3` is `1000.0`).
     @Test func pythonStrAndTruthMatchTheGolden() throws {
         let strings = try Self.cases("py_str"), truths = try Self.cases("py_truthy")
-        #expect(strings.count == 948 && truths.count == 24)
+        #expect(strings.count == 949 && truths.count == 24)
         for item in strings {
             let value = try Self.input(item)?["value"]
             #expect(Array(Python.str(value).utf8) == Array((item["expected"]?.string ?? "<missing>").utf8), "\(Self.describe(item))")
@@ -74,7 +74,7 @@ struct MosyleParityTests {
     /// says so instead of the test filtering it).
     @Test func devicesMatchTheGolden() throws {
         let cases = try Self.cases("adapt_device")
-        #expect(cases.count == 73)
+        #expect(cases.count == 82)
         for item in cases {
             let device = MosyleAdapter.device(try #require(item["input"]?.object))
             #expect(Self.same(device.asJSON, try #require(item["expected"])), "\(Self.describe(item))")
@@ -112,7 +112,7 @@ struct MosyleParityTests {
 
     @Test func usersAndGroupsMatchTheGolden() throws {
         let users = try Self.cases("adapt_user"), groups = try Self.cases("adapt_group")
-        #expect(users.count == 27 && groups.count == 27)
+        #expect(users.count == 32 && groups.count == 29)
         for item in users {
             let user = MosyleAdapter.user(try #require(item["input"]?.object))
             #expect(Self.same(user.asJSON, try #require(item["expected"])), "\(Self.describe(item))")
@@ -163,7 +163,7 @@ struct MosyleParityTests {
     /// "e" + U+0301), and a list or an object is no key (abapit raised `TypeError`): Phase 7a review L4.
     @Test func devicesDeduplicateAsAbapitsSetDid() throws {
         let cases = try Self.cases("dedupe_devices")
-        #expect(cases.count == 11)
+        #expect(cases.count == 12)
         for item in cases {
             let rows = (try Self.input(item)?.array ?? []).compactMap(\.object)
             var seen: Set<MosyleAdapter.DeviceKey> = [], kept: [JSONValue] = []
@@ -176,7 +176,7 @@ struct MosyleParityTests {
 
     @Test func logsMatchTheGolden() throws {
         let cases = try Self.cases("normalize_logs")
-        #expect(cases.count == 39)
+        #expect(cases.count == 49)
         for item in cases {
             let events = MosyleLogs.normalize(try Self.input(item))
             #expect(Self.same(.array(events.map(JSONValue.object)), try #require(item["expected"])), "\(Self.describe(item))")
@@ -242,9 +242,11 @@ struct MosyleParityTests {
                 event["when"] = .string(local)
                 return event
             }
+            // Python's sort: by code points, a tie included (verifier round 2: String's `==` is canonical equivalence).
             let sorted = parsed.enumerated().sorted { a, b in
-                let wa = a.element["when"]?.string ?? "", wb = b.element["when"]?.string ?? ""
-                return wa == wb ? a.offset < b.offset : wb.unicodeScalars.lexicographicallyPrecedes(wa.unicodeScalars)
+                let wa = Array((a.element["when"]?.string ?? "").unicodeScalars)
+                let wb = Array((b.element["when"]?.string ?? "").unicodeScalars)
+                return wa == wb ? a.offset < b.offset : wb.lexicographicallyPrecedes(wa)
             }.map { JSONValue.object($0.element) }
             #expect(Self.same(.array(sorted), item["expected"] ?? .null), "\(Self.describe(item))")
             #expect(raised || !Self.same(.array(abapit.map(JSONValue.object)), item["expected"] ?? .null), "a deviation is a real one")

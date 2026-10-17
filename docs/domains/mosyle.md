@@ -52,8 +52,9 @@
 - **`Python.swift` is abapit's Python, exactly** (Phase 7a review L4), each rule held by `py_str`, `py_truthy`,
   `to_iso` and `dedupe_devices` cases: `str()` of a float is `repr()` (`1e+20`, `1000.0`, positional from 1e-4 up
   to 1e16), of a list or dict its `repr()`; `int()` of a string reads any script's decimal digits and strips only
-  ASCII whitespace (U+001C refuses); `str.isdigit()`, `in` and set keys go by code points, never Swift's canonical
-  equivalence; dates are computed proleptic Gregorian (Foundation's Gregorian calendar is Julian before
+  ASCII whitespace (U+001C refuses); `str.isdigit()`, `in`, set keys and the Logs sort go by code points, never
+  Swift's canonical equivalence (verifier round 2: "2024-e" + U+0301 and "2024-" + U+00E9 tied in the sort, where
+  Python orders them); dates are computed proleptic Gregorian (Foundation's Gregorian calendar is Julian before
   1582-10-15). Swift's Unicode tables are read as of the golden's `unicode` (`Python.unicodeVersion`, 15.0, held
   to the header by a test): a character assigned since (a Garay digit, 16.0) is unassigned to abapit's Python,
   so `repr()` escapes it and `int()` refuses it here too.

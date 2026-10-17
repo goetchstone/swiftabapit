@@ -52,10 +52,14 @@ public enum MosyleLogs {
                     Python.truthy(log["Device"]) ? log["Device"] : log["DeviceName"], log["SerialNumber"])
             }
         }
-        // Newest first, stably, as Python's sort(reverse=True) keeps equal entries in order.
-        return events.enumerated().sorted { a, b in
-            let wa = a.element["when"]?.string ?? "", wb = b.element["when"]?.string ?? ""
-            return wa == wb ? a.offset < b.offset : wb.unicodeScalars.lexicographicallyPrecedes(wa.unicodeScalars)
-        }.map(\.element)
+        // Newest first, stably, as Python's sort(reverse=True) keeps equal entries in order. The stamps compare by
+        // code points, a tie included (verifier round 2): Swift's `==` on String is canonical equivalence, so
+        // "2024-e" + U+0301 and "2024-" + U+00E9 tied and kept their order, where Python puts U+00E9's first.
+        let keyed = events.enumerated().map { offset, event in
+            (offset: offset, when: Array((event["when"]?.string ?? "").unicodeScalars), event: event)
+        }
+        return keyed.sorted { a, b in
+            a.when == b.when ? a.offset < b.offset : b.when.lexicographicallyPrecedes(a.when)
+        }.map(\.event)
     }
 }

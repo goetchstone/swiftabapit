@@ -4198,6 +4198,170 @@
    }
   },
   {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTATV00001",
+    "os": "atv"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTATV00001",
+    "attributes": {
+     "serialNumber": "TESTATV00001",
+     "deviceModel": "",
+     "productFamily": "AppleTV",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTOSX00001",
+    "os": "osx"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTOSX00001",
+    "attributes": {
+     "serialNumber": "TESTOSX00001",
+     "deviceModel": "",
+     "productFamily": "Mac",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTMACOS001",
+    "os": "MacOS"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTMACOS001",
+    "attributes": {
+     "serialNumber": "TESTMACOS001",
+     "deviceModel": "",
+     "productFamily": "Mac",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTTVOS0001",
+    "os": "TVOS"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTTVOS0001",
+    "attributes": {
+     "serialNumber": "TESTTVOS0001",
+     "deviceModel": "",
+     "productFamily": "AppleTV",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTIOS00001",
+    "os": "IOS"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTIOS00001",
+    "attributes": {
+     "serialNumber": "TESTIOS00001",
+     "deviceModel": "",
+     "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTDOCK0001",
+    "device_model": "iPhone-on-iPad-dock",
+    "os": ""
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTDOCK0001",
+    "attributes": {
+     "serialNumber": "TESTDOCK0001",
+     "deviceModelId": "iPhone-on-iPad-dock",
+     "deviceModel": "iPhone-on-iPad-dock",
+     "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTDOCK0002",
+    "device_type": "iPhone or iPad",
+    "model_name": "x"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTDOCK0002",
+    "attributes": {
+     "serialNumber": "TESTDOCK0002",
+     "modelName": "x",
+     "deviceModel": "x",
+     "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTORDER001",
+    "device_model": "iPhone17,3",
+    "model_name": "iPad",
+    "os": "ios"
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTORDER001",
+    "attributes": {
+     "serialNumber": "TESTORDER001",
+     "deviceModelId": "iPhone17,3",
+     "modelName": "iPad",
+     "deviceModel": "iPhone17,3",
+     "productFamily": "iPhone",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
+   "function": "adapt_device",
+   "input": {
+    "serial_number": "TESTORDER002",
+    "model_name": "iPad Pro",
+    "device_model_name": "iPhone 16",
+    "os": ""
+   },
+   "expected": {
+    "type": "orgDevices",
+    "id": "TESTORDER002",
+    "attributes": {
+     "serialNumber": "TESTORDER002",
+     "deviceModel": "iPhone 16",
+     "modelName": "iPad Pro",
+     "productFamily": "iPad",
+     "managedBy": "Mosyle"
+    }
+   }
+  },
+  {
    "function": "device_columns",
    "input": null,
    "expected": [
@@ -5186,6 +5350,139 @@
      "type": 0.0,
      "usertype": "admin",
      "Password": "TESTPASSWORD2"
+    }
+   }
+  },
+  {
+   "function": "adapt_user",
+   "input": {
+    "name": null,
+    "identifier": null,
+    "managedappleid": null,
+    "usertype": null,
+    "iduser": "U"
+   },
+   "expected": {
+    "type": "mosyleUsers",
+    "id": "U",
+    "attributes": {
+     "name": null,
+     "email": null,
+     "identifier": null,
+     "userType": null,
+     "managedappleid": null,
+     "usertype": null,
+     "iduser": "U"
+    }
+   }
+  },
+  {
+   "function": "adapt_user",
+   "input": {
+    "iduser": "U1",
+    "id": "I1",
+    "identifier": "ident1"
+   },
+   "expected": {
+    "type": "mosyleUsers",
+    "id": "U1",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "ident1",
+     "userType": "",
+     "iduser": "U1",
+     "id": "I1"
+    }
+   }
+  },
+  {
+   "function": "adapt_user",
+   "input": {
+    "id": "I2",
+    "identifier": "ident2"
+   },
+   "expected": {
+    "type": "mosyleUsers",
+    "id": "I2",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "ident2",
+     "userType": "",
+     "id": "I2"
+    }
+   }
+  },
+  {
+   "function": "adapt_user",
+   "input": {
+    "ID": "TESTUPPER",
+    "Name": "TESTUPPER",
+    "EMAIL": "TESTUPPER",
+    "Type": "TESTUPPER",
+    "iduser": "U"
+   },
+   "expected": {
+    "type": "mosyleUsers",
+    "id": "U",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "",
+     "userType": "",
+     "iduser": "U"
+    }
+   },
+   "abapit": {
+    "type": "mosyleUsers",
+    "id": "U",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "",
+     "userType": "",
+     "ID": "TESTUPPER",
+     "Name": "TESTUPPER",
+     "EMAIL": "TESTUPPER",
+     "Type": "TESTUPPER",
+     "iduser": "U"
+    }
+   }
+  },
+  {
+   "function": "adapt_user",
+   "input": {
+    "iduser": "U",
+    "os": "ios",
+    "members": 3,
+    "idusergroup": "G",
+    "memberCount": 3
+   },
+   "expected": {
+    "type": "mosyleUsers",
+    "id": "U",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "",
+     "userType": "",
+     "iduser": "U"
+    }
+   },
+   "abapit": {
+    "type": "mosyleUsers",
+    "id": "U",
+    "attributes": {
+     "name": "",
+     "email": "",
+     "identifier": "",
+     "userType": "",
+     "iduser": "U",
+     "os": "ios",
+     "members": 3,
+     "idusergroup": "G",
+     "memberCount": 3
     }
    }
   },
@@ -6325,6 +6622,85 @@
    }
   },
   {
+   "function": "adapt_group",
+   "input": {
+    "raw": {
+     "idusergroup": "G2",
+     "name": null,
+     "identifier": null,
+     "os": null,
+     "email": "TESTUSERFIELD",
+     "type": "TESTUSERFIELD",
+     "iduser": "U1"
+    },
+    "kind": "userGroups"
+   },
+   "expected": {
+    "type": "userGroups",
+    "id": "G2",
+    "attributes": {
+     "name": null,
+     "identifier": null,
+     "memberCount": null,
+     "os": null,
+     "idusergroup": "G2"
+    }
+   },
+   "abapit": {
+    "type": "userGroups",
+    "id": "G2",
+    "attributes": {
+     "name": null,
+     "identifier": null,
+     "memberCount": null,
+     "os": null,
+     "idusergroup": "G2",
+     "email": "TESTUSERFIELD",
+     "type": "TESTUSERFIELD",
+     "iduser": "U1"
+    }
+   }
+  },
+  {
+   "function": "adapt_group",
+   "input": {
+    "raw": {
+     "IDUSERGROUP": "TESTUPPER",
+     "Name": "TESTUPPER",
+     "OS": "TESTUPPER",
+     "ID": "TESTUPPER",
+     "iddevicegroup": "D1"
+    },
+    "kind": "deviceGroups"
+   },
+   "expected": {
+    "type": "deviceGroups",
+    "id": "D1",
+    "attributes": {
+     "name": "",
+     "identifier": "",
+     "memberCount": null,
+     "os": "",
+     "iddevicegroup": "D1"
+    }
+   },
+   "abapit": {
+    "type": "deviceGroups",
+    "id": "D1",
+    "attributes": {
+     "name": "",
+     "identifier": "",
+     "memberCount": null,
+     "os": "",
+     "IDUSERGROUP": "TESTUPPER",
+     "Name": "TESTUPPER",
+     "OS": "TESTUPPER",
+     "ID": "TESTUPPER",
+     "iddevicegroup": "D1"
+    }
+   }
+  },
+  {
    "function": "allowlists",
    "input": null,
    "expected": {
@@ -7167,6 +7543,46 @@
    "expected": null
   },
   {
+   "function": "to_iso",
+   "input_json": "{\"value\": 9.25e18}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": 9.223372036854775808e18}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": -9.25e18}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": -1e20}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": 9223372036854775807}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": 9223372036854775808}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": -9223372036854775808}",
+   "expected": null
+  },
+  {
+   "function": "to_iso",
+   "input_json": "{\"value\": -9223372036854775809}",
+   "expected": null
+  },
+  {
    "function": "compliance_time",
    "input": {
     "value": "01:00 PM - 03/12/2024"
@@ -7440,6 +7856,223 @@
    "expected": null
   },
   {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 01/30/2023"
+   },
+   "expected": "2023-01-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 01/31/2023"
+   },
+   "expected": "2023-01-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 02/30/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 02/31/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 03/30/2023"
+   },
+   "expected": "2023-03-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 03/31/2023"
+   },
+   "expected": "2023-03-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 04/30/2023"
+   },
+   "expected": "2023-04-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 04/31/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 05/30/2023"
+   },
+   "expected": "2023-05-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 05/31/2023"
+   },
+   "expected": "2023-05-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 06/30/2023"
+   },
+   "expected": "2023-06-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 06/31/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 07/30/2023"
+   },
+   "expected": "2023-07-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 07/31/2023"
+   },
+   "expected": "2023-07-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 08/30/2023"
+   },
+   "expected": "2023-08-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 08/31/2023"
+   },
+   "expected": "2023-08-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 09/30/2023"
+   },
+   "expected": "2023-09-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 09/31/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 10/30/2023"
+   },
+   "expected": "2023-10-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 10/31/2023"
+   },
+   "expected": "2023-10-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 11/30/2023"
+   },
+   "expected": "2023-11-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 11/31/2023"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 12/30/2023"
+   },
+   "expected": "2023-12-30T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 12/31/2023"
+   },
+   "expected": "2023-12-31T13:00:00"
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01.00 PM - 03/12/2024"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "1.00 PM - 03/12/2024"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 03-12/2024"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM - 03/12-2024"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM + 03/12/2024"
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00 PM -03/12/2024 "
+   },
+   "expected": null
+  },
+  {
+   "function": "compliance_time",
+   "input": {
+    "value": "01:00PM  - 03/12/2024"
+   },
+   "expected": null
+  },
+  {
    "function": "py_str",
    "input_json": "{\"value\": 1e20}",
    "expected": "1e+20"
@@ -7683,6 +8316,11 @@
    "function": "py_str",
    "input_json": "{\"value\": {\"a\": [1, {\"b\": null}], \"k'\": \"v\", \"\": 1.25}}",
    "expected": "{'a': [1, {'b': None}], \"k'\": 'v', '': 1.25}"
+  },
+  {
+   "function": "py_str",
+   "input_json": "{\"value\": [\"\\u001f\", \"\\u001e\", \"\\u0001\", \"\\u0000\", \" \", \"~\"]}",
+   "expected": "['\\x1f', '\\x1e', '\\x01', '\\x00', ' ', '~']"
   },
   {
    "function": "py_str",
@@ -12400,6 +13038,22 @@
    ]
   },
   {
+   "function": "dedupe_devices",
+   "input_json": "[{\"custom_index\": 0, \"serial_number\": \"0.5\"}, {\"custom_index\": 1, \"serial_number\": 0.5}, {\"custom_index\": 2, \"serial_number\": \"nan\"}, {\"custom_index\": 3, \"serial_number\": NaN}, {\"custom_index\": 4, \"serial_number\": \"inf\"}, {\"custom_index\": 5, \"serial_number\": Infinity}, {\"custom_index\": 6, \"serial_number\": \"-inf\"}, {\"custom_index\": 7, \"serial_number\": -Infinity}, {\"custom_index\": 8, \"serial_number\": \"1e+20\"}, {\"custom_index\": 9, \"serial_number\": 1e20}]",
+   "expected": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ]
+  },
+  {
    "function": "normalize_logs",
    "input": {
     "action_logs": {
@@ -16226,6 +16880,201 @@
      "kind": "zero_trust",
      "when": "2023-11-14T22:13:22Z",
      "label": "Z",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": \"2024-e\\u0301\", \"Domain\": \"first\"}, {\"Timestamp\": \"2024-\\u00e9\", \"Domain\": \"second\"}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "2024-\u00e9",
+     "label": "second",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    },
+    {
+     "kind": "dns",
+     "when": "2024-e\u0301",
+     "label": "first",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": \"2024-\\u00e9\", \"Domain\": \"first\"}, {\"Timestamp\": \"2024-e\\u0301\", \"Domain\": \"second\"}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "2024-\u00e9",
+     "label": "first",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    },
+    {
+     "kind": "dns",
+     "when": "2024-e\u0301",
+     "label": "second",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": \"2024-e\\u0301\", \"Domain\": \"nfd\"}, {\"Timestamp\": \"2024-f\", \"Domain\": \"f\"}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "2024-f",
+     "label": "f",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    },
+    {
+     "kind": "dns",
+     "when": "2024-e\u0301",
+     "label": "nfd",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": \"1700000000\", \"Domain\": \"d\", \"FileName\": \"f\", \"RuleName\": \"r\", \"Action\": \"A\", \"Status\": \"S\", \"Device\": \"D\", \"DeviceName\": \"N\", \"SerialNumber\": \"SN\"}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "2023-11-14T22:13:20Z",
+     "label": "d",
+     "status": "A",
+     "device": "D",
+     "serial": "SN",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"av\": {\"Logs\": [{\"Timestamp\": \"1700000001\", \"Domain\": \"\", \"FileName\": \"f\", \"RuleName\": \"r\", \"Action\": 0, \"Status\": \"S\", \"Device\": \"\", \"DeviceName\": \"N\"}]}}",
+   "expected": [
+    {
+     "kind": "av",
+     "when": "2023-11-14T22:13:21Z",
+     "label": "f",
+     "status": "S",
+     "device": "N",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"zero_trust\": {\"Logs\": [{\"Timestamp\": \"1700000002\", \"Application\": \"\", \"FileName\": \"f.dmg\", \"Action\": null, \"Device\": false, \"Source\": {}}]}}",
+   "expected": [
+    {
+     "kind": "zero_trust",
+     "when": "2023-11-14T22:13:22Z",
+     "label": "f.dmg",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"action_logs\": {\"Logs\": [{\"ActionDate\": \"1700000003\", \"Action\": 0, \"UserName\": null, \"E-mail\": false}]}}",
+   "expected": [
+    {
+     "kind": "action",
+     "when": "2023-11-14T22:13:23Z",
+     "label": "",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": \"1700000004\", \"Domain\": \"\", \"FileName\": 0, \"RuleName\": null, \"Action\": false, \"Status\": [], \"Device\": {}, \"DeviceName\": 0.0, \"SerialNumber\": 0}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "2023-11-14T22:13:24Z",
+     "label": "",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"compliance\": {\"ios\": {\"Logs\": [{\"Timestamp\": \"1700000005\", \"RuleName\": 0, \"Status\": null, \"DeviceName\": false, \"SerialNumber\": \"\", \"E-mail\": []}]}}}",
+   "expected": [
+    {
+     "kind": "compliance",
+     "when": "2023-11-14T22:13:25Z",
+     "label": "",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    }
+   ]
+  },
+  {
+   "function": "normalize_logs",
+   "input_json": "{\"dns\": [{\"Timestamp\": 0, \"Domain\": \"zero\"}, {\"Timestamp\": \"junk\", \"Domain\": \"junk\"}, {\"Timestamp\": false, \"Domain\": \"false\"}]}",
+   "expected": [
+    {
+     "kind": "dns",
+     "when": "junk",
+     "label": "junk",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    },
+    {
+     "kind": "dns",
+     "when": "1970-01-01T00:00:00Z",
+     "label": "zero",
+     "status": "",
+     "device": "",
+     "serial": "",
+     "user": ""
+    },
+    {
+     "kind": "dns",
+     "when": "1970-01-01T00:00:00Z",
+     "label": "false",
      "status": "",
      "device": "",
      "serial": "",

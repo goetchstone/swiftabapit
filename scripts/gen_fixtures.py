@@ -786,6 +786,16 @@ def gen_mosyle(m: dict) -> None:
                  "managedBy": "Jamf", "deviceModel": "Fake", "osVersion": "1.0"},
                 {"serial_number": "TESTCAMEL002", "serialNumber": "TESTOTHER001", "date_last_beat": "1700000000",
                  "lastCheckIn": "2001-01-01"}]
+    # Verifier round 2: `_OS_FAMILY`'s other spellings (`atv`, `osx`) and an `os` in capitals (abapit lowers it), a
+    # model and a device type holding both words (iPad is checked first), and the model's sources in abapit's order
+    # (`device_model`, then `model_name`, then `device_model_name`).
+    devices += [{"serial_number": "TESTATV00001", "os": "atv"}, {"serial_number": "TESTOSX00001", "os": "osx"},
+                {"serial_number": "TESTMACOS001", "os": "MacOS"}, {"serial_number": "TESTTVOS0001", "os": "TVOS"},
+                {"serial_number": "TESTIOS00001", "os": "IOS"},
+                {"serial_number": "TESTDOCK0001", "device_model": "iPhone-on-iPad-dock", "os": ""},
+                {"serial_number": "TESTDOCK0002", "device_type": "iPhone or iPad", "model_name": "x"},
+                {"serial_number": "TESTORDER001", "device_model": "iPhone17,3", "model_name": "iPad", "os": "ios"},
+                {"serial_number": "TESTORDER002", "model_name": "iPad Pro", "device_model_name": "iPhone 16", "os": ""}]
     for raw in devices:
         cases.append(device_case(mosyle, raw))
     cases.append({"function": "device_columns", "input": None, "expected": device_columns(mosyle)})
@@ -804,6 +814,14 @@ def gen_mosyle(m: dict) -> None:
                  "secret": "TESTSECRET", "custom_field": "x"},
                 {"id": 7, "identifier": "kai", "type": 0.0, "usertype": "admin", "Password": "TESTPASSWORD2"}]:
         cases.append(allowlisted({"function": "adapt_user", "input": raw}, jsonable(mosyle.adapt_user(raw)), USER_ATTRIBUTES))
+    # Verifier round 2: null fields (abapit keeps None), the id's sources in order (`iduser`, `id`, `identifier`),
+    # allowlisted names in other cases (`ID`, `Name`: the list is case-sensitive, as Python's `in` is), and a group's
+    # fields on a user.
+    for raw in [{"name": None, "identifier": None, "managedappleid": None, "usertype": None, "iduser": "U"},
+                {"iduser": "U1", "id": "I1", "identifier": "ident1"}, {"id": "I2", "identifier": "ident2"},
+                {"ID": "TESTUPPER", "Name": "TESTUPPER", "EMAIL": "TESTUPPER", "Type": "TESTUPPER", "iduser": "U"},
+                {"iduser": "U", "os": "ios", "members": 3, "idusergroup": "G", "memberCount": 3}]:
+        cases.append(allowlisted({"function": "adapt_user", "input": raw}, jsonable(mosyle.adapt_user(raw)), USER_ATTRIBUTES))
     for _ in range(25):
         raw = {k: v for k, v in {"idusergroup": rng.choice(["7", None]), "iddevicegroup": rng.choice(["9", 9, None]),
                                  "id": rng.choice(["11", None]), "name": rng.choice(["Sales", ""]),
@@ -820,6 +838,14 @@ def gen_mosyle(m: dict) -> None:
                        "userGroups"),
                       ({"iddevicegroup": 9, "name": "Carts", "device_numbers": None, "members": 4, "os": "ios",
                         "token": "TESTTOKEN"}, "deviceGroups")]:
+        cases.append(allowlisted({"function": "adapt_group", "input": {"raw": raw, "kind": kind}},
+                                 jsonable(mosyle.adapt_group(raw, kind)), GROUP_ATTRIBUTES))
+    # Verifier round 2: null fields (abapit keeps None), a user's fields on a group, and allowlisted names in other
+    # cases.
+    for raw, kind in [({"idusergroup": "G2", "name": None, "identifier": None, "os": None, "email": "TESTUSERFIELD",
+                        "type": "TESTUSERFIELD", "iduser": "U1"}, "userGroups"),
+                      ({"IDUSERGROUP": "TESTUPPER", "Name": "TESTUPPER", "OS": "TESTUPPER", "ID": "TESTUPPER",
+                        "iddevicegroup": "D1"}, "deviceGroups")]:
         cases.append(allowlisted({"function": "adapt_group", "input": {"raw": raw, "kind": kind}},
                                  jsonable(mosyle.adapt_group(raw, kind)), GROUP_ATTRIBUTES))
     cases.append({"function": "allowlists", "input": None, "expected": {"user": USER_ATTRIBUTES, "group": GROUP_ATTRIBUTES}})
@@ -853,6 +879,12 @@ def gen_mosyle(m: dict) -> None:
                  '{"value": 253402300799.5}', '{"value": -62135596800.9}', '{"value": -62135596801.5}', '{"value": []}',
                  '{"value": {}}', '{"value": 123456789012345678901234567890}']:
         cases.append(json_case("to_iso", text, lambda parsed: mosyle._to_iso(parsed["value"])))
+    # Verifier round 2: floats just past Int64 (2^63 exactly, 9.25e18: `Int(Double)` traps there, so the clamp has to
+    # hold below it) and their negatives, and integers at and just past Int64's ends.
+    for text in ['{"value": 9.25e18}', '{"value": 9.223372036854775808e18}', '{"value": -9.25e18}', '{"value": -1e20}',
+                 '{"value": 9223372036854775807}', '{"value": 9223372036854775808}', '{"value": -9223372036854775808}',
+                 '{"value": -9223372036854775809}']:
+        cases.append(json_case("to_iso", text, lambda parsed: mosyle._to_iso(parsed["value"])))
     for value in ["01:00 PM - 03/12/2024", "12:30 AM - 01/02/2025", "12:05 PM - 12/31/2023", "13:00 PM - 03/12/2024",
                   "01:00 PM - 02/30/2024", "1:07 AM - 07/04/2026", "01:00 pm - 03/12/2024", "", None,
                   "99:59 PM - 03/12/2024", "00:30 PM - 03/12/2024", "00:00 AM - 03/12/2024", "12:00 PM - 03/12/2024",
@@ -863,6 +895,12 @@ def gen_mosyle(m: dict) -> None:
                   "01:00 PM - 04/31/2024", "01:60 PM - 03/12/2024", "1:5 PM - 03/12/2024", "001:00 PM - 03/12/2024",
                   "01:00 PM - 03/12/2024\n", " 01:00 PM - 03/12/2024", "01:00  PM - 03/12/2024",
                   "\u0661:00 PM - 03/12/2024", "01:00 PM - 03/12/2024\u0301", 1700000000]:
+        cases.append({"function": "compliance_time", "input": {"value": value}, "expected": compliance_time(value)})
+    # Verifier round 2: every month's 30th and 31st, so each month's length is pinned (not only February's and
+    # April's), and a wrong character in each separator's place.
+    for value in [f"01:00 PM - {month:02d}/{day}/2023" for month in range(1, 13) for day in (30, 31)] + [
+            "01.00 PM - 03/12/2024", "1.00 PM - 03/12/2024", "01:00 PM - 03-12/2024", "01:00 PM - 03/12-2024",
+            "01:00 PM + 03/12/2024", "01:00 PM -03/12/2024 ", "01:00PM  - 03/12/2024"]:
         cases.append({"function": "compliance_time", "input": {"value": value}, "expected": compliance_time(value)})
     # Phase 7a review L4: Python's str() and bool() of what json.loads made of Mosyle's text. A JSON integer is an
     # int (exact, `-0` is 0); anything with a fraction or an exponent is a float, written by repr(): the shortest
@@ -881,7 +919,9 @@ def gen_mosyle(m: dict) -> None:
              # unassigned there, so escaped).
              '["\\u2029", "\\uffff", "\\ufffe", "\\ud800\\udc00", "\\udbff\\udfff", "\\ud839\\udcd0", "\\ud87a\\udff0", '
              '"\\ud803\\udd40", "\\u1acf", "\\u088f"]',
-             '{"a": [1, {"b": null}], "k\'": "v", "": 1.25}']
+             '{"a": [1, {"b": null}], "k\'": "v", "": 1.25}',
+             # Verifier round 2: the last ASCII control (U+001F, `\x1f`) and its neighbours.
+             '["\\u001f", "\\u001e", "\\u0001", "\\u0000", " ", "~"]']
     floats = random.Random(1009)
     for _ in range(300):
         value = struct.unpack("<d", struct.pack("<Q", floats.getrandbits(64)))[0]
@@ -919,7 +959,11 @@ def gen_mosyle(m: dict) -> None:
                  ['{"serial_number": {"a": 1}, "deviceudid": "U"}', '{"deviceudid": "U"}'],
                  # Verifier round 1: a string serial that spells a number's key is still a string.
                  ['{"serial_number": "i123"}', '{"serial_number": 123}', '{"serial_number": "f0.5"}',
-                  '{"serial_number": 0.5}', '{"serial_number": "123"}']]:
+                  '{"serial_number": 0.5}', '{"serial_number": "123"}'],
+                 # Verifier round 2: a string that spells a float is still a string (`len({"0.5", 0.5}) == 2`).
+                 ['{"serial_number": "0.5"}', '{"serial_number": 0.5}', '{"serial_number": "nan"}', '{"serial_number": NaN}',
+                  '{"serial_number": "inf"}', '{"serial_number": Infinity}', '{"serial_number": "-inf"}',
+                  '{"serial_number": -Infinity}', '{"serial_number": "1e+20"}', '{"serial_number": 1e20}']]:
         text = "[" + ", ".join(f'{{"custom_index": {i}' + (", " + row[1:] if row != "{}" else "}")
                                for i, row in enumerate(rows)) + "]"
         cases.append(dedupe_case(m, text))
@@ -964,6 +1008,26 @@ def gen_mosyle(m: dict) -> None:
                  '{"compliance": {"mac": {"Logs": ["x", {"Timestamp": "1700000000", "RuleName": "R"}]}, "ios": "x"}}',
                  '{"action_logs": {"Logs": {"a": 1}}, "dns": [{"Timestamp": "1700000001", "Domain": "d"}, "x"]}',
                  '{"zero_trust": {"Events": {"Logs": ["x"]}, "Logs": [{"Timestamp": "1700000002", "Application": "Z"}]}}']:
+        cases.append(logs_case(mosyle, json.loads(text), text))
+    # Verifier round 2: stamps sorted by code points (`2024-e` + U+0301 and `2024-` + U+00E9 are canonically
+    # equivalent, a tie to Swift's `==`; `e` + U+0301 sorts before `f`, where its composed U+00E9 would sort after
+    # it), an entry holding each field and its fallback, present falsy values (each becomes ""), and falsy stamps.
+    for text in ['{"dns": [{"Timestamp": "2024-e\\u0301", "Domain": "first"}, {"Timestamp": "2024-\\u00e9", "Domain": "second"}]}',
+                 '{"dns": [{"Timestamp": "2024-\\u00e9", "Domain": "first"}, {"Timestamp": "2024-e\\u0301", "Domain": "second"}]}',
+                 '{"dns": [{"Timestamp": "2024-e\\u0301", "Domain": "nfd"}, {"Timestamp": "2024-f", "Domain": "f"}]}',
+                 '{"dns": [{"Timestamp": "1700000000", "Domain": "d", "FileName": "f", "RuleName": "r", "Action": "A", '
+                 '"Status": "S", "Device": "D", "DeviceName": "N", "SerialNumber": "SN"}]}',
+                 '{"av": {"Logs": [{"Timestamp": "1700000001", "Domain": "", "FileName": "f", "RuleName": "r", "Action": 0, '
+                 '"Status": "S", "Device": "", "DeviceName": "N"}]}}',
+                 '{"zero_trust": {"Logs": [{"Timestamp": "1700000002", "Application": "", "FileName": "f.dmg", "Action": null, '
+                 '"Device": false, "Source": {}}]}}',
+                 '{"action_logs": {"Logs": [{"ActionDate": "1700000003", "Action": 0, "UserName": null, "E-mail": false}]}}',
+                 '{"dns": [{"Timestamp": "1700000004", "Domain": "", "FileName": 0, "RuleName": null, "Action": false, '
+                 '"Status": [], "Device": {}, "DeviceName": 0.0, "SerialNumber": 0}]}',
+                 '{"compliance": {"ios": {"Logs": [{"Timestamp": "1700000005", "RuleName": 0, "Status": null, '
+                 '"DeviceName": false, "SerialNumber": "", "E-mail": []}]}}}',
+                 '{"dns": [{"Timestamp": 0, "Domain": "zero"}, {"Timestamp": "junk", "Domain": "junk"}, '
+                 '{"Timestamp": false, "Domain": "false"}]}']:
         cases.append(logs_case(mosyle, json.loads(text), text))
     write("mosyle", {**header(1007), "cases": cases})
 
