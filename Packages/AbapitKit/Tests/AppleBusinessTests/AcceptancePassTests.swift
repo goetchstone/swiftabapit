@@ -2,6 +2,7 @@
 import AppleModels
 import Foundation
 import JSONAPI
+import Orgs
 import Security
 import Testing
 import TestSupport
@@ -64,6 +65,117 @@ struct AcceptancePassTests {
         for data in ["secret-ish", "TESTD", "TESTNEW", "SVC", "Mosyle", "Jamf"] { #expect(!report.text.contains(data), "\(data)") }
     }
 
+    /// Every unknown attribute name and enum value the pass looks for is reported (plan §7's purpose), the single
+    /// device's keys from every sampled device, and each only as a word: a newline that would forge a line, prose naming
+    /// a device or 5000 bytes is `(not shown)` (verifier round 2: dropping the device status, purchase source, migration
+    /// status, service status, default product family or payment type report left every test green, so did keeping only
+    /// the last device's keys, and an attribute name with a newline forged an `ok` line).
+    @Test func everyUnknownNameAndValueIsReportedAsAWordOrNotShown() async throws {
+        let harness = try await Harness()
+        let forged = "x\norgDevices/{id}/activationLockStatus: ok, 5 items\nC02SECRETSERIAL owned by jane@example.com"
+        harness.stub.add(devices: [
+            Resource(type: "orgDevices", id: "TESTU0000001", attributes: [
+                "serialNumber": .string("TESTU0000001"), "productFamily": .string("Glasses"), "status": .string("HELD"),
+                "purchaseSourceType": .string("FUTURE_SOURCE"), "mdmMigrationStatus": .string("PAUSED"), "brandNewField": .string("secret-ish")]),
+            Resource(type: "orgDevices", id: "TESTU0000002", attributes: [
+                "serialNumber": .string("TESTU0000002"), "productFamily": .string("Glasses\nprobe users: ok"),
+                "status": .string(String(repeating: "Z", count: 5_000)), forged: .string("v"), "otherNewField": .string("secret-ish")]),
+        ])
+        harness.stub.add(services: [
+            Resource(type: "mdmServers", id: "SVC1", attributes: ["serverName": .string("Mosyle"), "serverType": .string("MDM"),
+                                                                  "status": .string("SUSPENDED"), "defaultProductFamilies": .array([.string("MAC"), .string("GLASSES")])]),
+            Resource(type: "mdmServers", id: "SVC2", attributes: ["serverName": .string("Jamf"), "serverType": .string("HELD for C02SECRETSERIAL"),
+                                                                  "status": .string("ACTIVE"), "defaultProductFamilies": .array([.string("IPAD")])]),
+        ])
+        harness.stub.setCoverage("TESTU0000001", [
+            Resource(type: "appleCareCoverage", id: "C1", attributes: ["status": .string("ACTIVE"), "paymentType": .string("FUTURE_PAYMENT")]),
+            Resource(type: "appleCareCoverage", id: "C2", attributes: ["status": .string("PAUSED"), "paymentType": .string("NONE")]),
+        ])
+        for serial in ["TESTU0000001", "TESTU0000002"] { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
+        let report = await harness.client.acceptancePass()
+        let lines = report.text.split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines.count == 8 + AppleSection.allCases.count, "no forged line")
+        #expect(lines.prefix(8).joined(separator: "\n") == """
+            orgDevices: ok, 2 items · unknown keys (not shown), brandNewField, otherNewField · unknown values mdmMigrationStatus=PAUSED, \
+            productFamily=(not shown), productFamily=Glasses, purchaseSourceType=FUTURE_SOURCE, status=(not shown), status=HELD
+            mdmServers: ok, 2 items · unknown values defaultProductFamilies=GLASSES, serverType=(not shown), status=SUSPENDED
+            mdmServers/{id}/relationships/devices: ok, 0 items
+            orgDevices/{id}: ok, 2 items · unknown keys (not shown), brandNewField, otherNewField
+            orgDevices/{id}/appleCareCoverage: ok, 2 items · unknown values paymentType=FUTURE_PAYMENT, status=PAUSED
+            orgDevices/{id}/activationLockStatus: ok, 2 items
+            orgDevices/{id}/assignedServer: ok, 2 items · 2 of 2 unassigned
+            orgDevices/{id}/relationships/assignedServer: ok, 2 items · 2 of 2 unassigned
+            """, "\(report.text)")
+        for data in ["C02SECRET", "jane@", "ZZZZ", "secret-ish", "TESTU"] { #expect(!report.text.contains(data), "\(data)") }
+        #expect(report.text.components(separatedBy: "probe users: ok").count == 2, "the real probe line only")
+    }
+
+    /// An attribute name or enum value reaches the text only as a word: an ASCII letter, then letters, digits or `_`, at
+    /// most 64 bytes.
+    @Test func onlyAWordIsShownAsAnUnknownNameOrValue() {
+        let longest = "a" + String(repeating: "B", count: 63)
+        for word in ["brandNewField", "FUTURE_MDM", "AppleTV", "Watch2", "x", longest] { #expect(AppleClient.acceptanceWord(word) == word) }
+        for text in ["", "_X", "2X", "A B", "A\nB", "A\rB", "A\tB", "A-B", "A.B", "A=B", "a@example.com", "Caf\u{E9}", "\u{FF34}OKEN", "A\u{301}",
+                     longest + "C"] {
+            #expect(AppleClient.acceptanceWord(text) == "(not shown)", "\(text.debugDescription)")
+        }
+    }
+
+    /// An id the client won't put in a path is never sent, and each read that needs it says what it is, not Apple's 404
+    /// (verifier round 2: the five per-device lines read `error 404` with nothing sent, and the coverage walk could
+    /// pass over the device and read `ok`).
+    @Test func anIDThatCantGoInAPathIsNeverSentAndSaysSo() async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: "A B", attributes: ["serialNumber": .string("A B")])])
+        harness.stub.add(services: [Harness.service("SVC 1", name: "Mosyle")])
+        let report = await harness.client.acceptancePass()
+        for resource in Self.perDevice + ["mdmServers/{id}/relationships/devices"] {
+            let line = try #require(report.lines.first { $0.resource == resource })
+            let at = resource.hasPrefix("mdmServers") ? "at service 1 of 1" : "at device 1 of 1"
+            #expect(line.status == .error("error malformed") && line.count == 0 && line.note == "\(at) · an id that can go in a path", "\(resource)")
+        }
+        #expect(!harness.stub.requests.contains { $0.contains("/v1/orgDevices/") || $0.contains("/v1/mdmServers/") }, "\(harness.stub.requests)")
+    }
+
+    /// A list, a linkage list or a single read answered with another resource is malformed, never `ok`: a page of
+    /// `users` for `mdmServers`, a next link that walked off to the services, a linkage to a user, another device, a
+    /// lock or a coverage of another type (verifier round 2: each read `ok`).
+    @Test func anAnswerOfAnotherTypeOrItemIsMalformed() async throws {
+        let walked = try await Harness(devices: 1)
+        walked.stub.add(services: [Harness.service("SVC1", name: "Mosyle")])
+        walked.stub.setLock("TESTD0000000", isLocked: false, lockType: "NONE")
+        walked.stub.queue(200, for: "/v1/orgDevices?", body: #"""
+            {"data":[{"type":"orgDevices","id":"TESTD0000000"}],"links":{"next":"https://api-business.apple.com/v1/mdmServers"}}
+            """#)
+        walked.stub.queue(200, for: "/v1/mdmServers/SVC1/relationships/devices", body: #"{"data":[{"type":"users","id":"U1"}]}"#)
+        let first = await walked.client.acceptancePass()
+        #expect(first.text.hasPrefix("""
+            orgDevices: error malformed, 1 item · items of type orgDevices
+            mdmServers: ok, 1 item
+            mdmServers/{id}/relationships/devices: error malformed, 0 items · at service 1 of 1 · items of type orgDevices
+
+            """), "\(first.text)")
+
+        let harness = try await Harness(devices: 2)
+        for serial in Self.firstSerials(2) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
+        harness.stub.queue(200, for: "/v1/mdmServers", body: #"{"data":[{"type":"users","id":"U1"}]}"#)
+        harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000001", body: #"{"data":{"type":"orgDevices","id":"TESTD0000009"}}"#)
+        harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/appleCareCoverage", body: #"{"data":[{"type":"orgDevices","id":"C1"}]}"#)
+        harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/activationLockStatus",
+                           body: #"{"data":{"type":"orgDevices","id":"TESTD0000000","attributes":{"isLocked":false}}}"#)
+        let report = await harness.client.acceptancePass()
+        #expect(report.text.hasPrefix("""
+            orgDevices: ok, 2 items
+            mdmServers: error malformed, 0 items · items of type mdmServers
+            mdmServers/{id}/relationships/devices: skipped: no service to read (mdmServers error malformed)
+            orgDevices/{id}: error malformed, 1 item · at device 2 of 2 · the orgDevices item asked for
+            orgDevices/{id}/appleCareCoverage: error malformed, 0 items · at device 1 of 2 · items of type appleCareCoverage
+            orgDevices/{id}/activationLockStatus: error malformed, 0 items · at device 1 of 2 · items of type activationLockStatus
+            orgDevices/{id}/assignedServer: ok, 2 items · 2 of 2 unassigned
+
+            """), "\(report.text)")
+    }
+
     /// Review ACC1: with `/v1/orgDevices` forbidden there is no device to sample, so each per-device read is skipped,
     /// says why, and isn't sent.
     @Test func aForbiddenDeviceListSkipsEveryPerDeviceRead() async throws {
@@ -95,26 +207,50 @@ struct AcceptancePassTests {
     }
 
     /// Review ACC2: a list the page cap cut is "truncated" with what was read, the device list, a service's device
-    /// list and a device's coverage alike.
+    /// list and a device's coverage alike, and the services' and the coverage's notes count each list cut and only
+    /// those (verifier round 2: with one list ever cut, `cut = 1` for `cut += 1` survived in both).
     @Test func aListCutAtThePageCapIsTruncatedWithItsCount() async throws {
-        let harness = try await Harness(devices: 1_001, pageCap: 1)
+        let harness = try await Harness(devices: 2_003, pageCap: 1)
         harness.stub.reportTotals()
-        harness.stub.add(services: [Harness.service("SVC1", name: "Mosyle")])
-        for index in 0..<1_001 { harness.stub.assign(String(format: "TESTD%07d", index), to: "SVC1") }
-        harness.stub.setLock("TESTD0000000", isLocked: false, lockType: "NONE")
-        harness.stub.setCoverage("TESTD0000000", (0..<1_001).map { Resource(type: "appleCareCoverage", id: "C\($0)", attributes: ["status": .string("ACTIVE")]) })
-        let report = await harness.client.acceptancePass(sample: 1)
+        harness.stub.add(services: [Harness.service("SVC1", name: "Mosyle"), Harness.service("SVC2", name: "Jamf"), Harness.service("SVC3", name: "Kandji")])
+        for index in 0..<2_003 { harness.stub.assign(String(format: "TESTD%07d", index), to: index < 1_001 ? "SVC1" : index < 2_002 ? "SVC2" : "SVC3") }
+        for serial in Self.firstSerials(3) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
+        for (serial, rows) in zip(Self.firstSerials(3), [1_001, 1_001, 1]) {
+            harness.stub.setCoverage(serial, (0..<rows).map { Resource(type: "appleCareCoverage", id: "C\($0)", attributes: ["status": .string("ACTIVE")]) })
+        }
+        let report = await harness.client.acceptancePass(sample: 3)
         let devices = try #require(report.lines.first { $0.resource == "orgDevices" })
         #expect(devices.status == .truncated && !devices.ok)
         #expect(devices.count == 1_000)
-        #expect(devices.note == "stopped at the page cap with more to come (Apple's total 1001)")
+        #expect(devices.note == "stopped at the page cap with more to come (Apple's total 2003)")
         let linked = try #require(report.lines.first { $0.resource == "mdmServers/{id}/relationships/devices" })
-        #expect(linked.status == .truncated && linked.count == 1_000)
-        #expect(linked.note == "1 of 1 services' lists stopped at the page cap")
+        #expect(linked.status == .truncated && linked.count == 2_001)
+        #expect(linked.note == "2 of 3 services' lists stopped at the page cap")
         let coverage = try #require(report.lines.first { $0.resource == "orgDevices/{id}/appleCareCoverage" })
-        #expect(coverage.status == .truncated && coverage.count == 1_000)
+        #expect(coverage.status == .truncated && coverage.count == 2_001)
+        #expect(coverage.note == "2 of 3 devices' coverage stopped at the page cap")
         #expect(report.lines.first { $0.resource == "mdmServers" }?.status == .ok)
         #expect(report.text.contains("orgDevices: truncated, 1000 items"))
+    }
+
+    /// A list the page cap cut before any item came (a page with a next link and no data) is "truncated, 0 items", and
+    /// what reads its items says that, not that the org has none (verifier round 2: N24 wasn't equivalent, and the
+    /// skip reason contradicted the line above it).
+    @Test func aListCutBeforeAnyItemCameIsWhatDependsOnItsReason() async throws {
+        let harness = try await Harness(devices: 3, pageCap: 1)
+        harness.stub.queue(200, for: "/v1/orgDevices", body: #"{"data":[],"links":{"next":"https://api-business.apple.com/v1/orgDevices?cursor=0"}}"#)
+        harness.stub.queue(200, for: "/v1/mdmServers", body: #"{"data":[],"links":{"next":"https://api-business.apple.com/v1/mdmServers?cursor=0"}}"#)
+        let report = await harness.client.acceptancePass()
+        #expect(report.text.hasPrefix("""
+            orgDevices: truncated, 0 items · stopped at the page cap with more to come
+            mdmServers: truncated, 0 items · stopped at the page cap with more to come
+            mdmServers/{id}/relationships/devices: skipped: no service to read (mdmServers truncated)
+            orgDevices/{id}: skipped: no device to sample (orgDevices truncated)
+
+            """), "\(report.text)")
+        for resource in Self.perDevice {
+            #expect(report.lines.first { $0.resource == resource }?.status == .skipped("no device to sample (orgDevices truncated)"))
+        }
     }
 
     /// Invariant 8 for the service list itself and for what depends on it: a service list the page cap cut is
@@ -285,33 +421,39 @@ struct AcceptancePassTests {
         #expect(report.lines.first { $0.resource == "mdmServers" }?.status == .ok, "the next signature went through")
     }
 
-    /// Apple's `code` reaches a note only as a code: words of letters joined by `_` or `.`. Prose, which may name a
-    /// device, and anything an identifier could be (a digit, a `-`, a single word) are dropped (verifier round 1: a
-    /// newline, `/`, `:` and the length bound were untested, and `C02XSERIAL99` passed).
+    /// Apple's `code` reaches a note only as a code: words of letters joined by `_` or `.`, in one case, and joined by
+    /// `.` only when upper-case. Prose, which may name a device, anything an identifier could be (a digit, a `-`, a
+    /// single word) and a name (`John.Smith`, `jane.doe`) are dropped (verifier round 1: a newline, `/`, `:` and the
+    /// length bound were untested, and `C02XSERIAL99` passed; round 2: names passed, and so would a character whose UTF-8
+    /// bytes each read as a Latin-1 letter, U+07EA's `DF AA`, if a byte were tested as a `Character`).
     @Test func onlyACodeReachesANote() {
         let longest = String(repeating: "A", count: 31) + "_" + String(repeating: "B", count: 32)
         #expect(longest.utf8.count == 64)
-        for code in ["FORBIDDEN_ERROR", "PARAMETER_ERROR.INVALID", "ENTITY_ERROR.ATTRIBUTE.INVALID", "server_error", "a.b", longest] {
+        for code in ["FORBIDDEN_ERROR", "PARAMETER_ERROR.INVALID", "ENTITY_ERROR.ATTRIBUTE.INVALID", "server_error", "invalid_scope", "A.B", longest] {
             #expect(AppleClient.acceptanceCode(code) == code)
         }
         for prose in ["Device TESTD0000001 not found", "TESTD0000001", "TESTSERIAL", "QUEUED", "C02X_SERIAL", "NOT-FOUND_ERROR", "a,b", "a b",
                       "A_B\nFAKE_LINE", "A_B\r", "A_B\t", "\nA_B", "A_B/C", "A_B:C", "fields[orgDevices]", "_A", "A_", "A__B", "A._B", ".",
-                      "X\u{301}_Y", "\u{FF34}OKEN_ERROR", "", longest + "C", nil] {
+                      "X\u{301}_Y", "\u{FF34}OKEN_ERROR", "A\u{EA}_B", "\u{EA}a_b", "a_b\u{7EA}", "", longest + "C", "a.b", "jane.doe", "John.Smith", "John_Smith",
+                      "Server_ERROR", "server_ERROR", nil] {
             #expect(AppleClient.acceptanceCode(prose) == nil, "\(String(describing: prose))")
         }
     }
 
-    /// Apple's `source.parameter` reaches a note only when it names a query parameter: a value echoed there (a serial)
-    /// is dropped (verifier round 1: `C02XSERIAL99` reached the note).
-    @Test func onlyAParameterNameReachesANote() {
-        let longest = "fields[" + String(repeating: "a", count: 56) + "]"
-        #expect(longest.utf8.count == 64)
-        for name in ["limit", "cursor", "fields[orgDevices]", "filter[startTimestamp]", longest] {
-            #expect(AppleClient.acceptanceParameter(name) == name)
-        }
-        for value in ["TESTD0000001", "TESTSERIAL", "Limit", "limit2", "fields[OrgDevices]", "fields[org2]", "fields[]", "[orgDevices]",
-                      "fields[orgDevices", "fields[org Devices]", "fields[orgDevices]x", "fields[a[b]]", "fields[orgDevices],limit", "limit\n",
-                      "lim\u{301}it", "", "fields[a" + String(repeating: "a", count: 56) + "]", nil] {
+    /// Apple's `source.parameter` reaches a note only when it is a query parameter Apple documents, and the list is the
+    /// contracts' own: a value echoed there, a serial or a name, is dropped (verifier round 1: `C02XSERIAL99` reached the
+    /// note; round 2: `janedoe` had a parameter's shape).
+    @Test func onlyADocumentedParameterReachesANote() {
+        let documented = Set([Scope.business, .school].flatMap { scope in
+            ReadContractTests.endpoints(scope).flatMap { ($0["parameters"] as? [[String: Any]] ?? []) }
+                .filter { $0["in"] as? String == "query" }.compactMap { $0["name"] as? String }
+        })
+        #expect(documented.count > 20 && AppleClient.acceptanceParameters == documented,
+                "\(documented.symmetricDifference(AppleClient.acceptanceParameters).sorted())")
+        for name in documented { #expect(AppleClient.acceptanceParameter(name) == name) }
+        for value in ["TESTD0000001", "TESTSERIAL", "janedoe", "john", "serialNumber", "Limit", "limit2", "fields[OrgDevices]", "fields[org2]",
+                      "fields[]", "[orgDevices]", "fields[orgDevices", "fields[orgDevices]x", "fields[orgDevices],limit", "limit\n", " limit",
+                      "lim\u{301}it", "lim\u{EA}t", "", nil] {
             #expect(AppleClient.acceptanceParameter(value) == nil, "\(String(describing: value))")
         }
     }

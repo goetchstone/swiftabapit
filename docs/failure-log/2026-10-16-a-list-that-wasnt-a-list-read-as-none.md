@@ -26,3 +26,17 @@
   `acceptanceFailure` in a table. `aGreenPassReadsLineByLine` holds the whole text. The round's mutant script
   re-ran both verifiers' survivors and this round's own mutants: 74, all killed. Still only a stub: what
   Apple sends for a malformed list is unknown, and the live acceptance pass is the proof.
+- **Recurrence (verifier round 2, same branch):** both verifiers held the round-1 fix but found the pass still read
+  `ok` for reads it hadn't proved: a page of another type (`users` for `mdmServers`, a next link that walked off to
+  the services), another device for a single read, and the coverage walk passing over an id that can't go in a path
+  (the four other per-device lines said Apple's `error 404` with nothing sent). A newline in an unknown attribute name
+  or enum value forged an `ok` line in the copied text. A check cancelled inside its loop kept sending over the stub
+  and said it stopped at the last item. Eighteen distinct mutants survived, among them six of the unknown-value
+  fields, the later-page `list()` check, `cut = 1` for `cut += 1`, three token codes and the walk's own cancellation
+  check. Cause: the tests drove one example per branch, so a branch that needs a second example (a second cut, a later
+  page, a non-last device) or another field went unasserted. Fix: commit "fix(1b-acceptance): verifier round 3":
+  `typed(_:asked:)`, `sendable`, `acceptanceWord`, a cancellation check per item, a skip reason that says `truncated`,
+  codes in one case, and parameters from the contracts' list. Prevention: each survivor has a test that fails on it
+  (this round's mutant script: 62 mutants, the survivors and this round's own, all killed); the per-item tests use two
+  or more items and the last one differs, and a cancellation test logs in the transport, since a walk's task can
+  outlive the pass.

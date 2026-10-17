@@ -5,9 +5,9 @@ import JSONAPI
 
 /// The read-only acceptance pass (plan §7): every read this phase makes, against the org, reporting per
 /// resource whether it ran and fully succeeded, how many items, and which attribute names and enum values this
-/// version doesn't know. It reports Apple's field names, statuses, counts, error codes and parameter names (each only
-/// when it has a code's shape) and this app's own words, never an item's data and never Apple's `detail` prose (which
-/// may echo an identifier), so its output can be pasted into an issue.
+/// version doesn't know. It reports Apple's field names and enum values (each only when it is a word), statuses, counts,
+/// error codes (only when code-shaped) and documented parameter names, and this app's own words, never an item's data
+/// and never Apple's `detail` prose (which may echo an identifier), so its output can be pasted into an issue.
 public struct AcceptanceReport: Sendable, Equatable {
     /// How one check went. Only `.ok` is a read that ran and fully succeeded (Phase 1b review M5: with `orgDevices`
     /// forbidden the five per-device lines printed "ok … 0", and a list cut at the page cap printed "ok").
@@ -38,10 +38,12 @@ public struct AcceptanceReport: Sendable, Equatable {
         public let status: Status
         /// Items read, up to where the check ended; nil when nothing was sent (skipped) or nothing is counted (a probe).
         public let count: Int?
+        /// Attribute names this version doesn't read, and `field=value`s it doesn't know, each as `acceptanceWord` shows it.
         public let unknownKeys: [String]
         public let unknownValues: [String]
-        /// What was cut, where a loop stopped, Apple's error `code` and `source.parameter` (only when code-shaped), the
-        /// token endpoint's code, this app's words for a malformed answer, the Vault's guidance. Never Apple's `detail`.
+        /// What was cut, where a loop stopped, Apple's error `code` (only when code-shaped) and `source.parameter` (only a
+        /// documented one), the token endpoint's code, this app's words for a malformed answer, the Vault's guidance.
+        /// Never Apple's `detail`.
         public let note: String?
 
         public var ok: Bool { status == .ok }
@@ -73,7 +75,7 @@ extension AppleClient {
         var devices: [OrgDevice] = []
         let deviceList = await Self.check("orgDevices") { found in
             for try await page in self.devices() {
-                devices += page.items
+                devices += try Self.typed(page.items)
                 found.count = devices.count
                 found.cut(page)
             }
@@ -89,7 +91,7 @@ extension AppleClient {
         var services: [MDMService] = []
         let serviceList = await Self.check("mdmServers") { found in
             for try await page in self.services() {
-                services += page.items
+                services += try Self.typed(page.items)
                 found.count = services.count
                 found.cut(page)
             }
@@ -104,11 +106,15 @@ extension AppleClient {
         lines.append(await Self.check("mdmServers/{id}/relationships/devices", unless: noService) { found in
             var cut = 0
             for (index, service) in services.enumerated() {
-                found.position = "at service \(index + 1) of \(services.count)"
-                for try await page in self.serviceDeviceIDs(service.id) {
-                    found.count += page.items.count
+                try found.at("service", index, of: services.count)
+                // The pages themselves, as for coverage, not `serviceDeviceIDs(_:)`'s ids: each linkage's type is checked.
+                guard let read = AppleRead.serviceDevices(scope, id: service.id) else { throw Self.unsafeID }
+                for try await page in self.pages(read).map(OrgDevice.init) {
+                    found.count += try Self.typed(page.items).count
                     if page.truncated { cut += 1 }
                 }
+                // A cancelled `for try await` ends without throwing: stop at this service, not after sending the rest.
+                try Task.checkCancellation()
             }
             found.truncation = [cut > 0 ? "\(cut) of \(services.count) services' lists stopped at the page cap" : nil, partial]
                 .compactMap { $0 }.joined(separator: " · ").nonEmpty
@@ -119,22 +125,25 @@ extension AppleClient {
             : sampled.isEmpty ? "no device to sample (sample size \(sample))" : nil
         lines.append(await Self.check("orgDevices/{id}", unless: unsampled) { found in
             for (index, device) in sampled.enumerated() {
-                found.position = "at device \(index + 1) of \(sampled.count)"
-                found.keys.formUnion(try await self.device(device.id).unreadAttributes)
+                try found.at("device", index, of: sampled.count)
+                let single = try await self.device(Self.sendable(device.id))
+                found.keys.formUnion(try Self.typed([single], asked: device.id)[0].unreadAttributes)
                 found.count += 1
             }
         })
         lines.append(await Self.check("orgDevices/{id}/appleCareCoverage", unless: unsampled) { found in
             var rows: [AppleCareCoverage] = [], cut = 0
             for (index, device) in sampled.enumerated() {
-                found.position = "at device \(index + 1) of \(sampled.count)"
+                try found.at("device", index, of: sampled.count)
                 // The pages themselves, not `appleCare(_:)`'s whole list: a coverage list cut at the page cap is said.
-                guard let read = AppleRead.appleCare(scope, serial: device.id) else { throw AppleAPIError.notFound }
+                guard let read = AppleRead.appleCare(scope, serial: device.id) else { throw Self.unsafeID }
                 for try await page in self.pages(read).map(AppleCareCoverage.init) {
-                    rows += page.items
+                    rows += try Self.typed(page.items)
                     found.count = rows.count
                     if page.truncated { cut += 1 }
                 }
+                // As for the services: stop at this device.
+                try Task.checkCancellation()
             }
             if cut > 0 { found.truncation = "\(cut) of \(sampled.count) devices' coverage stopped at the page cap" }
             found.keys = Set(rows.flatMap(\.unreadAttributes))
@@ -145,8 +154,8 @@ extension AppleClient {
         })
         lines.append(await Self.check("orgDevices/{id}/activationLockStatus", unless: unsampled) { found in
             for (index, device) in sampled.enumerated() {
-                found.position = "at device \(index + 1) of \(sampled.count)"
-                let lock = try await self.activationLock(device.id)
+                try found.at("device", index, of: sampled.count)
+                let lock = try await Self.typed([self.activationLock(Self.sendable(device.id))])[0]
                 found.keys.formUnion(lock.unreadAttributes)
                 if let type = lock.lockType, type.known == nil { found.values.insert("lockType=\(type.rawValue)") }
                 found.count += 1
@@ -155,8 +164,8 @@ extension AppleClient {
         lines.append(await Self.check("orgDevices/{id}/assignedServer", unless: unsampled) { found in
             var unassigned = 0
             for (index, device) in sampled.enumerated() {
-                found.position = "at device \(index + 1) of \(sampled.count)"
-                if try await self.assignedService(device.id) == nil { unassigned += 1 }
+                try found.at("device", index, of: sampled.count)
+                if try await self.assignedService(Self.sendable(device.id)) == nil { unassigned += 1 }
                 found.count += 1
             }
             found.note = "\(unassigned) of \(sampled.count) unassigned"
@@ -164,8 +173,8 @@ extension AppleClient {
         lines.append(await Self.check("orgDevices/{id}/relationships/assignedServer", unless: unsampled) { found in
             var unassigned = 0
             for (index, device) in sampled.enumerated() {
-                found.position = "at device \(index + 1) of \(sampled.count)"
-                if try await self.assignedServiceID(device.id) == nil { unassigned += 1 }
+                try found.at("device", index, of: sampled.count)
+                if try await self.assignedServiceID(Self.sendable(device.id)) == nil { unassigned += 1 }
                 found.count += 1
             }
             found.note = "\(unassigned) of \(sampled.count) unassigned"
@@ -190,6 +199,14 @@ extension AppleClient {
         var position: String?
         /// Counts said on success ("1 of 4 unassigned").
         var note: String?
+
+        /// On to a loop's next item: where the line says it stopped if it fails there, and nothing more is sent once the
+        /// pass is cancelled (verifier round 2: over a transport that answers anyway, as the stub does, a check cancelled
+        /// at its first device sent all twenty reads and said it stopped at the last).
+        mutating func at(_ what: String, _ index: Int, of total: Int) throws {
+            position = "at \(what) \(index + 1) of \(total)"
+            try Task.checkCancellation()
+        }
 
         mutating func cut<Item>(_ page: Page<Item>) {
             guard page.truncated else { return }
@@ -220,16 +237,53 @@ extension AppleClient {
             notes = [found.position, failed.note]
         }
         let note = notes.compactMap { $0 }.joined(separator: " · ")
-        return .init(resource: resource, status: status, count: counted ? found.count : nil, unknownKeys: found.keys.sorted(),
-                     unknownValues: found.values.sorted(), note: note.isEmpty ? nil : note)
+        return .init(resource: resource, status: status, count: counted ? found.count : nil,
+                     unknownKeys: Set(found.keys.map(acceptanceWord)).sorted(), unknownValues: Set(found.values.map(shown(value:))).sorted(),
+                     note: note.isEmpty ? nil : note)
     }
 
-    /// Why a check that reads `prerequisite`'s items has none: it failed, or it found none.
+    /// Why a check that reads `prerequisite`'s items has none: it found none, or it stopped short, failed or cut at the
+    /// page cap before an item came (verifier round 2: "has none" there contradicted the `truncated` line above it).
     private static func none(_ what: String, _ prerequisite: AcceptanceReport.Line) -> String {
-        switch prerequisite.status {
-        case .ok, .truncated: "no \(what) (\(prerequisite.resource) has none)"
-        default: "no \(what) (\(prerequisite.resource) \(prerequisite.status))"
+        "no \(what) (\(prerequisite.resource) \(prerequisite.status == .ok ? "has none" : "\(prerequisite.status)"))"
+    }
+
+    /// `items`, when each is `View`'s type and, for a single read, the item asked for. A list, a linkage list or a single
+    /// read answered with another resource (`users` for `mdmServers`, a next link that walked off to another collection,
+    /// another device) is malformed, never `ok` (verifier round 2: each read `ok`). The types are the contract's
+    /// (`OrgDevice`, `MdmServer`, `MdmServerDevicesLinkagesResponse.Data`, `AppleCareCoverage`, `ActivationLockStatus`).
+    private static func typed<View: ResourceView>(_ items: [View], asked id: String? = nil) throws -> [View] {
+        guard items.allSatisfy({ $0.resource.type == View.resourceType && (id == nil || $0.id == id) }) else {
+            throw AppleAPIError.malformed(id == nil ? "items of type \(View.resourceType)" : "the \(View.resourceType) item asked for")
         }
+        return items
+    }
+
+    /// An id the client won't put in a path (`AppleRead.isPathSafe`) is never sent, and is said as what it is: Apple sent
+    /// an id of a shape it doesn't document. Through `device(_:)` and the others it read `error 404`, which Apple never
+    /// sent, and the coverage walk could pass over it and read `ok` (verifier round 2).
+    private static let unsafeID = AppleAPIError.malformed("an id that can go in a path")
+
+    private static func sendable(_ id: String) throws -> String {
+        guard AppleRead.isPathSafe(id) else { throw unsafeID }
+        return id
+    }
+
+    /// An attribute name or enum value Apple sent that this version doesn't know, as the text shows it. Apple's
+    /// vocabulary is ASCII words (`brandNewField`, `FUTURE_MDM`, `AppleTV`): a letter, then letters, digits or `_`, at
+    /// most 64 bytes. Anything else (a newline that would forge a line, prose naming a device, 5000 bytes) is said as
+    /// `(not shown)`, never copied (verifier round 2: a newline in an attribute name forged an `ok` line).
+    static func acceptanceWord(_ text: some StringProtocol) -> String {
+        let bytes = text.utf8
+        guard let first = bytes.first, letters.contains(first), bytes.count <= 64,
+              bytes.allSatisfy({ letters.contains($0) || digits.contains($0) || $0 == UInt8(ascii: "_") }) else { return "(not shown)" }
+        return String(text)
+    }
+
+    /// `field=value` with the value as `acceptanceWord` shows it; the field is this file's own name.
+    private static func shown(value: String) -> String {
+        let field = value.prefix { $0 != "=" }
+        return "\(field)=\(acceptanceWord(value.dropFirst(field.count + 1)))"
     }
 
     /// A failure as a status and a note of codes. Not `AppleAPIError.message`: that carries Apple's `detail`
@@ -258,41 +312,48 @@ extension AppleClient {
 
     /// Apple's error `code` (`FORBIDDEN_ERROR`, `PARAMETER_ERROR.INVALID`) or the token endpoint's OAuth `error`
     /// (`server_error`) when it has a code's shape: two or more words of ASCII letters joined by `_` or `.`, at most 64
-    /// bytes. Anything else is dropped: prose, which may name a device, and whatever could be an identifier, since a
-    /// serial, a UUID or a number has a digit, a `-` or no join (verifier round 1: `C02XSERIAL99` reached a note).
+    /// bytes, in one case, and joined by `_` only when lower-case (OAuth's codes are). Anything else is dropped: prose,
+    /// which may name a device; whatever could be an identifier, since a serial, a UUID or a number has a digit, a `-` or
+    /// no join (verifier round 1: `C02XSERIAL99` reached a note); and a name, `John.Smith` or `jane.doe` (round 2).
     static func acceptanceCode(_ text: String?) -> String? {
         guard let text, text.utf8.count <= 64 else { return nil }
-        var words = 1, length = 0
+        var words = 1, length = 0, upper = false, lower = false, dotted = false
         for byte in text.utf8 {
             if byte == UInt8(ascii: "_") || byte == UInt8(ascii: ".") {
                 guard length > 0 else { return nil }
+                if byte == UInt8(ascii: ".") { dotted = true }
                 words += 1
                 length = 0
-            } else if letters.contains(byte) {
+            } else if lowercase.contains(byte) {
+                lower = true
+                length += 1
+            } else if uppercase.contains(byte) {
+                upper = true
                 length += 1
             } else {
                 return nil
             }
         }
-        return words >= 2 && length > 0 ? text : nil
+        return words >= 2 && length > 0 && !(upper && lower) && !(lower && dotted) ? text : nil
     }
 
-    /// Apple's `source.parameter` when it names a query parameter (`limit`, `cursor`, `fields[orgDevices]`,
-    /// `filter[startTimestamp]`): a word of ASCII letters that starts lower-case, then optionally a second in brackets,
-    /// at most 64 bytes. A value echoed there instead (a serial) is dropped.
+    /// Apple's `source.parameter` when it is a query parameter Apple documents: a value echoed there instead, a serial or
+    /// a name, is dropped (verifier round 2: `janedoe` had a parameter's shape and reached the note).
     static func acceptanceParameter(_ text: String?) -> String? {
-        guard let text, text.utf8.count <= 64 else { return nil }
-        let bytes = Array(text.utf8)
-        func word(_ part: ArraySlice<UInt8>) -> Bool {
-            part.first.map(lowercase.contains) == true && part.allSatisfy(letters.contains)
-        }
-        guard let open = bytes.firstIndex(of: UInt8(ascii: "[")) else { return word(bytes[...]) ? text : nil }
-        guard bytes.last == UInt8(ascii: "]"), word(bytes[..<open]), word(bytes[(open + 1)..<(bytes.count - 1)]) else { return nil }
-        return text
+        text.flatMap { acceptanceParameters.contains($0) ? $0 : nil }
     }
 
-    private static let lowercase = Set("abcdefghijklmnopqrstuvwxyz".utf8)
-    private static let letters = lowercase.union("ABCDEFGHIJKLMNOPQRSTUVWXYZ".utf8)
+    /// Every query parameter `Contracts/apple` documents, both scopes (`AcceptancePassTests` holds it to the contracts).
+    static let acceptanceParameters: Set<String> = [
+        "cursor", "include", "limit", "limit[apps]", "limit[configurations]", "limit[orgDevices]", "limit[packages]", "limit[userGroups]",
+        "limit[users]", "fields[activationLockStatus]", "fields[appleCareCoverage]", "fields[apps]", "fields[auditEvents]",
+        "fields[blueprints]", "fields[configurations]", "fields[mdmDeviceDetails]", "fields[mdmDevices]", "fields[mdmServers]",
+        "fields[orgDeviceActivities]", "fields[orgDevices]", "fields[organizationalUnits]", "fields[packages]", "fields[userGroups]",
+        "fields[users]", "filter[actorId]", "filter[endTimestamp]", "filter[startTimestamp]", "filter[subjectId]", "filter[type]",
+    ]
+
+    private static let lowercase = Set("abcdefghijklmnopqrstuvwxyz".utf8), uppercase = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ".utf8)
+    private static let letters = lowercase.union(uppercase), digits = Set("0123456789".utf8)
 
     private static func transportStatus(_ failure: HTTPFailure) -> String {
         switch failure {

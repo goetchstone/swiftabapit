@@ -16,7 +16,8 @@ import Vault
 struct AcceptanceFailureTests {
     /// A failure the stub can send, and what the device list's line then reads.
     enum Arrangement: String, CaseIterable, Sendable {
-        case revoked, offline, tokenServerError, tokenProse, tooLarge, rateLimited, unprocessable, unexpected, notJSON, malformed, keychain
+        case revoked, offline, tokenServerError, tokenProse, tokenInvalidScope, tokenMalformed, tooLarge, rateLimited, unprocessable, unexpected,
+             notJSON, malformed, keychain
 
         var bodyLimit: Int { self == .tooLarge ? 200 : HTTPClient.bodyLimit }
 
@@ -27,6 +28,9 @@ struct AcceptanceFailureTests {
             case .offline: stub.failTransport(HTTPClient.attempts)
             case .tokenServerError: stub.failNextToken(500)
             case .tokenProse: stub.failNextToken(503, error: "the key for TESTD0000000 was revoked")
+            case .tokenInvalidScope: stub.failNextToken(400, error: "invalid_scope")
+            // A 200 with no `access_token`.
+            case .tokenMalformed: stub.failNextToken(200)
             case .tooLarge: break
             case .rateLimited: for _ in 0..<HTTPClient.attempts { stub.queue(429, for: "/v1/orgDevices") }
             case .unprocessable:
@@ -42,7 +46,7 @@ struct AcceptanceFailureTests {
             switch self {
             case .revoked: .error("error 401")
             case .offline: .error("error transport -1005")
-            case .tokenServerError, .tokenProse: .error("error token")
+            case .tokenServerError, .tokenProse, .tokenInvalidScope, .tokenMalformed: .error("error token")
             case .tooLarge: .error("error too large")
             case .rateLimited: .error("error 429")
             case .unprocessable: .error("error 422")
@@ -57,6 +61,8 @@ struct AcceptanceFailureTests {
             switch self {
             case .tokenServerError: "500 server_error"
             case .tokenProse: "503"
+            case .tokenInvalidScope: "invalid_scope"
+            case .tokenMalformed: "malformed"
             case .malformed: "a page of /v1/orgDevices"
             case .keychain: VaultError.keychain(errSecInteractionNotAllowed).guidance
             default: nil
@@ -115,6 +121,12 @@ struct AcceptanceFailureTests {
             (AppleAPIError.token(.status(503, "TESTD0000001 revoked")), .error("error token"), "503"),
             (AppleAPIError.token(.invalidClient), .error("error token"), "invalid_client"),
             (AppleAPIError.token(.rateLimited), .error("error token"), "429"),
+            // Verifier round 2: these three codes could be dropped or swapped with every test green.
+            (AppleAPIError.token(.notConfigured), .error("error token"), "not configured"),
+            (AppleAPIError.token(.invalidScope), .error("error token"), "invalid_scope"),
+            (AppleAPIError.token(.malformed), .error("error token"), "malformed"),
+            (AppleAPIError.token(.invalidRequest), .error("error token"), "invalid_request"),
+            (AppleAPIError.token(.unauthorizedClient), .error("error token"), "unauthorized_client"),
             (AppleAPIError.vault("Touch ID was cancelled."), .error("error keychain"), "Touch ID was cancelled."),
             (AppleAPIError.wrongHost("api-school.apple.com"), .error("error wrong host"), nil),
             (CancellationError(), .error("error cancelled"), nil),
@@ -156,6 +168,18 @@ struct AcceptanceFailureTests {
         for resource in AcceptancePassTests.perDevice {
             #expect(report.lines.first { $0.resource == resource }?.status == .skipped("no device to sample (orgDevices error malformed)"))
         }
+    }
+
+    /// A later page that isn't a list is malformed too, with what the pages before it held, never "ok" over what came
+    /// (verifier round 2: checking only the first page left every test green, and a 1500-device org then read
+    /// `ok, 1000 items`).
+    @Test func aLaterPageThatIsntAListIsMalformedWithWhatCameBefore() async throws {
+        let harness = try await Harness(devices: 1_500)
+        for serial in AcceptancePassTests.firstSerials(5) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
+        harness.stub.queue(200, for: "/v1/orgDevices?cursor=", body: "{}")
+        let report = await harness.client.acceptancePass()
+        #expect(report.text.hasPrefix("orgDevices: error malformed, 1000 items · a page of /v1/orgDevices\n"), "\(report.text)")
+        #expect(harness.stub.requests.filter { $0.hasPrefix("GET api-business.apple.com/v1/orgDevices?") }.count == 2 + 1, "two pages and the probe")
     }
 
     /// The single reads, the coverage list and a probe say malformed too, in this app's words with no identifier.
@@ -206,7 +230,9 @@ struct AcceptanceFailureTests {
     @Test func aPassCancelledMidWalkIsNeverOk() async throws {
         let harness = try await Harness(devices: 2_500)
         let pass = PassBox()
+        let sent = Mutex<[String]>([])
         let transport = Interceptor(stub: harness.stub) { request in
+            sent.withLock { $0.append(request.url?.absoluteString ?? "?") }
             guard request.url?.query()?.contains("cursor=") == true else { return }
             while pass.task.withLock({ $0 }) == nil { await Task.yield() }
             pass.task.withLock { $0 }?.cancel()
@@ -222,6 +248,50 @@ struct AcceptanceFailureTests {
         #expect(devices.count.map { $0 < 2_500 } == true, "\(report.text)")
         #expect(report.lines.dropFirst().allSatisfy { $0.status == .skipped("the pass was cancelled") }, "\(report.text)")
         #expect(!harness.stub.requests.contains { $0.contains("/v1/mdmServers") || $0.contains("/v1/orgDevices/") })
+        // The walk stops before page 3 (verifier round 2: without its own check it fetched every page after the cancel).
+        // It runs in its own task, which can outlive the pass, so a page 3 is given time to show.
+        func pages() -> Int { sent.withLock { $0 }.filter { $0.contains("/v1/orgDevices?") }.count }
+        for _ in 0..<30 where pages() == 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(pages() == 2, "\(sent.withLock { $0 })")
+    }
+
+    /// A check cancelled inside its loop stops there: the read in flight is the last request sent, and the line says the
+    /// item it stopped at (verifier round 2: over the stub, which answers a cancelled read as a transport that ignores
+    /// cancellation would, a check cancelled at its first device sent the other nineteen reads and said "at device 20
+    /// of 20", and one cancelled at its first service walked all fifty services' lists and said "at service 50 of 50").
+    @Test(arguments: [
+        ("/v1/orgDevices/TESTD0000000", "orgDevices/{id}: error cancelled, 1 item · at device 2 of 5"),
+        ("/v1/orgDevices/TESTD0000000/appleCareCoverage", "orgDevices/{id}/appleCareCoverage: error cancelled, 0 items · at device 1 of 5"),
+        ("/v1/orgDevices/TESTD0000000/activationLockStatus", "orgDevices/{id}/activationLockStatus: error cancelled, 1 item · at device 2 of 5"),
+        ("/v1/orgDevices/TESTD0000000/assignedServer", "orgDevices/{id}/assignedServer: error cancelled, 1 item · at device 2 of 5"),
+        ("/v1/orgDevices/TESTD0000000/relationships/assignedServer",
+         "orgDevices/{id}/relationships/assignedServer: error cancelled, 1 item · at device 2 of 5"),
+        ("/v1/mdmServers/SVC0/relationships/devices", "mdmServers/{id}/relationships/devices: error cancelled, 0 items · at service 1 of 5"),
+    ])
+    func aCheckCancelledInItsLoopStopsWhereItWas(path: String, line: String) async throws {
+        let harness = try await Harness(devices: 5)
+        harness.stub.add(services: (0..<5).map { Harness.service("SVC\($0)", name: "S\($0)") })
+        for serial in AcceptancePassTests.firstSerials(5) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
+        let pass = PassBox()
+        // Logged before the cancel: a list's read runs in its walk's task, which the stub may record after the pass ends.
+        let sent = Mutex<[String]>([])
+        let transport = Interceptor(stub: harness.stub) { request in
+            sent.withLock { $0.append(request.url?.path() ?? "?") }
+            guard request.url?.path() == path else { return }
+            while pass.task.withLock({ $0 }) == nil { await Task.yield() }
+            pass.task.withLock { $0 }?.cancel()
+        }
+        let client = AppleClient(account: await harness.client.account, vault: harness.vault, transport: transport, limiter: harness.limiter,
+                                 sleep: { _ in })
+        let task = Task { await client.acceptancePass() }
+        pass.task.withLock { $0 = task }
+        let report = await task.value
+        let resource = String(line.prefix { $0 != ":" })
+        #expect(report.text.contains(line + "\n"), "\(report.text)")
+        let after = report.lines.drop { $0.resource != resource }.dropFirst()
+        #expect(!after.isEmpty && after.allSatisfy { $0.status == .skipped("the pass was cancelled") }, "\(report.text)")
+        let paths = sent.withLock { $0 }
+        #expect(paths.last == path && paths.filter { $0 == path }.count == 1, "nothing is sent after the read in flight: \(paths.suffix(3))")
     }
 }
 

@@ -38,11 +38,14 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   - `meta.paging.total`: absent in Apple's example; the stub sends it only when a test asks.
 - **Only a 404 or `"data": null` is unassigned.** A 403, a 500 or a malformed 200 (`{}`, `[]`, a linkage of
   another type) throws `.malformed` or its error: Phase 4's Guard re-validates assignments with this read.
-- **A list page is a list.** A 2xx list page (a probe's too) whose `data` isn't an array of resources (`{}`,
-  `null`, one object, an item without `type` or `id`, an `errors` body sent with 200) is
-  `.malformed("a page of <template>")`, never an empty page: read as one, the device list said "none" and the
-  acceptance pass printed `ok, 0 items` (Phase 1b verifier round 1; the same shape as Phase 1a's malformed
-  "unassigned"). The stub sends such a body with `queue(200, for:, body:)`.
+- **A list page is a list.** A 2xx list page (a probe's too, and every later page) whose `data` isn't an array of
+  resources (`{}`, `null`, one object, an item without `type` or `id`, an `errors` body with no `data` sent with
+  200) is `.malformed("a page of <template>")`, never an empty page: read as one, the device list said "none" and
+  the acceptance pass printed `ok, 0 items` (Phase 1b verifier round 1; the same shape as Phase 1a's malformed
+  "unassigned"). The stub sends such a body with `queue(200, for:, body:)`. Not checked by the client: the items'
+  `type`, a next link that leads to another collection on the same host, a single read's `type` and `id`, and
+  `data` sent together with `errors` (`Document` keeps no `errors`); the acceptance pass checks the first three
+  for what it reads.
 - **A probe says what failed**: `forbidden`, `ok`, or `error <status>` (Settings' `probeReads` says a bare `error`
   when no HTTP status came back: offline, too large, the token or the Keychain); never `ok` for a failure
   (invariant 8).
@@ -53,15 +56,25 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   the pass was cancelled, so it isn't sent) or `error <status>`. The probes run as checks, so a probe's failure
   reads like a read's (`error transport -1005`, not a bare `error`). Every per-device read covers the whole
   sample, capped at `acceptanceSampleLimit` (20) whatever the caller asks. Its notes carry counts, where a loop
-  stopped, Apple's `code` only when it is words of letters joined by `_` or `.`, `source.parameter` only when it
-  names a parameter (`limit`, `fields[orgDevices]`), the token endpoint's code, this app's words for a malformed
-  answer and the Vault's guidance: never `detail` (it may echo an identifier), `AppleAPIError.message` (which
-  quotes it), or anything shaped like an identifier (a digit, a `-`, a single word). `AcceptancePassTests`,
-  `AcceptanceFailureTests`.
+  stopped, Apple's `code` only when it is words of letters joined by `_` or `.`, `source.parameter` only when
+  `Contracts/apple` documents it (`acceptanceParameters`, held to both contracts), the token endpoint's code,
+  this app's words for a malformed answer and the Vault's guidance: never `detail` (it may echo an identifier),
+  `AppleAPIError.message` (which quotes it), or anything shaped like an identifier (a digit, a `-`, a single
+  word) or a name (mixed case, or lower-case joined by `.`). `AcceptancePassTests`, `AcceptanceFailureTests`.
+- **What the pass reads is checked as it reads it** (Phase 1b verifier round 2): every item it walks or reads is the
+  contract's type (`orgDevices`, `mdmServers`, the services' `orgDevices` linkages, `appleCareCoverage`,
+  `activationLockStatus`) and a single device is the one asked for, else `error malformed · items of type …`; an id
+  that can't go in a path is never sent and reads `error malformed · an id that can go in a path`, not Apple's 404;
+  the unknown attribute names and enum values it reports are ASCII words (a letter, then letters, digits or `_`, at
+  most 64 bytes), anything else `(not shown)`, so a newline can't forge a line; and a list cut at the cap before any
+  item came gives what depends on it `skipped: … (<list> truncated)`, not "has none".
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing.** The pass checks for
   cancellation after each check, so a walk cut short reads `error cancelled` and every later line `skipped: the
-  pass was cancelled`, with nothing more sent (verifier round 1: it read `ok, 0 items`, and the per-device reads
-  said the org had no device).
+  pass was cancelled` (verifier round 1: it read `ok, 0 items`, and the per-device reads said the org had no
+  device). Inside a check it checks before each device or service and after each list it walks, so the read in
+  flight is the last one sent and the line names the item it stopped at: the stub, like any transport that ignores
+  cancellation, answers a cancelled read, and a check cancelled at its first device sent all twenty (verifier
+  round 2). `AppleClient.walk` checks before each page.
 - **The stub's switches for these** (invariant 5): `queue(_:for:headers:body:)` sends a given body (a malformed
   200, bytes that aren't JSON, an `ErrorResponse` whose `code` or `parameter` is prose or a serial), and a `path`
   that goes on into the query (`/v1/orgDevices?cursor=`) fails a later page and not the first;
