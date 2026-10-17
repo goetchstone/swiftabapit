@@ -227,7 +227,7 @@ These rows follow D4. The full matrix is in Appendix C.
 | # | Defect (abapit file:line) | Swift design that prevents it | Phase |
 |---|---|---|---|
 | 1 | **Mosyle `activation_bypass` / `activation_bypass_mdm` (Activation Lock bypass codes) flow into pages and CSV**, because `adapt_device` passes every raw key through and `items_to_csv` exports the union of keys | Field **allowlist** in the Mosyle adapter. Request the list with `specific_columns` that excludes them. A redaction test fails if any `activation_bypass*` key reaches a model, a view, the audit log or a CSV | 7 |
-| 2 | Mosyle users, user groups and device groups stop paging when a page has fewer than 500 rows, but the server may cap pages at 50, so rows after 50 are **silently dropped** (`mosyle.py` `_list_objects`) | Page until the `rows`/`rows_count` total is reached (it can be an int or a string), or until `DEVICES_NOTFOUND` | 7 |
+| 2 | Mosyle users, user groups and device groups stop paging when a page has fewer than 500 rows, but the server may cap pages at 50, so rows after 50 are **silently dropped** (`mosyle.py` `_list_objects`) | Never stop on a short page or on `rows`/`rows_count` (whether it is the overall total or the page's count is unconfirmed; it can be an int or a string). Page until the list's own end-of-list status (`DEVICES_NOTFOUND`, `USERGROUP_NOTFOUND`, …), an empty page, a page that adds nothing new, or the cap (shown) | 7 |
 | 3 | Mosyle errors inside HTTP 200 (`MISSING_DATA`, `DEVICES_NOTFOUND`, `UNKNOWN_COLUMNS`, …) become empty lists, and probe/ping report "ok" (`mosyle.py:350-368, 413-424`) | Classify `response[0].status` (or `response.status`) with typed codes. `COMMAND_SENT` and `COMMAND_SENDED` both mean success | 7 |
 | 4 | Logs Stream drains **page 1 only**, with no retry. Reads consume events (confirmed live), so unread pages may be lost | Drain every page until `TotalLogs` is 0 or `TotalPages` is reached. **Persist each batch before requesting the next.** Retry with backoff | 7 |
 | 5 | Logs Stream compliance timestamps (`"01:00 PM - 03/12/2024"`, no timezone) are left unparsed | Dedicated parser, documented as local time | 7 |
@@ -347,8 +347,9 @@ App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, 
 AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models, in Packages/AbapitApp (AbapitKit's
                                                                products: its public API only); never HTTPCore, Wire or ChangeCore
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
-AppleBusiness → {HTTPCore, Wire, Vault, AppleModels, JSONAPI}
-Mosyle → {HTTPCore, Wire, Vault, MosyleModels}
+AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
+Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
+MosyleModels → {JSONAPI}
 HTTPCore → {Wire}
 History → {AppleModels, MosyleModels, Reports}
 Planners → {AppleModels, MosyleModels, JSONAPI, Wire}  (builds WireOperation via package init)
@@ -502,12 +503,20 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
   - its lifetime comes from the JWT `exp` claim, falling back to 23 h;
   - **ignore the `Expires` header** (PHP's fixed 1981 date);
   - single-flight `MosyleSession` actor;
-  - re-login once on 401.
+  - re-login once per read on a 401 or a 403, whichever comes first (abapit's single `relogged`, from Mosyle's
+    docs; a second refusal is the error);
+  - every request is checked as it is sent, by the session, the only way one carries the login (not an `Authorizer`);
+  - renew 60 s early, or halfway through a shorter life; an `exp` at or before now reads as unreadable;
+  - a login's 429 and 5xx are a rate limit and a server failure, not refused credentials.
   - Tokens can be IP-restricted [3P], so show that hint on 401 after a fresh login.
 - **Envelope**:
   - read `response[0].status`, or `response.status` for `devicegroups` and `logsstream`, which return
     an object;
   - the top-level `"status":"OK"` is meaningless;
+  - a 200 without that shape (no `response`, a string one, a status that isn't a string, a list key holding no
+    list, or any page with neither a list nor its own end-of-list status) is an error, never an empty list (Phase 7a
+    review and its verification);
+  - a status ends a list only when it is that list's own end-of-list status; any other is an error;
   - typed codes: `MISSING_DATA`, `DEVICES_NOTFOUND`, `UNKNOWN_COLUMNS`, `NO_DEVICE_UPDATED`,
     `USERGROUP_NOTFOUND`, `LOSTMODE_NOTENABLED`, `COMMAND_SENT`/`COMMAND_SENDED`, `DEVICE_UPDATED`,
     `DEVICE_ASSIGNED`;
@@ -515,8 +524,9 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
   - HTTP errors: 401 `{"error":…}`, 405 `INVALID_METHOD`; the Logs host uses a different 401 shape.
 - **Devices**:
   - iterate `os ∈ {ios, mac, tvos, visionos}`;
-  - `page_size` 500, paging until the `rows` total is reached;
-  - **`specific_columns` = the adapter's allowlist** (defect 1);
+  - `page_size` 500 (Mosyle sends 50), paging as defect 2's row says, never until a `rows` total;
+  - **`specific_columns` = the adapter's allowlist** (defect 1); on `UNKNOWN_COLUMNS`, asked again without the
+    columns Mosyle names, else without `specific_columns`, loudly (the adapter still drops the bypass codes);
   - dedupe by serial, else UDID.
 - **Logs Stream**: a single `LogsDrain` task per org, run on demand and on the scheduler.
   - It is bounded: at most N pages per run, with a time budget.
@@ -796,8 +806,10 @@ documented behaviour, never from convention (SwiftGamGui failure-log 10-12).
   - POST only; both headers required;
   - login returns the JWT in the **response header** plus a 1981 `Expires`;
   - a missing `os` gets `MISSING_DATA` in HTTP 200;
-  - past the last page gets `DEVICES_NOTFOUND`;
-  - pages are capped at 50 for users and groups;
+  - past the last page the device list gets `DEVICES_NOTFOUND` (other lists: empty, or the status a switch sets);
+  - pages are capped at 50 for every list;
+  - its own device-column list, so a column Mosyle lacks gets `UNKNOWN_COLUMNS` (never derived from the adapter);
+  - a switch for each failure the client handles (invariant 5), the login's included;
   - devicegroups and logsstream return an object;
   - Logs Stream **removes what it returns**;
   - unknown operations fail.
@@ -1221,14 +1233,18 @@ operator has a device they mean to release; a strict-stub test is the only cover
 
 ### Phase 7: Mosyle reads, Logs Stream, reconciliation, Device 360
 
-**Status:** not started.
+**Status:** split. **7a** (MosyleModels, `MosyleRead`, `MosyleSession`, `MosyleClient` reads, the strict
+`MosyleStub`): on branch `phase-7a-mosyle-models`, its adversarial review's findings fixed and being verified
+(2026-10-17). **7b**
+(the Logs Stream drain, `LogsStore`) and the reports, Device 360, collectors and demo fleet: not started. Live checks
+wait for the operator.
 
 **Owns:** `Mosyle/`, `MosyleModels/`, `Reports/{reconcile,mosylePosture,timeline}`,
 `History/{LogsStore,mosyleCollectors}`, `TestSupport/MosyleStub*`, `App/Screens/{Mosyle*,Reconciliation,Device360}`.
 
 **Scope**:
 
-- **Client** (§3.5): `MosyleSession`, envelope classification, pagination by total.
+- **Client** (§3.5): `MosyleSession`, envelope classification, pagination to each list's end (defect 2).
 - **Devices** with the field allowlist (defect 1) and typed adapters (defect 19).
 - **Users, user groups (+ members), device groups (+ `get_info` members and the compliance filter),
   custom device attributes (read), `/adminlogs`** (new).
@@ -1239,6 +1255,18 @@ operator has a device they mean to release; a strict-stub test is the only cover
 - **Device 360 merge** with an operator-chosen paired org.
 - **Mosyle snapshot collectors** (defect 6).
 - **Mosyle demo fleet.**
+
+**Live checks (operator)**:
+
+1. A login, and a 401 from an IP-restricted token reading as such.
+2. **The device list's `specific_columns`**: every column the adapter asks for is accepted (no `UNKNOWN_COLUMNS`
+   fallback line in the log), both `CurrentConsoleManagedUser` spellings and `os`/`device_type` among them; and
+   whether `UNKNOWN_COLUMNS`'s `info` names the columns. None is confirmed: abapit never sent `specific_columns`.
+3. The device count per platform against Mosyle's console, and what `rows` means (the page log line shows it).
+4. Each list's answer past its last row (users, user groups, device groups): an empty list or which status (any
+   other shape fails the read).
+5. What a 403 means (a read logs in again once on one, as abapit did; a second refusal is the error).
+6. The rest of docs/domains/mosyle.md's "Assumed, check live" list.
 
 **Done when**:
 

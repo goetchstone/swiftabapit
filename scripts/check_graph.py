@@ -20,6 +20,7 @@ declare. System frameworks are checked by `PackageGraphTests`.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -36,7 +37,7 @@ APP_TESTS = {"AppModelsTests": {"AppModels", "product:JSONAPI", "product:HTTPCor
 EDGES = {
     "JSONAPI": set(),
     "AppleModels": {"JSONAPI"},
-    "MosyleModels": set(),
+    "MosyleModels": {"JSONAPI"},
     "Wire": set(),
     "Planners": {"AppleModels", "MosyleModels", "JSONAPI", "Wire"},
     "Reports": {"AppleModels", "MosyleModels", "JSONAPI"},
@@ -45,7 +46,7 @@ EDGES = {
     "Vault": set(),
     "HTTPCore": {"Wire"},
     "AppleBusiness": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"},
-    "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels"},
+    "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels", "JSONAPI"},
     "History": {"Orgs", "AppleModels", "MosyleModels", "Reports"},
     "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault", "Orgs"},
     "Assist": {"Planners", "Reports"},
@@ -79,6 +80,30 @@ def dump(package: Path) -> dict:
     raw = subprocess.run(["swift", "package", "dump-package", "--package-path", str(package)],
                          capture_output=True, check=True, text=True).stdout
     return json.loads(raw)
+
+
+# What a manifest's code must not hold. A manifest is Swift run on the build machine and sees the environment: one
+# that branched on SDKROOT (set when `swift` evaluates it, as here, and unset under xcodebuild) gave Xcode
+# `-disable-access-control` while this check saw none (integration review H2). So a manifest imports
+# PackageDescription alone and reads nothing about where it runs.
+MANIFEST_REFUSED = ("unsafeFlags", "ProcessInfo", "environment", "Context", "getenv", "#if", "FileManager", "CommandLine",
+                    "Process", "contentsOf", "dlopen")
+
+
+def manifest_code(path: Path) -> str:
+    """The manifest's code: block and line comments removed (no manifest here holds `//` in a string)."""
+    text = re.sub(r"/\*.*?\*/", " ", path.read_text(), flags=re.S)
+    return re.sub(r"//[^\n]*", "", text)
+
+
+def check_manifest_text(path: Path, problems: list) -> None:
+    code = manifest_code(path)
+    imports = re.findall(r"^[ \t]*(?:@[A-Za-z_]+[ \t]+)*import[ \t]+([A-Za-z_][A-Za-z0-9_.]*)", code, flags=re.M)
+    if imports != ["PackageDescription"]:
+        problems.append(f"{path.parent.name}/Package.swift imports {imports} (PackageDescription only)")
+    for word in MANIFEST_REFUSED:
+        if word in code:
+            problems.append(f"{path.parent.name}/Package.swift holds `{word}` (a manifest reads nothing about where it runs)")
 
 
 def check_targets(manifest: dict, problems: list) -> None:
@@ -122,6 +147,8 @@ def check_app_package(problems: list) -> int:
 def main() -> int:
     manifest = dump(PACKAGE)
     problems = []
+    for package in (PACKAGE, APP_PACKAGE):
+        check_manifest_text(package / "Package.swift", problems)
     if manifest.get("dependencies"):
         problems.append(f"package dependencies: {manifest['dependencies']} (L5: none)")
     regular = {}

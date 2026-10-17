@@ -31,6 +31,26 @@ struct BoundaryTests {
         #expect(try SourceScan.files(in: Self.directory, matching: ["@testable", "@_spi", "@_implementationOnly"]).isEmpty)
     }
 
+    /// Raw memory reads a key's or a secret's stored bytes whatever their access: `withUnsafePointer(to: key)` and
+    /// `UnsafeRawPointer.load(as:)` returned both, with every check green (integration review H1).
+    static let rawMemory = ["Unsafe", "unsafe", "Unmanaged", "MemoryLayout"]
+
+    @Test func theScreenModelsTouchNoRawMemory() throws {
+        #expect(try SourceScan.files(in: Self.directory, matching: Self.rawMemory).isEmpty)
+        #expect(SourceScan.mentions(SourceScan.File(path: "x.swift", text: "withUnsafePointer(to: key) { UnsafeRawPointer($0).load(as: Data.self) }"),
+                                    Self.rawMemory))
+    }
+
+    /// What the screen models may import: Foundation, Observation and their five AbapitKit products. `import Network` and
+    /// `import SQLite3` passed every check once the module's list was dropped with the move (integration review M3).
+    @Test func theScreenModelsImportOnlyTheirModules() throws {
+        let allowed: Set = ["Foundation", "Observation", "AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports"]
+        for file in try SourceScan.swiftFiles(in: Self.directory) {
+            let extra = Set(SourceScan.imports(of: file)).subtracting(allowed)
+            #expect(extra.isEmpty, "\(file.path) imports \(extra.sorted())")
+        }
+    }
+
     /// The scan finds a use in each spelling it is there to catch.
     @Test func theScanFindsAUse() {
         for code in ["let m = Mirror(reflecting: key)", "dump(key)", "_ = String(reflecting: key)", "_ = unsafeBitCast(x, to: Int.self)"] {
