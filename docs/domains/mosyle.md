@@ -109,6 +109,35 @@
   login and the lenient end-of-list beside an empty list were unpinned. The session became the checked door, the
   scans read code (`SwiftCode`), and each has a test that kills its mutant.
 
+## Parity notes (MosyleModels)
+- **Users and groups pass an allowlist too** (Phase 7a review L1, invariant 11): `MosyleAdapter.userAttributes` and
+  `groupAttributes`, abapit's own names plus the raw fields they are read from. abapit kept every raw field, so a
+  password or a token sent on a user reached its page and its CSV. The golden records the cut as a deviation and
+  pins both lists. **Check live (Phase 7):** which other user and group fields Mosyle sends that are worth showing;
+  each joins its list with its source.
+- **`Python.swift` is abapit's Python, exactly** (Phase 7a review L4), each rule held by `py_str`, `py_truthy`,
+  `to_iso` and `dedupe_devices` cases: `str()` of a float is `repr()` (`1e+20`, `1000.0`, positional from 1e-4 up
+  to 1e16), of a list or dict its `repr()`; `int()` of a string reads any script's decimal digits and strips only
+  ASCII whitespace (U+001C refuses); `str.isdigit()`, `in`, set keys and the Logs sort go by code points, never
+  Swift's canonical equivalence (verifier round 2: "2024-e" + U+0301 and "2024-" + U+00E9 tied in the sort, where
+  Python orders them); dates are computed proleptic Gregorian (Foundation's Gregorian calendar is Julian before
+  1582-10-15). Swift's Unicode tables are read as of the golden's `unicode` (`Python.unicodeVersion`, 15.0, held
+  to the header by a test): a character assigned since (a Garay digit, 16.0) is unassigned to abapit's Python,
+  so `repr()` escapes it and `int()` refuses it here too.
+- **Devices pass the allowlist exactly**: the golden's expectation is abapit's own output for the raw cut to the
+  requested columns (`device_columns`, pinned: abapit's maps' sources plus `os` and `device_type`). So a raw key
+  spelled like one of abapit's names (`serialNumber` sent without `serial_number`), which abapit passed through,
+  is cut, and the golden records it.
+- **A number passed through keeps Mosyle's text** (`battery: 1e3` stays `1e3`); abapit's pages and CSV printed its
+  `str()` (`1000.0`). Only the fields abapit `str()`'d (ids, the family's words, a log's stamp) use the Python rule.
+- **The device dedupe key** is `MosyleAdapter.deviceKey`: by value for a number (`123` = `123.0` = `1.23e2`, `true`
+  = `1`; `"123"` differs), by code points for a string; a list or an object is no key (abapit raised `TypeError`).
+  `MosyleClient.devices()` still keys on string serials only, and is to switch to it, with a client test through
+  the stub (one page holding `123`, `123.0` and `"123"`).
+- **Compliance stamps** are ASCII, hour 1 to 12, a real proleptic Gregorian date; anything else stays raw, as abapit
+  showed it. A log entry that isn't an object is skipped (abapit raised `AttributeError` and lost the page; the
+  golden's `abapit_without_junk` is abapit's reading with the junk out, which the test holds the expectation to).
+
 ## Gotchas / stub-lies traps
 - **`Duration.seconds` traps past about 1.7e20.** A JWT `exp` is clamped as a number before it becomes a `Duration`
   (`exp: 1e300` or `1e999` is the 23 h fallback; so is a past one, which as a zero life logged in for every read).
