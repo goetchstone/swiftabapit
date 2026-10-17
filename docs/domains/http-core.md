@@ -7,7 +7,8 @@ rate limiter, bounded retries and progressive paging (plan §3.3).
 
 **Enforcement home:** `APIHost` (the allowlist, an enum), `ReadRequest`/`AuthRequest` `package` inits,
 `RouteTests` (only `Transport.swift` names `URLSession`; only the read builders make a read; only the token
-broker makes a credential exchange), `HTTPCoreTests`, `scripts/check_app.sh` (no listener symbol).
+broker makes a credential exchange), `HTTPCoreTests`, `scripts/check_app.sh` (no listener symbol). How the scans
+and the gate read code, and how they failed: [gates.md](gates.md).
 
 ## Files
 - `Sources/Wire/APIHost.swift` — the five hosts; `APIHost(of:)` accepts only `https`, no user, password or port.

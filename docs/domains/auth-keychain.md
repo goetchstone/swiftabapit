@@ -86,7 +86,8 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 - `App/Debug/Spikes.swift` — spike S1 (Phase 0).
 - `Sources/Vault/Secret.swift` — `Secret` (never prints); `VaultItem` (org slug + kind; the slug can't steer
   an account name).
-- `Sources/Vault/SecretStore.swift` — the protocol; `MemoryStore` with `failNext` and real OSStatus codes.
+- `Sources/Vault/SecretStore.swift` — the protocol; `MemoryStore` with `failNext` and real OSStatus codes,
+  debug builds only with its `Vault` initializer (a Release app keeps keys in the Keychain; gates runbook).
 - `Sources/Vault/KeychainStore.swift` — generic passwords (Mosyle) and `kSecClassKey` items (Apple keys,
   tagged `swiftabapit/<org>/apple-key`, signed with in place, never read out); a name-only index of what each
   org stores; one shared `LAContext` under a lock. Queries that carry the context are built inside the lock

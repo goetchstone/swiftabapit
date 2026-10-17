@@ -33,7 +33,9 @@ struct Harness {
         try await vault.storeKey(KeyImport.importForTests(key), as: VaultItem(org: "acme", kind: .appleKey)!)
         let sleeps = Recorder()
         self.sleeps = sleeps
-        limiter = RateLimiter(readsPerMinute: 600, sleep: { _ in })
+        // The limiter's sleeps move its own clock: a no-op sleep on the real clock spins until real time refills it.
+        let clock = ManualClock()
+        limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
         client = AppleClient(account: TokenBroker.Account(org: "acme", scope: scope, clientID: Self.clientID, keyID: Self.keyID, teamID: teamID),
                              vault: vault, transport: stub, limiter: limiter, pageCap: pageCap, bodyLimit: bodyLimit,
                              sleep: { duration in sleeps.value.withLock { $0.append(duration) } })

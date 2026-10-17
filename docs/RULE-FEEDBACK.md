@@ -27,6 +27,58 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-17 — A fix for invariant 8 made other data silent
+- **What happened:** the first fix for Phase 1b's M3 loaded devices and services side by side, each with its own
+  state, but only the Services screen showed the services' state. While they were read, or after a 403, Devices
+  showed a blank Service column (read as unassigned) and Overview showed a Services tile of 0, an unassigned tile of
+  0 and "every service has connected". Every guard in the services read could also be deleted with the tests green
+  (failure-log 2026-10-16, "the screen models had no tests", verifier round 1).
+- **Invariant in force:** #8, "stale or truncated data is never silent", home "screen-model tests".
+- **Why it didn't hold:** the home now existed, but its tests followed the half of the code the review had named.
+  A count or verdict built from a list nobody read whole looks the same as one built from a whole list.
+- **Would a rule have caught it?** Only if enforced differently: pre-commit item 14's "a test per guard" was in
+  force but not walked for the new half. A model-level rule would: a count shown to the operator is optional
+  (`Int?`, a dash) unless the list it counts was read whole, so the type, not a reviewer, refuses the zero.
+- **Enforcement home if changed:** skill (item 14: walk every guard of each new task, not only the named one).
+
+## 2026-10-16 — Invariant 8 named a home that didn't exist
+- **What happened:** Phase 1b's review found the screen models (`App/Models`) untested: an org switch kept the
+  old org's rows, CSV and Find; a superseded load said "loaded" and saved its rate on the next org; one failing
+  services read emptied the device list. Every mutant there survived (failure-log 2026-10-16, "the screen models
+  had no tests").
+- **Invariant in force:** #8, "stale or truncated data is never silent", home "screen-model tests".
+- **Why it didn't hold:** the models lived in the app target, which `swift test` doesn't build, and no app test
+  target existed, so the named home was empty and nothing said so.
+- **Would a rule have caught it?** Only if enforced differently: a home an invariant names should be a test target
+  that exists. The models are now `AppModels`, in their own package (`Packages/AbapitApp`, AbapitKit's public API only),
+  with `AppModelsTests`.
+- **Enforcement home if changed:** tripwire test (a check that every enforcement home CLAUDE.md names exists).
+
+## 2026-10-16 — Invariant 11 names an enforcement home that doesn't exist
+- **What happened:** Phase 1b's review found CSV export was a denylist (M2), and its verifier found the fix
+  held only by convention: any caller could pass `Array(item.attributes.keys)` as the column list. Invariant
+  11 names `RedactionTests` and `SourceScanTests` as its home; no `RedactionTests` exists, and no scan looks
+  at CSV export. Fixed in `fix1b-reports`: `CSV.text` takes an `ExportPolicy.Columns` only Reports can make.
+- **Invariant in force:** #11 (sensitive fields never leave; CSV export is an allowlist).
+- **Why it didn't hold:** wrong layer: the wording was right, and the home named a test nobody wrote.
+- **Would a rule have caught it?** only if enforced differently: by the compiler, as #1 is.
+- **Enforcement home if changed:** CLAUDE.md #11's home becomes "the compiler (`ExportPolicy.Columns` has an
+  internal init) and `ExportPolicyTests`", plus the Mosyle adapter's test when Phase 7 writes it.
+
+## 2026-10-16 — A check that was never seen to fail
+- **What happened:** Phase 1b's review got past the URLSession scan, the Release gate's debug-switch check
+  and the `#if DEBUG` import check. Fixing them showed the gate's `nm` check had never run: a pipe under
+  `pipefail` turned every match into "no match" (failure-log 2026-10-16, "the gate looked for what it could
+  not see").
+- **Invariant in force:** #4 (no listener; its scans) and plan §3.9 (no debug code in Release).
+- **Why it didn't hold:** not covered as a check. Each check was written to find a shape, and none was run
+  against something it must refuse. The stub entry below is the same lesson for stubs.
+- **Would a rule have caught it?** yes, if stated as a check: every scan and gate has a test, or a recorded
+  mutant run, that it fails. A scan gets a self-test of the spellings it must find. A binary gate is run on
+  mutant builds made from a scratch copy.
+- **Enforcement home if changed:** tripwire tests (`ScannerTests` for the scanner; `DebugOnlyTests`) and the
+  `pre-commit` skill's item 13, which could add "show each new check failing once".
+
 ## 2026-10-16 — "Stubs fail like the APIs" was read as "refuse like the APIs"
 - **What happened:** Phase 1a's strict stub refused every request Apple would refuse, and could not
   produce a dropped connection, a revoked account, a short-lived token or an oversized body. 13 of the

@@ -55,6 +55,13 @@ jobs:
         run: xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Release -derivedDataPath "$RUNNER_TEMP/dd" build
       - name: Hardened runtime, sandbox, exact entitlements, no listener
         run: scripts/check_app.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
+      - name: The same gate on an archive-style (stripped) Release build
+        # DEPLOYMENT_POSTPROCESSING=YES is what an archive does: strip the symbol table, then sign. On the build
+        # above it only relinks, strips and signs (seconds), so the binary that ships is gated as well as the one
+        # the tests saw (Phase 1b review M1: the stub linked into a stripped build passed the gate).
+        run: |
+          xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Release -derivedDataPath "$RUNNER_TEMP/dd" DEPLOYMENT_POSTPROCESSING=YES build
+          scripts/check_app.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
       - name: Screenshots (debug build, demo org only)
         run: |
           xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Debug -derivedDataPath "$RUNNER_TEMP/dd" build

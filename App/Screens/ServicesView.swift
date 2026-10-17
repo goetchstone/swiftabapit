@@ -1,15 +1,18 @@
 import AppleModels
+import AppModels
 import SwiftUI
 
 /// Device management services with their health (plan §2.1): how many devices each holds and when it last
-/// connected, flagged when that was more than `staleAfter` days ago.
+/// connected, flagged when that was more than `staleAfter` days ago. The services have their own state, apart from
+/// the devices' (Phase 1b review M3).
 struct ServicesView: View {
     let model: DevicesModel
     static let staleAfter = 30
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            StatusBanner(state: model.state) { model.load(force: true) }
+            StatusBanner(state: model.servicesState, shown: model.services.count, truncated: model.servicesTruncated,
+                         partial: model.servicesPartialCount) { model.load(force: true) }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
             Table(model.services) {
@@ -19,7 +22,8 @@ struct ServicesView: View {
                     .width(min: 70, ideal: 110)
                 TableColumn("Status") { Text($0.status?.rawValue.capitalized ?? "—") }
                     .width(min: 60, ideal: 80)
-                TableColumn("Devices") { service in Text((model.deviceCount[service.id] ?? service.deviceCount ?? 0).formatted()) }
+                // The count read, else Apple's own attribute, else a dash: never a zero nobody counted.
+                TableColumn("Devices") { service in Text((model.deviceCount[service.id] ?? service.deviceCount).map { $0.formatted() } ?? "—") }
                     .width(min: 60, ideal: 70)
                 TableColumn("Last connected") { service in LastConnected(service: service) }
                     .width(min: 120, ideal: 180)

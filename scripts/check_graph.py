@@ -26,6 +26,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "Packages" / "AbapitKit"
+# The screen models' package (Phase 1b review): outside AbapitKit as the app is, so they see its public API only. One
+# dependency, AbapitKit by path; products only; no unsafeFlags, which could name AbapitKit's package and reopen it.
+APP_PACKAGE = ROOT / "Packages" / "AbapitApp"
+APP_EDGES = {"AppModels": {"product:AppleBusiness", "product:AppleModels", "product:Orgs", "product:Vault", "product:Reports"}}
+APP_TESTS = {"AppModelsTests": {"AppModels", "product:JSONAPI", "product:HTTPCore", "product:TestSupport"} | APP_EDGES["AppModels"]}
 
 # A new edge is a reviewed change to this list, PackageGraphTests' list and the plan.
 EDGES = {
@@ -70,14 +75,14 @@ def closure(module: str) -> set[str]:
     return seen
 
 
-def main() -> int:
-    raw = subprocess.run(["swift", "package", "dump-package", "--package-path", str(PACKAGE)],
+def dump(package: Path) -> dict:
+    raw = subprocess.run(["swift", "package", "dump-package", "--package-path", str(package)],
                          capture_output=True, check=True, text=True).stdout
-    manifest = json.loads(raw)
-    problems = []
-    if manifest.get("dependencies"):
-        problems.append(f"package dependencies: {manifest['dependencies']} (L5: none)")
-    regular = {}
+    return json.loads(raw)
+
+
+def check_targets(manifest: dict, problems: list) -> None:
+    """What every target of either package must not do: a custom path, an exclude, unsafeFlags, another kind."""
     for target in manifest["targets"]:
         name, kind = target["name"], target["type"]
         for key in ("path", "sources", "publicHeadersPath"):
@@ -88,6 +93,41 @@ def main() -> int:
         for setting in target.get("settings", []):
             if "unsafeFlags" in json.dumps(setting.get("kind", {})):
                 problems.append(f"{name}: unsafeFlags (they can name the package and open its `package` boundary)")
+        if kind not in ("regular", "test"):
+            problems.append(f"{name}: a {kind} target (only regular and test targets)")
+
+
+def check_app_package(problems: list) -> int:
+    """The screen models' package: AbapitKit by path and nothing else, its products only, the planned edges."""
+    manifest = dump(APP_PACKAGE)
+    dependencies = manifest.get("dependencies") or []
+    paths = [Path(entry["path"]).resolve() for dependency in dependencies for entry in dependency.get("fileSystem", [])]
+    if len(dependencies) != 1 or paths != [PACKAGE.resolve()]:
+        problems.append(f"AbapitApp: dependencies {dependencies} (only AbapitKit, by path)")
+    check_targets(manifest, problems)
+    regular = {}
+    for target in manifest["targets"]:
+        found = names(target["dependencies"])
+        if target["type"] == "regular":
+            regular[target["name"]] = found
+        elif target["type"] == "test":
+            extra = found - APP_TESTS.get(target["name"], set())
+            if extra:
+                problems.append(f"AbapitApp {target['name']}: depends on {sorted(extra)}")
+    if regular != APP_EDGES:
+        problems.append(f"AbapitApp: declares {regular}, the plan allows {APP_EDGES}")
+    return sum(len(v) for v in regular.values())
+
+
+def main() -> int:
+    manifest = dump(PACKAGE)
+    problems = []
+    if manifest.get("dependencies"):
+        problems.append(f"package dependencies: {manifest['dependencies']} (L5: none)")
+    regular = {}
+    check_targets(manifest, problems)
+    for target in manifest["targets"]:
+        name, kind = target["name"], target["type"]
         if kind == "regular":
             regular[name] = names(target["dependencies"])
         elif kind == "test":
@@ -98,16 +138,16 @@ def main() -> int:
             extra = names(target["dependencies"]) - allowed
             if extra:
                 problems.append(f"{name}: depends on {sorted(extra)}, outside {tested} and its dependencies")
-        else:
-            problems.append(f"{name}: a {kind} target (only regular and test targets)")
     if regular != EDGES:
         for module in sorted(set(regular) | set(EDGES)):
             if regular.get(module) != EDGES.get(module):
                 problems.append(f"{module}: declares {sorted(regular.get(module, set()))}, the plan allows {sorted(EDGES.get(module, set()))}")
+    app_edges = check_app_package(problems)
     for problem in problems:
         print(f"check_graph: {problem}", file=sys.stderr)
     if not problems:
-        print(f"check_graph: ok ({len(regular)} modules, {sum(len(v) for v in regular.values())} edges, no package dependencies)")
+        print(f"check_graph: ok ({len(regular)} modules, {sum(len(v) for v in regular.values())} edges, no package dependencies; "
+              f"AbapitApp: {len(APP_EDGES)} module, {app_edges} product edges, AbapitKit only)")
     return 1 if problems else 0
 
 

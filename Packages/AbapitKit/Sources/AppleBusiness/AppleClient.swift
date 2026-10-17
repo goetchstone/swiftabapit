@@ -154,10 +154,10 @@ public actor AppleClient {
     /// is "forbidden"; anything else that fails is "error <status>". Apple has no permissions endpoint.
     public func probeReads(now: Date = Date()) async -> [ProbeResult] {
         var results: [ProbeResult] = []
-        for section in AppleSection.allCases where scope == .business || !section.businessOnly {
+        for section in probedSections {
             let status: String
             do {
-                _ = try await documentOf(AppleRead.probe(scope, section: AppleSectionPath(path: section.path), now: now))
+                try await probe(section, now: now)
                 status = ProbeResult.ok
             } catch AppleAPIError.forbidden {
                 status = ProbeResult.forbidden
@@ -169,6 +169,16 @@ public actor AppleClient {
             results.append(ProbeResult(section: section, status: status))
         }
         return results
+    }
+
+    /// The sections a read probe covers: School has no people, content or audit endpoints.
+    nonisolated var probedSections: [AppleSection] { AppleSection.allCases.filter { account.scope == .business || !$0.businessOnly } }
+
+    /// One read probe, `limit=1`. A 2xx that isn't a list is malformed, never "ok" (Phase 1b verifier round 1: a 200
+    /// `{}` probe read "ok").
+    func probe(_ section: AppleSection, now: Date) async throws {
+        let read = AppleRead.probe(scope, section: AppleSectionPath(path: section.path), now: now)
+        _ = try await Self.list(documentOf(read), read.template)
     }
 
     static func probeStatus(_ error: AppleAPIError) -> String {
@@ -218,6 +228,16 @@ public actor AppleClient {
         return found
     }
 
+    /// A list page's resources. A 2xx whose `data` isn't an array of resources (`{}`, `null`, one object, an item with no
+    /// `type` or `id`, an `errors` body sent with 200) is malformed: read as an empty page it said "none", and the
+    /// acceptance pass printed `ok, 0 items` and skipped every per-device read (Phase 1b verifier round 1).
+    private static func list(_ document: Document, _ template: String) throws -> [Resource] {
+        guard case .array(let items)? = document.data else { throw AppleAPIError.malformed("a page of \(template)") }
+        let resources = items.compactMap(Resource.init)
+        guard resources.count == items.count else { throw AppleAPIError.malformed("a page of \(template)") }
+        return resources
+    }
+
     /// Follows `links.next` (or `meta.paging.nextCursor`) up to the page cap, a page at a time.
     nonisolated func pages(_ first: ReadRequest) -> AsyncThrowingStream<Page<Resource>, any Error> {
         AsyncThrowingStream { continuation in
@@ -239,9 +259,10 @@ public actor AppleClient {
         while true {
             try Task.checkCancellation()
             let document = try document(from: response)
+            let items = try Self.list(document, first.template)
             let more = document.next != nil || document.nextCursor != nil
             let capped = more && number >= pageCap
-            yield(Page(items: document.resources, number: number, truncated: capped, total: document.total))
+            yield(Page(items: items, number: number, truncated: capped, total: document.total))
             guard more, !capped else { return }
             number += 1
             if let next = document.next, let url = URL(string: next) {

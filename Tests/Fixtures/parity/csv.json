@@ -5,6 +5,152 @@
  "unicode": "15.0.0",
  "seed": 1005,
  "now": "2026-10-16T12:00:00+00:00",
+ "blank": [
+  [
+   0,
+   32
+  ],
+  [
+   127,
+   160
+  ],
+  [
+   173,
+   173
+  ],
+  [
+   847,
+   847
+  ],
+  [
+   1536,
+   1541
+  ],
+  [
+   1564,
+   1564
+  ],
+  [
+   1757,
+   1757
+  ],
+  [
+   1807,
+   1807
+  ],
+  [
+   2192,
+   2193
+  ],
+  [
+   2274,
+   2274
+  ],
+  [
+   4447,
+   4448
+  ],
+  [
+   5760,
+   5760
+  ],
+  [
+   6068,
+   6069
+  ],
+  [
+   6155,
+   6159
+  ],
+  [
+   8192,
+   8207
+  ],
+  [
+   8232,
+   8239
+  ],
+  [
+   8287,
+   8303
+  ],
+  [
+   10240,
+   10240
+  ],
+  [
+   12288,
+   12288
+  ],
+  [
+   12644,
+   12644
+  ],
+  [
+   65024,
+   65039
+  ],
+  [
+   65279,
+   65279
+  ],
+  [
+   65440,
+   65440
+  ],
+  [
+   65520,
+   65531
+  ],
+  [
+   69821,
+   69821
+  ],
+  [
+   69837,
+   69837
+  ],
+  [
+   78896,
+   78911
+  ],
+  [
+   113824,
+   113827
+  ],
+  [
+   119155,
+   119162
+  ],
+  [
+   917504,
+   921599
+  ]
+ ],
+ "triggers": [
+  43,
+  45,
+  61,
+  64,
+  8314,
+  8315,
+  8316,
+  8330,
+  8331,
+  8332,
+  8722,
+  10869,
+  10870,
+  64297,
+  65122,
+  65123,
+  65126,
+  65131,
+  65291,
+  65293,
+  65309,
+  65312
+ ],
  "cases": [
   {
    "input": [
@@ -2527,6 +2673,388 @@
    ],
    "expected": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{\"\"id\"\":\"\"x\"\",\"\"n\"\":1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n",
    "abapit": "id,count,serialNumber,'=formula,notes,status,tags\r\n'=id,,\"'\rx; \tx\",'-1,2.5,\"{'id': 'x', 'n': 1}; y\", lead;  lead; \r\nTEST1,'\tx,,'-3,'\tx,\"; say \"\"hi\"\";  lead\",plain\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "C02X",
+     "attributes": {
+      "serverName": "Mosyle\"\u0301,=HYPERLINK(\"https://example.com/x\",\"x\")"
+     }
+    }
+   ],
+   "expected": "id,serverName\r\nC02X,\"Mosyle\"\"\u0301,=HYPERLINK(\"\"https://example.com/x\"\",\"\"x\"\")\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "C02X",
+     "attributes": {
+      "notes": "x\"\u0301,=2+5,\"\u0301"
+     }
+    }
+   ],
+   "expected": "id,notes\r\nC02X,\"x\"\"\u0301,=2+5,\"\"\u0301\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "k0": "a\"\u0301,b",
+      "k1": "a\"\u20dd,b",
+      "k2": "a\"\ufe0f,b",
+      "lone": "\"\u0301"
+     }
+    }
+   ],
+   "expected": "id,k0,k1,k2,lone\r\nTEST1,\"a\"\"\u0301,b\",\"a\"\"\u20dd,b\",\"a\"\"\ufe0f,b\",\"\"\"\u0301\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "\"\u0301,=1",
+     "attributes": {
+      "\"\u20dd,=cmd": "x",
+      "plain": "y"
+     }
+    }
+   ],
+   "expected": "id,\"\"\"\u20dd,=cmd\",plain\r\n\"\"\"\u0301,=1\",x,y\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "notes": "crlf\r\nfield",
+      "lead": "\r\n=1",
+      "mark": "=\u0301x",
+      "plus": "+\u20dd1"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "\r\nid",
+     "attributes": {
+      "notes": "\r\n",
+      "lead": "a\r\n=1"
+     }
+    }
+   ],
+   "expected": "id,notes,lead,mark,plus\r\nTEST1,\"crlf\r\nfield\",\"'\r\n=1\",'=\u0301x,'+\u20dd1\r\n\"'\r\nid\",\"'\r\n\",\"a\r\n=1\",,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "fw_eq": "\uff1d1+1",
+      "fw_plus": "\uff0bx",
+      "fw_minus": "\uff0d1",
+      "fw_at": "\uff20cmd"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "fw_eq": " \uff1d1",
+      "fw_plus": "\u3000\uff0b1",
+      "fw_minus": "x\uff0d1",
+      "fw_at": "\uff20"
+     }
+    }
+   ],
+   "expected": "id,fw_eq,fw_plus,fw_minus,fw_at\r\nTEST1,'\uff1d1+1,'\uff0bx,'\uff0d1,'\uff20cmd\r\nTEST2,' \uff1d1,'\u3000\uff0b1,x\uff0d1,'\uff20\r\n",
+   "abapit": "id,fw_eq,fw_plus,fw_minus,fw_at\r\nTEST1,\uff1d1+1,\uff0bx,\uff0d1,\uff20cmd\r\nTEST2, \uff1d1,\u3000\uff0b1,x\uff0d1,\uff20\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "space": " =1",
+      "nbsp": "\u00a0=1",
+      "em": "\u2003-1",
+      "ideographic": "\u3000+1",
+      "bom": "\ufeff=1",
+      "zwsp": "\u200b=1",
+      "lrm": "\u200e@x",
+      "joiner": "\u2060=1",
+      "lf": "\n=1",
+      "tab_space": "\t =1",
+      "mixed": "\r\n\u200b =1",
+      "list": [
+       " =1",
+       "x"
+      ]
+     }
+    }
+   ],
+   "expected": "id,space,nbsp,em,ideographic,bom,zwsp,lrm,joiner,lf,tab_space,mixed,list\r\nTEST1,' =1,'\u00a0=1,'\u2003-1,'\u3000+1,'\ufeff=1,'\u200b=1,'\u200e@x,'\u2060=1,\"'\n=1\",'\t =1,\"'\r\n\u200b =1\",' =1; x\r\n",
+   "abapit": "id,space,nbsp,em,ideographic,bom,zwsp,lrm,joiner,lf,tab_space,mixed,list\r\nTEST1, =1,\u00a0=1,\u2003-1,\u3000+1,\ufeff=1,\u200b=1,\u200e@x,\u2060=1,\"\n=1\",'\t =1,\"'\r\n\u200b =1\", =1; x\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": " =id",
+     "attributes": {
+      " =key": "\u200bplain",
+      "\u00a0@key": "\n plain",
+      "lead": " lead"
+     }
+    }
+   ],
+   "expected": "id,' =key,'\u00a0@key,lead\r\n' =id,\u200bplain,\"\n plain\", lead\r\n",
+   "abapit": "id, =key,\u00a0@key,lead\r\n =id,\u200bplain,\"\n plain\", lead\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "\u00e9": "nfc",
+      "e\u0301": "nfd",
+      "meta": {
+       "\u00e9": 1,
+       "e\u0301": 2
+      }
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "e\u0301": "nfd only"
+     }
+    }
+   ],
+   "expected": "id,\u00e9,e\u0301,meta\r\nTEST1,nfc,nfd,\"{\"\"e\u0301\"\":2,\"\"\u00e9\"\":1}\"\r\nTEST2,,nfd only,\r\n",
+   "abapit": "id,\u00e9,e\u0301,meta\r\nTEST1,nfc,nfd,\"{'\u00e9': 1, 'e\u0301': 2}\"\r\nTEST2,,nfd only,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "vt": "\u000b=1",
+      "ff": "\f+1",
+      "fs": "\u001c-1",
+      "us": "\u001f@x",
+      "nel": "\u0085=1",
+      "ls": "\u2028=1",
+      "ps": "\u2029+1",
+      "nul": "\u0000=1",
+      "soh": "\u0001=1",
+      "filler": "\u3164=1",
+      "jungseong": "\u1160=1",
+      "halfwidth": "\uffa0=1",
+      "braille": "\u2800=1",
+      "cgj": "\u034f=1",
+      "vs16": "\ufe0f=1",
+      "mark": "\u0301=1"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "vt": "\u000bplain",
+      "ls": "\u2028 plain",
+      "filler": "\u3164plain"
+     }
+    }
+   ],
+   "expected": "id,vt,ff,fs,us,nel,ls,ps,nul,soh,filler,jungseong,halfwidth,braille,cgj,vs16,mark\r\nTEST1,'\u000b=1,'\f+1,'\u001c-1,'\u001f@x,'\u0085=1,'\u2028=1,'\u2029+1,'\u0000=1,'\u0001=1,'\u3164=1,'\u1160=1,'\uffa0=1,'\u2800=1,'\u034f=1,'\ufe0f=1,\u0301=1\r\nTEST2,\u000bplain,,,,,\u2028 plain,,,,\u3164plain,,,,,,\r\n",
+   "abapit": "id,vt,ff,fs,us,nel,ls,ps,nul,soh,filler,jungseong,halfwidth,braille,cgj,vs16,mark\r\nTEST1,\u000b=1,\f+1,\u001c-1,\u001f@x,\u0085=1,\u2028=1,\u2029+1,\u0000=1,\u0001=1,\u3164=1,\u1160=1,\uffa0=1,\u2800=1,\u034f=1,\ufe0f=1,\u0301=1\r\nTEST2,\u000bplain,,,,,\u2028 plain,,,,\u3164plain,,,,,,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "small_eq": "\ufe661+1",
+      "small_plus": "\ufe621",
+      "small_minus": "\ufe631",
+      "small_at": "\ufe6bx",
+      "minus": "\u22121",
+      "sup_plus": "\u207a1",
+      "sub_eq": "\u208c1",
+      "sup_minus": "\u207b1",
+      "eqeq": "\u2a751",
+      "hebrew_plus": "\ufb291",
+      "nbsp_minus": "\u00a0\u22121"
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "TEST2",
+     "attributes": {
+      "small_eq": "\u20101",
+      "small_plus": "\u27961",
+      "small_minus": "\u02d71",
+      "small_at": "\u00b11",
+      "minus": "x\u22121"
+     }
+    }
+   ],
+   "expected": "id,small_eq,small_plus,small_minus,small_at,minus,sup_plus,sub_eq,sup_minus,eqeq,hebrew_plus,nbsp_minus\r\nTEST1,'\ufe661+1,'\ufe621,'\ufe631,'\ufe6bx,'\u22121,'\u207a1,'\u208c1,'\u207b1,'\u2a751,'\ufb291,'\u00a0\u22121\r\nTEST2,\u20101,\u27961,\u02d71,\u00b11,x\u22121,,,,,,\r\n",
+   "abapit": "id,small_eq,small_plus,small_minus,small_at,minus,sup_plus,sub_eq,sup_minus,eqeq,hebrew_plus,nbsp_minus\r\nTEST1,\ufe661+1,\ufe621,\ufe631,\ufe6bx,\u22121,\u207a1,\u208c1,\u207b1,\u2a751,\ufb291,\u00a0\u22121\r\nTEST2,\u20101,\u27961,\u02d71,\u00b11,x\u22121,,,,,,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "",
+     "attributes": {
+      "a": null
+     }
+    },
+    {
+     "type": "orgDevices",
+     "id": "",
+     "attributes": {}
+    }
+   ],
+   "expected": "id,a\r\n,\r\n,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "",
+     "attributes": {
+      "a": "",
+      "b": null,
+      "c": ""
+     }
+    }
+   ],
+   "expected": "id,a,b,c\r\n,,,\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "",
+     "attributes": {}
+    }
+   ],
+   "expected": "id\r\n\"\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "meta": {
+       "\ud83d\ude00": 1,
+       "\uff5e": 2,
+       "\ue000": 3,
+       "z": 4
+      }
+     }
+    }
+   ],
+   "expected": "id,meta\r\nTEST1,\"{\"\"z\"\":4,\"\"\ue000\"\":3,\"\"\uff5e\"\":2,\"\"\ud83d\ude00\"\":1}\"\r\n",
+   "abapit": "id,meta\r\nTEST1,\"{'\ud83d\ude00': 1, '\uff5e': 2, '\\ue000': 3, 'z': 4}\"\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "tags": [
+       [
+        "a",
+        "b"
+       ],
+       "y"
+      ],
+      "empty": [
+       []
+      ],
+      "deep": [
+       [
+        [
+         "x"
+        ],
+        {
+         "k": [
+          1,
+          null
+         ]
+        }
+       ],
+       null,
+       true,
+       2.5
+      ],
+      "flat": [
+       "a",
+       null,
+       false,
+       0
+      ]
+     }
+    }
+   ],
+   "expected": "id,tags,empty,deep,flat\r\nTEST1,\"[\"\"a\"\",\"\"b\"\"]; y\",[],\"[[\"\"x\"\"],{\"\"k\"\":[1,null]}]; None; True; 2.5\",a; None; False; 0\r\n",
+   "abapit": "id,tags,empty,deep,flat\r\nTEST1,\"['a', 'b']; y\",[],\"[['x'], {'k': [1, None]}]; None; True; 2.5\",a; None; False; 0\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "\u06dd=id",
+     "attributes": {
+      "\u0600=key": "\u0600=1",
+      "end_of_ayah": "\u06dd+1",
+      "syriac": "\u070f-1",
+      "pound": "\u0890=1",
+      "kaithi": "\ud804\udcbd@x",
+      "plain": "\u06001"
+     }
+    }
+   ],
+   "expected": "id,'\u0600=key,end_of_ayah,syriac,pound,kaithi,plain\r\n'\u06dd=id,'\u0600=1,'\u06dd+1,'\u070f-1,'\u0890=1,'\ud804\udcbd@x,\u06001\r\n",
+   "abapit": "id,\u0600=key,end_of_ayah,syriac,pound,kaithi,plain\r\n\u06dd=id,\u0600=1,\u06dd+1,\u070f-1,\u0890=1,\ud804\udcbd@x,\u06001\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "meta": {
+       "a\"b\\c\u0001": 1,
+       "tab\tnl\n": 2,
+       "\u007f\u2028": 3,
+       "\u00e9": [
+        {
+         "\"": null
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "expected": "id,meta\r\nTEST1,\"{\"\"a\\\"\"b\\\\c\\u0001\"\":1,\"\"tab\\tnl\\n\"\":2,\"\"\u007f\u2028\"\":3,\"\"\u00e9\"\":[{\"\"\\\"\"\"\":null}]}\"\r\n",
+   "abapit": "id,meta\r\nTEST1,\"{'a\"\"b\\\\c\\x01': 1, 'tab\\tnl\\n': 2, '\\x7f\\u2028': 3, '\u00e9': [{'\"\"': None}]}\"\r\n"
   }
  ]
 }
