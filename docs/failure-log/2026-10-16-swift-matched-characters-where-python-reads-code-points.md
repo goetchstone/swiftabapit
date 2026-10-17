@@ -19,9 +19,9 @@
 - **Fix:** branch `fix1b-reports`. The writer quotes and doubles by scalar; the guard also catches the
   full-width triggers and a trigger after leading Zs, Cf, tab, CR or LF (a listed deviation). `CSV.text`
   takes a column list (`ExportPolicy.devices` for the Devices view); abapit's every-key union is internal,
-  for the golden. The denylist folds a key (NFKC, case, letters and digits) and has more stems. Find trims
-  Python's whitespace. `gen_fixtures.py` adds hand-written CSV and `device_stats` cases and reads every
-  expected CSV back with `csv.reader`.
+  for the golden. The denylist folds a key (compatibility forms, case, letters and digits: NFKC at first,
+  NFKD since verifier round 1) and has more stems. Find trims Python's whitespace. `gen_fixtures.py` adds
+  hand-written CSV and `device_stats` cases and reads every expected CSV back with `csv.reader`.
 - **Prevention:** the generator's round trip fails on a split cell or a formula cell; the golden holds the
   reviewer's payloads; `ExportPolicyTests` holds the allowlist; 42 mutants, listed in the commit. The
   `history` runbook's gotchas say: port single-character logic through `unicodeScalars`, and use the
@@ -40,3 +40,14 @@
   `String.contains` (a prepended U+0D4E hid `token`). The lesson for the next port: a review fixes the
   instance, so grep the module for the class (`==`, `contains`, `first`, `Set<String>` and `String` keys on
   ported data) before calling it done.
+- **Verifier round 2** (two independent verifiers, 00938e8): the fix held; every finding was low. The same
+  class again, one level down: a blank Prepend scalar (U+0600) and the trigger after it are one `Character`,
+  so a guard finding its lead by `Character` would miss `"\u{600}=1"`, and no golden cell had one. Swift's
+  `lowercased()` has no Final_Sigma rule, so Find differed from Python's `lower()` on a word-final capital
+  sigma, held only by prose. Golden gaps let four more mutants through: JSON keys written raw, `-0.0` kept as
+  a name, unassigned serials sorted as `String`s, one service's serials deduped as `String`s. The allowlist
+  was never tested on a long list, `notByDefault` matched only its exact spelling while the denylist folded,
+  and nothing checked Find ignores non-identifier attributes. Fixed: Prepend and escaped-key cells in
+  `csv.json`; `-0.0` and NFC/NFD service cases in `reports.json`; `Find.lower` with CPython's sigma rule;
+  `notByDefault` read folded; tests for each. The lesson: grapheme rules have more joiners than combining
+  marks (Prepend, ZWJ, regional indicators), so a port that skips or tests "the first thing" says scalar.

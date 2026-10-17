@@ -49,13 +49,19 @@ struct ExportPolicyTests {
             #expect(ExportPolicy.isSensitive(key), "\(key.debugDescription)")
             let items = [CSV.Item(id: "C02X", attributes: ["serialNumber": .string("C02X"), key: .string("VALUE-THAT-MUST-NOT-LEAVE")])]
             // `includeNotByDefault` lets only `notByDefault` through, never a secret (verifier round 1: no test
-            // passed it with a secret, and a mutant that skipped the denylist when it was set survived).
-            for names in [ExportPolicy.devices.names, ["serialNumber", key], [key]] {
+            // passed it with a secret, and a mutant that skipped the denylist when it was set survived). And on a
+            // list as long as the Devices one, before it and after it (verifier round 2: every list here had one or
+            // two names, so a denylist skipped past ten columns survived).
+            let devices = ExportPolicy.devices.names
+            for names in [devices + [key], [key] + devices, ["serialNumber", key], [key]] {
                 for includeNotByDefault in [false, true] {
                     let text = CSV.text(items, columns: Self.columns(names), includeNotByDefault: includeNotByDefault)
                     #expect(!text.contains("VALUE-THAT-MUST-NOT-LEAVE"), "\(key.debugDescription) via \(names), \(includeNotByDefault)")
                     #expect(!Self.header(text).contains(key), "\(key.debugDescription) in the header")
                     #expect(!ExportPolicy.permits(key, includeNotByDefault: includeNotByDefault), "\(key.debugDescription)")
+                    if names.count > 2 {
+                        #expect(Self.bytes(Self.header(text)) == Self.bytes((["id"] + devices).joined(separator: ",")), "\(key.debugDescription)")
+                    }
                 }
             }
         }
@@ -66,6 +72,16 @@ struct ExportPolicyTests {
         #expect(Self.bytes(CSV.text(items, columns: Self.columns(["serverName", "lastConnectedIp"]))) == Self.bytes("id,serverName\r\nA0,Mosyle\r\n"))
         #expect(Self.bytes(CSV.text(items, columns: Self.columns(["serverName", "lastConnectedIp"]), includeNotByDefault: true))
                 == Self.bytes("id,serverName,lastConnectedIp\r\nA0,Mosyle,192.0.2.1\r\n"))
+        // Read folded, as the denylist reads a key: another spelling is held back by default too (verifier round 2:
+        // an exact match let `last_connected_ip` out unasked).
+        let spellings = ["last_connected_ip", "LastConnectedIP", "LAST-CONNECTED-IP", "lastConnected\u{200B}Ip"]
+        var attributes: JSONObject = [:]
+        for spelling in spellings { attributes[spelling] = .string("192.0.2.1") }
+        let spelled = [CSV.Item(id: "A0", attributes: attributes)]
+        #expect(Self.bytes(CSV.text(spelled, columns: Self.columns(spellings))) == Self.bytes("id\r\nA0\r\n"))
+        #expect(Self.bytes(CSV.text(spelled, columns: Self.columns(spellings), includeNotByDefault: true))
+                == Self.bytes((["id"] + spellings).joined(separator: ",") + "\r\nA0,192.0.2.1,192.0.2.1,192.0.2.1,192.0.2.1\r\n"))
+        #expect(!ExportPolicy.isNotByDefault("lastConnectedDateTime") && !ExportPolicy.isNotByDefault("connectedIp"))
     }
 
     /// The Devices export: the table's columns first, then every other documented attribute in Apple's order
@@ -78,7 +94,7 @@ struct ExportPolicyTests {
         #expect(Set(columns).count == columns.count)
         for column in columns {
             #expect(!ExportPolicy.isSensitive(column), "\(column)")
-            #expect(!ExportPolicy.notByDefault.contains(column), "\(column)")
+            #expect(!ExportPolicy.isNotByDefault(column), "\(column)")
         }
         var attributes: JSONObject = [:]
         for field in OrgDevice.fields { attributes[field] = .string("x") }
@@ -99,6 +115,9 @@ struct ExportPolicyTests {
         #expect(ExportPolicy.fold("tok\u{301}en") == "token")
         #expect(ExportPolicy.fold("tok\u{345}en") == "token")
         #expect(ExportPolicy.fold("Pa\u{301}ss\u{2163}") == "passiv")
+        // Every number category stays, Nd, Nl and No: U+0F2A TIBETAN DIGIT HALF ONE and U+10107 AEGEAN NUMBER ONE
+        // have no decomposition, so they are kept as they are (verifier round 2: dropping No survived).
+        #expect(Array(ExportPolicy.fold("Half\u{F2A}\u{10107}9").unicodeScalars) == Array("half\u{F2A}\u{10107}9".unicodeScalars))
         for key in OrgDevice.fields + ["serverName", "deviceCount", "lastConnectedDateTime", "description", "agreementNumber"] {
             #expect(!ExportPolicy.isSensitive(key), "\(key)")
         }

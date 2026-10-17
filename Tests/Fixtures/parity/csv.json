@@ -3015,6 +3015,46 @@
    ],
    "expected": "id,tags,empty,deep,flat\r\nTEST1,\"[\"\"a\"\",\"\"b\"\"]; y\",[],\"[[\"\"x\"\"],{\"\"k\"\":[1,null]}]; None; True; 2.5\",a; None; False; 0\r\n",
    "abapit": "id,tags,empty,deep,flat\r\nTEST1,\"['a', 'b']; y\",[],\"[['x'], {'k': [1, None]}]; None; True; 2.5\",a; None; False; 0\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "\u06dd=id",
+     "attributes": {
+      "\u0600=key": "\u0600=1",
+      "end_of_ayah": "\u06dd+1",
+      "syriac": "\u070f-1",
+      "pound": "\u0890=1",
+      "kaithi": "\ud804\udcbd@x",
+      "plain": "\u06001"
+     }
+    }
+   ],
+   "expected": "id,'\u0600=key,end_of_ayah,syriac,pound,kaithi,plain\r\n'\u06dd=id,'\u0600=1,'\u06dd+1,'\u070f-1,'\u0890=1,'\ud804\udcbd@x,\u06001\r\n",
+   "abapit": "id,\u0600=key,end_of_ayah,syriac,pound,kaithi,plain\r\n\u06dd=id,\u0600=1,\u06dd+1,\u070f-1,\u0890=1,\ud804\udcbd@x,\u06001\r\n"
+  },
+  {
+   "input": [
+    {
+     "type": "orgDevices",
+     "id": "TEST1",
+     "attributes": {
+      "meta": {
+       "a\"b\\c\u0001": 1,
+       "tab\tnl\n": 2,
+       "\u007f\u2028": 3,
+       "\u00e9": [
+        {
+         "\"": null
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "expected": "id,meta\r\nTEST1,\"{\"\"a\\\"\"b\\\\c\\u0001\"\":1,\"\"tab\\tnl\\n\"\":2,\"\"\u007f\u2028\"\":3,\"\"\u00e9\"\":[{\"\"\\\"\"\"\":null}]}\"\r\n",
+   "abapit": "id,meta\r\nTEST1,\"{'a\"\"b\\\\c\\x01': 1, 'tab\\tnl\\n': 2, '\\x7f\\u2028': 3, '\u00e9': [{'\"\"': None}]}\"\r\n"
   }
  ]
 }

@@ -108,7 +108,9 @@ public enum CSV {
     /// tab, a CR or a trigger first; the listed deviation guards a cell whose first visible scalar is a trigger
     /// or reads as one (Phase 1b review, LOW: `" =1"`, `"\u{200B}=1"`, `"\u{FF1D}1"`; verifier round 1:
     /// `"\u{0B}=1"`, `"\u{2028}=1"`, `"\u{FE66}1"`, `"\u{2212}1"`). By scalar: a CR LF or a trigger with a
-    /// combining mark is one `Character`, and Python sees its first code point.
+    /// combining mark is one `Character`, and Python sees its first code point. So is a blank Prepend scalar and
+    /// the trigger after it (`"\u{600}=1"`, U+0600 ARABIC NUMBER SIGN, is one `Character`): the lead is the first
+    /// non-blank scalar, never the first non-blank `Character` (verifier round 2).
     static func safe(_ text: String) -> String {
         let scalars = text.unicodeScalars
         if let first = scalars.first, first == "\t" || first == "\r" { return "'" + text }
@@ -196,8 +198,16 @@ public enum ExportPolicy {
         return sensitiveStems.contains { folded.firstRange(of: Array($0.utf8)) != nil }
     }
 
+    /// Whether a column is one of `notByDefault`, read folded as the denylist reads a key, by code point:
+    /// `last_connected_ip` and `LastConnectedIP` are `lastConnectedIp` too (verifier round 2: an exact match
+    /// would have let either spelling out unasked, while the denylist beside it folded).
+    static func isNotByDefault(_ key: String) -> Bool {
+        let folded = Array(fold(key).utf8)
+        return notByDefault.contains { Array(fold($0).utf8) == folded }
+    }
+
     /// Whether a listed column may be written.
     static func permits(_ key: String, includeNotByDefault: Bool) -> Bool {
-        !isSensitive(key) && (includeNotByDefault || !notByDefault.contains(key))
+        !isSensitive(key) && (includeNotByDefault || !isNotByDefault(key))
     }
 }

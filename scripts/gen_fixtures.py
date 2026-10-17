@@ -319,7 +319,8 @@ def stats_edges() -> list[list[dict]]:
     own offset across a month boundary, and the exact 30- and 90-day boundaries. Then (verifier round 1)
     whitespace-only names, which Python keeps, and NFC and NFD spellings of one name, which Counter counts
     apart; and the one deviating fleet, where Python's Counter merges `True` with `1` and `1.0`, and keeps `"5"`
-    apart from `5` (see `shown`). Literals only, so the drawn cases don't move."""
+    apart from `5` (see `shown`). Then (verifier round 2) `-0.0`, falsy as every zero is. Literals only, so the
+    drawn cases don't move."""
     def dev(index: int, **attrs) -> dict:
         serial = f"TESTSTAT{index:04d}"
         return {"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial, **attrs}}
@@ -362,7 +363,11 @@ def stats_edges() -> list[list[dict]]:
     merged = [(True, "5", 2.5), (1, 5, "2.5"), (True, 5, 2.5), ("True", "5", None), (1.0, "5", 0)]
     quirks = [dev(400 + i, productFamily=family, status=status, deviceModel=model)
               for i, (family, status, model) in enumerate(merged)]
-    return [top, unknown, months, boundary, top + unknown + months + boundary, names, quirks]
+    # Verifier round 2: -0.0 is falsy too, so Unknown (a text test for "0" and "0.0" kept it as a name).
+    zeros = [dev(500 + i, productFamily=family, status=status, deviceModel=model)
+             for i, (family, status, model) in enumerate([(-0.0, "ASSIGNED", -0.0), ("Mac", -0.0, "Mac mini (M4)"),
+                                                           (-0.0, 0.0, 0), ("Mac", "ASSIGNED", "Mac mini (M4)")])]
+    return [top, unknown, months, boundary, top + unknown + months + boundary, names, quirks, zeros]
 
 
 STAT_FIELDS = ("productFamily", "status", "deviceModel")
@@ -427,6 +432,15 @@ def gen_reports(m: dict) -> None:
     mapping = {"SVC1": [nfd, nfd, "TEST1"], "SVC2": [nfd, "GONE1"]}
     add("assignment_summary", {"devices": devices, "servers": svcs, "server_device_ids": mapping},
         lambda: reports.assignment_summary(devices, svcs, mapping))
+    # Verifier round 2: one service lists both spellings of a serial (two devices to Python's set), and the
+    # unassigned ones sort by code point, which puts an ASCII serial between an NFD and an NFC spelling.
+    nfc_n, nfd_n = "C02\u00d1Y", "C02N\u0303Y"
+    devices2 = [{"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial}}
+                for serial in (nfc, "C02F", nfd, nfc_n, nfd_n, "TEST3")]
+    svcs2 = [{"type": "mdmServers", "id": "SVC3", "attributes": {"serverName": "Mosyle"}}]
+    mapping2 = {"SVC3": [nfc_n, nfd_n, nfc_n, "TEST3"]}
+    add("assignment_summary", {"devices": devices2, "servers": svcs2, "server_device_ids": mapping2},
+        lambda: reports.assignment_summary(devices2, svcs2, mapping2))
     for _ in range(20):
         devices = fleet(rng, 0, 20)
         care = applecare(rng, devices) + applecare(rng, fleet(rng, 0, 3))
@@ -636,6 +650,12 @@ def csv_edges() -> list[list[dict]]:
         # A list inside a list is JSON, as a dict inside a list is.
         [item("TEST1", {"tags": [["a", "b"], "y"], "empty": [[]], "deep": [[["x"], {"k": [1, None]}], None, True, 2.5],
                         "flat": ["a", None, False, 0]})],
+        # Verifier round 2. A blank (Cf) that is also a Prepend character joins the trigger after it into one
+        # Swift Character, so the guard must find its lead by scalar: U+0600, U+06DD, U+070F, U+0890, U+110BD.
+        [item("\u06dd=id", {"\u0600=key": "\u0600=1", "end_of_ayah": "\u06dd+1", "syriac": "\u070f-1",
+                             "pound": "\u0890=1", "kaithi": "\U000110bd@x", "plain": "\u0600" + "1"})],
+        # A JSON key is escaped as a JSON string is: a quote, a backslash and the C0 controls, and nothing else.
+        [item("TEST1", {"meta": {'a"b\\c\u0001': 1, "tab\tnl\n": 2, "\u007f\u2028": 3, "\u00e9": [{'"': None}]}})],
     ]
 
 

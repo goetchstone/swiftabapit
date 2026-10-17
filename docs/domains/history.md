@@ -24,7 +24,8 @@ phase 1b; its notes are below.
   `ExportPolicy` (`devices` today) and an every-key list doesn't compile outside Reports. abapit's union of
   keys is `CSV.union`, internal, for the parity golden only. `ExportPolicy.isSensitive` is the second defence,
   with or without `includeNotByDefault`: it drops a listed column whose folded name (NFKD, then lowercased,
-  then letters and numbers by general category) holds a secret stem.
+  then letters and numbers by general category) holds a secret stem. `notByDefault` is read folded the same
+  way, so `last_connected_ip` stays out unasked as `lastConnectedIp` does.
 - **The writer works by Unicode scalar**, as Python's `csv` does: quoting is decided by a `,`, `"`, CR or LF
   scalar, and every `"` scalar is doubled.
 - **The formula guard** is abapit's (a tab, a CR or `=+-@` first) plus a listed deviation: a cell whose first
@@ -32,8 +33,10 @@ phase 1b; its notes are below.
   Zs, Zl, Zp, default-ignorable, U+2800), which holds Python's, .NET's and Java's whitespace. Reads as one:
   U+2212, or a compatibility form starting with `=+-@` or U+2212 (full-width, small, super- and subscript
   forms). `csv.json` lists both sets and `theGuardsSetsAreTheGoldens` holds Swift to them scalar by scalar.
-- **Find** trims Python's whitespace (`str.strip()`), the set the serials golden lists, and matches by code
-  point (UTF-8 bytes), as Python's `==` and `in` do.
+- **Find** trims Python's whitespace (`str.strip()`), the set the serials golden lists, lowercases as
+  Python's `lower()` does (`Find.lower`: Swift's `lowercased()` plus Unicode's Final_Sigma rule), and matches
+  by code point (UTF-8 bytes), as Python's `==` and `in` do. It matches the device's id and abapit's eight
+  identifier fields (`OrgDevice.identifiers`), never a model, family, status or other attribute.
 - **`device_stats`** counts a breakdown by the name shown: Python's `Counter` keys by value (a listed
   deviation, one fleet in `reports.json`). **`AssignmentSummary`** keeps serials as sets of UTF-8 bytes, as
   Python's sets compare code points; the denylist finds a stem in the folded key's bytes.
@@ -53,6 +56,18 @@ phase 1b; its notes are below.
   holds for `Set<String>` and `[String: _]` keys (canonical equivalence), which Python's sets and dicts
   don't have: key them by `Array($0.utf8)`. A dictionary the caller builds (`deviceIDs`, keyed by service ID)
   still merges equivalent keys; service IDs are Apple's ASCII.
+- **A Prepend scalar joins what follows it.** U+0600, U+06DD, U+070F, U+0890, U+08E2, U+110BD and U+110CD
+  are format characters (blank to the guard) and Grapheme_Cluster_Break=Prepend, so `"\u{600}=1"` starts
+  with one `Character` holding U+0600 and `=`. A guard that skipped blank `Character`s would miss the trigger;
+  `CSV.safe` skips blank scalars. The golden holds such a cell (verifier round 2).
+- **Swift's `lowercased()` isn't Python's `lower()`** on a capital sigma that ends a word: Python gives the
+  final U+03C2, Swift U+03C3, so `\u{3A3}` found an order number `A\u{3A3}` that abapit wouldn't. For every
+  other code point the two agree (per-scalar full case mapping), apart from letters newer than Python's
+  Unicode version. `Find.lower` applies CPython's `handle_capital_sigma` rule.
+- **A golden needs two of a kind to pin an order or a merge.** One non-ASCII unassigned serial, one spelling
+  per service, no JSON key needing an escape, no `-0.0`: each let a mutant through (verifier round 2). The
+  hand-written `assignment_summary` and `csv` cases now hold NFC and NFD serials in one service and in one
+  unassigned list with an ASCII serial between them, and dict keys with a quote, a backslash and controls.
 - **`.whitespacesAndNewlines` isn't Python's whitespace**: it misses U+001C to U+001F, which `str.strip()`
   and `str.split()` remove. Use the golden's `python_whitespace` list (Find keeps a copy; `SerialParser`
   another; a test pins each to the golden).
@@ -81,11 +96,13 @@ phase 1b; its notes are below.
 
 ## Testing / live-verification status
 
-- Goldens: `csv.json` (86 cases, 41 listed deviations: containers as JSON, and 5 for the wider guard; and
-  the guard's `blank` and `triggers` sets) and `reports.json` (`device_stats` 32 cases, 1 deviation, the
-  Counter fleet). The generator reads every expected CSV back with Python's `csv.reader` and fails if a cell
-  splits, joins or starts (after blanks) with a trigger.
-- Mutants for the Phase 1b fixes and verifier round 1 are listed in the branch's commit messages.
+- Goldens: `csv.json` (88 cases, 43 listed deviations: containers as JSON, and 6 for the wider guard; and
+  the guard's `blank` and `triggers` sets) and `reports.json` (`device_stats` 33 cases, 1 deviation, the
+  Counter fleet; `assignment_summary` 22 cases). The generator reads every expected CSV back with Python's
+  `csv.reader` and fails if a cell splits, joins or starts (after blanks) with a trigger.
+- Mutants for the Phase 1b fixes and verifier rounds 1 and 2 are listed in the branch's commit messages.
+- Find has no parity golden (abapit's `/find` is in `web/app.py`, not a pure module): `FindTests` holds it,
+  with Python 3.12's own outputs written in for the final-sigma cases.
 
 ## To do common tasks here
 

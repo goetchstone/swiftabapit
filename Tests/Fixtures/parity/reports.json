@@ -12329,6 +12329,142 @@
    }
   },
   {
+   "function": "device_stats",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0500",
+      "attributes": {
+       "serialNumber": "TESTSTAT0500",
+       "productFamily": -0.0,
+       "status": "ASSIGNED",
+       "deviceModel": -0.0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0501",
+      "attributes": {
+       "serialNumber": "TESTSTAT0501",
+       "productFamily": "Mac",
+       "status": -0.0,
+       "deviceModel": "Mac mini (M4)"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0502",
+      "attributes": {
+       "serialNumber": "TESTSTAT0502",
+       "productFamily": -0.0,
+       "status": 0.0,
+       "deviceModel": 0
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TESTSTAT0503",
+      "attributes": {
+       "serialNumber": "TESTSTAT0503",
+       "productFamily": "Mac",
+       "status": "ASSIGNED",
+       "deviceModel": "Mac mini (M4)"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "total": 4,
+     "by_family": [
+      [
+       "Unknown",
+       2
+      ],
+      [
+       "Mac",
+       2
+      ]
+     ],
+     "by_status": [
+      [
+       "ASSIGNED",
+       2
+      ],
+      [
+       "Unknown",
+       2
+      ]
+     ],
+     "top_models": [
+      [
+       "Unknown",
+       2
+      ],
+      [
+       "Mac mini (M4)",
+       2
+      ]
+     ],
+     "added_30": 0,
+     "added_90": 0,
+     "added_by_month": [
+      [
+       "2025-11",
+       0
+      ],
+      [
+       "2025-12",
+       0
+      ],
+      [
+       "2026-01",
+       0
+      ],
+      [
+       "2026-02",
+       0
+      ],
+      [
+       "2026-03",
+       0
+      ],
+      [
+       "2026-04",
+       0
+      ],
+      [
+       "2026-05",
+       0
+      ],
+      [
+       "2026-06",
+       0
+      ],
+      [
+       "2026-07",
+       0
+      ],
+      [
+       "2026-08",
+       0
+      ],
+      [
+       "2026-09",
+       0
+      ],
+      [
+       "2026-10",
+       0
+      ]
+     ],
+     "month_max": 0,
+     "family_max": 2
+    }
+   }
+  },
+  {
    "function": "assignment_summary",
    "input": {
     "devices": [
@@ -15891,6 +16027,94 @@
       "C02\u00c9X"
      ],
      "assigned_count": 2
+    }
+   }
+  },
+  {
+   "function": "assignment_summary",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "C02\u00c9X",
+      "attributes": {
+       "serialNumber": "C02\u00c9X"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02F",
+      "attributes": {
+       "serialNumber": "C02F"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02E\u0301X",
+      "attributes": {
+       "serialNumber": "C02E\u0301X"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02\u00d1Y",
+      "attributes": {
+       "serialNumber": "C02\u00d1Y"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02N\u0303Y",
+      "attributes": {
+       "serialNumber": "C02N\u0303Y"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "TEST3",
+      "attributes": {
+       "serialNumber": "TEST3"
+      }
+     }
+    ],
+    "servers": [
+     {
+      "type": "mdmServers",
+      "id": "SVC3",
+      "attributes": {
+       "serverName": "Mosyle"
+      }
+     }
+    ],
+    "server_device_ids": {
+     "SVC3": [
+      "C02\u00d1Y",
+      "C02N\u0303Y",
+      "C02\u00d1Y",
+      "TEST3"
+     ]
+    }
+   },
+   "expected": {
+    "ok": {
+     "per_server": [
+      {
+       "server": {
+        "type": "mdmServers",
+        "id": "SVC3",
+        "attributes": {
+         "serverName": "Mosyle"
+        }
+       },
+       "count": 3
+      }
+     ],
+     "unassigned": [
+      "C02E\u0301X",
+      "C02F",
+      "C02\u00c9X"
+     ],
+     "assigned_count": 3
     }
    }
   },

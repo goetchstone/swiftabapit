@@ -35,8 +35,9 @@ struct ReportsParityTests {
         let cases = try Self.cases("csv")
         // 70 drawn, then the hand-written ones: the Phase 1b review's H1 payloads, CR LF and combining marks by
         // scalar, the wider formula guard, NFC and NFD keys; then verifier round 1's: invisible leads and look-alike
-        // triggers, rows of empty fields, JSON keys past the BMP, and a list inside a list.
-        #expect(cases.count == 86)
+        // triggers, rows of empty fields, JSON keys past the BMP, and a list inside a list; then verifier round 2's:
+        // a blank Prepend scalar before a trigger (one `Character` with it), and JSON keys that need escaping.
+        #expect(cases.count == 88)
         for (index, item) in cases.enumerated() {
             let items = Self.items(item)
             let expected = try #require(item["expected"]?.string)
@@ -57,7 +58,7 @@ struct ReportsParityTests {
     /// trigger after invisible leads. Each deviating case holds one of those, and the list doesn't grow unseen.
     @Test func everyCSVDeviationIsAContainerOrTheWiderGuard() throws {
         let deviating = try Self.cases("csv").filter { $0["abapit"] != nil }
-        #expect(deviating.count == 41)
+        #expect(deviating.count == 43)
         var wider = 0
         for item in deviating {
             let items = Self.items(item)
@@ -67,7 +68,7 @@ struct ReportsParityTests {
             if widerGuard { wider += 1 }
             #expect(container || widerGuard)
         }
-        #expect(wider == 5)
+        #expect(wider == 6)
     }
 
     /// The guard's sets are the golden's, scalar by scalar: what may lead unseen (check_text.py's invisible, which
@@ -108,10 +109,14 @@ struct ReportsParityTests {
                      "\u{0B}=1", "\u{0C}+1", "\u{1C}-1", "\u{85}=1", "\u{2028}=1", "\u{2029}@x", "\u{0}=1", "\u{1}=1",
                      "\u{3164}=1", "\u{115F}=1", "\u{FFA0}=1", "\u{2800}=1", "\u{34F}=1", "\u{FE0F}=1",
                      "\u{FE66}1", "\u{FE62}1", "\u{FE63}1", "\u{FE6B}x", "\u{207A}1", "\u{208C}1", "\u{207B}1", "\u{2A75}1",
-                     "\u{2212}1", "\u{A0}\u{2212}1"] {
+                     "\u{2212}1", "\u{A0}\u{2212}1",
+                     // Verifier round 2: a blank Prepend scalar joins the trigger after it into one `Character`.
+                     "\u{600}=1", "\u{6DD}+1", "\u{70F}-1", "\u{890}=1", "\u{8E2}=1", "\u{110BD}@x", "\u{110CD}=1",
+                     " \u{600}=1"] {
             #expect(CSV.safe(text) == "'" + text, "\(text.debugDescription)")
             #expect(!Self.abapitGuards(text), "\(text.debugDescription)")
         }
+        #expect("\u{600}=1".first.map { Array($0.unicodeScalars) } == ["\u{600}", "="])
         // A combining mark shows (and nothing trims it), a hyphen, a heavy minus and a plus-minus aren't signs.
         for text in ["", "plain", " lead", "\u{200B}plain", "\n plain", "x=1", "'=1", "\u{301}=1", "\u{20DD}+1",
                      "\u{2028}plain", "\u{2010}1", "\u{2796}1", "\u{B1}1", "x\u{2212}1"] {
@@ -148,10 +153,10 @@ struct ReportsParityTests {
     /// timestamp's own offset across a month boundary, and the exact 30- and 90-day boundaries. Then verifier
     /// round 1's two: whitespace-only names and NFC and NFD spellings of one name, each its own row as in Python;
     /// and the one listed deviation, rows by the name shown (Python's Counter merges `True`, `1` and `1.0`, and
-    /// keeps `"5"` and `5` as two rows named `5`).
+    /// keeps `"5"` and `5` as two rows named `5`). Then verifier round 2's: `-0.0`, falsy, so Unknown.
     @Test func deviceStatsMatchTheGolden() throws {
         let cases = try Self.cases("reports", "device_stats")
-        #expect(cases.count == 32)
+        #expect(cases.count == 33)
         #expect(cases.indices.filter { cases[$0]["abapit"] != nil } == [31])
         let now = Self.now
         for (index, item) in cases.enumerated() {
@@ -174,7 +179,7 @@ struct ReportsParityTests {
             #expect(stats.familyMax == expected["family_max"]?.int, "case \(index)")
         }
         // The hand-written fleets reach what the drawn ones don't.
-        let edges = cases.suffix(7).compactMap { $0["expected"]?["ok"] }
+        let edges = cases.suffix(8).compactMap { $0["expected"]?["ok"] }
         #expect(edges.contains { ($0["top_models"]?.array?.count ?? 0) == 10 })
         #expect(edges.contains { ($0["by_status"]?.array ?? []).contains { $0.array?.first?.bool == true } })
         let names = edges.flatMap { ($0["top_models"]?.array ?? []) + ($0["by_status"]?.array ?? []) }.compactMap { $0.array?.first?.string }
@@ -182,10 +187,24 @@ struct ReportsParityTests {
         #expect(names.contains { Array($0.utf8) == Array("Caf\u{E9}".utf8) } && names.contains { Array($0.utf8) == Array("Cafe\u{301}".utf8) })
     }
 
+    /// Python's truth of a JSON number is its value: any spelling of zero is falsy, so Unknown (verifier round 2:
+    /// a test of the text for `0` and `0.0` kept `-0.0`). The golden can't hold `0e0` or `-0`, which Python's
+    /// `json.dumps` never writes, but Apple's JSON could.
+    @Test func everyZeroIsUnknown() {
+        for text in ["0", "0.0", "-0", "-0.0", "0e0", "0E+00", "-0.000e-5", "0.00"] {
+            #expect(DeviceStats.orUnknown(.number(text)) == "Unknown", "\(text)")
+        }
+        for text in ["1", "-1", "2.5", "1e-300", "-0.001"] {
+            #expect(DeviceStats.orUnknown(.number(text)) == text, "\(text)")
+        }
+    }
+
     @Test func assignmentSummaryMatchesTheGolden() throws {
         let cases = try Self.cases("reports", "assignment_summary")
-        // 20 drawn, then verifier round 1's NFC and NFD spellings of one serial: two devices, as in Python.
-        #expect(cases.count == 21)
+        // 20 drawn, then verifier round 1's NFC and NFD spellings of one serial: two devices, as in Python. Then
+        // verifier round 2's: one service listing both spellings (two of its devices), and unassigned serials whose
+        // code-point order differs from `String`'s (an ASCII serial sorts between the NFD and the NFC one).
+        #expect(cases.count == 22)
         for item in cases {
             let input = try #require(item["input"])
             var ids: [String: [String]] = [:]
