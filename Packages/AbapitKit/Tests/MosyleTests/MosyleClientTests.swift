@@ -27,12 +27,13 @@ struct MosyleClientTests {
         let vault = Vault(store: MemoryStore())
         let client: MosyleClient
 
-        init(pageCap: Int = MosyleClient.defaultPageCap, account: MosyleStub.Account = MosyleClientTests.account) async throws {
+        init(pageCap: Int = MosyleClient.defaultPageCap, account: MosyleStub.Account = MosyleClientTests.account,
+             bodyLimit: Int = HTTPClient.bodyLimit) async throws {
             stub.register(account)
             try await vault.replaceSet([.mosyleAccessToken: Secret("access-token"), .mosyleEmail: Secret("admin@example.com"),
                                         .mosylePassword: Secret("pw")], for: MosyleClientTests.org)
             client = MosyleClient(org: MosyleClientTests.org, vault: vault, transport: stub, limiter: MosyleClientTests.limiter(),
-                                  pageCap: pageCap, sleep: { _ in })
+                                  pageCap: pageCap, bodyLimit: bodyLimit, sleep: { _ in })
         }
 
         func devices() async throws -> [MosylePage] {
@@ -45,10 +46,12 @@ struct MosyleClientTests {
     static func device(_ serial: String, os: String) -> JSONObject {
         ["serial_number": .string(serial), "deviceudid": .string("UDID-\(serial)"), "device_name": .string("Device \(serial)"),
          "os": .string(os), "osversion": .string("27.0"), "date_last_beat": .string("1700000000"),
-         "activation_bypass": .string("BYPASS-SECRET"), "activation_bypass_code": .string("CODE-SECRET")]
+         "activation_bypass": .string("BYPASS-SECRET"), "activation_bypass_mdm": .string("MDM-SECRET"),
+         "activation_bypass_code": .string("CODE-SECRET")]
     }
 
     static func devices(_ count: Int, os: String) -> [JSONObject] { (0..<count).map { device("\(os.uppercased())\($0)", os: os) } }
+    static func users(_ count: Int) -> [JSONObject] { (0..<count).map { ["iduser": .string("U\($0)"), "name": .string("User \($0)")] } }
 
     @Test func aLoginIsSharedAcrossReads() async throws {
         let harness = try await Harness()
@@ -72,13 +75,16 @@ struct MosyleClientTests {
         #expect(asked == ["ios#1", "ios#2", "mac#1", "mac#2", "mac#3", "mac#4", "tvos#1", "visionos#1", "visionos#2"])
     }
 
-    /// Defect 1: the Activation Lock bypass codes are never asked for, and never kept when a tenant sends them anyway.
+    /// Defect 1: the Activation Lock bypass codes are never asked for, by the list or the ping, and never kept when a
+    /// tenant sends them anyway.
     @Test func theBypassCodesAreNeitherAskedForNorKept() async throws {
         let harness = try await Harness()
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         harness.stub.ignoreColumns()
+        try await harness.client.ping()
         let items = try await harness.devices().flatMap(\.items)
         #expect(items.count == 3)
+        #expect(harness.stub.bodies.count == 6, "the ping, then five pages over four platforms")
         for body in harness.stub.bodies {
             let columns = body["options"]?["specific_columns"]?.array?.compactMap(\.string) ?? []
             #expect(!columns.isEmpty && !columns.contains { $0.hasPrefix("activation_bypass") })
@@ -97,11 +103,16 @@ struct MosyleClientTests {
         #expect(try await harness.devices().flatMap(\.items).map(\.id) == ["SAME", "OTHER"])
     }
 
-    /// Defect 3: a status inside an HTTP 200 is an error, not an empty list; an unknown one fails closed.
+    /// Defect 3: a status inside an HTTP 200 is an error, not an empty list; an unknown one fails closed. The device
+    /// list's `UNKNOWN_COLUMNS` asks again without its columns first (`MosyleFailureTests`); a user list's is the error.
     @Test(arguments: ["MISSING_DATA", "UNKNOWN_COLUMNS", "SOMETHING_NEW"])
     func aStatusInsideA200IsAnError(status: String) async throws {
         let harness = try await Harness()
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        harness.stub.add(users: Self.users(3))
+        harness.stub.failEnvelope(status, for: "/v1/users")
+        await #expect(throws: MosyleAPIError.status(OpenEnum(status), info: "stubbed")) { _ = try await harness.client.users() }
+        guard status != "UNKNOWN_COLUMNS" else { return }
         harness.stub.failEnvelope(status, for: "/v1/devices")
         await #expect(throws: MosyleAPIError.status(OpenEnum(status), info: "stubbed")) { _ = try await harness.devices() }
     }
@@ -109,7 +120,7 @@ struct MosyleClientTests {
     @Test func aTenantThatIgnoresPagingStopsAtTheRepeat() async throws {
         let harness = try await Harness()
         harness.stub.add(devices: Self.devices(120, os: "mac"), os: "mac")
-        harness.stub.add(users: (0..<70).map { ["iduser": .string("U\($0)"), "name": .string("User \($0)")] })
+        harness.stub.add(users: Self.users(70))
         harness.stub.ignorePaging()
         #expect(try await harness.devices().flatMap(\.items).count == 50)
         #expect(harness.stub.bodies.filter { $0["options"]?["os"]?.string == "mac" }.count == 2)
@@ -117,19 +128,22 @@ struct MosyleClientTests {
         #expect(users.items.count == 50 && !users.truncated)
     }
 
-    /// Invariant 8: a list cut off at the cap says so.
+    /// Invariant 8: a list cut off at the cap says so, and the device stream's last page says so even when a later
+    /// platform wasn't cut (Phase 7a review L3: the visionOS page after a cut macOS read as complete).
     @Test func theCapIsShown() async throws {
         let harness = try await Harness(pageCap: 2)
         harness.stub.add(devices: Self.devices(120, os: "mac"), os: "mac")
-        harness.stub.add(users: (0..<120).map { ["iduser": .string("U\($0)"), "name": .string("User \($0)")] })
+        harness.stub.add(devices: Self.devices(2, os: "visionos"), os: "visionos")
+        harness.stub.add(users: Self.users(120))
         let pages = try await harness.devices()
-        #expect(pages.flatMap(\.items).count == 100)
+        #expect(pages.flatMap(\.items).count == 102)
+        #expect(pages.last?.items.first?.attributes["productFamily"] == .string("Vision"))
         #expect(pages.last?.truncated == true)
+        #expect(pages.first?.truncated == false, "nothing before the cut is marked")
         let users = try await harness.client.users()
         #expect(users.items.count == 100 && users.truncated)
         let whole = try await Harness()
-        whole.stub.add(users: (0..<120).map { ["iduser": .string("U\($0)"), "name": .string("User \($0)")] })
-        whole.stub.sendRowsAsStrings()
+        whole.stub.add(users: Self.users(120))
         let all = try await whole.client.users()
         #expect(all.items.count == 120 && !all.truncated)
     }
@@ -225,30 +239,37 @@ struct MosyleSessionTests {
         func advance(_ by: Duration) { lock.withLock { instant = instant.advanced(by: by) } }
     }
 
-    static func session(_ stub: MosyleStub, clock: Clock = Clock()) async throws -> MosyleSession {
+    /// `sleep` is `HTTPClient`'s, between a read's attempts (a 429's wait).
+    static func session(_ stub: MosyleStub, clock: Clock = Clock(),
+                        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in }) async throws -> MosyleSession {
         stub.register(MosyleClientTests.account)
         let vault = Vault(store: MemoryStore())
         try await vault.replaceSet([.mosyleAccessToken: Secret("access-token"), .mosyleEmail: Secret("admin@example.com"),
                                     .mosylePassword: Secret("pw")], for: MosyleClientTests.org)
         return MosyleSession(org: MosyleClientTests.org, service: .business, vault: vault,
-                             http: HTTPClient(transport: stub, limiter: MosyleClientTests.limiter()), clock: { clock.now })
+                             http: HTTPClient(transport: stub, limiter: MosyleClientTests.limiter(), sleep: sleep), clock: { clock.now })
     }
+
+    /// A read the stub answers on an empty tenant: the session's login is reached only through one.
+    static let read = MosyleRead.users(page: 1)
 
     @Test func theJWTsExpSetsItsLife() async throws {
         let stub = MosyleStub(), clock = Clock()
         stub.jwtLifetime(150)
         let session = try await Self.session(stub, clock: clock)
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         clock.advance(.seconds(89))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         #expect(await session.logins == 1)
         clock.advance(.seconds(2))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         #expect(await session.logins == 2, "inside the last 60 s: logged in again")
     }
 
-    /// Review H1's shape, on Mosyle's side: an `exp` far past `Duration`'s range is the fallback, not a trap.
-    static let exps: [(String, Int)] = [("1e300", 82_800), ("1e999", 82_800), ("-1e300", 0), ("\"soon\"", 82_800), ("null", 82_800)]
+    /// Review H1's shape, on Mosyle's side: an `exp` far past `Duration`'s range is the fallback, not a trap. One at or
+    /// before now is the fallback too, not a zero life (Phase 7a review M2: a login per read).
+    static let exps: [(String, Int)] = [("1e300", 82_800), ("1e999", 82_800), ("-1e300", 82_800), ("1", 82_800), ("-1e999", 82_800),
+                                        ("NaN", 82_800), ("\"soon\"", 82_800), ("null", 82_800)]
 
     @Test(arguments: exps)
     func everyExpIsBounded(exp: String, seconds: Int) {
@@ -258,24 +279,41 @@ struct MosyleSessionTests {
         #expect(MosyleSession.lifetime(of: "not a jwt", now: Date()) == MosyleSession.fallbackLifetime)
     }
 
+    /// A read held while another logs in again after a 401 is refused late, for the first login: its own refresh
+    /// keeps the second login rather than dropping it for a third (Phase 1a's review: one expiry minted three tokens).
     @Test func aLate401KeepsTheNewLogin() async throws {
-        let session = try await Self.session(MosyleStub())
-        let old = try await session.headers(for: .mosyle)
-        await session.invalidate(rejected: old)
-        let new = try await session.headers(for: .mosyle)
-        #expect(new != old)
-        await session.invalidate(rejected: old)
-        #expect(try await session.headers(for: .mosyle) == new)
-        #expect(await session.logins == 2)
+        let stub = MosyleStub()
+        let session = try await Self.session(stub)
+        _ = try await session.read(Self.read)
+        stub.holdRequests(to: "/v1/devices", fromPage: 1)
+        let held = Task { try await session.read(MosyleRead.devices(os: "mac", page: 1)) }
+        let asked = { stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count }
+        for _ in 0..<300 where asked() < 1 { try await Task.sleep(for: .milliseconds(10)) }
+        stub.expireLoginsOnce()
+        #expect(try await session.read(Self.read).status == 200)
+        #expect(stub.logins == 2, "the users read logged in again after its 401")
+        stub.release()
+        #expect(try await held.value.status == 200)
+        #expect(stub.logins == 2, "the held read's late 401 was for the first login: the second is kept")
     }
 
-    @Test func theSessionAuthenticatesOnlyItsHost() async throws {
-        let session = try await Self.session(MosyleStub())
-        for host in [APIHost.appleBusiness, .appleSchool, .appleAccount, .mosyleLogs] {
-            await #expect(throws: MosyleAPIError.wrongHost(host.rawValue)) { _ = try await session.headers(for: host) }
+    /// The session sends only a Mosyle read of its own service, checked before any login: the Logs Stream's read on
+    /// the business session, a write, and a read's body sent to another host each leave nothing on the wire. It is
+    /// no `Authorizer`, so `HTTPClient` can't send anything else with its login (Phase 7a's verification, round 3).
+    @Test func theSessionSendsOnlyItsOwnReads() async throws {
+        let stub = MosyleStub()
+        let session = try await Self.session(stub)
+        #expect(!((session as Any) is any Authorizer))
+        let logs = MosyleRead.logsStream(types: ["dns"], page: 1)
+        await #expect(throws: MosyleAPIError.wrongHost(APIHost.mosyleLogs.rawValue)) { _ = try await session.read(logs) }
+        let wipe = ReadRequest(host: .mosyle, method: .post, path: "/v1/devices", body: Data(#"{"operation": "wipe_devices"}"#.utf8))
+        await #expect(throws: MosyleAPIError.notARead("/v1/devices")) { _ = try await session.read(wipe) }
+        for host in [APIHost.appleBusiness, .appleSchool, .appleAccount] {
+            let elsewhere = ReadRequest(host: host, method: .post, path: "/v1/users", body: Self.read.body)
+            await #expect(throws: MosyleAPIError.notARead("/v1/users")) { _ = try await session.read(elsewhere) }
         }
-        let headers = try await session.headers(for: .mosyle)
-        #expect(headers["accessToken"] == "access-token" && headers["Authorization"]?.hasPrefix("Bearer ") == true)
+        #expect(stub.requests.isEmpty && stub.logins == 0, "nothing sent, not even a login")
+        #expect(try await session.read(Self.read).status == 200, "the stub checked its accessToken and Bearer JWT")
     }
 
     /// The JWT from the response's `Authorization` header, bare or `Bearer`, else the body as abapit tolerated.
@@ -288,6 +326,7 @@ struct MosyleSessionTests {
         #expect(MosyleSession.bearer(response(["authorization": "abc"])) == "abc")
         #expect(MosyleSession.bearer(response([:], #"{"token": "Bearer xyz"}"#)) == "xyz")
         #expect(MosyleSession.bearer(response(["authorization": "Bearer "])) == nil)
+        #expect(MosyleSession.bearer(response(["authorization": "Bearer abc def"])) == nil, "a JWT has no space in it")
         #expect(MosyleSession.bearer(response([:])) == nil)
     }
 }
