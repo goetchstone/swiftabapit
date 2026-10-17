@@ -44,8 +44,12 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   the acceptance pass printed `ok, 0 items` (Phase 1b verifier round 1; the same shape as Phase 1a's malformed
   "unassigned"). The stub sends such a body with `queue(200, for:, body:)`. Not checked by the client: the items'
   `type`, a next link that leads to another collection on the same host, a single read's `type` and `id`, and
-  `data` sent together with `errors` (`Document` keeps no `errors`); the acceptance pass checks the first three
-  for what it reads.
+  `data` sent together with `errors` (`Document` keeps no `errors`). The acceptance pass checks the items' `type`
+  and the single device's `id` for what it reads, so it catches a next link only into a collection of another type:
+  one into another collection of the same type (one service's device list into another's, one device's coverage
+  into another's, the device list into a service's `orgDevices` linkages) is followed and reads `ok` with that
+  list's items counted too (verifier round 3). The lock's `id` isn't checked: only Apple's example makes it the
+  serial.
 - **A probe says what failed**: `forbidden`, `ok`, or `error <status>` (Settings' `probeReads` says a bare `error`
   when no HTTP status came back: offline, too large, the token or the Keychain); never `ok` for a failure
   (invariant 8).
@@ -63,11 +67,13 @@ values; Apple's examples decode), `ReadContractTests` (every read is a documente
   word) or a name (mixed case, or lower-case joined by `.`). `AcceptancePassTests`, `AcceptanceFailureTests`.
 - **What the pass reads is checked as it reads it** (Phase 1b verifier round 2): every item it walks or reads is the
   contract's type (`orgDevices`, `mdmServers`, the services' `orgDevices` linkages, `appleCareCoverage`,
-  `activationLockStatus`) and a single device is the one asked for, else `error malformed · items of type …`; an id
-  that can't go in a path is never sent and reads `error malformed · an id that can go in a path`, not Apple's 404;
-  the unknown attribute names and enum values it reports are ASCII words (a letter, then letters, digits or `_`, at
-  most 64 bytes), anything else `(not shown)`, so a newline can't forge a line; and a list cut at the cap before any
-  item came gives what depends on it `skipped: … (<list> truncated)`, not "has none".
+  `activationLockStatus`) and a single device is the one asked for, byte for byte, else `error malformed · items of
+  type …`; an id that can't go in a path is never sent and reads `error malformed · an id that can go in a path`, not
+  Apple's 404; the unknown attribute names and enum values it reports are ASCII words (a letter, then letters, digits
+  or `_`, at most 64 bytes), anything else `(not shown)`, so a newline can't forge a line; and a list cut at the cap
+  before any item came gives what depends on it `skipped: … (<list> truncated)`, not "has none". Apple's text is
+  tested as bytes and never split or compared as `Character`s: a combining mark joins the character before it, so a
+  value led by U+0301 hid the `=` its field was found by and went into the text raw (verifier round 3).
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing.** The pass checks for
   cancellation after each check, so a walk cut short reads `error cancelled` and every later line `skipped: the
   pass was cancelled` (verifier round 1: it read `ok, 0 items`, and the per-device reads said the org had no

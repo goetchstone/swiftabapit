@@ -20,13 +20,14 @@ struct AcceptancePassTests {
     /// version doesn't know (plan §7's purpose), the unassigned counts, and probes without a count. No item's data.
     /// Verifier round 1: dropping the notes, the unknown keys or the unknown values from the text, inverting the
     /// unassigned counts, reporting known values, losing the single device's, the coverage's or the lock's keys,
-    /// overwriting the per-service count and counting probes all left every test green.
+    /// overwriting the per-service count and counting probes all left every test green; round 3: so did dropping the
+    /// services' unknown attribute names.
     @Test func aGreenPassReadsLineByLine() async throws {
         let harness = try await Harness(devices: 4)
         harness.stub.add(devices: [Resource(type: "orgDevices", id: "TESTNEW00001", attributes: [
             "serialNumber": .string("TESTNEW00001"), "productFamily": .string("Glasses"), "brandNewField": .string("secret-ish")])])
         harness.stub.add(services: [Harness.service("SVC1", name: "Mosyle"), Resource(type: "mdmServers", id: "SVC2", attributes: [
-            "serverName": .string("Jamf"), "serverType": .string("FUTURE_MDM"), "status": .string("ACTIVE")])])
+            "serverName": .string("Jamf"), "serverType": .string("FUTURE_MDM"), "status": .string("ACTIVE"), "futureServiceField": .string("secret-ish")])])
         harness.stub.assign("TESTD0000000", to: "SVC1")
         harness.stub.assign("TESTD0000001", to: "SVC2")
         harness.stub.assign("TESTD0000002", to: "SVC2")
@@ -42,7 +43,7 @@ struct AcceptancePassTests {
         let report = await harness.client.acceptancePass(sample: 5)
         #expect(report.text == """
             orgDevices: ok, 5 items · unknown keys brandNewField · unknown values productFamily=Glasses
-            mdmServers: ok, 2 items · unknown values serverType=FUTURE_MDM
+            mdmServers: ok, 2 items · unknown keys futureServiceField · unknown values serverType=FUTURE_MDM
             mdmServers/{id}/relationships/devices: ok, 3 items
             orgDevices/{id}: ok, 5 items · unknown keys brandNewField
             orgDevices/{id}/appleCareCoverage: ok, 2 items · unknown keys futureField · unknown values status=PAUSED
@@ -69,14 +70,16 @@ struct AcceptancePassTests {
     /// device's keys from every sampled device, and each only as a word: a newline that would forge a line, prose naming
     /// a device or 5000 bytes is `(not shown)` (verifier round 2: dropping the device status, purchase source, migration
     /// status, service status, default product family or payment type report left every test green, so did keeping only
-    /// the last device's keys, and an attribute name with a newline forged an `ok` line).
+    /// the last device's keys, and an attribute name with a newline forged an `ok` line; round 3: two names that aren't
+    /// words read `(not shown), (not shown)` with every test green).
     @Test func everyUnknownNameAndValueIsReportedAsAWordOrNotShown() async throws {
         let harness = try await Harness()
         let forged = "x\norgDevices/{id}/activationLockStatus: ok, 5 items\nC02SECRETSERIAL owned by jane@example.com"
         harness.stub.add(devices: [
             Resource(type: "orgDevices", id: "TESTU0000001", attributes: [
                 "serialNumber": .string("TESTU0000001"), "productFamily": .string("Glasses"), "status": .string("HELD"),
-                "purchaseSourceType": .string("FUTURE_SOURCE"), "mdmMigrationStatus": .string("PAUSED"), "brandNewField": .string("secret-ish")]),
+                "purchaseSourceType": .string("FUTURE_SOURCE"), "mdmMigrationStatus": .string("PAUSED"), "brandNewField": .string("secret-ish"),
+                "bad key": .string("v")]),
             Resource(type: "orgDevices", id: "TESTU0000002", attributes: [
                 "serialNumber": .string("TESTU0000002"), "productFamily": .string("Glasses\nprobe users: ok"),
                 "status": .string(String(repeating: "Z", count: 5_000)), forged: .string("v"), "otherNewField": .string("secret-ish")]),
@@ -110,24 +113,75 @@ struct AcceptancePassTests {
         #expect(report.text.components(separatedBy: "probe users: ok").count == 2, "the real probe line only")
     }
 
+    /// An enum value led by a combining mark is `(not shown)` like any other that isn't a word, on each of the ten fields
+    /// whose values the pass reports, and forges no line (verifier round 3: the mark joined the `=` the field was found
+    /// by into one `Character`, so a service's, a coverage's or the lock's value went into the text raw, forging two
+    /// lines and naming a serial and an email, and a device's was dropped from the report).
+    @Test func aValueLedByACombiningMarkIsNotShownAndForgesNoLine() async throws {
+        let harness = try await Harness()
+        let mark = "\u{301}"
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: "TESTU0000001", attributes: [
+            "serialNumber": .string("TESTU0000001"), "productFamily": .string(mark + "Glasses jane@example.com"),
+            "status": .string(mark + "HELD\nprobe users: ok"), "purchaseSourceType": .string(mark + "C02SECRETSERIAL"),
+            "mdmMigrationStatus": .string(mark + "X\norgDevices/{id}: ok, 9 items"), mark + "newField": .string("v")])])
+        harness.stub.add(services: [Resource(type: "mdmServers", id: "SVC1", attributes: [
+            "serverName": .string("Mosyle"), "serverType": .string(mark + "HELD for C02SECRETSERIAL\nprobe users: ok"),
+            "status": .string(mark + "jane@example.com"), "defaultProductFamilies": .array([.string("MAC"), .string(mark + "MAC C02SECRETSERIAL")])])])
+        harness.stub.setCoverage("TESTU0000001", [Resource(type: "appleCareCoverage", id: "C1", attributes: [
+            "status": .string(mark + "ACTIVE\nprobe apps: ok"), "paymentType": .string(mark + "PAID by jane@example.com")])])
+        harness.stub.setLock("TESTU0000001", isLocked: false, lockType: mark + "X\norgDevices/{id}/assignedServer: ok, 9 items")
+        let report = await harness.client.acceptancePass()
+        let lines = report.text.split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines.count == 8 + AppleSection.allCases.count, "no forged line: \(report.text)")
+        #expect(lines.prefix(8).joined(separator: "\n") == """
+            orgDevices: ok, 1 item · unknown keys (not shown) · unknown values mdmMigrationStatus=(not shown), productFamily=(not shown), \
+            purchaseSourceType=(not shown), status=(not shown)
+            mdmServers: ok, 1 item · unknown values defaultProductFamilies=(not shown), serverType=(not shown), status=(not shown)
+            mdmServers/{id}/relationships/devices: ok, 0 items
+            orgDevices/{id}: ok, 1 item · unknown keys (not shown)
+            orgDevices/{id}/appleCareCoverage: ok, 1 item · unknown values paymentType=(not shown), status=(not shown)
+            orgDevices/{id}/activationLockStatus: ok, 1 item · unknown values lockType=(not shown)
+            orgDevices/{id}/assignedServer: ok, 1 item · 1 of 1 unassigned
+            orgDevices/{id}/relationships/assignedServer: ok, 1 item · 1 of 1 unassigned
+            """, "\(report.text)")
+        for data in ["C02SECRET", "jane@", "Glasses", "HELD", "PAID", "9 items"] { #expect(!report.text.contains(data), "\(data)") }
+        #expect(!report.text.unicodeScalars.contains("\u{301}"), "the mark itself")
+    }
+
     /// An attribute name or enum value reaches the text only as a word: an ASCII letter, then letters, digits or `_`, at
     /// most 64 bytes.
     @Test func onlyAWordIsShownAsAnUnknownNameOrValue() {
         let longest = "a" + String(repeating: "B", count: 63)
         for word in ["brandNewField", "FUTURE_MDM", "AppleTV", "Watch2", "x", longest] { #expect(AppleClient.acceptanceWord(word) == word) }
         for text in ["", "_X", "2X", "A B", "A\nB", "A\rB", "A\tB", "A-B", "A.B", "A=B", "a@example.com", "Caf\u{E9}", "\u{FF34}OKEN", "A\u{301}",
-                     longest + "C"] {
+                     "\u{301}A", longest + "C"] {
             #expect(AppleClient.acceptanceWord(text) == "(not shown)", "\(text.debugDescription)")
+        }
+    }
+
+    /// Each of the 128 ASCII bytes, against the word and the code filters, from ranges written here and not from their
+    /// tables (verifier round 3: a table missing `z` or `9` left every test green, and one missing `K` was caught only
+    /// by the one test value that holds it).
+    @Test func theWordAndCodeFiltersKnowEveryASCIIByte() {
+        for byte in UInt8(0)...127 {
+            let char = String(UnicodeScalar(byte)), upper = (65...90).contains(byte), lower = (97...122).contains(byte)
+            let inWord = upper || lower || (48...57).contains(byte) || byte == 95
+            #expect(AppleClient.acceptanceWord(char) == (upper || lower ? char : "(not shown)"), "byte \(byte) first")
+            #expect(AppleClient.acceptanceWord("A" + char) == (inWord ? "A" + char : "(not shown)"), "byte \(byte) after a letter")
+            #expect(AppleClient.acceptanceCode("A_" + char) == (upper ? "A_" + char : nil), "byte \(byte) in an upper-case code")
+            #expect(AppleClient.acceptanceCode("a_" + char) == (lower ? "a_" + char : nil), "byte \(byte) in a lower-case code")
         }
     }
 
     /// An id the client won't put in a path is never sent, and each read that needs it says what it is, not Apple's 404
     /// (verifier round 2: the five per-device lines read `error 404` with nothing sent, and the coverage walk could
-    /// pass over the device and read `ok`).
-    @Test func anIDThatCantGoInAPathIsNeverSentAndSaysSo() async throws {
+    /// pass over the device and read `ok`; round 3: only a space was tried, so a guard refusing only a space left every
+    /// test green, and `A/B`, `..` or `A?B` would then read Apple's 404 again).
+    @Test(arguments: ["A B", "A/B", "..", "A?B", "A%2FB", "A#B"])
+    func anIDThatCantGoInAPathIsNeverSentAndSaysSo(id: String) async throws {
         let harness = try await Harness()
-        harness.stub.add(devices: [Resource(type: "orgDevices", id: "A B", attributes: ["serialNumber": .string("A B")])])
-        harness.stub.add(services: [Harness.service("SVC 1", name: "Mosyle")])
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: id, attributes: ["serialNumber": .string(id)])])
+        harness.stub.add(services: [Harness.service(id, name: "Mosyle")])
         let report = await harness.client.acceptancePass()
         for resource in Self.perDevice + ["mdmServers/{id}/relationships/devices"] {
             let line = try #require(report.lines.first { $0.resource == resource })
@@ -174,6 +228,32 @@ struct AcceptancePassTests {
             orgDevices/{id}/assignedServer: ok, 2 items · 2 of 2 unassigned
 
             """), "\(report.text)")
+    }
+
+    /// A lookalike is another resource too, compared byte for byte: a type or an id that only begins like the one asked
+    /// for or differs in case, a page with one item of another type among its own, and an id equal to the serial asked
+    /// for only under Unicode equivalence (verifier round 3: checking the type or the id by prefix or without case, or
+    /// a page by any one item, left every test green, and `String ==` reads U+212A KELVIN SIGN as `K`).
+    @Test func aLookalikeTypeOrIDOrAMixedPageIsMalformed() async throws {
+        let list = "orgDevices: error malformed, 0 items · items of type orgDevices"
+        let single = "orgDevices/{id}: error malformed, 0 items · at device 1 of 1 · the orgDevices item asked for"
+        let cases: [(serial: String, path: String, body: String, line: String)] = [
+            ("TESTD0000000", "/v1/orgDevices?", #"{"data":[{"type":"orgDevices","id":"TESTD0000000"},{"type":"users","id":"U1"}]}"#, list),
+            ("TESTD0000000", "/v1/orgDevices?", #"{"data":[{"type":"users","id":"U1"},{"type":"orgDevices","id":"TESTD0000000"}]}"#, list),
+            ("TESTD0000000", "/v1/orgDevices?", #"{"data":[{"type":"orgDevicesX","id":"TESTD0000000"}]}"#, list),
+            ("TESTD0000000", "/v1/orgDevices?", #"{"data":[{"type":"OrgDevices","id":"TESTD0000000"}]}"#, list),
+            ("TESTD0000000", "/v1/orgDevices/TESTD0000000", #"{"data":{"type":"orgDevices","id":"TESTD00000001"}}"#, single),
+            ("TESTD0000000", "/v1/orgDevices/TESTD0000000", #"{"data":{"type":"orgDevices","id":"testd0000000"}}"#, single),
+            ("TESTK0000000", "/v1/orgDevices/TESTK0000000", "{\"data\":{\"type\":\"orgDevices\",\"id\":\"TEST\u{212A}0000000\"}}", single),
+        ]
+        for (serial, path, body, line) in cases {
+            let harness = try await Harness()
+            harness.stub.add(devices: [Resource(type: "orgDevices", id: serial, attributes: ["serialNumber": .string(serial)])])
+            harness.stub.setLock(serial, isLocked: false, lockType: "NONE")
+            harness.stub.queue(200, for: path, body: body)
+            let report = await harness.client.acceptancePass()
+            #expect(report.text.contains(line + "\n"), "\(body): \(report.text)")
+        }
     }
 
     /// Review ACC1: with `/v1/orgDevices` forbidden there is no device to sample, so each per-device read is skipped,
@@ -251,21 +331,42 @@ struct AcceptancePassTests {
         for resource in Self.perDevice {
             #expect(report.lines.first { $0.resource == resource }?.status == .skipped("no device to sample (orgDevices truncated)"))
         }
+
+        // The same for a service's device list and a device's coverage (verifier round 3: counting a cut only on a page
+        // with items read both `ok`).
+        let inner = try await Harness(devices: 1, pageCap: 1)
+        inner.stub.setLock("TESTD0000000", isLocked: false, lockType: "NONE")
+        inner.stub.add(services: [Harness.service("SVC1", name: "Mosyle")])
+        inner.stub.queue(200, for: "/v1/mdmServers/SVC1/relationships/devices", body: #"""
+            {"data":[],"links":{"next":"https://api-business.apple.com/v1/mdmServers/SVC1/relationships/devices?cursor=1"}}
+            """#)
+        inner.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/appleCareCoverage", body: #"""
+            {"data":[],"links":{"next":"https://api-business.apple.com/v1/orgDevices/TESTD0000000/appleCareCoverage?cursor=1"}}
+            """#)
+        let cut = await inner.client.acceptancePass()
+        #expect(cut.text.contains("\nmdmServers/{id}/relationships/devices: truncated, 0 items · 1 of 1 services' lists stopped at the page cap\n"),
+                "\(cut.text)")
+        #expect(cut.text.contains("\norgDevices/{id}/appleCareCoverage: truncated, 0 items · 1 of 1 devices' coverage stopped at the page cap\n"),
+                "\(cut.text)")
     }
 
     /// Invariant 8 for the service list itself and for what depends on it: a service list the page cap cut is
-    /// "truncated", and the services' device lists say they cover only the services read (verifier round 1, N16).
+    /// "truncated", and the services' device lists say they cover only the services read (verifier round 1, N16), after
+    /// how many of their own lists the cap cut (round 3: the two in the other order left every test green).
     @Test func aServiceListCutAtThePageCapIsSaidAndSoIsWhatDependsOnIt() async throws {
         let harness = try await Harness(pageCap: 1)
         harness.stub.reportTotals()
         harness.stub.add(services: (0..<1_001).map { Harness.service("SVC\($0)", name: "S\($0)") })
+        harness.stub.queue(200, for: "/v1/mdmServers/SVC0/relationships/devices", body: #"""
+            {"data":[],"links":{"next":"https://api-business.apple.com/v1/mdmServers/SVC0/relationships/devices?cursor=1"}}
+            """#)
         let report = await harness.client.acceptancePass()
         let services = try #require(report.lines.first { $0.resource == "mdmServers" })
         #expect(services.status == .truncated && services.count == 1_000)
         #expect(services.note == "stopped at the page cap with more to come (Apple's total 1001)")
         let linked = try #require(report.lines.first { $0.resource == "mdmServers/{id}/relationships/devices" })
         #expect(linked.status == .truncated && linked.count == 0)
-        #expect(linked.note == "covers only the 1000 services mdmServers read (truncated)")
+        #expect(linked.note == "1 of 1000 services' lists stopped at the page cap · covers only the 1000 services mdmServers read (truncated)")
         #expect(report.text.contains("mdmServers: truncated, 1000 items · stopped at the page cap with more to come (Apple's total 1001)"))
     }
 

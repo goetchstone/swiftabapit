@@ -40,3 +40,17 @@
   (this round's mutant script: 62 mutants, the survivors and this round's own, all killed); the per-item tests use two
   or more items and the last one differs, and a cancellation test logs in the transport, since a walk's task can
   outlive the pass.
+- **Recurrence (verifier round 3, same branch):** the round-2 word filter held for attribute names but not for enum
+  values. `shown(value:)` found the field again by the first `=` `Character` of `field=value`; a value led by a
+  combining mark (U+0301) joined that `=` into one `Character`, so Apple's whole value was taken for the field and
+  copied raw: a service's, a coverage's or the lock's value forged two lines and named a serial and an email, and a
+  device's was dropped from the report (`isUnknown` split the same way and fell to `default: false`). This is the
+  Phase 1b review's H1 (a combining mark after a CSV quote) in new code. `typed(_:asked:)` compared ids with `String
+  ==`, so an id with U+212A KELVIN SIGN read as the `K` serial asked for. Fifteen mutants survived, among them
+  lookalike and mixed-type pages, an empty page cut at the cap one level in, an id guard weakened to "no space", and
+  the byte tables. Cause: Apple's text was handled as `Character`s at one more seam, and the filter's tests ran it
+  alone, never through the string it was spliced into. Fix: commit "fix(1b-acceptance): verifier round 4":
+  `Found.unknown(_:_:)` takes the field and Apple's value apart and is the only way a value reaches the text, and
+  `typed` compares bytes. Prevention: a test sends a value led by a combining mark on each of the ten fields; each
+  survivor has a test that fails on it (this round's mutant script: 32 mutants, all killed). Rule: never split,
+  search or compare Apple's text as `Character`s; bytes, or keep the parts apart.

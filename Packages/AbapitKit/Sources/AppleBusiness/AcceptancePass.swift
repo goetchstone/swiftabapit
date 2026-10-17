@@ -80,12 +80,12 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(devices.flatMap(\.unreadAttributes))
-            found.values = Set(devices.flatMap { device in
-                [device.productFamily.map { "productFamily=\($0.rawValue)" }, device.status.map { "status=\($0.rawValue)" },
-                 device.purchaseSourceType.map { "purchaseSourceType=\($0.rawValue)" },
-                 device.migrationStatus.map { "mdmMigrationStatus=\($0.rawValue)" }].compactMap { $0 }
-                    .filter { value in Self.isUnknown(value, device) }
-            })
+            for device in devices {
+                found.unknown("productFamily", device.productFamily)
+                found.unknown("status", device.status)
+                found.unknown("purchaseSourceType", device.purchaseSourceType)
+                found.unknown("mdmMigrationStatus", device.migrationStatus)
+            }
         }
         lines.append(deviceList)
         var services: [MDMService] = []
@@ -96,7 +96,11 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(services.flatMap(\.unreadAttributes))
-            found.values = Set(services.flatMap(Self.unknownValues))
+            for service in services {
+                found.unknown("serverType", service.type)
+                found.unknown("status", service.status)
+                for family in service.defaultProductFamilies { found.unknown("defaultProductFamilies", family) }
+            }
         }
         lines.append(serviceList)
         let noService = services.isEmpty ? Self.none("service to read", serviceList) : nil
@@ -147,17 +151,17 @@ extension AppleClient {
             }
             if cut > 0 { found.truncation = "\(cut) of \(sampled.count) devices' coverage stopped at the page cap" }
             found.keys = Set(rows.flatMap(\.unreadAttributes))
-            found.values = Set(rows.flatMap { row in
-                [row.status.flatMap { $0.known == nil ? "status=\($0.rawValue)" : nil },
-                 row.paymentType.flatMap { $0.known == nil ? "paymentType=\($0.rawValue)" : nil }].compactMap { $0 }
-            })
+            for row in rows {
+                found.unknown("status", row.status)
+                found.unknown("paymentType", row.paymentType)
+            }
         })
         lines.append(await Self.check("orgDevices/{id}/activationLockStatus", unless: unsampled) { found in
             for (index, device) in sampled.enumerated() {
                 try found.at("device", index, of: sampled.count)
                 let lock = try await Self.typed([self.activationLock(Self.sendable(device.id))])[0]
                 found.keys.formUnion(lock.unreadAttributes)
-                if let type = lock.lockType, type.known == nil { found.values.insert("lockType=\(type.rawValue)") }
+                found.unknown("lockType", lock.lockType)
                 found.count += 1
             }
         })
@@ -192,7 +196,8 @@ extension AppleClient {
     private struct Found {
         var count = 0
         var keys: Set<String> = []
-        var values: Set<String> = []
+        /// `field=value`s as the text shows them; only `unknown(_:_:)` adds one.
+        private(set) var values: Set<String> = []
         /// What the page cap cut, in counts; when set, the check is `.truncated`.
         var truncation: String?
         /// Where a loop is ("at device 3 of 5"): said only if it fails there.
@@ -206,6 +211,16 @@ extension AppleClient {
         mutating func at(_ what: String, _ index: Int, of total: Int) throws {
             position = "at \(what) \(index + 1) of \(total)"
             try Task.checkCancellation()
+        }
+
+        /// Adds `field=value` when this version doesn't know `value`, the value as `acceptanceWord` shows it. The field is
+        /// this file's own name and stays apart from Apple's value until here (verifier round 3: the field was found again
+        /// by the first `=` Character of one string, and a value led by a combining mark joined that `=` into one
+        /// Character, so Apple's whole value was taken for the field and copied raw, forging lines and naming a serial,
+        /// and a device's such value was dropped from the report).
+        mutating func unknown<Known>(_ field: String, _ value: OpenEnum<Known>?) {
+            guard let value, value.known == nil else { return }
+            values.insert("\(field)=\(AppleClient.acceptanceWord(value.rawValue))")
         }
 
         mutating func cut<Item>(_ page: Page<Item>) {
@@ -238,7 +253,7 @@ extension AppleClient {
         }
         let note = notes.compactMap { $0 }.joined(separator: " · ")
         return .init(resource: resource, status: status, count: counted ? found.count : nil,
-                     unknownKeys: Set(found.keys.map(acceptanceWord)).sorted(), unknownValues: Set(found.values.map(shown(value:))).sorted(),
+                     unknownKeys: Set(found.keys.map(acceptanceWord)).sorted(), unknownValues: found.values.sorted(),
                      note: note.isEmpty ? nil : note)
     }
 
@@ -248,12 +263,16 @@ extension AppleClient {
         "no \(what) (\(prerequisite.resource) \(prerequisite.status == .ok ? "has none" : "\(prerequisite.status)"))"
     }
 
-    /// `items`, when each is `View`'s type and, for a single read, the item asked for. A list, a linkage list or a single
-    /// read answered with another resource (`users` for `mdmServers`, a next link that walked off to another collection,
-    /// another device) is malformed, never `ok` (verifier round 2: each read `ok`). The types are the contract's
-    /// (`OrgDevice`, `MdmServer`, `MdmServerDevicesLinkagesResponse.Data`, `AppleCareCoverage`, `ActivationLockStatus`).
+    /// `items`, when each is `View`'s type and, given `id` (the single device read), the item asked for. A list, a linkage
+    /// list or a single read answered with another resource (`users` for `mdmServers`, a next link that walked off to a
+    /// collection of another type, another device) is malformed, never `ok` (verifier round 2: each read `ok`). The types
+    /// are the contract's (`OrgDevice`, `MdmServer`, `MdmServerDevicesLinkagesResponse.Data`, `AppleCareCoverage`,
+    /// `ActivationLockStatus`). Byte for byte, as `OpenEnum` matches: `String ==` folds Unicode equivalents, so an id with
+    /// U+212A KELVIN SIGN read as the `K` serial asked for (verifier round 3). The lock's `id` isn't checked: the
+    /// contract types it as a string, and only Apple's example makes it the serial (invariant 5: never from convention).
     private static func typed<View: ResourceView>(_ items: [View], asked id: String? = nil) throws -> [View] {
-        guard items.allSatisfy({ $0.resource.type == View.resourceType && (id == nil || $0.id == id) }) else {
+        func same(_ one: String, _ other: String) -> Bool { one.utf8.elementsEqual(other.utf8) }
+        guard items.allSatisfy({ item in same(item.resource.type, View.resourceType) && (id.map { same(item.id, $0) } ?? true) }) else {
             throw AppleAPIError.malformed(id == nil ? "items of type \(View.resourceType)" : "the \(View.resourceType) item asked for")
         }
         return items
@@ -278,12 +297,6 @@ extension AppleClient {
         guard let first = bytes.first, letters.contains(first), bytes.count <= 64,
               bytes.allSatisfy({ letters.contains($0) || digits.contains($0) || $0 == UInt8(ascii: "_") }) else { return "(not shown)" }
         return String(text)
-    }
-
-    /// `field=value` with the value as `acceptanceWord` shows it; the field is this file's own name.
-    private static func shown(value: String) -> String {
-        let field = value.prefix { $0 != "=" }
-        return "\(field)=\(acceptanceWord(value.dropFirst(field.count + 1)))"
     }
 
     /// A failure as a status and a note of codes. Not `AppleAPIError.message`: that carries Apple's `detail`
@@ -373,24 +386,6 @@ extension AppleClient {
         case .rateLimited: "429"
         case .malformed: "malformed"
         case .status(let status, let code): ["\(status)", acceptanceCode(code)].compactMap { $0 }.joined(separator: " ")
-        }
-    }
-
-    private static func unknownValues(_ service: MDMService) -> [String] {
-        var found: [String] = []
-        if let type = service.type, type.known == nil { found.append("serverType=\(type.rawValue)") }
-        if let status = service.status, status.known == nil { found.append("status=\(status.rawValue)") }
-        for family in service.defaultProductFamilies where family.known == nil { found.append("defaultProductFamilies=\(family.rawValue)") }
-        return found
-    }
-
-    private static func isUnknown(_ value: String, _ device: OrgDevice) -> Bool {
-        switch value.split(separator: "=").first {
-        case "productFamily": device.productFamily?.known == nil
-        case "status": device.status?.known == nil
-        case "purchaseSourceType": device.purchaseSourceType?.known == nil
-        case "mdmMigrationStatus": device.migrationStatus?.known == nil
-        default: false
         }
     }
 }
