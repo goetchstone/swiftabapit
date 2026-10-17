@@ -60,6 +60,9 @@ struct PackageGraphTests {
         #expect(!manifest.contains(".package("), "zero third-party dependencies (L5)")
         let project = try String(contentsOf: Fixtures.repoRoot.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)
         #expect(!project.contains("XCRemoteSwiftPackageReference"), "no remote packages in the Xcode project either")
+        // Exactly the two local packages: a third linked into the app would be read by no scan (integration review L1).
+        let local = project.matches(of: #/relativePath = ([^;]+);/#).map { String($0.output.1) }
+        #expect(local.sorted() == ["Packages/AbapitApp", "Packages/AbapitKit"], "\(local)")
     }
 
     /// Every module's own imports stay within its edges, plus the system frameworks it may use.
