@@ -22,18 +22,21 @@
   `MosyleFailureTests` (every failure the client handles), `MosyleLoginTests` (the login's failures, single flight, the
   Logs Stream's login), `MosyleStubTests` (the stub's own strictness), `MosyleReadTests` (the allowlist as values, the
   check before sending, the builders' trap as an exit test, the login's redaction); `RouteTests`
-  (`everyMosyleReadIsOnTheAllowlist`, `nothingElseExtendsOrRenamesReadRequest`, the request and exchange makers).
+  (`everyMosyleReadIsOnTheAllowlist`, `nothingElseExtendsOrRenamesReadRequest`, `noRequestIsMadeElsewhereHoweverItIsSpelt`,
+  `theMosyleStubDoesNotAskTheClient`, the request and exchange makers).
 
 ## How it works
 - **Login**: `POST /v1/login`, header `accessToken`, body `{email, password}`; the JWT comes back in the response's
   `Authorization` header. Every other request sends both `accessToken` and `Authorization: Bearer <jwt>`. The JWT's
   `exp` sets its life (at most 23 h; none, unreadable, or at or before now: 23 h), renewed 60 s early, or halfway
   through a life shorter than 2 min; PHP's fixed 1981 `Expires` header is ignored. One login at a time per org; a 401
-  logs in again once, through `invalidate(rejected:)`, so a late 401 for an older JWT keeps the new one. A 403 is
-  `.forbidden` and isn't logged in again (plan §3.5 re-logs on 401; abapit re-logged on 403 too: a recorded
-  deviation, Phase 7a review L5). A login answering 429 is `.rateLimited`, a 5xx `.server`, a 2xx without a token
-  `.noToken`; only another refusal is `.login(status:)`, the one that names the credentials. A login is never
-  retried. The Logs Stream logs in on its own host with its own token (`Service.logs`).
+  logs in again once, through `invalidate(rejected:)`, so a late 401 for an older JWT keeps the new one. A 403 logs
+  in again once too, as abapit did (its 7f118fc, "reworked against the official Business API docs": "re-login on
+  401/403"; its Logs Stream path calls a 403 "token expired"), dropping only the login it was refused with; a second
+  403 is `.forbidden` (Phase 7a review L5: the first fix didn't re-log, and its verification found that rested on an
+  argument against abapit's evidence). A login answering 429 is `.rateLimited`, a 5xx `.server`, a 2xx without a
+  token `.noToken`; only another refusal (a 3xx included) is `.login(status:)`, the one that names the credentials.
+  A login is never retried. The Logs Stream logs in on its own host with its own token (`Service.logs`).
 - **Reads are POSTs**, so the method can't tell a read from a write. A read is a `(path, operation)` on
   `MosyleRead.allowed`, and only `MosyleRead` builds one (`precondition`, held by an exit test, plus the source
   scans). The client checks each request again as it will be sent (`MosyleRead.isAllowed`: a POST, no query, the
@@ -41,26 +44,37 @@
   `ReadRequest` made anywhere else in the package can't carry a write (`.notARead`, nothing sent). Anything else
   Mosyle offers is a write, for ChangeCore in Phase 8.
 - **The envelope**: the entry's `status` is the operation's (`response[0].status`, or `response.status` where
-  `response` is an object); the top-level `"status": "OK"` comes on errors too. A list read accepts no status or
-  `OK`, ends on **its own** end-of-list status (`MosyleRead.endOfList`), and fails on any other, **an unknown one
-  included** (defect 3: abapit read them as empty lists).
-- **A malformed 200 is never an empty list** (Phase 7a review H2): no `response`, a string `response`, an empty
-  list, a first entry that isn't an object, a status that isn't a string, a row that isn't an object, or a first page
-  with neither a status nor a list is `.malformed`. Past page 1, an entry with neither is the end of the list. The
-  ping says "ok" only for `OK`, `DEVICES_NOTFOUND` or a `devices` list.
+  `response` is an object); the top-level `"status": "OK"` comes on errors too. A list page is one of two answers,
+  on every page: a list under the first of its keys that holds one (abapit's `_extract`; an empty list ends the
+  walk), or **its own** end-of-list status (`MosyleRead.endOfList`, byte for byte) with no rows beside it. `OK` is
+  no status. Any other status fails, **an unknown one, another list's end, a lower-case end and a write's success
+  status (`COMMAND_SENT`) included** (defect 3: abapit read them as empty lists).
+- **A malformed 200 is never an empty list** (Phase 7a review H2, and its verification): no `response`, a string or
+  `null` `response`, an empty list, a first entry that isn't an object, a status that isn't a string, a row that
+  isn't an object, a list key holding no list (`null`, a string, PHP's object-keyed array `{"0": …}`), an end status
+  beside rows, or an entry with no list and no end status (beside an `OK` too, and past page 1 too: there 50 of 120
+  users read as all of them) is `.malformed`. Only a code-shaped top-level `status` is shown, never Mosyle's text,
+  and only a string `info`. The ping says "ok" only for a `devices` list or `DEVICES_NOTFOUND`.
 - **Devices**: one platform at a time (`ios`, `mac`, `tvos`, `visionos`; `os` is required), `specific_columns` =
-  the adapter's sources (defect 1: the bypass codes are never asked for, and the adapter drops them if sent),
-  deduplicated by abapit's key (the first truthy of serial and UDID, a number as well as a string).
+  the adapter's sources (defect 1: the bypass codes aren't asked for unless the column fallback below has had to
+  ask for every column, and the adapter drops them whenever they are sent), deduplicated by abapit's key (the first
+  truthy of serial and UDID, a number as well as a string, compared as Python's set compares: `1000`, `1e3` and
+  `1000.0` are one key, `true` is `1`, a zero is no key; past `Int`'s range an integer and an equal float stay two,
+  a recorded deviation). The stream sends no empty page.
 - **The column fallback** (Phase 7a review H3): no source confirms any of the 33 names as a `specific_columns` name
   (abapit sent only `os` and `page`), and one wrong name would fail every device list. On `UNKNOWN_COLUMNS` the
   client asks again without the columns Mosyle's `info` names, the first time; else, or on a second refusal, without
   `specific_columns`, so only the adapter's allowlist keeps the bypass codes out (as it did for abapit); a third
-  refusal is the error. Each step is an error-level log line and `MosyleClient.columnFallback`, for a screen to show.
-  Failing closed was rejected: it trades a whole lost list for codes the adapter drops anyway.
+  refusal is the error. An empty `specific_columns` is never sent: Mosyle naming every column is every column. Two
+  walks refused at once settle on one fallback (the second asks again with the first's). The ping asks as the list
+  does and shares its fallback. Each step is an error-level log line naming the columns (a test reads it back from
+  the process's own log) and `MosyleClient.columnFallback`, for a screen to show. Failing closed was rejected: it
+  trades a whole lost list for codes the adapter drops anyway.
 - **Paging**: from page 1 until the list's own end-of-list status, an empty page, a page that adds nothing new (users
   and groups are deduplicated by id, or by the whole row without one: a tenant that wraps past its end served 60
-  users as 6000, review L2), or the cap (200 pages). Rows on the cap's page mark the result `truncated` (a full last
-  page at the cap may in fact be the end: the mark means "may be incomplete"), and every list returns it; in the
+  users as 6000, review L2), or the cap (200 pages). New rows on the cap's page mark the result `truncated` (a full
+  last page at the cap may in fact be the end: the mark means "may be incomplete"; a cap page that adds nothing new
+  is the end, unmarked), and every list returns it; in the
   device stream every page after a cut says so, so the last page does (review L3). Each page's log line gives the
   rows it held and Mosyle's `rows`, for the live check of what `rows` means.
 
@@ -76,6 +90,12 @@
 - Phase 7a's review (27 of 30 mutants survived): the malformed 200s (H2), the stub's columns being the adapter's
   (H3), the one list end (M1), the login storms (M2), the unreached branches (M3) and the allowlist scan's gaps (M4).
   `MosyleStubTests` now hold the stub's own checks (deleting its `accessToken` or expiry check survived before).
+- Its verification (round 1, 33 survivors over two lenses): an `OK` beside a list key holding no list, and any page
+  past 1 without a list, still read as an empty success; `ReadRequest (host:` with a space, a line break or the
+  metatype passed every builder scan, and `HTTPClient` sends such a request unchecked; a write built through
+  `MosyleRead.read` in another file passed the scan of one file; the stub's column list had nothing keeping it its
+  own; the fallback's underscore names, second refusal, concurrent re-ask and log level were untested; the 403
+  deviation from abapit; Python's number equality in the dedupe key. Each now has a test that kills its mutant.
 
 ## Gotchas / stub-lies traps
 - **`Duration.seconds` traps past about 1.7e20.** A JWT `exp` is clamped as a number before it becomes a `Duration`
@@ -84,6 +104,11 @@
   The margin is `min(60 s, lifetime / 2)`.
 - **The stub's columns must not come from the client.** Derived from the adapter, `UNKNOWN_COLUMNS` could never fire
   and a misspelt column was green. `MosyleStub.deviceColumns` is written out, with its sources.
+- **Swift's call syntax defeats a line scan**: `ReadRequest (host:` with a space, `ReadRequest` and `.init(` on
+  separate lines, and `ReadRequest.self` then `t.init (` all compile. `noRequestIsMadeElsewhereHoweverItIsSpelt`
+  reads each file whole with whitespace-tolerant patterns.
+- **The fallback's log test reads `OSLogStore`** (this process's own entries): it takes a few seconds, and a
+  `.debug` line isn't kept at all, which is the point (the live check reads the error-level line).
 - **The Write tool decodes `\uXXXX` in a file's text** (it turned a JSON escape in a test into the letter itself:
   the "escape" case passed vacuously until the body's byte count gave it away). Write escapes through a script.
 - **`Authorization: Bearer ` with nothing after it is no token**, not the token "Bearer".
@@ -101,9 +126,14 @@
   - **Each list's end-of-list status**, past the last row: `DEVICES_NOTFOUND` (abapit's recorded envelope) and
     `USERGROUP_NOTFOUND` (plan §3.5) have sources; `USERS_NOTFOUND`, `USER_NOTFOUND`, `USERGROUPS_NOTFOUND`,
     `DEVICEGROUPS_NOTFOUND` and `DEVICEGROUP_NOTFOUND` are guesses. An empty list also ends a walk; any other
-    status is an error, so a wrong guess fails loudly, not silently.
-  - **What a 403 means**: the client doesn't log in again (abapit did). If a live 403 turns out to mean an expired
-    login, log in again on 403 as on 401.
+    status is an error. A guess Mosyle doesn't send fails loudly; but a guess Mosyle sends for an error (say
+    `USER_NOTFOUND` for a missing user, on a list) would read as the end, silently, so the guesses are as few as
+    the shapes need, and the live check settles each.
+  - **That nothing else ends a list**: an entry with no list and no end status, beside an `OK` or past page 1, is an
+    error, as is a list key holding `null` or PHP's object-keyed array. No source shows Mosyle sends any of these; if
+    a live list ends that way, its read fails loudly (live check 4) rather than dropping rows.
+  - **What a 403 means**: the client logs in again once, as abapit did, and a second 403 is `.forbidden`. If a live
+    403 is always a permission, the extra login per refused read is the cost.
   - A login's 429 and 5xx: mapped from the status alone, as the client reads no login body.
   - The stub's 401 body (`{"error": …}`) and the login's success body (`{"status": "OK"}`): the client reads the
     status code and the header only, so another shape loses only detail.
@@ -122,6 +152,8 @@
   fallback in the log**, and the assumptions above.
 
 ## To do common tasks here
+- **The Logs Stream's drain (Phase 7b)** sends through its own client: it must check `MosyleRead.isAllowed` before
+  each send, as `MosyleClient.envelope` does (a computed `operation` in its body is caught only there).
 - **A new read**: add `path#operation` to `MosyleRead.allowed` (a read only: the route scan refuses an operation
   that isn't a read verb or names a change) and to `MosyleReadTests`' exact list, its end-of-list statuses to
   `MosyleRead.endOfList` if it is a list, a builder through `read(_:_:_:)`, a stub handler that fails as Mosyle

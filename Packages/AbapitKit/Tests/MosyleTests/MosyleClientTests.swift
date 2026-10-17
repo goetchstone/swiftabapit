@@ -75,13 +75,16 @@ struct MosyleClientTests {
         #expect(asked == ["ios#1", "ios#2", "mac#1", "mac#2", "mac#3", "mac#4", "tvos#1", "visionos#1", "visionos#2"])
     }
 
-    /// Defect 1: the Activation Lock bypass codes are never asked for, and never kept when a tenant sends them anyway.
+    /// Defect 1: the Activation Lock bypass codes are never asked for, by the list or the ping, and never kept when a
+    /// tenant sends them anyway.
     @Test func theBypassCodesAreNeitherAskedForNorKept() async throws {
         let harness = try await Harness()
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         harness.stub.ignoreColumns()
+        try await harness.client.ping()
         let items = try await harness.devices().flatMap(\.items)
         #expect(items.count == 3)
+        #expect(harness.stub.bodies.count == 6, "the ping, then five pages over four platforms")
         for body in harness.stub.bodies {
             let columns = body["options"]?["specific_columns"]?.array?.compactMap(\.string) ?? []
             #expect(!columns.isEmpty && !columns.contains { $0.hasPrefix("activation_bypass") })

@@ -7,7 +7,7 @@ import Vault
 import Wire
 
 /// A page of Mosyle items as they arrive, with the cap noted (invariant 8). In the device stream `truncated` stays
-/// set on every page after a platform was cut, so the last page says so (Phase 7a review L3).
+/// set on every page after a platform was cut, so the last page says so (Phase 7a review L3), and no page is empty.
 public struct MosylePage: Sendable {
     public let items: [Resource]
     public let truncated: Bool
@@ -86,26 +86,41 @@ public actor MosyleClient {
         return MosylePage(items: groups, truncated: truncated)
     }
 
-    /// Settings → Test: a login and the smallest list. "ok" only for an answer Mosyle sends, `OK`, `DEVICES_NOTFOUND`
-    /// or a `devices` list: four malformed 200s read as "ok" (Phase 7a review H2).
+    /// Settings → Test: a login and the first page of Macs, asked as the device list asks them (its columns, and their
+    /// fallback: a ping of `serial_number` alone failed on a refused column where the list degraded and read). "ok"
+    /// only for an answer Mosyle sends, a `devices` list or `DEVICES_NOTFOUND` (Phase 7a review H2).
     public func ping() async throws {
-        let request = MosyleRead.devices(os: "mac", page: 1, columns: ["serial_number"])
-        _ = try Self.page(try await envelope(request), ["devices"], MosyleRead.ends(request), first: true)
+        _ = try Self.page(try await devicesPage(os: "mac", page: 1), ["devices"], MosyleRead.ends(MosyleRead.devices(os: "mac", page: 1)))
     }
 
     // MARK: plumbing
 
     /// abapit's dedupe key, `raw.get("serial_number") or raw.get("deviceudid")`: the first truthy one, so an empty
-    /// serial is no key, and a number is a key as well as a string (Python's `12345` and `"12345"` stay two).
+    /// serial or a zero is no key, and a number is a key as well as a string (Python's `12345` and `"12345"` stay
+    /// two). Numbers are keyed as Python's set compares them: `12345`, `12345.0` and `1.2345e4` are one key, and
+    /// `true` is `1` (Phase 7a's verification). One deviation, recorded: past `Int`'s range an integer and an equal
+    /// float stay two keys, where Python makes them one.
     static func deviceKey(_ raw: JSONObject) -> String? {
         for field in ["serial_number", "deviceudid"] {
             switch raw[field] {
             case .string(let text)? where !text.isEmpty: return "s" + text
-            case .number(let text)? where (Double(text) ?? 1) != 0: return "n" + text
+            case .number(let text)?: if let key = number(text) { return "n" + key }
+            case .bool(true)?: return "n1"
             default: continue
             }
         }
         return nil
+    }
+
+    /// A JSON number's value as Python compares it, or nil for a zero (falsy). An integer is exact; a float that is a
+    /// whole number in `Int`'s range is that integer; any other float is its shortest spelling, one per `Double`.
+    static func number(_ text: String) -> String? {
+        if let int = Int(text) { return int == 0 ? nil : String(int) }
+        if text.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == "-") }) { return text }
+        guard let value = Double(text) else { return text }
+        if value == 0 { return nil }
+        if value.isFinite, value == value.rounded(), let int = Int(exactly: value) { return String(int) }
+        return "\(value)"
     }
 
     private func allDevices(_ yield: (MosylePage) -> Void) async throws {
@@ -114,10 +129,11 @@ public actor MosyleClient {
             let ends = MosyleRead.ends(MosyleRead.devices(os: os, page: 1))
             try await walk({ try await self.devicesPage(os: os, page: $0) }, keys: ["devices"], endOfList: ends) { raw, capped in
                 let fresh = raw.filter { device in Self.deviceKey(device).map { seen.insert($0).inserted } ?? true }
+                guard !fresh.isEmpty else { return false }
                 // Once any platform was cut, every later page says so: the screen reads the last one (review L3).
-                cut = cut || (capped && !fresh.isEmpty)
+                cut = cut || capped
                 yield(MosylePage(items: fresh.map(MosyleAdapter.device), truncated: cut))
-                return !fresh.isEmpty
+                return true
             }
         }
     }
@@ -126,7 +142,8 @@ public actor MosyleClient {
     /// the first time, else without `specific_columns`; a third refusal is the error. No source confirms any of the
     /// names as a `specific_columns` name (abapit sent only `os` and `page`), and one wrong name would fail every
     /// device list on the live tenant (Phase 7a review H3). Failing closed would lose the list, where the adapter's
-    /// allowlist still drops what wasn't asked for; so it degrades, and says so in the log and `columnFallback`.
+    /// allowlist still drops what wasn't asked for; so it degrades, and says so in the log and `columnFallback`. An
+    /// empty `specific_columns` is never sent (what Mosyle makes of one is unknown): with nothing left, every column.
     private func devicesPage(os: String, page: Int) async throws -> MosyleEnvelope {
         while true {
             let asked = deviceColumns
@@ -135,9 +152,9 @@ public actor MosyleClient {
             // Another walk degraded the columns while this page was out: ask again with what it settled on.
             if asked != deviceColumns { continue }
             let named = Set(envelope.info?.split { !($0.isLetter || $0.isNumber || $0 == "_") }.map(String.init) ?? [])
-            let refused = asked.filter(named.contains)
-            if columnFallback == nil, !refused.isEmpty {
-                deviceColumns = asked.filter { !named.contains($0) }
+            let refused = asked.filter(named.contains), rest = asked.filter { !named.contains($0) }
+            if columnFallback == nil, !refused.isEmpty, !rest.isEmpty {
+                deviceColumns = rest
                 columnFallback = .without(refused)
                 Self.log.error("Mosyle refused the device columns \(refused.joined(separator: ", "), privacy: .public) (UNKNOWN_COLUMNS): asking without them")
             } else {
@@ -172,7 +189,7 @@ public actor MosyleClient {
         while page <= pageCap {
             try Task.checkCancellation()
             let envelope = try await fetch(page)
-            guard case .rows(let rows) = try Self.page(envelope, keys, endOfList, first: page == 1) else { return }
+            guard case .rows(let rows) = try Self.page(envelope, keys, endOfList) else { return }
             // Mosyle's `rows` beside the page's count: what the Phase 7 live check reads to settle what `rows` means.
             Self.log.info("Mosyle \(keys[0], privacy: .public) page \(page): \(rows.count) rows; its rows field says \(envelope.total ?? -1)")
             guard take(rows, page == pageCap) else { return }
@@ -180,9 +197,9 @@ public actor MosyleClient {
         }
     }
 
-    static func page(_ envelope: MosyleEnvelope, _ keys: [String], _ endOfList: Set<String>, first: Bool) throws -> MosyleEnvelope.Page {
+    static func page(_ envelope: MosyleEnvelope, _ keys: [String], _ endOfList: Set<String>) throws -> MosyleEnvelope.Page {
         do {
-            return try envelope.read(keys, endOfList: endOfList, firstPage: first)
+            return try envelope.read(keys, endOfList: endOfList)
         } catch {
             switch error {
             case .malformed(let reason): throw MosyleAPIError.malformed(reason)
@@ -192,25 +209,53 @@ public actor MosyleClient {
     }
 
     /// One request's answer, its HTTP status classified. Internal, not private, so a test can hand it a forged read.
+    /// A 403 logs in again once, as a 401 does in `HTTPClient`: abapit re-logged on both (its 7f118fc, "reworked
+    /// against the official Business API docs"; its Logs Stream path calls a 403 "token expired"), and a JWT Mosyle
+    /// expired early would otherwise read as forbidden until its renewal, up to a day (Phase 7a's verification of L5).
     func envelope(_ read: ReadRequest) async throws -> MosyleEnvelope {
         // Checked as it will be sent, not only where it was built (Phase 7a review M4).
         guard read.host == .mosyle, MosyleRead.isAllowed(read) else { throw MosyleAPIError.notARead(read.template) }
-        let response: HTTPResponse
-        do {
-            response = try await http.read(read, authorizer: session)
-        } catch let failure as HTTPFailure {
-            throw MosyleAPIError.http(failure)
+        var relogged = false
+        while true {
+            let sent = Sent(session)
+            let response: HTTPResponse
+            do {
+                response = try await http.read(read, authorizer: sent)
+            } catch let failure as HTTPFailure {
+                throw MosyleAPIError.http(failure)
+            }
+            switch response.status {
+            case 200..<300: break
+            case 401: throw MosyleAPIError.unauthorized
+            case 403 where !relogged:
+                relogged = true
+                await session.invalidate(rejected: await sent.last)
+                continue
+            case 403: throw MosyleAPIError.forbidden
+            case 405: throw MosyleAPIError.invalidMethod
+            case 429: throw MosyleAPIError.rateLimited
+            case 500...599: throw MosyleAPIError.server(status: response.status)
+            default: throw MosyleAPIError.unexpected(status: response.status)
+            }
+            guard let envelope = MosyleEnvelope(response.body) else { throw MosyleAPIError.notJSON(bytes: response.body.count) }
+            return envelope
         }
-        switch response.status {
-        case 200..<300: break
-        case 401: throw MosyleAPIError.unauthorized
-        case 403: throw MosyleAPIError.forbidden
-        case 405: throw MosyleAPIError.invalidMethod
-        case 429: throw MosyleAPIError.rateLimited
-        case 500...599: throw MosyleAPIError.server(status: response.status)
-        default: throw MosyleAPIError.unexpected(status: response.status)
-        }
-        guard let envelope = MosyleEnvelope(response.body) else { throw MosyleAPIError.notJSON(bytes: response.body.count) }
-        return envelope
     }
+}
+
+/// The session as one read's `HTTPClient` sees it, keeping the headers its last attempt carried, so that a 403 drops
+/// exactly the login it refused: a late 403 for an older JWT keeps a newer one, as `invalidate(rejected:)` does for a
+/// 401. An actor, as the session is: the headers hold the access token and the JWT (invariant 3).
+private actor Sent: Authorizer {
+    private let session: MosyleSession
+    private(set) var last: [String: String] = [:]
+
+    init(_ session: MosyleSession) { self.session = session }
+
+    func headers(for host: APIHost) async throws -> [String: String] {
+        last = try await session.headers(for: host)
+        return last
+    }
+
+    func invalidate(rejected: [String: String]) async { await session.invalidate(rejected: rejected) }
 }

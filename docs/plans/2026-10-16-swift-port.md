@@ -498,7 +498,7 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
   - its lifetime comes from the JWT `exp` claim, falling back to 23 h;
   - **ignore the `Expires` header** (PHP's fixed 1981 date);
   - single-flight `MosyleSession` actor;
-  - re-login once on 401 (not on 403: abapit did; a fresh login can't lift a permission or an IP restriction);
+  - re-login once on 401 or 403 (abapit did both, from Mosyle's docs; a second 403 is "forbidden");
   - renew 60 s early, or halfway through a shorter life; an `exp` at or before now reads as unreadable;
   - a login's 429 and 5xx are a rate limit and a server failure, not refused credentials.
   - Tokens can be IP-restricted [3P], so show that hint on 401 after a fresh login.
@@ -506,8 +506,9 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
   - read `response[0].status`, or `response.status` for `devicegroups` and `logsstream`, which return
     an object;
   - the top-level `"status":"OK"` is meaningless;
-  - a 200 without that shape (no `response`, a string one, a status that isn't a string, a first page with no
-    status and no list) is an error, never an empty list (Phase 7a review);
+  - a 200 without that shape (no `response`, a string one, a status that isn't a string, a list key holding no
+    list, or any page with neither a list nor its own end-of-list status) is an error, never an empty list (Phase 7a
+    review and its verification);
   - a status ends a list only when it is that list's own end-of-list status; any other is an error;
   - typed codes: `MISSING_DATA`, `DEVICES_NOTFOUND`, `UNKNOWN_COLUMNS`, `NO_DEVICE_UPDATED`,
     `USERGROUP_NOTFOUND`, `LOSTMODE_NOTENABLED`, `COMMAND_SENT`/`COMMAND_SENDED`, `DEVICE_UPDATED`,
@@ -1226,7 +1227,8 @@ operator has a device they mean to release; a strict-stub test is the only cover
 ### Phase 7: Mosyle reads, Logs Stream, reconciliation, Device 360
 
 **Status:** split. **7a** (MosyleModels, `MosyleRead`, `MosyleSession`, `MosyleClient` reads, the strict
-`MosyleStub`): on branch `phase-7a-mosyle-models`, its adversarial review's findings being fixed (2026-10-16). **7b**
+`MosyleStub`): on branch `phase-7a-mosyle-models`, its adversarial review's findings fixed and being verified
+(2026-10-17). **7b**
 (the Logs Stream drain, `LogsStore`) and the reports, Device 360, collectors and demo fleet: not started. Live checks
 wait for the operator.
 
@@ -1254,8 +1256,9 @@ wait for the operator.
    fallback line in the log), both `CurrentConsoleManagedUser` spellings and `os`/`device_type` among them; and
    whether `UNKNOWN_COLUMNS`'s `info` names the columns. None is confirmed: abapit never sent `specific_columns`.
 3. The device count per platform against Mosyle's console, and what `rows` means (the page log line shows it).
-4. Each list's answer past its last row (users, user groups, device groups): an empty list or which status.
-5. What a 403 means (the client doesn't log in again on one; abapit did).
+4. Each list's answer past its last row (users, user groups, device groups): an empty list or which status (any
+   other shape fails the read).
+5. What a 403 means (the client logs in again once on one, as abapit did; a second is "forbidden").
 6. The rest of docs/domains/mosyle.md's "Assumed, check live" list.
 
 **Done when**:

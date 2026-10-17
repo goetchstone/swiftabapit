@@ -20,7 +20,7 @@ public enum MosyleStatus: String, KnownValues {
     /// Statuses that mean the request did what it asked.
     public var isSuccess: Bool { [.ok, .commandSent, .commandSended, .deviceUpdated, .deviceAssigned].contains(self) }
     /// The device list read past its end. Each list has its own end-of-list statuses, which a list read passes to
-    /// `read(_:endOfList:firstPage:)` (Phase 7a review M1: this one ended every list, and no other ended any).
+    /// `read(_:endOfList:)` (Phase 7a review M1: this one ended every list, and no other ended any).
     public var isEndOfList: Bool { self == .devicesNotFound }
 }
 
@@ -70,7 +70,7 @@ public struct MosyleEnvelope: Sendable {
     }
 
     /// The operation failed by its own status (anything but success and the end of a list). Unknown statuses fail
-    /// closed: a new error code must not read as rows. A list read uses `read(_:endOfList:firstPage:)` instead.
+    /// closed: a new error code must not read as rows. A list read uses `read(_:endOfList:)` instead.
     public var failure: OpenEnum<MosyleStatus>? {
         guard let status else { return nil }
         if let known = status.known, known.isSuccess || known.isEndOfList { return nil }
@@ -99,7 +99,7 @@ public struct MosyleEnvelope: Sendable {
     /// One page of a list read.
     public enum Page: Sendable, Equatable {
         case rows([JSONObject])
-        /// The list's own end-of-list status, an empty list, or (past page 1) an entry with neither.
+        /// The list's own end-of-list status, or an empty list.
         case end
     }
 
@@ -109,23 +109,34 @@ public struct MosyleEnvelope: Sendable {
         case status(OpenEnum<MosyleStatus>, info: String?)
     }
 
-    /// One page of a list read, under the first of `keys` that holds a list (abapit's `_extract`). A status ends the
-    /// list only when it is this list's own (`endOfList`, compared byte for byte); `OK` is no status; any other fails
-    /// closed. A malformed answer is never an empty list (Phase 7a review H2), and neither is a first page with no
-    /// status and no list: a ping that reads one must not say "ok".
-    public func read(_ keys: [String], endOfList: Set<String>, firstPage: Bool) throws(Problem) -> Page {
+    /// One page of a list read. Two answers are a page, on every page: a list under the first of `keys` that holds
+    /// one (abapit's `_extract`; an empty list is the end), or the list's own end-of-list status (`endOfList`,
+    /// compared byte for byte) with no rows beside it. `OK` is no status. Anything else is an error: another status,
+    /// an unknown one included (defect 3); a list key holding something else (`null`, a string, PHP's object-keyed
+    /// array); an end status beside rows; or no list at all. Each read as an empty list and a ping as "ok", on page 1
+    /// beside an `OK` and on any later page (Phase 7a review H2, and its verification): no source says Mosyle ends a
+    /// list that way, so it is said, not guessed (docs/domains/mosyle.md, "Assumed, check live").
+    public func read(_ keys: [String], endOfList: Set<String>) throws(Problem) -> Page {
         if let malformed { throw .malformed(malformed) }
+        var end: OpenEnum<MosyleStatus>?
         if let status, status != .known(.ok) {
-            if endOfList.contains(where: { $0.utf8.elementsEqual(status.rawValue.utf8) }) { return .end }
-            throw .status(status, info: info)
+            guard endOfList.contains(where: { $0.utf8.elementsEqual(status.rawValue.utf8) }) else { throw .status(status, info: info) }
+            end = status
         }
+        var rows: [JSONObject]?
         for key in keys {
             guard case .array(let items)? = entry[key] else { continue }
-            let rows = items.compactMap(\.object)
-            guard rows.count == items.count else { throw .malformed("a row under \(key) isn't an object") }
-            return rows.isEmpty ? .end : .rows(rows)
+            let objects = items.compactMap(\.object)
+            guard objects.count == items.count else { throw .malformed("a row under \(key) isn't an object") }
+            rows = objects
+            break
         }
-        if status == nil, firstPage { throw .malformed("it has no status and no \(keys.joined(separator: " or ")) list") }
-        return .end
+        if rows == nil, let key = keys.first(where: { entry[$0] != nil }) { throw .malformed("its \(key) isn't a list") }
+        if let end {
+            guard rows?.isEmpty ?? true else { throw .malformed("its status \(end.rawValue) ends the list, yet it holds rows") }
+            return .end
+        }
+        guard let rows else { throw .malformed("it has no \(keys.joined(separator: " or ")) list and no end-of-list status") }
+        return rows.isEmpty ? .end : .rows(rows)
     }
 }

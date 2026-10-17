@@ -17,18 +17,30 @@
   never as a value or at send time.
 - **Why not caught:** Phase 1a's lesson ("a switch for every failure the client handles") was applied to the switches
   the author thought of, and the stub's strictness about columns was strictness about the client's own list. Nobody
-  mutated the stub itself, or asked what a 200 that isn't Mosyle's shape does.
-- **Fix:** branch `fix7a-client`. `MosyleEnvelope.malformed` and `read(_:endOfList:firstPage:)` (a malformed 200 is
-  `.malformed`; a ping needs `OK`, `DEVICES_NOTFOUND` or a `devices` list); `MosyleRead.endOfList` per list;
+  mutated the stub itself, or asked what a 200 that isn't Mosyle's shape does. The fix's verification then found the
+  same class one step on: the fix chose lenient shapes with no source (an `OK` beside no list, or a list key holding
+  `null`, read as an empty list; any page past 1 without a list as the end, so 50 of 120 users read as all) and its
+  own tests pinned them; and its scans matched `ReadRequest(` as text, which `ReadRequest (` with a space defeats.
+- **Fix:** branch `fix7a-client`. `MosyleEnvelope.malformed` and `read(_:endOfList:)` (a malformed 200 is
+  `.malformed`; a ping needs `DEVICES_NOTFOUND` or a `devices` list); `MosyleRead.endOfList` per list;
   `MosyleStub.deviceColumns` written out with its sources, plus `lackColumns` and a bounded, logged column fallback in
   the client; `margin(for:)` = min(60 s, life/2), a past `exp` is the fallback, login 429/5xx mapped; `.forbidden`
-  for a 403 (not re-logged: a recorded deviation from abapit); `MosyleRead.isAllowed` checked before every send; an
-  exit test for the builders' trap; exact-value and extension scans; dedupe by id for users and groups; cumulative
+  for a 403 (not re-logged at first; in round 2, once, as abapit did); `MosyleRead.isAllowed` checked before every
+  send; an exit test for the builders' trap; exact-value and extension scans; dedupe by id for users and groups; cumulative
   truncation in the device stream; redacting descriptions for `AuthRequest` and `HTTPResponse`. New stub switches:
   `queue` with a body, host and page (the login too), `endLists`, `lackColumns`, `wrapPages`,
   `holdRequests`/`release`, `Account.logsToken`. 64 hand mutants, each killed (listed in the fix's report).
+  Round 2, after the fix's verification: a list page is a list under its key or its own end status with no rows
+  beside it, on every page, and anything else is `.malformed`; the ping asks as the list does and shares its column
+  fallback, which never sends an empty `specific_columns`; a 403 logs in again once, as abapit did (its 7f118fc, from
+  Mosyle's docs); the dedupe key compares numbers as Python does; the device stream sends no empty page;
+  whitespace-tolerant, whole-file builder scans; a scan that the stub never names the adapter or the client. Hand
+  mutants listed in the round's report, all killed but one equivalent.
 - **Prevention:** `MosyleStubTests` mutate-proof the stub's own checks; `everyRequestedColumnIsOneMosyleHas` fails when
-  the client asks for a column the stub's (independently written) list lacks; `MosyleReadTests` hold the allowlist as
-  a value. The lesson for the review brief: **a stub's "known values" must not be computed from the client**, and a
-  malformed-but-successful answer is a failure mode to drive like a 500. Still only a stub: none of the 33 column
+  the client asks for a column the stub's list lacks, which holds only while that list is written out, so
+  `theMosyleStubDoesNotAskTheClient` refuses a stub that names the adapter or the client; `MosyleReadTests` hold the
+  allowlist as a value; `noRequestIsMadeElsewhereHoweverItIsSpelt` reads each file whole, whitespace-tolerant. The
+  lesson for the review brief: **a stub's "known values" must not be computed from the client**, a
+  malformed-but-successful answer is a failure mode to drive like a 500, and **a lenient reading needs a source**:
+  without one, an odd shape fails closed and goes on the live-check list. Still only a stub: none of the 33 column
   names nor the guessed end-of-list statuses is confirmed; they are named Phase 7 live checks (plan §8, Phase 7).

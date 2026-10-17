@@ -40,6 +40,14 @@ struct MosyleLoginTests {
         #expect(await session.logins == 2, "past the halfway mark: renewed")
     }
 
+    /// An `exp` exactly at now is the fallback too, and one a moment later is its own life: the boundary is held.
+    @Test func anExpAtNowIsTheFallback() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func jwt(_ exp: Int) -> String { "h.\(Base64URL.encode(Data("{\"exp\": \(exp)}".utf8))).s" }
+        #expect(MosyleSession.lifetime(of: jwt(1_800_000_000), now: now) == MosyleSession.fallbackLifetime)
+        #expect(MosyleSession.lifetime(of: jwt(1_800_000_100), now: now) == .seconds(100))
+    }
+
     @Test func theMarginIsSixtySecondsOrHalfTheLife() {
         #expect(MosyleSession.margin(for: .seconds(23 * 3600)) == .seconds(60))
         #expect(MosyleSession.margin(for: .seconds(120)) == .seconds(60))
@@ -51,7 +59,7 @@ struct MosyleLoginTests {
     /// operator to re-enter them (Phase 7a review M2: a 429 read as "refused the email, password or access token").
     static let failures: [(Int, String?, MosyleAPIError)] = [
         (429, nil, .rateLimited), (500, nil, .server(status: 500)), (503, nil, .server(status: 503)),
-        (401, nil, .login(status: 401)), (403, nil, .login(status: 403)),
+        (401, nil, .login(status: 401)), (403, nil, .login(status: 403)), (302, nil, .login(status: 302)),
         (200, "<html>sign in</html>", .noToken), (200, #"{"status":"OK"}"#, .noToken),
     ]
 

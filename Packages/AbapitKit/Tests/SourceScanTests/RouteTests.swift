@@ -73,6 +73,22 @@ struct RouteTests {
             "\(match.output[1].substring ?? "")#\(match.output[2].substring ?? "")"
         }
         #expect(made.count >= 4 && Set(made).isSubset(of: allowed), "\(made)")
+        // Nor anywhere else, however it is spelt: a write built in another file through `MosyleRead.read`, never
+        // called, passed the scan of this file alone (Phase 7a's verification). Only this file calls the raw builder.
+        let spaced = try Regex(#"\bread\s*\(\s*"([^"]*)"\s*,\s*(?:"([^"]*)"|nil)"#)
+        let raw = [try Regex(#"\bMosyleRead\s*\.\s*read\s*\("#), try Regex(#"\bextension\s+(Mosyle\s*\.\s*)?MosyleRead\b"#)]
+        var others = 0
+        for directory in [Self.sources, "App"] {
+            for other in try SourceScan.swiftFiles(in: directory) {
+                let code = other.lines.joined(separator: "\n")
+                let reads = code.matches(of: spaced).map { "\($0.output[1].substring ?? "")#\($0.output[2].substring ?? "")" }
+                #expect(Set(reads).isSubset(of: allowed), "\(other.path): \(reads)")
+                guard other.path != file.path else { continue }
+                others += 1
+                for pattern in raw { #expect(!code.contains(pattern), "\(other.path)") }
+            }
+        }
+        #expect(others > 50)
         // The Logs Stream's body is top-level with no `operation`: one there would make it another request.
         let logs = try #require(text.range(of: "func logsStream("))
         let logsEnd = try #require(text[logs.upperBound...].range(of: "\n    }\n"))
@@ -96,6 +112,43 @@ struct RouteTests {
         #expect(scanned > 50)
         let wire = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/Wire").first { $0.path.hasSuffix("Requests.swift") })
         #expect(wire.lines.contains { $0.contains("public struct ReadRequest") })
+    }
+
+    /// However it is spelt, only the builders make a `ReadRequest` or an `AuthRequest`. A space before the parenthesis
+    /// (`ReadRequest (host:`), a line break (`ReadRequest` then `.init(` on the next line), the metatype
+    /// (`ReadRequest.self`, then `.init (`) and an implicit `.init (host:` each passed the line scans above, and a
+    /// request made so is sent by `HTTPClient` unchecked (Phase 7a's verification). Each file is read whole.
+    @Test func noRequestIsMadeElsewhereHoweverItIsSpelt() throws {
+        let read = try Regex(#"\bReadRequest\s*(\.\s*(init|self)\b|\()"#)
+        let auth = try Regex(#"\bAuthRequest\s*(\.\s*(init|self)\b|\()"#)
+        let implicit = try Regex(#"\.\s*init\s*\(\s*host\s*:"#)
+        var reads: Set<String> = [], auths: Set<String> = [], implicits: Set<String> = [], scanned = 0
+        for directory in [Self.sources, "App"] {
+            for file in try SourceScan.swiftFiles(in: directory) {
+                scanned += 1
+                let code = file.lines.joined(separator: "\n")
+                if code.contains(read) { reads.insert(file.path) }
+                if code.contains(auth) { auths.insert(file.path) }
+                if code.contains(implicit) { implicits.insert(file.path) }
+            }
+        }
+        #expect(scanned > 50)
+        #expect(reads == ["\(Self.sources)/AppleBusiness/AppleRead.swift", "\(Self.sources)/Mosyle/MosyleRead.swift",
+                          "\(Self.sources)/Wire/Requests.swift"], "\(reads)")
+        #expect(auths == ["\(Self.sources)/AppleBusiness/TokenBroker.swift", "\(Self.sources)/Mosyle/MosyleSession.swift"], "\(auths)")
+        #expect(implicits.isEmpty, "\(implicits)")
+    }
+
+    /// The stub's device columns are its own (Phase 7a review H3): taken from the adapter or the client again, a
+    /// column the client asks for and Mosyle lacks would be agreed with, and `everyRequestedColumnIsOneMosyleHas`
+    /// would pass vacuously (Phase 7a's verification).
+    @Test func theMosyleStubDoesNotAskTheClient() throws {
+        let stub = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/TestSupport").first { $0.path.hasSuffix("/MosyleStub.swift") })
+        let code = stub.lines.joined(separator: "\n")
+        #expect(code.contains("static let deviceColumns: Set<String> = ["))
+        for name in ["MosyleAdapter", "MosyleRead", "MosyleClient", "MosyleSession", "deviceAttributes"] {
+            #expect(!code.contains(name), "MosyleStub.swift names \(name)")
+        }
     }
 
     /// Only the Vault touches the Keychain (invariant 3); the app's spike uses throwaway items only.

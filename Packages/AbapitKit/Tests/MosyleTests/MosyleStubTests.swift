@@ -34,6 +34,18 @@ struct MosyleStubTests {
         try await post(stub, path: "/v1/devices", headers: headers, body: #"{"operation": "list", "options": {"os": "mac"}}"#).0
     }
 
+    /// The entry's status of an HTTP 200 from the stub.
+    static func status(_ stub: MosyleStub, path: String, headers: [String: String], body: String) async throws -> String? {
+        var request = URLRequest(url: URL(string: "https://businessapi.mosyle.com\(path)")!)
+        request.httpMethod = "POST"
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        request.httpBody = Data(body.utf8)
+        let (data, response) = try await stub.send(request, limit: 1 << 20)
+        #expect(response.statusCode == 200)
+        let root = JSONValue.parse(String(decoding: data, as: UTF8.self))
+        return root?["response"]?.array?.first?["status"]?.string ?? root?["response"]?["status"]?.string
+    }
+
     @Test func aReadNeedsTheAccessTokenAndALiveJWTOfThisHost() async throws {
         let now = Now()
         let stub = MosyleStub(now: { now.value })
@@ -65,6 +77,33 @@ struct MosyleStubTests {
         let noLogs = MosyleStub()
         noLogs.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw"))
         #expect(try await Self.login(noLogs, host: "businessapilogs.mosyle.com", token: "").0 == 401, "no Logs Stream token, no login")
+    }
+
+    /// The stub's other refusals (Phase 7a's verification: deleting each survived): a login with another admin's
+    /// email, a query string (Mosyle reads take a body), a device or device-group list without `os` (plan §6.3:
+    /// `MISSING_DATA`), and a column name that isn't a string.
+    @Test func theStubRefusesWhatMosyleRefuses() async throws {
+        let stub = MosyleStub()
+        stub.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw"))
+        let other = try await Self.post(stub, path: "/v1/login", headers: ["accessToken": "access-token"],
+                                        body: #"{"email": "other@example.com", "password": "pw"}"#)
+        #expect(other.0 == 401 && other.1 == nil, "another admin's email")
+        let jwt = try #require(try await Self.login(stub).1)
+        let auth = ["accessToken": "access-token", "Authorization": jwt]
+        var query = URLRequest(url: URL(string: "https://businessapi.mosyle.com/v1/devices?operation=list")!)
+        query.httpMethod = "POST"
+        for (name, value) in auth { query.setValue(value, forHTTPHeaderField: name) }
+        query.httpBody = Data(#"{"operation": "list", "options": {"os": "mac"}}"#.utf8)
+        await #expect(throws: MosyleStub.StubFailure.self, "a query string") { _ = try await stub.send(query, limit: 1 << 20) }
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth, body: #"{"operation": "list", "options": {}}"#) == "MISSING_DATA")
+        #expect(try await Self.status(stub, path: "/v1/devicegroups", headers: auth,
+                                      body: #"{"operation": "list_devicegroup", "options": {"page": 1}}"#) == "MISSING_DATA")
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
+                                      body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": [1]}}"#) == "UNKNOWN_COLUMNS")
+        #expect(stub.columnRefusals == 1)
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
+                                      body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": ["serial_number"]}}"#) == "DEVICES_NOTFOUND",
+                "the control")
     }
 
     /// A column the stub's Mosyle lacks is refused, whoever asks.

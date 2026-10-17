@@ -7,8 +7,9 @@ import Wire
 
 /// One Mosyle org's login (plan §3.5): `POST /v1/login` with the access token in the `accessToken` header and
 /// the admin's email and password in the body; the JWT comes back in the response's `Authorization` header.
-/// Single-flight, memory only, re-logged once on a 401. The JWT's own `exp` sets its life (else 23 h; Mosyle's
-/// `Expires` header is PHP's fixed 1981 date and is ignored), renewed 60 s early or halfway through a shorter life.
+/// Single-flight, memory only, re-logged once on a 401 (`HTTPClient`) or a 403 (`MosyleClient`, as abapit did). The
+/// JWT's own `exp` sets its life (else 23 h; Mosyle's `Expires` header is PHP's fixed 1981 date and is ignored),
+/// renewed 60 s early or halfway through a shorter life.
 /// The Logs Stream is a second service with its own token and login on its own host.
 public actor MosyleSession: Authorizer {
     public enum Service: Sendable {
@@ -135,8 +136,8 @@ public actor MosyleSession: Authorizer {
 /// A Mosyle failure: an HTTP status, or Mosyle's own status inside an HTTP 200 (plan §3.5; defect 3).
 public enum MosyleAPIError: Error, Equatable, Sendable {
     case unauthorized
-    /// A 403. Not logged in again: abapit re-logged on 403 as on 401, but plan §3.5 re-logs on 401 only, and a fresh
-    /// login can't lift a permission or an IP restriction (Phase 7a review L5; check live what Mosyle's 403 means).
+    /// A 403 after a fresh login. abapit re-logged on 403 as on 401, and so does the client: whether Mosyle's 403
+    /// means an expired login or a permission is unconfirmed (Phase 7a review L5 and its verification; a live check).
     case forbidden
     case login(status: Int)
     case noToken
@@ -160,8 +161,8 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
             "Mosyle refused this organization's credentials, even after a fresh login. If the access token is restricted to "
                 + "certain IP addresses, this Mac's may not be one."
         case .forbidden:
-            "Mosyle refused this read (HTTP 403). The admin account or the access token may not be allowed it, or the token "
-                + "may be restricted to other IP addresses."
+            "Mosyle refused this read (HTTP 403), even after a fresh login. The admin account or the access token may not be "
+                + "allowed it, or the token may be restricted to other IP addresses."
         case .login(let status): "Mosyle's login refused the email, password or access token (HTTP \(status))."
         case .noToken: "Mosyle's login answered without a token."
         case .invalidMethod: "Mosyle refused the request's method (INVALID_METHOD)."
