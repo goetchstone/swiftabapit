@@ -324,8 +324,9 @@ struct RouteTests {
     }
 
     static let wire = "\(sources)/Wire/Requests.swift"
-    static let readMakers: Set = ["\(sources)/AppleBusiness/AppleRead.swift", "\(sources)/Mosyle/MosyleRead.swift", wire]
-    static let authMakers: Set = ["\(sources)/AppleBusiness/TokenBroker.swift", "\(sources)/Mosyle/MosyleSession.swift", wire]
+    /// The files allowed to make each request type (the needles above are `readMakers` and `authMakers`).
+    static let readMakerFiles: Set = ["\(sources)/AppleBusiness/AppleRead.swift", "\(sources)/Mosyle/MosyleRead.swift", wire]
+    static let authMakerFiles: Set = ["\(sources)/AppleBusiness/TokenBroker.swift", "\(sources)/Mosyle/MosyleSession.swift", wire]
     /// How many argument lists open with `host:` in each file that makes a request, counted exactly in this unit's
     /// files and Wire's (nil: Apple's, held by its own scans). Every applied `ReadRequest` or `AuthRequest` init opens
     /// so, however its type is spelt; HTTPClient's two are `URL.make(host:`.
@@ -352,7 +353,7 @@ struct RouteTests {
         if path == "\(sources)/HTTPCore/HTTPClient.swift", try count(#"\bURL\s*\.\s*make\s*\(\s*host\s*:"#) != 2 {
             problems.append("\(path): its host: lists are no longer URL.make's")
         }
-        for (name, makers) in [("ReadRequest", readMakers), ("AuthRequest", authMakers)] where !makers.contains(path) {
+        for (name, makers) in [("ReadRequest", readMakerFiles), ("AuthRequest", authMakerFiles)] where !makers.contains(path) {
             let named = try count(#"\b\#(name)\b"#), annotated = try count(#"(:|->)\s*(Wire\s*\.\s*)?\#(name)\s*(\)|,|\{|async\b|throws\b|$)"#)
             if named != annotated { problems.append("\(path): \(name) named other than as a parameter or result type") }
         }
