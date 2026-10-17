@@ -239,25 +239,30 @@ struct MosyleSessionTests {
         func advance(_ by: Duration) { lock.withLock { instant = instant.advanced(by: by) } }
     }
 
-    static func session(_ stub: MosyleStub, clock: Clock = Clock()) async throws -> MosyleSession {
+    /// `sleep` is `HTTPClient`'s, between a read's attempts (a 429's wait).
+    static func session(_ stub: MosyleStub, clock: Clock = Clock(),
+                        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in }) async throws -> MosyleSession {
         stub.register(MosyleClientTests.account)
         let vault = Vault(store: MemoryStore())
         try await vault.replaceSet([.mosyleAccessToken: Secret("access-token"), .mosyleEmail: Secret("admin@example.com"),
                                     .mosylePassword: Secret("pw")], for: MosyleClientTests.org)
         return MosyleSession(org: MosyleClientTests.org, service: .business, vault: vault,
-                             http: HTTPClient(transport: stub, limiter: MosyleClientTests.limiter()), clock: { clock.now })
+                             http: HTTPClient(transport: stub, limiter: MosyleClientTests.limiter(), sleep: sleep), clock: { clock.now })
     }
+
+    /// A read the stub answers on an empty tenant: the session's login is reached only through one.
+    static let read = MosyleRead.users(page: 1)
 
     @Test func theJWTsExpSetsItsLife() async throws {
         let stub = MosyleStub(), clock = Clock()
         stub.jwtLifetime(150)
         let session = try await Self.session(stub, clock: clock)
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         clock.advance(.seconds(89))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         #expect(await session.logins == 1)
         clock.advance(.seconds(2))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(Self.read)
         #expect(await session.logins == 2, "inside the last 60 s: logged in again")
     }
 
@@ -274,24 +279,41 @@ struct MosyleSessionTests {
         #expect(MosyleSession.lifetime(of: "not a jwt", now: Date()) == MosyleSession.fallbackLifetime)
     }
 
+    /// A read held while another logs in again after a 401 is refused late, for the first login: its own refresh
+    /// keeps the second login rather than dropping it for a third (Phase 1a's review: one expiry minted three tokens).
     @Test func aLate401KeepsTheNewLogin() async throws {
-        let session = try await Self.session(MosyleStub())
-        let old = try await session.headers(for: .mosyle)
-        await session.invalidate(rejected: old)
-        let new = try await session.headers(for: .mosyle)
-        #expect(new != old)
-        await session.invalidate(rejected: old)
-        #expect(try await session.headers(for: .mosyle) == new)
-        #expect(await session.logins == 2)
+        let stub = MosyleStub()
+        let session = try await Self.session(stub)
+        _ = try await session.read(Self.read)
+        stub.holdRequests(to: "/v1/devices", fromPage: 1)
+        let held = Task { try await session.read(MosyleRead.devices(os: "mac", page: 1)) }
+        let asked = { stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count }
+        for _ in 0..<300 where asked() < 1 { try await Task.sleep(for: .milliseconds(10)) }
+        stub.expireLoginsOnce()
+        #expect(try await session.read(Self.read).status == 200)
+        #expect(stub.logins == 2, "the users read logged in again after its 401")
+        stub.release()
+        #expect(try await held.value.status == 200)
+        #expect(stub.logins == 2, "the held read's late 401 was for the first login: the second is kept")
     }
 
-    @Test func theSessionAuthenticatesOnlyItsHost() async throws {
-        let session = try await Self.session(MosyleStub())
-        for host in [APIHost.appleBusiness, .appleSchool, .appleAccount, .mosyleLogs] {
-            await #expect(throws: MosyleAPIError.wrongHost(host.rawValue)) { _ = try await session.headers(for: host) }
+    /// The session sends only a Mosyle read of its own service, checked before any login: the Logs Stream's read on
+    /// the business session, a write, and a read's body sent to another host each leave nothing on the wire. It is
+    /// no `Authorizer`, so `HTTPClient` can't send anything else with its login (Phase 7a's verification, round 3).
+    @Test func theSessionSendsOnlyItsOwnReads() async throws {
+        let stub = MosyleStub()
+        let session = try await Self.session(stub)
+        #expect(!((session as Any) is any Authorizer))
+        let logs = MosyleRead.logsStream(types: ["dns"], page: 1)
+        await #expect(throws: MosyleAPIError.wrongHost(APIHost.mosyleLogs.rawValue)) { _ = try await session.read(logs) }
+        let wipe = ReadRequest(host: .mosyle, method: .post, path: "/v1/devices", body: Data(#"{"operation": "wipe_devices"}"#.utf8))
+        await #expect(throws: MosyleAPIError.notARead("/v1/devices")) { _ = try await session.read(wipe) }
+        for host in [APIHost.appleBusiness, .appleSchool, .appleAccount] {
+            let elsewhere = ReadRequest(host: host, method: .post, path: "/v1/users", body: Self.read.body)
+            await #expect(throws: MosyleAPIError.notARead("/v1/users")) { _ = try await session.read(elsewhere) }
         }
-        let headers = try await session.headers(for: .mosyle)
-        #expect(headers["accessToken"] == "access-token" && headers["Authorization"]?.hasPrefix("Bearer ") == true)
+        #expect(stub.requests.isEmpty && stub.logins == 0, "nothing sent, not even a login")
+        #expect(try await session.read(Self.read).status == 200, "the stub checked its accessToken and Bearer JWT")
     }
 
     /// The JWT from the response's `Authorization` header, bare or `Bearer`, else the body as abapit tolerated.

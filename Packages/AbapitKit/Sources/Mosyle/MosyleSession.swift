@@ -7,11 +7,16 @@ import Wire
 
 /// One Mosyle org's login (plan §3.5): `POST /v1/login` with the access token in the `accessToken` header and
 /// the admin's email and password in the body; the JWT comes back in the response's `Authorization` header.
-/// Single-flight, memory only, re-logged once on a 401 (`HTTPClient`) or a 403 (`MosyleClient`, as abapit did). The
-/// JWT's own `exp` sets its life (else 23 h; Mosyle's `Expires` header is PHP's fixed 1981 date and is ignored),
-/// renewed 60 s early or halfway through a shorter life.
+/// Single-flight, memory only, re-logged once per read on a 401 or a 403, as abapit did. The JWT's own `exp` sets
+/// its life (else 23 h; Mosyle's `Expires` header is PHP's fixed 1981 date and is ignored), renewed 60 s early or
+/// halfway through a shorter life.
 /// The Logs Stream is a second service with its own token and login on its own host.
-public actor MosyleSession: Authorizer {
+///
+/// Not an `Authorizer`: its login leaves this file only on a request `read(_:)` has checked is a Mosyle read as it
+/// will be sent. As an `Authorizer`, `HTTPClient.read(_:authorizer:)` put a write built anywhere in the package on
+/// the wire with this login, and a builder scan can't see every spelling of one (a backticked type name, a comment
+/// before the parenthesis, `Array<ReadRequest>.Element(`: Phase 7a's verification, round 3).
+public actor MosyleSession {
     public enum Service: Sendable {
         case business, logs
 
@@ -47,7 +52,23 @@ public actor MosyleSession: Authorizer {
         self.clock = clock
     }
 
-    public func headers(for host: APIHost) async throws -> [String: String] {
+    /// `request` sent with this login, once `MosyleRead.isAllowed` says it is a Mosyle read as it will be sent (Phase
+    /// 7a review M4); checked before any login, so a refused request sends nothing, and the headers are for this
+    /// service's own host only (`.wrongHost`, also before any login). One fresh login per read, as abapit's single
+    /// `relogged` allowed: on a 401 (`HTTPClient`'s refresh) or a 403 (here; abapit's 7f118fc re-logged on both,
+    /// "reworked against the official Business API docs"), dropping only the login the read's last attempt carried. A
+    /// 401 then a 403, or a 403 then a 401, is the error, not a second fresh login (Phase 7a's verification, round 3:
+    /// one read could log in three more times).
+    func read(_ request: ReadRequest) async throws -> HTTPResponse {
+        guard MosyleRead.isAllowed(request) else { throw MosyleAPIError.notARead(request.template) }
+        let login = Login(self)
+        while true {
+            let response = try await http.read(request, authorizer: login)
+            guard response.status == 403, await login.relogin() else { return response }
+        }
+    }
+
+    fileprivate func headers(for host: APIHost) async throws -> [String: String] {
         guard host == service.host else { throw MosyleAPIError.wrongHost(host.rawValue) }
         let (token, jwt) = try await current()
         return ["accessToken": String(decoding: token.bytes, as: UTF8.self), "Authorization": "Bearer " + String(decoding: jwt.bytes, as: UTF8.self)]
@@ -55,7 +76,7 @@ public actor MosyleSession: Authorizer {
 
     /// Drops the session only if the refused request carried its JWT: a late 401 for an older one keeps the new
     /// login (Phase 1a's review: one expiry minted three tokens).
-    public func invalidate(rejected: [String: String]) {
+    fileprivate func invalidate(rejected: [String: String]) {
         guard let session, rejected["Authorization"] == "Bearer " + String(decoding: session.jwt.bytes, as: UTF8.self) else { return }
         self.session = nil
     }
@@ -133,11 +154,48 @@ public actor MosyleSession: Authorizer {
     }
 }
 
+/// The session as one read's `HTTPClient` sees it: the only `Authorizer` that carries a Mosyle login, made only by
+/// `MosyleSession.read(_:)`. It keeps the headers the read's last attempt carried, so that a 403 drops exactly the
+/// login it refused (a late 403 for an older JWT keeps a newer one, as a late 401 does), and it allows the read one
+/// fresh login, whichever refusal asks first. An actor, as the session is: the headers hold the access token and the
+/// JWT (invariant 3).
+private actor Login: Authorizer {
+    private let session: MosyleSession
+    private var sent: [String: String] = [:]
+    private var relogged = false
+    /// Refused again after its fresh login: the next attempt would only be refused once more.
+    private var spent = false
+
+    init(_ session: MosyleSession) { self.session = session }
+
+    func headers(for host: APIHost) async throws -> [String: String] {
+        guard !spent else { throw MosyleAPIError.unauthorized }
+        sent = try await session.headers(for: host)
+        return sent
+    }
+
+    /// `HTTPClient`'s 401: the refused login is dropped either way; past this read's one fresh login, the read stops.
+    func invalidate(rejected: [String: String]) async {
+        if relogged { spent = true }
+        relogged = true
+        await session.invalidate(rejected: rejected)
+    }
+
+    /// A 403: drops the login the last attempt carried and says to ask again, once per read.
+    func relogin() async -> Bool {
+        guard !relogged else { return false }
+        relogged = true
+        await session.invalidate(rejected: sent)
+        return true
+    }
+}
+
 /// A Mosyle failure: an HTTP status, or Mosyle's own status inside an HTTP 200 (plan §3.5; defect 3).
 public enum MosyleAPIError: Error, Equatable, Sendable {
     case unauthorized
-    /// A 403 after a fresh login. abapit re-logged on 403 as on 401, and so does the client: whether Mosyle's 403
-    /// means an expired login or a permission is unconfirmed (Phase 7a review L5 and its verification; a live check).
+    /// A 403 after a fresh login. abapit re-logged on 403 as on 401, and so does the session, once per read: whether
+    /// Mosyle's 403 means an expired login or a permission is unconfirmed (Phase 7a review L5 and its verification;
+    /// a live check).
     case forbidden
     case login(status: Int)
     case noToken

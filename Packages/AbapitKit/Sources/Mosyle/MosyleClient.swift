@@ -30,7 +30,6 @@ public actor MosyleClient {
     private static let log = Logger(subsystem: "io.github.goetchstone.swiftabapit", category: "mosyle")
 
     public let org: String
-    private let http: HTTPClient
     private let session: MosyleSession
     private let pageCap: Int
     /// The device columns asked for: the adapter's, until Mosyle refuses one; nil once every column is asked for.
@@ -41,9 +40,8 @@ public actor MosyleClient {
     public init(org: String, vault: Vault, transport: any Transport, limiter: RateLimiter = RateLimiter(), pageCap: Int = MosyleClient.defaultPageCap,
                 bodyLimit: Int = HTTPClient.bodyLimit, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.org = org
-        let http = HTTPClient(transport: transport, limiter: limiter, bodyLimit: bodyLimit, sleep: sleep)
-        self.http = http
-        session = MosyleSession(org: org, service: .business, vault: vault, http: http)
+        session = MosyleSession(org: org, service: .business, vault: vault,
+                                http: HTTPClient(transport: transport, limiter: limiter, bodyLimit: bodyLimit, sleep: sleep))
         self.pageCap = pageCap
     }
 
@@ -158,9 +156,13 @@ public actor MosyleClient {
                 columnFallback = .without(refused)
                 Self.log.error("Mosyle refused the device columns \(refused.joined(separator: ", "), privacy: .public) (UNKNOWN_COLUMNS): asking without them")
             } else {
+                // The columns refused, when Mosyle named any it was asked for: the live check reads which, and a test
+                // tells its own line from the lines of the tests running beside it.
+                let what = refused.isEmpty ? "a device column (UNKNOWN_COLUMNS) without naming one this app asked for"
+                    : "the device columns \(refused.joined(separator: ", ")) (UNKNOWN_COLUMNS)" + (columnFallback == nil ? ", every one asked for" : " after an earlier fallback")
                 deviceColumns = nil
                 columnFallback = .everyColumn
-                Self.log.error("Mosyle refused a device column (UNKNOWN_COLUMNS) without naming one this app asked for: asking for every column; only the adapter's allowlist now keeps the Activation Lock bypass codes out")
+                Self.log.error("Mosyle refused \(what, privacy: .public): asking for every column; only the adapter's allowlist now keeps the Activation Lock bypass codes out")
             }
         }
     }
@@ -208,54 +210,25 @@ public actor MosyleClient {
         }
     }
 
-    /// One request's answer, its HTTP status classified. Internal, not private, so a test can hand it a forged read.
-    /// A 403 logs in again once, as a 401 does in `HTTPClient`: abapit re-logged on both (its 7f118fc, "reworked
-    /// against the official Business API docs"; its Logs Stream path calls a 403 "token expired"), and a JWT Mosyle
-    /// expired early would otherwise read as forbidden until its renewal, up to a day (Phase 7a's verification of L5).
+    /// One request's answer, its HTTP status classified. Internal, not private, so a test can hand it a forged read:
+    /// the session checks it as it will be sent and logs in again once for a 401 or a 403 (`MosyleSession.read`).
     func envelope(_ read: ReadRequest) async throws -> MosyleEnvelope {
-        // Checked as it will be sent, not only where it was built (Phase 7a review M4).
-        guard read.host == .mosyle, MosyleRead.isAllowed(read) else { throw MosyleAPIError.notARead(read.template) }
-        var relogged = false
-        while true {
-            let sent = Sent(session)
-            let response: HTTPResponse
-            do {
-                response = try await http.read(read, authorizer: sent)
-            } catch let failure as HTTPFailure {
-                throw MosyleAPIError.http(failure)
-            }
-            switch response.status {
-            case 200..<300: break
-            case 401: throw MosyleAPIError.unauthorized
-            case 403 where !relogged:
-                relogged = true
-                await session.invalidate(rejected: await sent.last)
-                continue
-            case 403: throw MosyleAPIError.forbidden
-            case 405: throw MosyleAPIError.invalidMethod
-            case 429: throw MosyleAPIError.rateLimited
-            case 500...599: throw MosyleAPIError.server(status: response.status)
-            default: throw MosyleAPIError.unexpected(status: response.status)
-            }
-            guard let envelope = MosyleEnvelope(response.body) else { throw MosyleAPIError.notJSON(bytes: response.body.count) }
-            return envelope
+        let response: HTTPResponse
+        do {
+            response = try await session.read(read)
+        } catch let failure as HTTPFailure {
+            throw MosyleAPIError.http(failure)
         }
+        switch response.status {
+        case 200..<300: break
+        case 401: throw MosyleAPIError.unauthorized
+        case 403: throw MosyleAPIError.forbidden
+        case 405: throw MosyleAPIError.invalidMethod
+        case 429: throw MosyleAPIError.rateLimited
+        case 500...599: throw MosyleAPIError.server(status: response.status)
+        default: throw MosyleAPIError.unexpected(status: response.status)
+        }
+        guard let envelope = MosyleEnvelope(response.body) else { throw MosyleAPIError.notJSON(bytes: response.body.count) }
+        return envelope
     }
-}
-
-/// The session as one read's `HTTPClient` sees it, keeping the headers its last attempt carried, so that a 403 drops
-/// exactly the login it refused: a late 403 for an older JWT keeps a newer one, as `invalidate(rejected:)` does for a
-/// 401. An actor, as the session is: the headers hold the access token and the JWT (invariant 3).
-private actor Sent: Authorizer {
-    private let session: MosyleSession
-    private(set) var last: [String: String] = [:]
-
-    init(_ session: MosyleSession) { self.session = session }
-
-    func headers(for host: APIHost) async throws -> [String: String] {
-        last = try await session.headers(for: host)
-        return last
-    }
-
-    func invalidate(rejected: [String: String]) async { await session.invalidate(rejected: rejected) }
 }

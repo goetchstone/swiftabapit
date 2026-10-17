@@ -67,12 +67,32 @@ struct MosyleFailureTests {
     }
 
     /// A ping is "ok" for what Mosyle sends: no Macs (`DEVICES_NOTFOUND`, abapit's recorded envelope) or a `devices`
-    /// list. An entry's bare `OK` with no list is not one (no source; it is in the malformed list above).
+    /// list. An entry's bare `OK` with no list is not one (no source; it is in the malformed list above). The list's
+    /// own end status beside an empty list is the end too, on any page: no row is lost by reading it so, and one
+    /// beside rows is the error (Phase 7a's verification, round 3: this reading was unpinned).
     @Test func aPingAcceptsWhatMosyleSends() async throws {
         let harness = try await Harness()
         try await harness.client.ping()
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         try await harness.client.ping()
+        let end = #"{"status":"OK","response":[{"status":"DEVICES_NOTFOUND","devices":[]}]}"#
+        harness.stub.queue(200, for: "/v1/devices", body: end)
+        try await harness.client.ping()
+        harness.stub.queue(200, for: "/v1/devices", page: 1, body: end)
+        #expect(try await harness.devices().flatMap(\.items).count == 3, "iOS, asked first, ends at once; macOS reads its 3")
+        harness.stub.add(users: Self.users(50))
+        harness.stub.queue(200, for: "/v1/users", page: 2, body: #"{"status":"OK","response":[{"status":"USERS_NOTFOUND","users":[]}]}"#)
+        #expect(try await harness.client.users().items.count == 50)
+    }
+
+    /// `OK` is no status only as Mosyle spells it: an `ok` beside a list is a status this app doesn't know, and fails
+    /// closed rather than reading the rows, as an end status is compared byte for byte (Phase 7a's verification,
+    /// round 3: a case-insensitive `OK` survived).
+    @Test(arguments: ["ok", "Ok", "oK"])
+    func onlyOKAsMosyleSpellsItIsNoStatus(spelling: String) async throws {
+        let harness = try await Harness()
+        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"\#(spelling)","devices":[{"serial_number":"X"}]}]}"#)
+        await #expect(throws: MosyleAPIError.status(OpenEnum(spelling), info: nil)) { _ = try await harness.devices() }
     }
 
     /// A status's `info` is shown only when it is text: anything else could be any size and shape.
@@ -173,7 +193,8 @@ struct MosyleFailureTests {
         let every = Set(Self.ownEnds.values.joined())
         let writes = ["COMMAND_SENT", "COMMAND_SENDED", "DEVICE_UPDATED", "DEVICE_ASSIGNED", "NO_DEVICE_UPDATED", "LOSTMODE_NOTENABLED"]
         for (path, own) in Self.ownEnds {
-            for status in every.subtracting(own).sorted() + own.map { $0.lowercased() }.sorted() + writes {
+            let others = every.subtracting(own).sorted() + own.map { $0.lowercased() }.sorted() + writes
+            for status in others {
                 let harness = try await Harness()
                 harness.stub.failEnvelope(status, for: path)
                 await #expect(throws: MosyleAPIError.status(OpenEnum(status), info: "stubbed"), "\(path) \(status)") { try await Self.read(harness, path) }
@@ -197,6 +218,42 @@ struct MosyleFailureTests {
         await #expect(throws: MosyleAPIError.forbidden) { try await harness.client.ping() }
         #expect(harness.stub.logins == 3, "one fresh login per read, not a loop")
         #expect(MosyleAPIError.forbidden.message.contains("fresh login") && MosyleAPIError.forbidden.message.contains("403"))
+    }
+
+    /// One fresh login per read, whichever refusal comes first, as abapit's single `relogged` allowed: a 401 then a
+    /// 403, or a 403 then a 401, is the error after one more login, not two or three (Phase 7a's verification, round
+    /// 3: HTTPClient's 401 refresh and the client's 403 retry each logged in, up to three times for one read).
+    static let refusals: [([Int], MosyleAPIError?)] = [
+        ([401], nil), ([403], nil), ([401, 401], .unauthorized), ([403, 403], .forbidden), ([401, 403], .forbidden),
+        ([403, 401], .unauthorized), ([401, 403, 403], .forbidden), ([403, 401, 401], .unauthorized),
+    ]
+
+    @Test(arguments: refusals)
+    func aReadLogsInAgainOnceWhicheverRefusalAsks(statuses: [Int], error: MosyleAPIError?) async throws {
+        let harness = try await Harness()
+        try await harness.client.ping()
+        for status in statuses { harness.stub.queue(status, for: "/v1/devices") }
+        if let error {
+            await #expect(throws: error, "\(statuses)") { try await harness.client.ping() }
+        } else {
+            try await harness.client.ping()
+        }
+        #expect(harness.stub.logins == 2, "\(statuses): one fresh login")
+        let asked = harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count
+        #expect(asked == 3, "\(statuses): the first ping's page, then this one's twice, never a third time")
+    }
+
+    /// A 403 drops the login its read's last attempt carried, not its first: here a 429's wait outlived the first
+    /// login, the retry renewed it, and the 403 refused the renewed one, which must be the one dropped (Phase 7a's
+    /// verification, round 3: keeping the first attempt's headers survived, and the refused login was used again).
+    @Test func a403DropsTheLoginItWasRefusedWith() async throws {
+        let stub = MosyleStub(), clock = MosyleSessionTests.Clock()
+        let session = try await MosyleSessionTests.session(stub, clock: clock, sleep: { _ in clock.advance(.seconds(24 * 3600)) })
+        _ = try await session.read(MosyleSessionTests.read)
+        stub.queue(429, for: "/v1/users", headers: ["Retry-After": "1"])
+        stub.queue(403, for: "/v1/users")
+        #expect(try await session.read(MosyleSessionTests.read).status == 200)
+        #expect(stub.logins == 3, "the first; the one renewed after the wait; the fresh one after its 403")
     }
 
     /// A late 403 for an older JWT keeps the newer login, as a late 401 does: the read held while another logged in
@@ -271,13 +328,13 @@ struct MosyleFailureTests {
     // MARK: M4, the allowlist as sent
 
     /// A read made anywhere else in the package is checked as it will be sent, and a write never leaves. The Logs
-    /// Stream's read is for its own client (Phase 7b), never the business one.
+    /// Stream's read is for its own session (Phase 7b), never the business one.
     @Test func aForgedReadIsNeverSent() async throws {
         let harness = try await Harness()
         let forged = ReadRequest(host: .mosyle, method: .post, path: "/v1/devices", body: Data(#"{"operation": "wipe_devices"}"#.utf8))
         await #expect(throws: MosyleAPIError.notARead("/v1/devices")) { _ = try await harness.client.envelope(forged) }
         let logs = MosyleRead.logsStream(types: ["dns"], page: 1)
-        await #expect(throws: MosyleAPIError.notARead("/v1/logsstream")) { _ = try await harness.client.envelope(logs) }
+        await #expect(throws: MosyleAPIError.wrongHost(APIHost.mosyleLogs.rawValue)) { _ = try await harness.client.envelope(logs) }
         #expect(harness.stub.requests.isEmpty)
     }
 
@@ -367,22 +424,26 @@ struct MosyleFailureTests {
     }
 
     /// Each fallback is an error-level line naming the columns: the Phase 7 live check reads it, and a debug line is
-    /// never kept (Phase 7a's verification: lowering both lines survived). Read back from this process's own log.
+    /// never kept (Phase 7a's verification: lowering both lines survived). Read back from this process's own log, so
+    /// each line is this test's own, whole: two columns no other test refuses (round 3: the lines of the tests
+    /// running beside it passed for its own, and logging only two or more columns, or only a first refusal, survived).
     @Test func theFallbackIsLoggedAsAnError() async throws {
         let since = Date().addingTimeInterval(-1)
         let harness = try await Harness()
-        harness.stub.lackColumns(["currentconsolemanageduser"])
+        harness.stub.lackColumns(["bluetooth_mac_address"])
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         _ = try await harness.devices()
-        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#)
+        harness.stub.queue(200, for: "/v1/devices",
+                           body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns: ethernet_mac_address"}]}"#)
         _ = try await harness.devices()
         #expect(await harness.client.columnFallback == .everyColumn)
         let store = try OSLogStore(scope: .currentProcessIdentifier)
         let entries = try store.getEntries(at: store.position(date: since),
                                            matching: NSPredicate(format: "subsystem == %@ AND category == %@", "io.github.goetchstone.swiftabapit", "mosyle"))
         let errors = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.level == .error }.map(\.composedMessage)
-        #expect(errors.contains { $0.contains("refused the device columns currentconsolemanageduser") }, "\(errors)")
-        #expect(errors.contains { $0.contains("asking for every column") }, "\(errors)")
+        #expect(errors.contains("Mosyle refused the device columns bluetooth_mac_address (UNKNOWN_COLUMNS): asking without them"), "\(errors)")
+        #expect(errors.contains("Mosyle refused the device columns ethernet_mac_address (UNKNOWN_COLUMNS) after an earlier fallback: asking for "
+                                + "every column; only the adapter's allowlist now keeps the Activation Lock bypass codes out"), "\(errors)")
     }
 
     /// Unnamed, the list is asked for whole, and only the adapter's allowlist keeps the bypass codes out (invariant 11).
@@ -450,10 +511,15 @@ struct MosyleFailureTests {
             ["serial_number": .number("1.5"), "device_name": .string("F1")],
             ["serial_number": .number("15e-1"), "device_name": .string("F2")],
             ["serial_number": .number("2.5"), "device_name": .string("F3")],
+            // Past `Int`'s range and the same `Double`: two integers Python keeps apart, and one repeated (round 3:
+            // keyed through `Double`, the two merged and a device went, silently).
+            ["serial_number": .number("100000000000000000000"), "device_name": .string("L1")],
+            ["serial_number": .number("100000000000000000001"), "device_name": .string("L2")],
+            ["serial_number": .number("100000000000000000000"), "device_name": .string("L3")],
         ]
         harness.stub.add(devices: rows, os: "mac")
         let names = try await harness.devices().flatMap(\.items).compactMap { $0.attributes["deviceName"]?.string }
-        #expect(names == ["A", "B", "C", "D", "N1", "S", "Z1", "Z2", "Z4", "T1", "B1", "F1", "F3"])
+        #expect(names == ["A", "B", "C", "D", "N1", "S", "Z1", "Z2", "Z4", "T1", "B1", "F1", "F3", "L1", "L2"])
     }
 
     /// A cap page that adds nothing new is the end, not a cut: a list that wraps on the cap's page isn't marked.

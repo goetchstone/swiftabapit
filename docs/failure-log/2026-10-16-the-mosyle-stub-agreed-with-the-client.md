@@ -36,10 +36,18 @@
   Mosyle's docs); the dedupe key compares numbers as Python does; the device stream sends no empty page;
   whitespace-tolerant, whole-file builder scans; a scan that the stub never names the adapter or the client. Hand
   mutants listed in the round's report, all killed but one equivalent.
+  Round 3: a backtick, a block comment and `Array<ReadRequest>.Element` still got a forged write past every scan,
+  and `HTTPClient.read` sent it with the session as the `Authorizer`. The session is no longer one: its login reaches
+  `HTTPClient` only through `MosyleSession.read`, which checks `MosyleRead.isAllowed` before any login, and allows
+  one fresh login per read whichever of a 401 or a 403 asks (abapit's single `relogged`). The scans read code
+  (`SwiftCode`), with ASCII word boundaries, exact `host:` counts in the makers, and the type named only as a
+  parameter or result type elsewhere; a test runs each evasion through them.
 - **Prevention:** `MosyleStubTests` mutate-proof the stub's own checks; `everyRequestedColumnIsOneMosyleHas` fails when
   the client asks for a column the stub's list lacks, which holds only while that list is written out, so
   `theMosyleStubDoesNotAskTheClient` refuses a stub that names the adapter or the client; `MosyleReadTests` hold the
-  allowlist as a value; `noRequestIsMadeElsewhereHoweverItIsSpelt` reads each file whole, whitespace-tolerant. The
+  allowlist as a value; `noRequestIsMadeOutsideTheBuilders` reads each file as code. A scan of source can't see
+  every spelling Swift accepts, so a guarantee lives where the request is sent, and a scan only keeps code where a
+  reviewer looks: **check the value at the door, not the spelling in the file**. The
   lesson for the review brief: **a stub's "known values" must not be computed from the client**, a
   malformed-but-successful answer is a failure mode to drive like a 500, and **a lenient reading needs a source**:
   without one, an odd shape fails closed and goes on the live-check list. Still only a stub: none of the 33 column

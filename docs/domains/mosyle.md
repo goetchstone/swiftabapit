@@ -13,8 +13,9 @@
   (abapit's field maps as an allowlist), `Python.swift` (the truthiness, `str()` and `int()` the adapters lean on),
   `Logs.swift` (abapit's `normalize_logs`). Pure; held to `Tests/Fixtures/parity/mosyle.json`.
 - `Sources/Mosyle/MosyleRead.swift`: every Mosyle read, by `path#operation`, on `MosyleRead.allowed`; each list's
-  end-of-list statuses; `isAllowed`, the check made again just before sending.
-- `Sources/Mosyle/MosyleSession.swift`: the login, an `Authorizer`; `MosyleAPIError` and its words.
+  end-of-list statuses; `isAllowed`, the check made again as each request is sent.
+- `Sources/Mosyle/MosyleSession.swift`: the login, and `read(_:)`, the only way a request carries it (the session is
+  no `Authorizer`; its private `Login` is, made per read); `MosyleAPIError` and its words.
 - `Sources/Mosyle/MosyleClient.swift`: devices per platform, users, groups, ping; paging, dedupe, the cap, the column
   fallback.
 - `Sources/TestSupport/MosyleStub.swift`: the strict stub (Debug only), with its own device-column list.
@@ -22,27 +23,31 @@
   `MosyleFailureTests` (every failure the client handles), `MosyleLoginTests` (the login's failures, single flight, the
   Logs Stream's login), `MosyleStubTests` (the stub's own strictness), `MosyleReadTests` (the allowlist as values, the
   check before sending, the builders' trap as an exit test, the login's redaction); `RouteTests`
-  (`everyMosyleReadIsOnTheAllowlist`, `nothingElseExtendsOrRenamesReadRequest`, `noRequestIsMadeElsewhereHoweverItIsSpelt`,
-  `theMosyleStubDoesNotAskTheClient`, the request and exchange makers).
+  (`everyMosyleReadIsOnTheAllowlist`, `nothingElseExtendsOrRenamesReadRequest`, `noRequestIsMadeOutsideTheBuilders`,
+  `theRequestScansFindEverySpellingTheyKnow`, `onlyTheSessionCarriesAMosyleLogin`, `theMosyleStubDoesNotAskTheClient`,
+  the request and exchange makers; `SwiftCode` reads a file as code for them).
 
 ## How it works
 - **Login**: `POST /v1/login`, header `accessToken`, body `{email, password}`; the JWT comes back in the response's
   `Authorization` header. Every other request sends both `accessToken` and `Authorization: Bearer <jwt>`. The JWT's
   `exp` sets its life (at most 23 h; none, unreadable, or at or before now: 23 h), renewed 60 s early, or halfway
-  through a life shorter than 2 min; PHP's fixed 1981 `Expires` header is ignored. One login at a time per org; a 401
-  logs in again once, through `invalidate(rejected:)`, so a late 401 for an older JWT keeps the new one. A 403 logs
-  in again once too, as abapit did (its 7f118fc, "reworked against the official Business API docs": "re-login on
-  401/403"; its Logs Stream path calls a 403 "token expired"), dropping only the login it was refused with; a second
-  403 is `.forbidden` (Phase 7a review L5: the first fix didn't re-log, and its verification found that rested on an
-  argument against abapit's evidence). A login answering 429 is `.rateLimited`, a 5xx `.server`, a 2xx without a
+  through a life shorter than 2 min; PHP's fixed 1981 `Expires` header is ignored. One login at a time per org. A
+  read logs in again once, whichever of a 401 or a 403 asks first, as abapit's single `relogged` did (its 7f118fc,
+  "reworked against the official Business API docs": "re-login on 401/403"; its Logs Stream path calls a 403 "token
+  expired"), dropping only the login the read's last attempt carried, so a late 401 or 403 for an older JWT keeps
+  the new one. A second refusal is the error: `.unauthorized` after a 401, `.forbidden` after a 403 (Phase 7a review
+  L5: the first fix didn't re-log on 403; round 3 of its verification: HTTPClient's 401 refresh and the 403 retry each
+  logged in, up to three times for one read). A login answering 429 is `.rateLimited`, a 5xx `.server`, a 2xx without a
   token `.noToken`; only another refusal (a 3xx included) is `.login(status:)`, the one that names the credentials.
   A login is never retried. The Logs Stream logs in on its own host with its own token (`Service.logs`).
 - **Reads are POSTs**, so the method can't tell a read from a write. A read is a `(path, operation)` on
   `MosyleRead.allowed`, and only `MosyleRead` builds one (`precondition`, held by an exit test, plus the source
-  scans). The client checks each request again as it will be sent (`MosyleRead.isAllowed`: a POST, no query, the
-  body exactly as the builders serialize it, its `path#operation` on the list, the path's own host), so a
-  `ReadRequest` made anywhere else in the package can't carry a write (`.notARead`, nothing sent). Anything else
-  Mosyle offers is a write, for ChangeCore in Phase 8.
+  scans). The session checks each request as it will be sent (`MosyleSession.read`, through `MosyleRead.isAllowed`:
+  a POST, no query, the body exactly as the builders serialize it, its `path#operation` on the list, the path's own
+  host), before any login, so a `ReadRequest` made anywhere else in the package can't carry a write (`.notARead`,
+  nothing sent). That holds however the request was spelt, because the session is no `Authorizer`: its login reaches
+  `HTTPClient` only inside `read(_:)` (round 3 of the verification sent three forged writes, each past every scan,
+  through `HTTPClient.read` with the session). Anything else Mosyle offers is a write, for ChangeCore in Phase 8.
 - **The envelope**: the entry's `status` is the operation's (`response[0].status`, or `response.status` where
   `response` is an object); the top-level `"status": "OK"` comes on errors too. A list page is one of two answers,
   on every page: a list under the first of its keys that holds one (abapit's `_extract`; an empty list ends the
@@ -96,6 +101,13 @@
   `MosyleRead.read` in another file passed the scan of one file; the stub's column list had nothing keeping it its
   own; the fallback's underscore names, second refusal, concurrent re-ask and log level were untested; the 403
   deviation from abapit; Python's number equality in the dedupe key. Each now has a test that kills its mutant.
+- Round 3 (two lenses): a backticked `` `ReadRequest`( ``, `ReadRequest/**/(`, `Array<ReadRequest>.Element(`,
+  `.init(/**/host:`, a backticked `AuthRequest`, `` MosyleRead.`read`( `` and a spaced third builder inside
+  MosyleRead.swift each passed every builder scan, and `HTTPClient.read(_:authorizer:)` sent the forged writes with the
+  session's login; a 401 then a 403 logged in twice more, and which login a 403 dropped was untested; the log test
+  passed on other tests' lines; big-integer serials, a lower-case `ok`, the stub's column trim and empty `os`, a 599
+  login and the lenient end-of-list beside an empty list were unpinned. The session became the checked door, the
+  scans read code (`SwiftCode`), and each has a test that kills its mutant.
 
 ## Gotchas / stub-lies traps
 - **`Duration.seconds` traps past about 1.7e20.** A JWT `exp` is clamped as a number before it becomes a `Duration`
@@ -104,11 +116,21 @@
   The margin is `min(60 s, lifetime / 2)`.
 - **The stub's columns must not come from the client.** Derived from the adapter, `UNKNOWN_COLUMNS` could never fire
   and a misspelt column was green. `MosyleStub.deviceColumns` is written out, with its sources.
-- **Swift's call syntax defeats a line scan**: `ReadRequest (host:` with a space, `ReadRequest` and `.init(` on
-  separate lines, and `ReadRequest.self` then `t.init (` all compile. `noRequestIsMadeElsewhereHoweverItIsSpelt`
-  reads each file whole with whitespace-tolerant patterns.
+- **Swift's call syntax defeats a scan of the text**: `ReadRequest (host:` with a space, `ReadRequest` and `.init(`
+  on separate lines, `ReadRequest.self` then `t.init (`, a backticked `` `ReadRequest` ``, a comment between the
+  tokens and `Array<ReadRequest>.Element(` all compile. The scans read each file as code (`SwiftCode.read`: comments
+  out, backticks out, strings and interpolations followed), count each maker's `host:` argument lists exactly, and
+  allow `ReadRequest` elsewhere only as a parameter or result type. They still can't see every spelling, which is
+  why the session checks each request as it is sent.
+- **Swift's `\b` is Unicode's**: `reader.read` and `Wire.ReadRequest` are one word each, so `\bread` and
+  `\bReadRequest` match neither. The scans use `wordBoundaryKind(.simple)`.
+- **A bare regex literal can hide code from a scan**: a `"` or `/*` inside one reads as a string or a comment to
+  anything that doesn't know it is a regex. `SwiftCode` takes one as written only when it holds no quote, backtick,
+  bracket or hash (MosyleModels' compliance pattern), and the scans refuse a file with any other.
 - **The fallback's log test reads `OSLogStore`** (this process's own entries): it takes a few seconds, and a
-  `.debug` line isn't kept at all, which is the point (the live check reads the error-level line).
+  `.debug` line isn't kept at all, which is the point (the live check reads the error-level line). Other tests write
+  their fallback lines at the same moment, so the test refuses two columns no other test refuses and matches each
+  line whole; the every-column line names the columns refused, when Mosyle named any.
 - **The Write tool decodes `\uXXXX` in a file's text** (it turned a JSON escape in a test into the letter itself:
   the "escape" case passed vacuously until the body's byte count gave it away). Write escapes through a script.
 - **`Authorization: Bearer ` with nothing after it is no token**, not the token "Bearer".
@@ -132,7 +154,7 @@
   - **That nothing else ends a list**: an entry with no list and no end status, beside an `OK` or past page 1, is an
     error, as is a list key holding `null` or PHP's object-keyed array. No source shows Mosyle sends any of these; if
     a live list ends that way, its read fails loudly (live check 4) rather than dropping rows.
-  - **What a 403 means**: the client logs in again once, as abapit did, and a second 403 is `.forbidden`. If a live
+  - **What a 403 means**: a read logs in again once, as abapit did, and a second refusal is the error. If a live
     403 is always a permission, the extra login per refused read is the cost.
   - A login's 429 and 5xx: mapped from the status alone, as the client reads no login body.
   - The stub's 401 body (`{"error": …}`) and the login's success body (`{"status": "OK"}`): the client reads the
@@ -152,8 +174,9 @@
   fallback in the log**, and the assumptions above.
 
 ## To do common tasks here
-- **The Logs Stream's drain (Phase 7b)** sends through its own client: it must check `MosyleRead.isAllowed` before
-  each send, as `MosyleClient.envelope` does (a computed `operation` in its body is caught only there).
+- **The Logs Stream's drain (Phase 7b)** sends through a `.logs` `MosyleSession`'s `read(_:)`, which checks each
+  request as it is sent (a computed `operation` in its body is caught there). The stub's Logs host already checks
+  the Logs token and JWT, then leaves the read itself unhandled.
 - **A new read**: add `path#operation` to `MosyleRead.allowed` (a read only: the route scan refuses an operation
   that isn't a read verb or names a change) and to `MosyleReadTests`' exact list, its end-of-list statuses to
   `MosyleRead.endOfList` if it is a list, a builder through `read(_:_:_:)`, a stub handler that fails as Mosyle

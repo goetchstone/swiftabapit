@@ -498,7 +498,9 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
   - its lifetime comes from the JWT `exp` claim, falling back to 23 h;
   - **ignore the `Expires` header** (PHP's fixed 1981 date);
   - single-flight `MosyleSession` actor;
-  - re-login once on 401 or 403 (abapit did both, from Mosyle's docs; a second 403 is "forbidden");
+  - re-login once per read on a 401 or a 403, whichever comes first (abapit's single `relogged`, from Mosyle's
+    docs; a second refusal is the error);
+  - every request is checked as it is sent, by the session, the only way one carries the login (not an `Authorizer`);
   - renew 60 s early, or halfway through a shorter life; an `exp` at or before now reads as unreadable;
   - a login's 429 and 5xx are a rate limit and a server failure, not refused credentials.
   - Tokens can be IP-restricted [3P], so show that hint on 401 after a fresh login.
@@ -1258,7 +1260,7 @@ wait for the operator.
 3. The device count per platform against Mosyle's console, and what `rows` means (the page log line shows it).
 4. Each list's answer past its last row (users, user groups, device groups): an empty list or which status (any
    other shape fails the read).
-5. What a 403 means (the client logs in again once on one, as abapit did; a second is "forbidden").
+5. What a 403 means (a read logs in again once on one, as abapit did; a second refusal is the error).
 6. The rest of docs/domains/mosyle.md's "Assumed, check live" list.
 
 **Done when**:

@@ -30,13 +30,13 @@ struct MosyleLoginTests {
         let stub = MosyleStub(), clock = Clock()
         stub.jwtLifetime(45)
         let session = try await MosyleSessionTests.session(stub, clock: clock)
-        for _ in 0..<5 { _ = try await session.headers(for: .mosyle) }
+        for _ in 0..<5 { _ = try await session.read(MosyleSessionTests.read) }
         #expect(await session.logins == 1)
         clock.advance(.seconds(21))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(MosyleSessionTests.read)
         #expect(await session.logins == 1)
         clock.advance(.seconds(2))
-        _ = try await session.headers(for: .mosyle)
+        _ = try await session.read(MosyleSessionTests.read)
         #expect(await session.logins == 2, "past the halfway mark: renewed")
     }
 
@@ -58,7 +58,7 @@ struct MosyleLoginTests {
     /// A login refused for the credentials says so; a 429, a 5xx or an answer without a token doesn't send the
     /// operator to re-enter them (Phase 7a review M2: a 429 read as "refused the email, password or access token").
     static let failures: [(Int, String?, MosyleAPIError)] = [
-        (429, nil, .rateLimited), (500, nil, .server(status: 500)), (503, nil, .server(status: 503)),
+        (429, nil, .rateLimited), (500, nil, .server(status: 500)), (503, nil, .server(status: 503)), (599, nil, .server(status: 599)),
         (401, nil, .login(status: 401)), (403, nil, .login(status: 403)), (302, nil, .login(status: 302)),
         (200, "<html>sign in</html>", .noToken), (200, #"{"status":"OK"}"#, .noToken),
     ]
@@ -79,7 +79,7 @@ struct MosyleLoginTests {
         let stub = MosyleStub()
         let session = try await MosyleSessionTests.session(stub)
         try await withThrowingTaskGroup(of: Void.self) { group in
-            for _ in 0..<10 { group.addTask { _ = try await session.headers(for: .mosyle) } }
+            for _ in 0..<10 { group.addTask { _ = try await session.read(MosyleSessionTests.read) } }
             try await group.waitForAll()
         }
         #expect(await session.logins == 1 && stub.logins == 1)
@@ -94,7 +94,8 @@ struct MosyleLoginTests {
         #expect(harness.stub.logins == 2)
     }
 
-    /// The Logs Stream is its own service: its own token, logged in on its own host, used only there.
+    /// The Logs Stream is its own service: its own token, logged in on its own host, used only there. Its read reaches
+    /// the stub's Logs host with that login (the stub checks both, then leaves the read itself to Phase 7b).
     @Test func theLogsStreamLogsInOnItsOwnHostWithItsOwnToken() async throws {
         let stub = MosyleStub()
         stub.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw", logsToken: "logs-token"))
@@ -103,10 +104,12 @@ struct MosyleLoginTests {
                                     .mosyleEmail: Secret("admin@example.com"), .mosylePassword: Secret("pw")], for: MosyleClientTests.org)
         let session = MosyleSession(org: MosyleClientTests.org, service: .logs, vault: vault,
                                     http: HTTPClient(transport: stub, limiter: MosyleClientTests.limiter()))
-        let headers = try await session.headers(for: .mosyleLogs)
-        #expect(headers["accessToken"] == "logs-token" && headers["Authorization"]?.hasPrefix("Bearer ") == true)
-        #expect(stub.requests == ["POST businessapilogs.mosyle.com/v1/login"])
+        await #expect(throws: MosyleStub.StubFailure.unhandled("businessapilogs.mosyle.com/v1/logsstream: the Logs Stream arrives with LogsDrain")) {
+            _ = try await session.read(MosyleRead.logsStream(types: ["dns"], page: 1))
+        }
+        #expect(stub.requests == ["POST businessapilogs.mosyle.com/v1/login", "POST businessapilogs.mosyle.com/v1/logsstream"])
         #expect(stub.logins == 1)
-        await #expect(throws: MosyleAPIError.wrongHost(APIHost.mosyle.rawValue)) { _ = try await session.headers(for: .mosyle) }
+        await #expect(throws: MosyleAPIError.wrongHost(APIHost.mosyle.rawValue)) { _ = try await session.read(MosyleSessionTests.read) }
+        #expect(stub.requests.count == 2, "a business read on the Logs session sends nothing")
     }
 }

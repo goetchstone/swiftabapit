@@ -16,8 +16,8 @@ import Wire
 /// - `/v1/login` takes the `accessToken` header and `{email, password}`; the JWT comes back in the response's
 ///   `Authorization` header, with PHP's fixed `Expires: Thu, 19 Nov 1981 08:52:00 GMT` beside it. The Logs Stream
 ///   host logs in the same way with its own token, and each host takes only its own JWTs.
-/// - Every other request needs both `accessToken` and `Authorization: Bearer <jwt>` of a live login, else 401
-///   `{"error": …}`.
+/// - Every other request needs both `accessToken` and `Authorization: Bearer <jwt>` of a live login on its host, else
+///   401 `{"error": …}`. A Logs Stream read that has both is unhandled: the read itself arrives with LogsDrain (7b).
 /// - Lists page at **50 rows whatever `page_size` asks** (abapit recorded `"page_size":50`; it asked for 500 and
 ///   stopped after the first short page: defect 2). Devices need `os` (else `MISSING_DATA`), refuse a column not in
 ///   `deviceColumns` (`UNKNOWN_COLUMNS`), answer `DEVICES_NOTFOUND` past the end, and return only `specific_columns`
@@ -238,6 +238,8 @@ public final class MosyleStub: Transport, Sendable {
                 (status, headers, body) = login(request, object, host: host)
             } else if host == .mosyle {
                 (status, headers, body) = try business(request, path: path, object)
+            } else if state.withLock({ refuses(request, on: host, $0) }) {
+                (status, headers, body) = (401, [:], Self.json(["error": .string("Unauthorized")]))
             } else {
                 throw StubFailure.unhandled("\(host.rawValue)\(path): the Logs Stream arrives with LogsDrain")
             }
@@ -287,14 +289,19 @@ public final class MosyleStub: Transport, Sendable {
 
     // MARK: Mosyle Business
 
+    /// Whether `request` lacks `host`'s access token or a live JWT this stub issued for `host` (or the token is revoked).
+    private func refuses(_ request: URLRequest, on host: APIHost, _ state: State) -> Bool {
+        let bearer = request.value(forHTTPHeaderField: "Authorization") ?? ""
+        let jwt = bearer.hasPrefix("Bearer ") ? String(bearer.dropFirst(7)) : ""
+        let token = host == .mosyle ? state.account?.accessToken : state.account?.logsToken
+        guard !state.revoked, let token, request.value(forHTTPHeaderField: "accessToken") == token,
+              let issued = state.jwts[jwt], issued.host == host, issued.expires > now() else { return true }
+        return false
+    }
+
     private func business(_ request: URLRequest, path: String, _ object: JSONObject) throws -> (Int, [String: String], Data) {
         let refusal: (Int, [String: String], Data)? = state.withLock { state in
-            let bearer = request.value(forHTTPHeaderField: "Authorization") ?? ""
-            let jwt = bearer.hasPrefix("Bearer ") ? String(bearer.dropFirst(7)) : ""
-            guard !state.revoked, let account = state.account, request.value(forHTTPHeaderField: "accessToken") == account.accessToken,
-                  let issued = state.jwts[jwt], issued.host == .mosyle, issued.expires > now() else {
-                return (401, [:], Self.json(["error": .string("Unauthorized")]))
-            }
+            if refuses(request, on: .mosyle, state) { return (401, [:], Self.json(["error": .string("Unauthorized")])) }
             if state.expireOnce {
                 state.expireOnce = false
                 state.jwts = [:]
