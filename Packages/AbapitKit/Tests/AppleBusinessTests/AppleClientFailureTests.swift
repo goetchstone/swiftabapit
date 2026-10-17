@@ -4,6 +4,7 @@ import CryptoKit
 import Foundation
 import HTTPCore
 import JSONAPI
+import Security
 import Testing
 import TestSupport
 import Vault
@@ -117,6 +118,17 @@ struct AppleClientFailureTests {
         #expect(results.first { $0.section == .apps }?.status == "error 404")
     }
 
+    /// Phase 1b verifier round 1: a 2xx list page that wasn't a list (`{}`, one object) was read as an empty page, so as
+    /// "none", and a probe answered `{}` read "ok". Both are malformed now, and the next read is whole.
+    @Test func aListPageThatIsntAListIsMalformedNotNone() async throws {
+        let harness = try await Harness(devices: 1)
+        harness.stub.queue(200, for: "/v1/orgDevices", body: "{}")
+        await #expect(throws: AppleAPIError.malformed("a page of /v1/orgDevices")) { _ = try await harness.allDevices() }
+        harness.stub.queue(200, for: "/v1/users", body: #"{"data":{"type":"users","id":"U1"}}"#)
+        #expect(await harness.client.probeReads().first { $0.section == .users }?.status == "error malformed")
+        #expect(try await harness.allDevices().count == 1)
+    }
+
     /// Review M6: pages past the first follow Apple's cursor-only next link at the size the first page asked for.
     @Test func laterPagesKeepTheirSize() async throws {
         let harness = try await Harness(devices: 2_100)
@@ -128,6 +140,32 @@ struct AppleClientFailureTests {
         var services = 0
         for try await page in harness.client.services() { services += page.items.count }
         #expect(services == 1_001)
+    }
+
+    /// Phase 1b review (mutant "broker: VaultError not mapped"): a Keychain refusal while signing the assertion
+    /// reaches the client as `.vault` carrying the Vault's guidance, nothing goes to Apple, and the failure isn't kept.
+    @Test(arguments: [errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed, errSecMissingEntitlement, errSecNotAvailable])
+    func aKeychainRefusalWhileSigningIsTheVaultsGuidance(status: OSStatus) async throws {
+        let harness = try await Harness(devices: 1)
+        harness.store.failNext(.sign, with: status)
+        await #expect(throws: AppleAPIError.vault(VaultError.keychain(status).guidance)) { _ = try await harness.client.device("TESTD0000000") }
+        #expect(harness.stub.requests.isEmpty, "no assertion, so no token request and no read")
+        _ = try await harness.client.device("TESTD0000000")
+        #expect(harness.stub.mints == 1)
+        if status == errSecUserCanceled {
+            #expect(AppleAPIError.vault(VaultError.keychain(status).guidance).message.contains("Touch ID"))
+        }
+    }
+
+    /// No key stored for the org: the Vault's "add it in Settings", not an opaque failure.
+    @Test func aMissingKeyIsTheVaultsGuidance() async throws {
+        let harness = try await Harness(devices: 1)
+        let broker = TokenBroker(account: .init(org: "acme", scope: .business, clientID: Harness.clientID, keyID: Harness.keyID, teamID: ""),
+                                 vault: Vault(store: MemoryStore()), http: HTTPClient(transport: harness.stub, limiter: RateLimiter(sleep: { _ in })))
+        let item = try #require(VaultItem(org: "acme", kind: .appleKey))
+        await #expect(throws: AppleAPIError.vault(VaultError.missing(item).guidance)) { _ = try await broker.headers(for: .appleBusiness) }
+        #expect(AppleAPIError.vault(VaultError.missing(item).guidance).message.contains("Settings"))
+        #expect(harness.stub.requests.isEmpty)
     }
 }
 

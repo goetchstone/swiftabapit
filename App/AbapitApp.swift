@@ -1,4 +1,5 @@
 import AppKit
+import AppModels
 import Reports
 import SwiftUI
 

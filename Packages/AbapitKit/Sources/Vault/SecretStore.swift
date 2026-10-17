@@ -31,10 +31,16 @@ package protocol SecretStore: Sendable {
     func endSession()
 }
 
+#if DEBUG
 /// An in-memory store for tests and the demo org. A failure can be queued per operation with the exact
 /// `OSStatus` the Keychain returns, so callers are tested against real failures, not just absence:
 /// -25300 not found, -128 cancelled, -25293 auth failed, -25308 interaction not allowed (also a locked
 /// Mac), -34018 missing entitlement (plan §6.3).
+///
+/// Debug builds only (invariant 3: a Release app keeps keys in the Keychain). Public and in every build, it was
+/// picked unnamed: `Vault(store: .init(), now: …)` resolves to the one initializer that takes `now:`, this
+/// store's, and a Release app built from it kept the org's key in memory past every scan and the gate (Phase 1b
+/// gates verifier round 1). Compiled out, that is a compile error in Release.
 public final class MemoryStore: SecretStore {
     public enum Operation: Sendable, Hashable { case read, write, storeKey, sign, delete, inventory }
 
@@ -44,7 +50,10 @@ public final class MemoryStore: SecretStore {
         var failures: [Operation: (status: OSStatus, skipping: Int)] = [:]
         var uses = 0
         var sessionsEnded = 0
+        var keyHold = KeyHold()
     }
+
+    private struct KeyHold { var armed = false, released = false, waiting = 0 }
 
     private let state = Mutex(State())
 
@@ -54,6 +63,14 @@ public final class MemoryStore: SecretStore {
     public func failNext(_ operation: Operation, with status: OSStatus, skipping: Int = 0) {
         state.withLock { $0.failures[operation] = (status, skipping) }
     }
+
+    /// The next `storeKey` waits, off the caller's thread as a Keychain call runs, until `releaseKeyHold()`: a test then
+    /// acts inside a save's Keychain window rather than racing it. It lives here, not in a wrapper store, because the
+    /// screen models' tests sit in another package and see only this public API (Phase 1b review).
+    public func holdNextKey() { state.withLock { $0.keyHold = KeyHold(armed: true) } }
+    public func releaseKeyHold() { state.withLock { $0.keyHold.released = true } }
+    /// Key writes waiting at the hold now.
+    public var keysWaiting: Int { state.withLock { $0.keyHold.waiting } }
 
     /// Reads and signatures so far: what a session would have prompted for.
     public var useCount: Int { state.withLock { $0.uses } }
@@ -94,6 +111,15 @@ public final class MemoryStore: SecretStore {
     }
 
     package func storeKey(_ key: P256.Signing.PrivateKey, as item: VaultItem) throws {
+        let held = state.withLock { state in
+            defer { state.keyHold.armed = false }
+            if state.keyHold.armed { state.keyHold.waiting += 1 }
+            return state.keyHold.armed
+        }
+        if held {
+            while !state.withLock({ $0.keyHold.released }) { usleep(500) }
+            state.withLock { $0.keyHold.waiting -= 1 }
+        }
         try state.withLock { state in
             try check(.storeKey, in: &state)
             state.keys[item] = key
@@ -132,3 +158,4 @@ public final class MemoryStore: SecretStore {
         state.withLock { $0.sessionsEnded += 1 }
     }
 }
+#endif

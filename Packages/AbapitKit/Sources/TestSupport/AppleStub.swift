@@ -55,9 +55,9 @@ public final class AppleStub: Transport, Sendable {
         var coverage: [String: [Resource]] = [:]
         var locks: [String: Resource] = [:]
         var forbiddenPaths: Set<String> = []
-        var queued: [(path: String, status: Int, headers: [String: String])] = []
+        var queued: [(path: String, status: Int, headers: [String: String], body: Data?)] = []
         var unauthorizedOnce = false
-        var tokenFailures: [Int] = []
+        var tokenFailures: [(status: Int, error: String?)] = []
         var requests: [String] = []
         var mints = 0
         var alwaysUnauthorized = false
@@ -88,14 +88,18 @@ public final class AppleStub: Transport, Sendable {
     }
     /// Every request under `path` answers 403, as a role without that permission gets.
     public func forbid(_ path: String) { state.withLock { _ = $0.forbiddenPaths.insert(path) } }
-    /// The next request under `path` answers `status` (429 with `Retry-After` in `headers`, 500, …).
-    public func queue(_ status: Int, for path: String, headers: [String: String] = [:]) {
-        state.withLock { $0.queued.append((path, status, headers)) }
+    /// The next request under `path` answers `status` (429 with `Retry-After` in `headers`, 500, …) with Apple's
+    /// `ErrorResponse`, or with `body` as given: a 200 that isn't the documented shape (`{}`, one object for a list),
+    /// bytes that aren't JSON, an `ErrorResponse` whose `code` or `source.parameter` is prose or an identifier. `path`
+    /// may go on into the query (`/v1/orgDevices?cursor=`) to fail a later page and not the first. The client handles
+    /// each of these, so the stub has to be able to send them (invariant 5; Phase 1b verifier round 1).
+    public func queue(_ status: Int, for path: String, headers: [String: String] = [:], body: String? = nil) {
+        state.withLock { $0.queued.append((path, status, headers, body.map { Data($0.utf8) })) }
     }
     /// The next resource request answers 401, once: a token that expired early.
     public func expireTokensOnce() { state.withLock { $0.unauthorizedOnce = true } }
-    /// The next token request answers `status` (429, 500).
-    public func failNextToken(_ status: Int) { state.withLock { $0.tokenFailures.append(status) } }
+    /// The next token request answers `status` (429, 500), with `error` as its OAuth `error` when given.
+    public func failNextToken(_ status: Int, error: String? = nil) { state.withLock { $0.tokenFailures.append((status, error)) } }
     /// Every resource request answers 401, as an account whose key was revoked: a fresh token doesn't help.
     public func revokeAccount() { state.withLock { $0.alwaysUnauthorized = true } }
     /// The next `count` requests fail before reaching "Apple" (offline, a reset connection).
@@ -142,7 +146,7 @@ public final class AppleStub: Transport, Sendable {
 
     private func token(_ request: URLRequest) -> (Int, [String: String], Data) {
         if let failure = state.withLock({ $0.tokenFailures.isEmpty ? nil : $0.tokenFailures.removeFirst() }) {
-            return (failure, [:], Self.json(["error": .string(failure == 429 ? "rate_limited" : "server_error")]))
+            return (failure.status, [:], Self.json(["error": .string(failure.error ?? (failure.status == 429 ? "rate_limited" : "server_error"))]))
         }
         let invalid = (400, [String: String](), Self.json(["error": .string("invalid_client")]))
         guard request.url?.query == nil, request.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded",
@@ -199,11 +203,13 @@ public final class AppleStub: Transport, Sendable {
             return token.scope == scope && token.expires > now()
         }
         guard valid else { return Self.error(401, "NOT_AUTHORIZED", "Unauthorized", "Authentication credentials are missing or invalid.") }
-        if let queued = state.withLock({ state -> (Int, [String: String])? in
-            guard let index = state.queued.firstIndex(where: { path.hasPrefix($0.path) }) else { return nil }
+        let target = path + (url.query(percentEncoded: true).map { "?\($0)" } ?? "")
+        if let queued = state.withLock({ state -> (Int, [String: String], Data?)? in
+            guard let index = state.queued.firstIndex(where: { target.hasPrefix($0.path) }) else { return nil }
             let item = state.queued.remove(at: index)
-            return (item.status, item.headers)
+            return (item.status, item.headers, item.body)
         }) {
+            if let body = queued.2 { return (queued.0, queued.1, body) }
             let (status, headers, body) = Self.error(queued.0, "QUEUED", "Queued failure", "A failure the test queued.")
             return (status, queued.1.merging(headers) { a, _ in a }, body)
         }

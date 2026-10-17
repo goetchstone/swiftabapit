@@ -3,6 +3,8 @@
 // `package`-access symbol (the `WriteTicket`, `HTTPCore.send(_:ticket:)`, `Secret.bytes`, the read
 // builders) is invisible to views and App Intents by construction (plan §3.2, L9).
 //
+// The screen models live in Packages/AbapitApp, outside this package as the app is (Phase 1b review).
+//
 // The dependency edges below are the whole graph: `PackageGraphTests` parses this file and fails on any
 // edge not in its list. The pure modules (JSONAPI, AppleModels, MosyleModels, Wire, Planners, Reports,
 // ProfileSchema) import only Foundation, so they build on Linux for the fuzz job. Zero third-party

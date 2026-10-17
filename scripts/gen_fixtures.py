@@ -12,6 +12,12 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
   - serials: uppercase ASCII letters only (Python's str.upper() follows its Unicode version; a serial is
     ASCII, and a non-ASCII token matches no device either way);
   - csv: a dict or nested list cell is JSON (sorted keys), not Python's repr;
+  - csv: the formula guard also catches a scalar whose compatibility form starts with a trigger (the
+    full-width, small and super/subscript forms) or U+2212, and a trigger after leading invisible scalars
+    (scripts/check_text.py's set, which covers Python's whitespace), which abapit let through (Phase 1b
+    review, LOW; verifier round 1);
+  - device_stats: a breakdown counts names as shown (`str` of the value): Python's Counter merges `True`
+    with `1` and keeps `"5"` apart from `5`, two rows the dashboard can't tell apart (verifier round 1);
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
   - mosyle adapt_device: an allowlist (defect 1, invariant 11): what abapit makes of the raw cut to the columns
     the list asks for, so no raw key is passed through (`activation_bypass*`, or a raw `serialNumber`); a serial
@@ -319,6 +325,89 @@ def audit_events(rng: random.Random, count: int) -> list[dict]:
     return events
 
 
+def stats_edges() -> list[list[dict]]:
+    """Hand-written device_stats fleets for what the drawn ones never reach (Phase 1b review, LOW): more than
+    ten models, values Python's `or "Unknown"` reads (null, numbers, booleans), a month read in a timestamp's
+    own offset across a month boundary, and the exact 30- and 90-day boundaries. Then (verifier round 1)
+    whitespace-only names, which Python keeps, and NFC and NFD spellings of one name, which Counter counts
+    apart; and the one deviating fleet, where Python's Counter merges `True` with `1` and `1.0`, and keeps `"5"`
+    apart from `5` (see `shown`). Then (verifier round 2) `-0.0`, falsy as every zero is. Literals only, so the
+    drawn cases don't move."""
+    def dev(index: int, **attrs) -> dict:
+        serial = f"TESTSTAT{index:04d}"
+        return {"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial, **attrs}}
+
+    # Thirteen models, ties across the tenth place: the cap, then first-seen order among equals.
+    counts = [7, 6, 5, 5, 4, 3, 3, 2, 2, 2, 2, 1, 1]
+    models, left = [], list(counts)
+    while any(left):
+        for k, n in enumerate(left):
+            if n:
+                models.append(f"Model {k + 1:02d}")
+                left[k] -= 1
+    top = [dev(i, deviceModel=name, productFamily=FAMILIES[i % len(FAMILIES)], status="ASSIGNED")
+           for i, name in enumerate(models)]
+
+    odd = [None, True, False, 0, 0.0, 5, 2.5, -1, "0", "", "Mac", "False"]
+    unknown = [dev(i, productFamily=odd[i % len(odd)], status=odd[(i + 3) % len(odd)],
+                   deviceModel=odd[(i + 7) % len(odd)]) for i in range(2 * len(odd))] + [dev(99)]
+
+    # The month is the one the timestamp was written in. Each stamp below falls in another month in UTC, and
+    # unevenly, so a UTC reading changes the counts; two leave the 12-month window in one reading only.
+    offsets = [("2026-09-30T23:30:00-05:00", 3), ("2025-12-31T23:00:00-02:00", 2), ("2026-08-01T02:00:00+05:30", 1),
+               ("2025-11-01T00:30:00+01:00", 1), ("2025-10-31T22:00:00-03:00", 2), ("2026-11-01T00:30:00+14:00", 1)]
+    months = [dev(100 + i, addedToOrgDateTime=stamp, deviceModel="Mac mini (M4)", productFamily="Mac", status="UNASSIGNED")
+              for i, stamp in enumerate(stamp for stamp, n in offsets for _ in range(n))]
+
+    def ago(days: int, delta: timedelta = timedelta(0), hours: int = 0) -> str:
+        return (FIXED_NOW - timedelta(days=days) + delta).astimezone(timezone(timedelta(hours=hours))).isoformat()
+
+    edges = [ago(30), ago(30, hours=2), ago(30, timedelta(seconds=-1)), ago(30, timedelta(microseconds=-1)),
+             ago(30, timedelta(microseconds=1)), ago(90), ago(90, hours=-7), ago(90, timedelta(seconds=-1)),
+             ago(0), ago(-1)]
+    edges = [stamp.replace("+00:00", "Z") if i % 2 == 0 else stamp for i, stamp in enumerate(edges)]
+    boundary = [dev(200 + i, addedToOrgDateTime=stamp, deviceModel="iPhone 16", productFamily="iPhone", status="ASSIGNED")
+                for i, stamp in enumerate(edges)]
+    blank_or_nfd = [("Caf\u00e9", " ", "\u3000"), ("Cafe\u0301", " ", "ASSIGNED"), ("Caf\u00e9", "\t", "e\u0301"),
+                    (" ", "Mac", "\u00e9"), ("\u00a0", "Mac", "\u00e9"), (" ", "Mac", "e\u0301")]
+    names = [dev(300 + i, deviceModel=model, productFamily=family, status=status)
+             for i, (model, family, status) in enumerate(blank_or_nfd)]
+    merged = [(True, "5", 2.5), (1, 5, "2.5"), (True, 5, 2.5), ("True", "5", None), (1.0, "5", 0)]
+    quirks = [dev(400 + i, productFamily=family, status=status, deviceModel=model)
+              for i, (family, status, model) in enumerate(merged)]
+    # Verifier round 2: -0.0 is falsy too, so Unknown (a text test for "0" and "0.0" kept it as a name).
+    zeros = [dev(500 + i, productFamily=family, status=status, deviceModel=model)
+             for i, (family, status, model) in enumerate([(-0.0, "ASSIGNED", -0.0), ("Mac", -0.0, "Mac mini (M4)"),
+                                                           (-0.0, 0.0, 0), ("Mac", "ASSIGNED", "Mac mini (M4)")])]
+    return [top, unknown, months, boundary, top + unknown + months + boundary, names, quirks, zeros]
+
+
+STAT_FIELDS = ("productFamily", "status", "deviceModel")
+
+
+def shown(devices: list[dict]) -> list[dict]:
+    """The fleet with each breakdown value as the dashboard shows it, `str(value)` (a falsy one stays, for
+    `or "Unknown"`): the corrected device_stats counts names. abapit's Counter keys by value, so `True`, `1`
+    and `1.0` are one row and `"5"` and `5` two rows named alike (a listed deviation, verifier round 1)."""
+    out = copy.deepcopy(devices)
+    for device in out:
+        attributes = device.get("attributes", {})
+        for field in STAT_FIELDS:
+            value = attributes.get(field)
+            if value and not isinstance(value, str):
+                attributes[field] = str(value)
+    return out
+
+
+def named(result: dict) -> dict:
+    """A device_stats outcome with each tally's name as `str` shows it: what the dashboard displays."""
+    out = copy.deepcopy(result)
+    for key in ("by_family", "by_status", "top_models"):
+        if "ok" in out:
+            out["ok"][key] = [[name if isinstance(name, str) else str(name), count] for name, count in out["ok"][key]]
+    return out
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
@@ -331,6 +420,14 @@ def gen_reports(m: dict) -> None:
     for _ in range(25):
         devices = fleet(rng, 0, 40)
         add("device_stats", {"devices": devices}, lambda: reports.device_stats(devices))
+    for devices in stats_edges():
+        add("device_stats", {"devices": devices}, lambda: reports.device_stats(devices))
+        corrected = outcome(lambda: reports.device_stats(shown(devices)))
+        if "ok" not in cases[-1]["expected"] or "ok" not in corrected:
+            raise SystemExit(f"device_stats refused a hand-written case: {cases[-1]['expected']}")
+        # Only a fleet whose rows read differently deviates; the others keep abapit's output byte for byte.
+        if named(cases[-1]["expected"]) != corrected:
+            cases[-1]["abapit"], cases[-1]["expected"] = cases[-1]["expected"], corrected
     for _ in range(20):
         devices = fleet(rng, 0, 20)
         svcs = servers(rng, rng.randint(0, 3))
@@ -338,6 +435,24 @@ def gen_reports(m: dict) -> None:
                    for s in svcs}
         add("assignment_summary", {"devices": devices, "servers": svcs, "server_device_ids": mapping},
             lambda: reports.assignment_summary(devices, svcs, mapping))
+    # Hand-written, drawing nothing (verifier round 1): serials are sets by code point, so NFC and NFD spellings
+    # of one serial are two devices, and a service listing one twice counts it once.
+    nfc, nfd = "C02\u00c9X", "C02E\u0301X"
+    devices = [{"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial}} for serial in (nfc, nfd, "", "TEST1")]
+    svcs = [{"type": "mdmServers", "id": "SVC1", "attributes": {"serverName": "Mosyle"}},
+            {"type": "mdmServers", "id": "SVC2", "attributes": {"serverName": "Jamf"}}]
+    mapping = {"SVC1": [nfd, nfd, "TEST1"], "SVC2": [nfd, "GONE1"]}
+    add("assignment_summary", {"devices": devices, "servers": svcs, "server_device_ids": mapping},
+        lambda: reports.assignment_summary(devices, svcs, mapping))
+    # Verifier round 2: one service lists both spellings of a serial (two devices to Python's set), and the
+    # unassigned ones sort by code point, which puts an ASCII serial between an NFD and an NFC spelling.
+    nfc_n, nfd_n = "C02\u00d1Y", "C02N\u0303Y"
+    devices2 = [{"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial}}
+                for serial in (nfc, "C02F", nfd, nfc_n, nfd_n, "TEST3")]
+    svcs2 = [{"type": "mdmServers", "id": "SVC3", "attributes": {"serverName": "Mosyle"}}]
+    mapping2 = {"SVC3": [nfc_n, nfd_n, nfc_n, "TEST3"]}
+    add("assignment_summary", {"devices": devices2, "servers": svcs2, "server_device_ids": mapping2},
+        lambda: reports.assignment_summary(devices2, svcs2, mapping2))
     for _ in range(20):
         devices = fleet(rng, 0, 20)
         care = applecare(rng, devices) + applecare(rng, fleet(rng, 0, 3))
@@ -405,19 +520,71 @@ def gen_reports(m: dict) -> None:
 
 # -- CSV -------------------------------------------------------------------------------------------
 
+def json_cell(value) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
 def corrected_cell(value) -> str:
-    """abapit's _cell, with JSON for containers instead of Python's repr."""
+    """abapit's _cell, with JSON for containers instead of Python's repr: a dict, and a dict or a list inside a
+    list (verifier round 1: this joined an inner list with "; " where Swift, and the docstring, said JSON)."""
     if value is None:
         return ""
     if isinstance(value, dict):
-        return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return json_cell(value)
     if isinstance(value, list):
-        return "; ".join(corrected_cell(v) if isinstance(v, (dict, list)) else str(v) for v in value)
+        return "; ".join(json_cell(v) if isinstance(v, (dict, list)) else str(v) for v in value)
     return str(value)
 
 
-def corrected_csv(m: dict, items: list[dict]) -> str:
-    reports = m["reports"]
+def load_check_text():
+    """scripts/check_text.py, whose `invisible` is the repo's one definition of a character a reader can't see."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_text", ROOT / "scripts" / "check_text.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+CHECK_TEXT = load_check_text()
+
+
+def csv_trigger(char: str) -> bool:
+    """abapit's triggers (=+-@) and U+2212 MINUS SIGN, or a character whose compatibility form starts with one
+    (the full-width, small, super- and subscript forms)."""
+    return unicodedata.normalize("NFKC", char)[:1] in ("=", "+", "-", "@", "\u2212")
+
+
+def csv_blank(char: str) -> bool:
+    """What may stand before a trigger unseen: whatever check_text.py calls invisible (Cc, Cf, Zs, Zl, Zp,
+    default-ignorable, U+2800), and the space, tab, CR and LF it allows. Python's whitespace is a subset."""
+    return char in " \t\r\n" or CHECK_TEXT.invisible(char)
+
+
+def code_points(test) -> list[int]:
+    return [c for c in range(0x110000) if not 0xD800 <= c <= 0xDFFF and test(chr(c))]
+
+
+def ranges(points: list[int]) -> list[list[int]]:
+    """Code points as [first, last] runs, so the golden can list a set of thousands."""
+    runs: list[list[int]] = []
+    for point in points:
+        if runs and runs[-1][1] == point - 1:
+            runs[-1][1] = point
+        else:
+            runs.append([point, point])
+    return runs
+
+
+def corrected_safe(value: str) -> str:
+    """abapit's _csv_safe (a tab or CR first, or a trigger first), extended (a listed deviation): a cell whose
+    first visible character is a trigger, or reads as one, is guarded too."""
+    if value and value[0] in "\t\r":
+        return "'" + value
+    lead = next((char for char in value if not csv_blank(char)), "")
+    return "'" + value if lead and csv_trigger(lead) else value
+
+
+def corrected_csv(items: list[dict], abapit_safe) -> str:
     columns: list[str] = []
     for item in items:
         for key in item.get("attributes", {}):
@@ -425,11 +592,83 @@ def corrected_csv(m: dict, items: list[dict]) -> str:
                 columns.append(key)
     rows = [["id"] + columns] + [[item.get("id", "")] + [corrected_cell(item.get("attributes", {}).get(c)) for c in columns]
                                  for item in items]
+    for cell in (cell for row in rows for cell in row):
+        if abapit_safe(cell) != cell and corrected_safe(cell) != abapit_safe(cell):
+            raise SystemExit(f"the corrected guard dropped abapit's own rule for {cell!r}")
+    rows = [[corrected_safe(cell) for cell in row] for row in rows]
     import csv as pycsv
     buffer = io.StringIO()
-    writer = pycsv.writer(buffer)
-    writer.writerows([[reports._csv_safe(cell) for cell in row] for row in rows])
-    return buffer.getvalue()
+    pycsv.writer(buffer).writerows(rows)
+    text = buffer.getvalue()
+    # Read back as a spreadsheet's importer would: every cell intact (none split, none joined), and none whose
+    # first visible character is a trigger. The Phase 1b review's H1 rows read back as an extra `=2+5` cell.
+    read = list(pycsv.reader(io.StringIO(text, newline="")))
+    if read != rows:
+        raise SystemExit(f"csv round trip changed the cells: {rows!r} -> {read!r}")
+    for cell in (cell for row in read for cell in row):
+        lead = next((char for char in cell if not csv_blank(char)), "")
+        if lead and csv_trigger(lead):
+            raise SystemExit(f"csv cell reads as a formula: {cell!r}")
+    return text
+
+
+def csv_edges() -> list[list[dict]]:
+    """Hand-written CSV cases (Phase 1b review H1 and LOW), after the drawn ones so those don't move."""
+    def item(id_: str, attrs: dict) -> dict:
+        return {"type": "orgDevices", "id": id_, "attributes": attrs}
+
+    marks = ["\u0301", "\u20dd", "\ufe0f"]   # a combining acute, an enclosing circle, an emoji presentation selector
+    return [
+        # H1: a quote then a combining mark is one Character in Swift but still a quote to Python's csv. The
+        # Character-level replace left it single, the field closed early, and the rest was a new, unguarded cell.
+        [item("C02X", {"serverName": 'Mosyle"\u0301,=HYPERLINK("https://example.com/x","x")'})],
+        [item("C02X", {"notes": 'x"\u0301,=2+5,"\u0301'})],
+        [item("TEST1", {f"k{i}": f'a"{mark},b' for i, mark in enumerate(marks)} | {"lone": '"\u0301'})],
+        [item('"\u0301,=1', {'"\u20dd,=cmd': "x", "plain": "y"})],
+        # CR LF is one Character in Swift: a field holding it is still quoted, and one starting with it guarded
+        # (abapit's own rule, a CR first). So is a trigger carrying a combining mark.
+        [item("TEST1", {"notes": "crlf\r\nfield", "lead": "\r\n=1", "mark": "=\u0301x", "plus": "+\u20dd1"}),
+         item("\r\nid", {"notes": "\r\n", "lead": "a\r\n=1"})],
+        # The extended guard (a listed deviation): full-width triggers, and triggers after leading blanks.
+        [item("TEST1", {"fw_eq": "\uff1d1+1", "fw_plus": "\uff0bx", "fw_minus": "\uff0d1", "fw_at": "\uff20cmd"}),
+         item("TEST2", {"fw_eq": " \uff1d1", "fw_plus": "\u3000\uff0b1", "fw_minus": "x\uff0d1", "fw_at": "\uff20"})],
+        [item("TEST1", {"space": " =1", "nbsp": "\u00a0=1", "em": "\u2003-1", "ideographic": "\u3000+1",
+                        "bom": "\ufeff=1", "zwsp": "\u200b=1", "lrm": "\u200e@x", "joiner": "\u2060=1",
+                        "lf": "\n=1", "tab_space": "\t =1", "mixed": "\r\n\u200b =1", "list": [" =1", "x"]})],
+        [item(" =id", {" =key": "\u200bplain", "\u00a0@key": "\n plain", "lead": " lead"})],
+        # Columns and JSON keys by code point: NFC and NFD spellings are two keys, as in Python.
+        [item("TEST1", {"\u00e9": "nfc", "e\u0301": "nfd", "meta": {"\u00e9": 1, "e\u0301": 2}}),
+         item("TEST2", {"e\u0301": "nfd only"})],
+        # Verifier round 1. The wider guard: a trigger after any invisible lead (controls, separators,
+        # default-ignorables, U+2800), and look-alike triggers. A leading combining mark shows, so isn't skipped.
+        [item("TEST1", {"vt": "\u000b=1", "ff": "\u000c+1", "fs": "\u001c-1", "us": "\u001f@x", "nel": "\u0085=1",
+                        "ls": "\u2028=1", "ps": "\u2029+1", "nul": "\u0000=1", "soh": "\u0001=1",
+                        "filler": "\u3164=1", "jungseong": "\u1160=1", "halfwidth": "\uffa0=1", "braille": "\u2800=1",
+                        "cgj": "\u034f=1", "vs16": "\ufe0f=1", "mark": "\u0301=1"}),
+         item("TEST2", {"vt": "\u000bplain", "ls": "\u2028 plain", "filler": "\u3164plain"})],
+        [item("TEST1", {"small_eq": "\ufe66" + "1+1", "small_plus": "\ufe62" + "1", "small_minus": "\ufe63" + "1",
+                        "small_at": "\ufe6b" + "x", "minus": "\u2212" + "1", "sup_plus": "\u207a" + "1",
+                        "sub_eq": "\u208c" + "1", "sup_minus": "\u207b" + "1", "eqeq": "\u2a75" + "1",
+                        "hebrew_plus": "\ufb29" + "1", "nbsp_minus": "\u00a0\u2212" + "1"}),
+         # Not triggers: a hyphen, a heavy minus, a modifier minus, a plus-minus, a sign not first.
+         item("TEST2", {"small_eq": "\u2010" + "1", "small_plus": "\u2796" + "1", "small_minus": "\u02d7" + "1",
+                        "small_at": "\u00b1" + "1", "minus": "x\u2212" + "1"})],
+        # A row of empty fields: one is `""`, two or more are commas only (Python 3.12's csv).
+        [item("", {"a": None}), item("", {})],
+        [item("", {"a": "", "b": None, "c": ""})],
+        [item("", {})],
+        # JSON keys sort by code point: U+FF5E before U+1F600 (UTF-16 order puts the surrogate pair first).
+        [item("TEST1", {"meta": {"\U0001f600": 1, "\uff5e": 2, "\ue000": 3, "z": 4}})],
+        # A list inside a list is JSON, as a dict inside a list is.
+        [item("TEST1", {"tags": [["a", "b"], "y"], "empty": [[]], "deep": [[["x"], {"k": [1, None]}], None, True, 2.5],
+                        "flat": ["a", None, False, 0]})],
+        # Verifier round 2. A blank (Cf) that is also a Prepend character joins the trigger after it into one
+        # Swift Character, so the guard must find its lead by scalar: U+0600, U+06DD, U+070F, U+0890, U+110BD.
+        [item("\u06dd=id", {"\u0600=key": "\u0600=1", "end_of_ayah": "\u06dd+1", "syriac": "\u070f-1",
+                             "pound": "\u0890=1", "kaithi": "\U000110bd@x", "plain": "\u0600" + "1"})],
+        # A JSON key is escaped as a JSON string is: a quote, a backslash and the C0 controls, and nothing else.
+        [item("TEST1", {"meta": {'a"b\\c\u0001': 1, "tab\tnl\n": 2, "\u007f\u2028": 3, "\u00e9": [{'"': None}]}})],
+    ]
 
 
 def gen_csv(m: dict) -> None:
@@ -459,13 +698,20 @@ def gen_csv(m: dict) -> None:
                 else:
                     attrs[key] = [{"id": "x", "n": 1}, "y"]
             items.append({"type": "orgDevices", "id": rng.choice(["", "TEST1", "=id", f"TEST{i}"]), "attributes": attrs})
-        abapit = m["reports"].items_to_csv(items)
-        expected = corrected_csv(m, items)
-        case = {"input": items, "expected": expected}
-        if abapit != expected:
-            case["abapit"] = abapit
-        cases.append(case)
-    write("csv", {**header(1005), "cases": cases})
+        cases.append(csv_case(m, items))
+    cases += [csv_case(m, items) for items in csv_edges()]
+    # The guard's two sets, for the Swift test to hold `CSV.isBlank` and `CSV.isTrigger` to, scalar by scalar.
+    write("csv", {**header(1005), "blank": ranges(code_points(csv_blank)), "triggers": code_points(csv_trigger),
+                  "cases": cases})
+
+
+def csv_case(m: dict, items: list[dict]) -> dict:
+    abapit = m["reports"].items_to_csv(items)
+    expected = corrected_csv(items, m["reports"]._csv_safe)
+    case = {"input": items, "expected": expected}
+    if abapit != expected:
+        case["abapit"] = abapit
+    return case
 
 
 # -- snapshot diffs --------------------------------------------------------------------------------

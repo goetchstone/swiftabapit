@@ -22,79 +22,206 @@ struct ReportsParityTests {
         #expect(Self.now == Date(timeIntervalSince1970: 1_792_152_000))
     }
 
+    static func items(_ item: JSONObject) -> [CSV.Item] {
+        (item["input"]?.array ?? []).compactMap { value -> CSV.Item? in
+            guard let id = value["id"]?.string else { return nil }
+            return CSV.Item(id: id, attributes: value["attributes"]?.object ?? [:])
+        }
+    }
+
+    /// The writer with abapit's columns (every key, first seen first): the golden's shape. No export takes this
+    /// path; `CSV.text` takes a column list.
     @Test func csvMatchesTheGoldenByteForByte() throws {
         let cases = try Self.cases("csv")
-        #expect(cases.count == 70)
-        for item in cases {
-            let items = (item["input"]?.array ?? []).compactMap { value -> CSV.Item? in
-                guard let id = value["id"]?.string else { return nil }
-                return CSV.Item(id: id, attributes: value["attributes"]?.object ?? [:])
-            }
+        // 70 drawn, then the hand-written ones: the Phase 1b review's H1 payloads, CR LF and combining marks by
+        // scalar, the wider formula guard, NFC and NFD keys; then verifier round 1's: invisible leads and look-alike
+        // triggers, rows of empty fields, JSON keys past the BMP, and a list inside a list; then verifier round 2's:
+        // a blank Prepend scalar before a trigger (one `Character` with it), and JSON keys that need escaping.
+        #expect(cases.count == 88)
+        for (index, item) in cases.enumerated() {
+            let items = Self.items(item)
             let expected = try #require(item["expected"]?.string)
-            #expect(Array(CSV.text(items).utf8) == Array(expected.utf8), "\(expected.debugDescription)")
+            #expect(Array(CSV.write(items, columns: CSV.union(items)).utf8) == Array(expected.utf8), "case \(index): \(expected.debugDescription)")
         }
     }
 
-    /// The deviation: abapit wrote containers as Python's repr. Each deviating case holds a dict or a nested list.
-    @Test func everyCSVDeviationIsAContainerCell() throws {
+    /// abapit's own guard: a tab, a CR or one of its four triggers as the first code point.
+    static func abapitGuards(_ text: String) -> Bool { text.unicodeScalars.first.map { "=+-@\t\r".unicodeScalars.contains($0) } ?? false }
+
+    static func isContainer(_ value: JSONValue) -> Bool {
+        if case .object = value { return true }
+        if case .array(let items) = value { return items.contains { if case .object = $0 { true } else if case .array = $0 { true } else { false } } }
+        return false
+    }
+
+    /// The deviations: abapit wrote containers as Python's repr, and its guard missed look-alike triggers and a
+    /// trigger after invisible leads. Each deviating case holds one of those, and the list doesn't grow unseen.
+    @Test func everyCSVDeviationIsAContainerOrTheWiderGuard() throws {
         let deviating = try Self.cases("csv").filter { $0["abapit"] != nil }
-        #expect(!deviating.isEmpty)
+        #expect(deviating.count == 43)
+        var wider = 0
         for item in deviating {
-            let hasContainer = (item["input"]?.array ?? []).contains { value in
-                (value["attributes"]?.object?.members ?? []).contains { member in
-                    if case .object = member.value { return true }
-                    if case .array(let items) = member.value { return items.contains { if case .object = $0 { true } else if case .array = $0 { true } else { false } } }
-                    return false
-                }
+            let items = Self.items(item)
+            let container = items.contains { $0.attributes.members.contains { Self.isContainer($0.value) } }
+            let cells = items.flatMap { [$0.id] + $0.attributes.keys + $0.attributes.members.map { CSV.cell($0.value) } }
+            let widerGuard = cells.contains { CSV.safe($0) != $0 && !Self.abapitGuards($0) }
+            if widerGuard { wider += 1 }
+            #expect(container || widerGuard)
+        }
+        #expect(wider == 6)
+    }
+
+    /// The guard's sets are the golden's, scalar by scalar: what may lead unseen (check_text.py's invisible, which
+    /// holds Python's whitespace) and what reads as a trigger (verifier round 1). Python and Swift each derive
+    /// theirs from Unicode properties, so a property that moves between their Unicode versions shows here.
+    @Test func theGuardsSetsAreTheGoldens() throws {
+        let golden = try Fixtures.parityValue("csv")
+        var blank: Set<UInt32> = []
+        for run in try #require(golden["blank"]?.array) {
+            let bounds = (run.array ?? []).compactMap(\.int)
+            try #require(bounds.count == 2)
+            blank.formUnion(UInt32(bounds[0])...UInt32(bounds[1]))
+        }
+        let triggers = Set(try #require(golden["triggers"]?.array).compactMap(\.int).map(UInt32.init))
+        #expect(blank.count == 4291)
+        #expect(triggers.count == 22)
+        var wrongBlank: [UInt32] = [], wrongTrigger: [UInt32] = []
+        for value in UInt32(0)..<0x110000 {
+            guard let scalar = Unicode.Scalar(value) else { continue }
+            if CSV.isBlank(scalar) != blank.contains(value) { wrongBlank.append(value) }
+            if CSV.isTrigger(scalar) != triggers.contains(value) { wrongTrigger.append(value) }
+        }
+        #expect(wrongBlank.isEmpty, "\(wrongBlank.prefix(20).map { String($0, radix: 16) })")
+        #expect(wrongTrigger.isEmpty, "\(wrongTrigger.prefix(20).map { String($0, radix: 16) })")
+    }
+
+    /// The wider guard, cell by cell: what abapit guarded is still guarded, and the deviation adds only cells
+    /// whose first visible scalar is a trigger or reads as one.
+    @Test func theFormulaGuardCatchesWhatAbapitDidAndTheListedRest() {
+        for text in ["=1", "+1", "-1", "@x", "\tx", "\rx", "\r\n=1", "=\u{301}x", "\t plain"] {
+            #expect(CSV.safe(text) == "'" + text, "\(text.debugDescription)")
+            #expect(Self.abapitGuards(text), "\(text.debugDescription)")
+        }
+        for text in ["\u{FF1D}1", "\u{FF0B}1", "\u{FF0D}1", "\u{FF20}x", " =1", "\u{A0}=1", "\u{2003}+1", "\u{3000}-1",
+                     "\u{FEFF}=1", "\u{200B}=1", "\u{200E}@x", "\u{2060}=1", "\n=1", "\n \u{200B}\u{FF1D}1",
+                     // Verifier round 1: other controls and separators, default-ignorables and U+2800 as leads;
+                     // small, super- and subscript forms, U+2A75 and U+2212 as triggers.
+                     "\u{0B}=1", "\u{0C}+1", "\u{1C}-1", "\u{85}=1", "\u{2028}=1", "\u{2029}@x", "\u{0}=1", "\u{1}=1",
+                     "\u{3164}=1", "\u{115F}=1", "\u{FFA0}=1", "\u{2800}=1", "\u{34F}=1", "\u{FE0F}=1",
+                     "\u{FE66}1", "\u{FE62}1", "\u{FE63}1", "\u{FE6B}x", "\u{207A}1", "\u{208C}1", "\u{207B}1", "\u{2A75}1",
+                     "\u{2212}1", "\u{A0}\u{2212}1",
+                     // Verifier round 2: a blank Prepend scalar joins the trigger after it into one `Character`.
+                     "\u{600}=1", "\u{6DD}+1", "\u{70F}-1", "\u{890}=1", "\u{8E2}=1", "\u{110BD}@x", "\u{110CD}=1",
+                     " \u{600}=1"] {
+            #expect(CSV.safe(text) == "'" + text, "\(text.debugDescription)")
+            #expect(!Self.abapitGuards(text), "\(text.debugDescription)")
+        }
+        // However many blanks lead (verifier round 3: no cell had more than three, so a scan capped at five
+        // scalars kept every test green). The generator's `corrected_safe` guards each of these too.
+        for count in [5, 6, 40] {
+            for blank in [" ", "\u{200B}", "\u{A0}\u{200B}\t\n \u{3000}\u{FEFF}"] {
+                let lead = String(repeating: blank, count: count)
+                #expect(CSV.safe(lead + "=1") == "'" + lead + "=1", "\(count) x \(blank.debugDescription)")
+                #expect(CSV.safe(lead + "\u{FF0B}1") == "'" + lead + "\u{FF0B}1", "\(count) x \(blank.debugDescription)")
+                #expect(CSV.safe(lead + "plain") == lead + "plain", "\(count) x \(blank.debugDescription)")
             }
-            #expect(hasContainer)
+        }
+        #expect("\u{600}=1".first.map { Array($0.unicodeScalars) } == ["\u{600}", "="])
+        // A combining mark shows (and nothing trims it), a hyphen, a heavy minus and a plus-minus aren't signs.
+        for text in ["", "plain", " lead", "\u{200B}plain", "\n plain", "x=1", "'=1", "\u{301}=1", "\u{20DD}+1",
+                     "\u{2028}plain", "\u{2010}1", "\u{2796}1", "\u{B1}1", "x\u{2212}1"] {
+            #expect(CSV.safe(text) == text, "\(text.debugDescription)")
         }
     }
 
-    @Test func theExportPolicyDropsWhatMustNotLeave() {
-        let items = [CSV.Item(id: "C02X", attributes: ["serialNumber": .string("C02X"), "lastConnectedIp": .string("192.0.2.1"),
-                                                       "activation_bypass": .string("TESTBYPASS"), "accessToken": .string("x")])]
-        let text = CSV.text(items, allowing: ExportPolicy.allowing())
-        #expect(text == "id,serialNumber\r\nC02X,C02X\r\n")
-        #expect(CSV.text(items, allowing: ExportPolicy.allowing(["serialNumber", "lastConnectedIp"], includeNotByDefault: true))
-                == "id,serialNumber,lastConnectedIp\r\nC02X,C02X,192.0.2.1\r\n")
+    /// Quoting by scalar (Phase 1b review H1): a quote followed by a combining mark is still a quote, and a
+    /// CR LF (one `Character`) still forces quotes.
+    @Test func quotesAreDecidedAndDoubledByScalar() {
+        #expect(Array(CSV.quoted("Mosyle\"\u{301},=2+5").unicodeScalars) == Array("\"Mosyle\"\"\u{301},=2+5\"".unicodeScalars))
+        #expect(Array(CSV.quoted("a\r\nb").unicodeScalars) == Array("\"a\r\nb\"".unicodeScalars))
+        #expect(Array(CSV.quoted("\"\u{20DD}").unicodeScalars) == Array("\"\"\"\u{20DD}\"".unicodeScalars))
+        #expect(Array(CSV.quoted("plain\u{301}").unicodeScalars) == Array("plain\u{301}".unicodeScalars))
     }
 
+    /// A Counter key as abapit shows it, Python's `str(key)`: the golden holds a number or a boolean key as JSON
+    /// (`[5, 2]`, `[true, 2]`), and the input's number text is what Python's `json` wrote, so it reads the same.
+    static func pythonName(_ value: JSONValue?) -> String? {
+        switch value {
+        case .string(let text)?: text
+        case .number(let text)?: text
+        case .bool(let flag)?: flag ? "True" : "False"
+        default: nil
+        }
+    }
+
+    /// A breakdown as bytes and counts: `Tally`'s `==` compares names as `String`s, which canonical equivalence
+    /// would let an NFC name pass for an NFD one (verifier round 1).
+    static func bytes(_ tallies: [Tally]) -> [[UInt8]] { tallies.map { Array($0.name.utf8) + [0xFF] + Array(String($0.count).utf8) } }
+
+    /// 25 drawn fleets, then five hand-written ones (Phase 1b review, LOW): thirteen models (the top-10 cap), the
+    /// values `or "Unknown"` reads (null, `0`, `0.0`, `false`, `true`, `5`, `""`, `"0"`), months in the
+    /// timestamp's own offset across a month boundary, and the exact 30- and 90-day boundaries. Then verifier
+    /// round 1's two: whitespace-only names and NFC and NFD spellings of one name, each its own row as in Python;
+    /// and the one listed deviation, rows by the name shown (Python's Counter merges `True`, `1` and `1.0`, and
+    /// keeps `"5"` and `5` as two rows named `5`). Then verifier round 2's: `-0.0`, falsy, so Unknown.
     @Test func deviceStatsMatchTheGolden() throws {
         let cases = try Self.cases("reports", "device_stats")
-        #expect(cases.count == 25)
+        #expect(cases.count == 33)
+        #expect(cases.indices.filter { cases[$0]["abapit"] != nil } == [31])
         let now = Self.now
-        for item in cases {
+        for (index, item) in cases.enumerated() {
             let stats = DeviceStats(Self.resources(item["input"]?["devices"]), now: now)
             let expected = try #require(item["expected"]?["ok"])
-            func tallies(_ key: String) -> [Tally] {
-                (expected[key]?.array ?? []).compactMap { pair in
-                    guard let name = pair.array?.first?.string, let count = pair.array?.last?.int else { return nil }
-                    return Tally(name: name, count: count)
+            func tallies(_ key: String) throws -> [Tally] {
+                try (expected[key]?.array ?? []).map { pair in
+                    Tally(name: try #require(Self.pythonName(pair.array?.first), "case \(index) \(key)"),
+                          count: try #require(pair.array?.last?.int))
                 }
             }
-            #expect(stats.total == expected["total"]?.int)
-            #expect(stats.byFamily == tallies("by_family"))
-            #expect(stats.byStatus == tallies("by_status"))
-            #expect(stats.topModels == tallies("top_models"))
-            #expect(stats.added30 == expected["added_30"]?.int)
-            #expect(stats.added90 == expected["added_90"]?.int)
-            #expect(stats.addedByMonth == tallies("added_by_month"))
-            #expect(stats.monthMax == expected["month_max"]?.int)
-            #expect(stats.familyMax == expected["family_max"]?.int)
+            #expect(stats.total == expected["total"]?.int, "case \(index)")
+            #expect(Self.bytes(stats.byFamily) == Self.bytes(try tallies("by_family")), "case \(index)")
+            #expect(Self.bytes(stats.byStatus) == Self.bytes(try tallies("by_status")), "case \(index)")
+            #expect(Self.bytes(stats.topModels) == Self.bytes(try tallies("top_models")), "case \(index)")
+            #expect(stats.added30 == expected["added_30"]?.int, "case \(index)")
+            #expect(stats.added90 == expected["added_90"]?.int, "case \(index)")
+            #expect(Self.bytes(stats.addedByMonth) == Self.bytes(try tallies("added_by_month")), "case \(index)")
+            #expect(stats.monthMax == expected["month_max"]?.int, "case \(index)")
+            #expect(stats.familyMax == expected["family_max"]?.int, "case \(index)")
+        }
+        // The hand-written fleets reach what the drawn ones don't.
+        let edges = cases.suffix(8).compactMap { $0["expected"]?["ok"] }
+        #expect(edges.contains { ($0["top_models"]?.array?.count ?? 0) == 10 })
+        #expect(edges.contains { ($0["by_status"]?.array ?? []).contains { $0.array?.first?.bool == true } })
+        let names = edges.flatMap { ($0["top_models"]?.array ?? []) + ($0["by_status"]?.array ?? []) }.compactMap { $0.array?.first?.string }
+        #expect(names.contains(" ") && names.contains("\u{3000}"))
+        #expect(names.contains { Array($0.utf8) == Array("Caf\u{E9}".utf8) } && names.contains { Array($0.utf8) == Array("Cafe\u{301}".utf8) })
+    }
+
+    /// Python's truth of a JSON number is its value: any spelling of zero is falsy, so Unknown (verifier round 2:
+    /// a test of the text for `0` and `0.0` kept `-0.0`). The golden can't hold `0e0` or `-0`, which Python's
+    /// `json.dumps` never writes, but Apple's JSON could.
+    @Test func everyZeroIsUnknown() {
+        for text in ["0", "0.0", "-0", "-0.0", "0e0", "0E+00", "-0.000e-5", "0.00"] {
+            #expect(DeviceStats.orUnknown(.number(text)) == "Unknown", "\(text)")
+        }
+        for text in ["1", "-1", "2.5", "1e-300", "-0.001"] {
+            #expect(DeviceStats.orUnknown(.number(text)) == text, "\(text)")
         }
     }
 
     @Test func assignmentSummaryMatchesTheGolden() throws {
         let cases = try Self.cases("reports", "assignment_summary")
-        #expect(cases.count == 20)
+        // 20 drawn, then verifier round 1's NFC and NFD spellings of one serial: two devices, as in Python. Then
+        // verifier round 2's: one service listing both spellings (two of its devices), and unassigned serials whose
+        // code-point order differs from `String`'s (an ASCII serial sorts between the NFD and the NFC one).
+        #expect(cases.count == 22)
         for item in cases {
             let input = try #require(item["input"])
             var ids: [String: [String]] = [:]
             for (key, value) in input["server_device_ids"]?.object ?? [:] { ids[key] = value.array?.compactMap(\.string) ?? [] }
             let summary = AssignmentSummary(devices: Self.resources(input["devices"]), services: Self.resources(input["servers"]), deviceIDs: ids)
             let expected = try #require(item["expected"]?["ok"])
-            #expect(summary.unassigned == (expected["unassigned"]?.array ?? []).compactMap(\.string))
+            #expect(summary.unassigned.map { Array($0.utf8) } == (expected["unassigned"]?.array ?? []).compactMap(\.string).map { Array($0.utf8) })
             #expect(summary.assignedCount == expected["assigned_count"]?.int)
             #expect(summary.perService.map(\.count) == (expected["per_server"]?.array ?? []).compactMap { $0["count"]?.int })
             #expect(summary.perService.map(\.service.id) == (expected["per_server"]?.array ?? []).compactMap { $0["server"]?["id"]?.string })

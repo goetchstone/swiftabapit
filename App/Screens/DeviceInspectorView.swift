@@ -1,4 +1,5 @@
 import AppleModels
+import AppModels
 import JSONAPI
 import SwiftUI
 
@@ -45,7 +46,7 @@ struct DeviceInspectorView: View {
             Section("Activation Lock") {
                 PanelView(model.lock) { lock in
                     LabeledContent("Locked", value: lock.isLocked == true ? "Yes" : lock.isLocked == false ? "No" : "Unknown")
-                    LabeledContent("Held by", value: lock.lockType?.rawValue ?? "—")
+                    LabeledContent("Held by", value: Self.holder(lock.lockType))
                     if lock.blocksRelease {
                         Label("A person's Apple Account holds this lock: the device can't be redeployed or released until they remove it.",
                               systemImage: "exclamationmark.triangle")
@@ -84,6 +85,17 @@ struct DeviceInspectorView: View {
         case .number(let text)?: text
         case .array(let items)?: items.map { text($0) }.joined(separator: ", ")
         case .object?: value!.jsonText
+        }
+    }
+
+    /// Who holds an Activation Lock, in words; a value Apple adds later shows as sent.
+    static func holder(_ type: OpenEnum<LockType>?) -> String {
+        switch type {
+        case .known(.mdm)?: "The organization (MDM)"
+        case .known(.user)?: "A person's Apple Account"
+        case .known(.none)?: "Nobody"
+        case .unknown(let raw)?: raw
+        case nil: "—"
         }
     }
 }
