@@ -32,6 +32,30 @@ struct FindTests {
         #expect(Find.matches("   ", in: Self.fleet).isEmpty)
     }
 
+    /// Every exact hit counts, as abapit's `exact` list does: an order number is every device's in that order, so
+    /// it filters the table rather than opening one of them (verifier round 3: keeping the first exact hit only
+    /// kept every test green, since no fleet had two devices with one identifier).
+    @Test func everyExactHitFilters() {
+        let fleet = [Self.device("C02XA1", order: "O-7"), Self.device("C02XA2", order: "O-7"), Self.device("C02XA3", order: "O-77")]
+        #expect(Find.matches("o-7", in: fleet).map(\.id) == ["C02XA1", "C02XA2"])
+        #expect(Find.matches("o-77", in: fleet).map(\.id) == ["C02XA3"])
+    }
+
+    /// abapit strips the query, never the identifiers (`value.lower() == needle`): an order number with a trailing
+    /// space is not an exact hit, so the substring hits stand. And an empty query finds nothing, even a device
+    /// whose identifier is empty, where abapit goes back to the list (verifier round 3: stripping the values, or
+    /// dropping the empty-query guard, kept every test green).
+    @Test func theIdentifiersAreNotStrippedAndNothingFindsAnEmptyOne() {
+        let fleet = [Self.device("C02XA1", order: "O-1 "), Self.device("C02XA2", order: "O-12")]
+        #expect(Find.matches("O-1", in: fleet).map(\.id) == ["C02XA1", "C02XA2"])
+        #expect(Find.matches("o-1 ", in: fleet).map(\.id) == ["C02XA1", "C02XA2"])
+        let blank = [Self.device("C02XA3", order: "")]
+        #expect(blank[0].identifiers.contains(""))
+        for query in ["", "   ", "\t\n", "\u{3000}"] {
+            #expect(Find.matches(query, in: blank).isEmpty, "\(query.debugDescription)")
+        }
+    }
+
     /// abapit's `q.strip()` trims Python's whitespace, which the serials golden lists. A pasted serial brings a
     /// tab, a line break or a no-break space; each still finds the one device (Phase 1b review: a spaces-only
     /// trim survived every test).
@@ -105,6 +129,21 @@ struct FindTests {
         #expect(lower("-\u{3A3}") == Array("-\u{3C3}".utf8))
         #expect(lower("A\u{3A3}\u{3A3}") == Array("a\u{3C3}\u{3C2}".utf8))
         #expect(lower("C02XA1") == Array("c02xa1".utf8))
+        // Verifier round 3. A mark after the sigma makes one `Character` with it, so the sigma is looked for by
+        // scalar. The nearest scalar counts, not the first. A scalar both cased and case-ignorable (U+02B0,
+        // U+0345) is skipped. Cased is not alphabetic (U+4E2D isn't cased) and takes in titlecase (U+01C5).
+        // Private use is never case-ignorable, whatever Apple's data says of U+F870.
+        #expect(lower("A\u{3A3}\u{301}") == Array("a\u{3C2}\u{301}".utf8))
+        #expect(lower("1A\u{3A3}") == Array("1a\u{3C2}".utf8))
+        #expect(lower("\u{2B0}\u{3A3}") == Array("\u{2B0}\u{3C3}".utf8))
+        #expect(lower("A\u{3A3}\u{2B0}") == Array("a\u{3C2}\u{2B0}".utf8))
+        #expect(lower("A\u{3A3}\u{345}") == Array("a\u{3C2}\u{345}".utf8))
+        #expect(lower("\u{4E2D}\u{3A3}") == Array("\u{4E2D}\u{3C3}".utf8))
+        #expect(lower("A\u{3A3}\u{4E2D}") == Array("a\u{3C2}\u{4E2D}".utf8))
+        #expect(lower("\u{1C5}\u{3A3}") == Array("\u{1C6}\u{3C2}".utf8))
+        #expect(lower("A\u{3A3}\u{1C5}") == Array("a\u{3C3}\u{1C6}".utf8))
+        #expect(lower("A\u{F870}\u{3A3}") == Array("a\u{F870}\u{3C3}".utf8))
+        #expect(lower("A\u{3A3}\u{F870}B") == Array("a\u{3C2}\u{F870}b".utf8))
 
         // Order numbers lower to: a + final, sigma + b, c + period + final, d + sigma + apostrophe + s, e + sigma + e.
         let fleet = [Self.device("C02XS1", order: "A\u{3A3}"), Self.device("C02XS2", order: "\u{3A3}B"),

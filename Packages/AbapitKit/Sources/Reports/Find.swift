@@ -35,8 +35,12 @@ public enum Find {
     /// Python's `str.lower()`, as UTF-8 bytes. That is each scalar's full lowercase mapping, which is what Swift's
     /// `lowercased()` does, except for a capital sigma that ends a word: Python lowers it to the final U+03C2 and
     /// Swift to U+03C3 (verifier round 2: `\u{3A3}` found an order number `A\u{3A3}`, whose Python lower is
-    /// `a\u{3C2}`). A scratch check against Python 3.12 agreed on 25,000 random strings and on every code point
-    /// but the 55 letters Unicode 16 and 17 added, which Python's Unicode 15 doesn't case.
+    /// `a\u{3C2}`). The sigma is looked for by scalar: followed by a combining mark it is one `Character` that
+    /// isn't U+03A3 (verifier round 3).
+    ///
+    /// Checked against Python 3.12 (Unicode 15) on every code point. The mapping agrees but for the 55 letters
+    /// Unicode 16 and 17 added. The sigma rule's two properties agree but for 196: the 194 Python doesn't assign,
+    /// U+0295 (no longer cased) and U+1171E (no longer case-ignorable). Identifiers are ASCII in practice.
     static func lower(_ text: String) -> [UInt8] {
         guard text.unicodeScalars.contains("\u{3A3}") else { return Array(text.lowercased().utf8) }
         let scalars = Array(text.unicodeScalars)
@@ -53,11 +57,20 @@ public enum Find {
     }
 
     /// CPython's `handle_capital_sigma` (Unicode's Final_Sigma): a cased scalar before it and none after it,
-    /// skipping case-ignorable ones (an apostrophe, a period, a combining mark) both ways.
+    /// skipping case-ignorable ones (an apostrophe, a period, a combining mark) both ways. Only the nearest
+    /// scalar that isn't skipped counts on each side, and a scalar that is both, such as U+0345 or U+02B0, is
+    /// skipped (verifier round 3: the tests had neither, nor a titlecase or an uncased letter beside a sigma).
     static func isFinalSigma(_ scalars: [Unicode.Scalar], at index: Int) -> Bool {
-        guard let before = scalars[..<index].last(where: { !$0.properties.isCaseIgnorable }), before.properties.isCased else { return false }
-        guard let after = scalars[(index + 1)...].first(where: { !$0.properties.isCaseIgnorable }) else { return true }
+        guard let before = scalars[..<index].last(where: { !isCaseIgnorable($0) }), before.properties.isCased else { return false }
+        guard let after = scalars[(index + 1)...].first(where: { !isCaseIgnorable($0) }) else { return true }
         return !after.properties.isCased
+    }
+
+    /// Unicode's Case_Ignorable, which never holds for private use. Apple's data says it does for 40 private-use
+    /// scalars between U+F870 and U+F8B8 (Apple's own marks), so `A\u{F870}\u{3A3}` lowered to a final sigma where
+    /// Python, which reads Unicode's data, gives U+03C3 (verifier round 3).
+    static func isCaseIgnorable(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.properties.isCaseIgnorable && scalar.properties.generalCategory != .privateUse
     }
 
     /// `str.strip()`: Python's whitespace off both ends, by scalar.

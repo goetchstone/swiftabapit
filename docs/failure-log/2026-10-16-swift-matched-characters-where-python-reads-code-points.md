@@ -51,3 +51,18 @@
   `csv.json`; `-0.0` and NFC/NFD service cases in `reports.json`; `Find.lower` with CPython's sigma rule;
   `notByDefault` read folded; tests for each. The lesson: grapheme rules have more joiners than combining
   marks (Prepend, ZWJ, regional indicators), so a port that skips or tests "the first thing" says scalar.
+- **Verifier round 3** (two independent verifiers, b3e35d5): the fix held; every finding was low. Most were
+  missing tests. Find kept every test green when it kept only the first exact hit (no fleet had two devices
+  sharing an order number), stripped the identifiers, or dropped its empty-query guard. The formula guard did
+  the same when capped at five scalars (no cell had more than three blanks). Eight sigma-rule mutants
+  survived: looking for the sigma by `Character` (the H1 class again: U+03A3 + U+0301 is one `Character`),
+  the first scalar instead of the nearest, `isAlphabetic` or upper-or-lower for Cased on either side, and a
+  skip that stopped at a scalar both cased and case-ignorable. Two were real differences. Apple's data calls
+  40 private-use scalars case-ignorable, which Unicode and Python don't, so `A\u{F870}\u{3A3}` lowered to a
+  final sigma. And the fold kept modifier letters such as U+02BC, which looks like the `'` it drops. The
+  docs had also said Find agreed with Python on every code point but 55 new letters, which holds for the
+  case mapping only: the sigma rule's two properties also differ on the 194 code points Unicode 15 doesn't
+  assign, on U+0295 and U+1171E, and on Apple's 40. Fixed: `Find.isCaseIgnorable` leaves private use out, and the fold drops the modifier letters
+  NFKD leaves. Each fix and each gap has a test, with Python 3.12's outputs. The lesson: a rule that reads a
+  property needs a test scalar with that property and without its neighbours (cased but case-ignorable,
+  alphabetic but uncased, titlecase), and a differential over every code point before the docs say "agrees".

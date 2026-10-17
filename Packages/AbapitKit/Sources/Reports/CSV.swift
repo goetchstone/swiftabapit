@@ -179,11 +179,15 @@ public enum ExportPolicy {
     /// `token` and `apikey`). Phase 1b review M2: each of those spellings got past the old denylist. Decomposed,
     /// not composed: NFKC made `k` + U+0301 one letter, U+1E31, so `tok\u{301}en` missed `token`; and decomposed
     /// before lowercasing, because a modifier capital has no lowercase of its own (verifier round 1).
+    ///
+    /// Not a modifier letter that is still one once decomposed: those left are mostly apostrophes, primes,
+    /// length marks and the tatweel (U+02BC, U+02B9, U+02D0, U+0640). The fold drops `'`, so it drops U+02BC,
+    /// which looks the same, and `to\u{2BC}ken` reads `token` (verifier round 3: the fold kept them).
     static func fold(_ key: String) -> String {
         let scalars = key.decomposedStringWithCompatibilityMapping.lowercased().unicodeScalars
         return String(String.UnicodeScalarView(scalars.filter { scalar in
             switch scalar.properties.generalCategory {
-            case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
+            case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .otherLetter,
                  .decimalNumber, .letterNumber, .otherNumber: true
             default: false
             }

@@ -116,6 +116,16 @@ struct ReportsParityTests {
             #expect(CSV.safe(text) == "'" + text, "\(text.debugDescription)")
             #expect(!Self.abapitGuards(text), "\(text.debugDescription)")
         }
+        // However many blanks lead (verifier round 3: no cell had more than three, so a scan capped at five
+        // scalars kept every test green). The generator's `corrected_safe` guards each of these too.
+        for count in [5, 6, 40] {
+            for blank in [" ", "\u{200B}", "\u{A0}\u{200B}\t\n \u{3000}\u{FEFF}"] {
+                let lead = String(repeating: blank, count: count)
+                #expect(CSV.safe(lead + "=1") == "'" + lead + "=1", "\(count) x \(blank.debugDescription)")
+                #expect(CSV.safe(lead + "\u{FF0B}1") == "'" + lead + "\u{FF0B}1", "\(count) x \(blank.debugDescription)")
+                #expect(CSV.safe(lead + "plain") == lead + "plain", "\(count) x \(blank.debugDescription)")
+            }
+        }
         #expect("\u{600}=1".first.map { Array($0.unicodeScalars) } == ["\u{600}", "="])
         // A combining mark shows (and nothing trims it), a hyphen, a heavy minus and a plus-minus aren't signs.
         for text in ["", "plain", " lead", "\u{200B}plain", "\n plain", "x=1", "'=1", "\u{301}=1", "\u{20DD}+1",

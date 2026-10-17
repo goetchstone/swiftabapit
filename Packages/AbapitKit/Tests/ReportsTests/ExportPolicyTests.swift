@@ -17,6 +17,9 @@ struct ExportPolicyTests {
         "activation_bypass", "activation_bypass_mdm", "activationLockBypassCode", "accessToken", "client_secret", "Password",
         "unixPasswd", "\u{1D40}\u{1D3C}\u{1D37}\u{1D31}\u{1D3A}", "\u{1D413}\u{1D40E}\u{1D40A}\u{1D404}\u{1D40D}",
         "tok\u{301}en", "tok\u{345}en", "pa\u{301}ssword", "\u{D4E}token",
+        // Verifier round 3: modifier letters that stay modifier letters, a modifier apostrophe, prime and
+        // triangular colon, and the tatweel.
+        "to\u{2BC}ken", "pass\u{2B9}word", "se\u{2D0}cret", "tok\u{640}en",
     ]
 
     static func bytes(_ text: String) -> [UInt8] { Array(text.utf8) }
@@ -82,6 +85,8 @@ struct ExportPolicyTests {
         #expect(Self.bytes(CSV.text(spelled, columns: Self.columns(spellings), includeNotByDefault: true))
                 == Self.bytes((["id"] + spellings).joined(separator: ",") + "\r\nA0,192.0.2.1,192.0.2.1,192.0.2.1,192.0.2.1\r\n"))
         #expect(!ExportPolicy.isNotByDefault("lastConnectedDateTime") && !ExportPolicy.isNotByDefault("connectedIp"))
+        // The attribute named, not every name holding it (verifier round 3: a containment match survived).
+        #expect(!ExportPolicy.isNotByDefault("lastConnectedIpCount") && !ExportPolicy.isNotByDefault("previousLastConnectedIp"))
     }
 
     /// The Devices export: the table's columns first, then every other documented attribute in Apple's order
@@ -118,6 +123,11 @@ struct ExportPolicyTests {
         // Every number category stays, Nd, Nl and No: U+0F2A TIBETAN DIGIT HALF ONE and U+10107 AEGEAN NUMBER ONE
         // have no decomposition, so they are kept as they are (verifier round 2: dropping No survived).
         #expect(Array(ExportPolicy.fold("Half\u{F2A}\u{10107}9").unicodeScalars) == Array("half\u{F2A}\u{10107}9".unicodeScalars))
+        // Other letters stay; a modifier letter that decomposes stays as its letter, and one that doesn't is
+        // dropped like the punctuation it looks like (verifier round 3).
+        #expect(Array(ExportPolicy.fold("Serial\u{4E2D}\u{E01}").unicodeScalars) == Array("serial\u{4E2D}\u{E01}".unicodeScalars))
+        #expect(ExportPolicy.fold("to\u{2BC}ken") == "token")
+        #expect(ExportPolicy.fold("\u{2B0}\u{1D2C}") == "ha")
         for key in OrgDevice.fields + ["serverName", "deviceCount", "lastConnectedDateTime", "description", "agreementNumber"] {
             #expect(!ExportPolicy.isSensitive(key), "\(key)")
         }
