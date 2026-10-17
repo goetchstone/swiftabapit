@@ -47,7 +47,7 @@ org editor's save).
 - **An edit writes only what its sheet changed** from the profile it opened (`OrgDraft.base`), so two sheets on one
   org keep each other's changes; the account's four fields go together, and always with a picked key, which
   belongs to the IDs it was picked with (verifier round 2).
-- **A test that needs a window holds it, never races it**: `HeldStore.holdNextKey()` holds a save inside its
+- **A test that needs a window holds it, never races it**: `MemoryStore.holdNextKey()` holds a save inside its
   Keychain write, `Stall` holds a client's limiter so a load waits in its rate read, `World.buffer` holds the main
   actor while a page or an error is answered. `Task.yield()` ordering isn't a window. Storing a key doesn't prompt
   (the prompt is on use), so a save's Keychain window is milliseconds live: an edit reserves its own id for it.
