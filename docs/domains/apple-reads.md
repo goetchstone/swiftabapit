@@ -20,7 +20,8 @@ org editor's save).
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here),
   `AppleClient` (pages as an `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; read
   probes), `AppleAPIError` (status + Apple `code`, never prose), `AcceptancePass` (the DEBUG pass, plan §7).
-- `Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`, public API only):
+- `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
+  package so the compiler gives them AbapitKit's public API only, as it gives the app:
   `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
   services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3).
@@ -50,13 +51,12 @@ org editor's save).
   Keychain write, `Stall` holds a client's limiter so a load waits in its rate read, `World.buffer` holds the main
   actor while a page or an error is answered. `Task.yield()` ordering isn't a window. Storing a key doesn't prompt
   (the prompt is on use), so a save's Keychain window is milliseconds live: an edit reserves its own id for it.
-- **The boundary scan reads interpolations as code** (`BoundaryTests.code`): `"\(vault.secret(item))"` and a raw
-  string's `\#( … )` are uses; literal text, comments and `#/…/#` regex literals are not. It follows raw
-  identifiers (`` `a"b` `` is one name, `` .`key` `` is `.key`), a `\` inside `#/…/#` and a lone CR ending a line,
-  and refuses what it doesn't follow: a `/` other than spaced division, which a bare `/…/` regex literal needs, in
-  the screen models and every module they reach (verifier round 2: `/"""/` hid every line after it). Its routes are
-  held to the declarations: every `package` declaration in a module AppModels reaches (from Package.swift) is a
-  route or sits in a route type, so a new `package` API is a reviewed addition to `BoundaryTests.routes`.
+- **The screen models' boundary is the compiler's.** In AbapitKit they could see every `package` declaration, and
+  a source scan held them off: verifier round 4 read `ImportedKey.key` through implicit `self` past it. In
+  `Packages/AbapitApp` that read, `Secret.bytes` and `Vault.sign` are compile errors (checked by mutant at the
+  merge); `scripts/check_graph.py` holds the package to AbapitKit's products and refuses `unsafeFlags`, and
+  `BoundaryTests` keeps only what access control can't stop: reflection, raw memory, `@testable`. A test that
+  needs a hook in AbapitKit gets a public, debug-only one (`MemoryStore.holdNextKey()`), not a wrapper store.
 - **`fields[orgDevices]` can't name the MDM-migration attributes** (`isMdmMigrationCapable`,
   `mdmMigrationStatus`, `mdmMigrationDeadlineDateTime`), and the device table filters on them, so the device
   list asks for every attribute. The services list uses sparse fields.

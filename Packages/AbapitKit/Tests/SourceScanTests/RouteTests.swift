@@ -8,6 +8,10 @@ import TestSupport
 @Suite("Routes")
 struct RouteTests {
     static let sources = "Packages/AbapitKit/Sources"
+    /// The app's side of the package boundary: the app target and the screen models' own package (Phase 1b review), which
+    /// see AbapitKit's public API only, and so are held to what the app is held to.
+    static let appModels = "Packages/AbapitApp/Sources"
+    static let appSide = ["App", appModels]
 
     // The needle lists, each held to the spellings it must find by `ScannerTests`. A needle matches inside a longer
     // name and across whitespace, in code and string literals, never in a comment (`SourceScan.mentions`).
@@ -17,7 +21,9 @@ struct RouteTests {
     static let allowedTransport = ["URLSessionTransport"]
     /// A transport's `send`: called (`transport.send(request, limit:)`), taken as a function (`let s = t.send`), or
     /// called as `send(…)` in an extension of the protocol.
-    static let sends = [".send", "extensionTransport", "extensionHTTPCore.Transport"]
+    /// `.send(`, not `.send`: the substring caught `Self.sendable(…)` in AcceptancePass when the branches met. Every
+    /// other spelling of the call (`` `send` ``, `send (`, a bare `send(` in an extension) is `sendName`'s, below.
+    static let sends = [".send(", "extensionTransport", "extensionHTTPCore.Transport"]
     /// The name itself, which an extension of a conforming type or of a protocol refining `Transport` calls bare:
     /// `extension URLSessionTransport { … send(request, limit: 1) }` in AppleClient, and `protocol Sneaky: Transport`
     /// with a default method doing the same, passed `sends` (Phase 1b gates verifier round 2).
@@ -56,7 +62,7 @@ struct RouteTests {
     @Test func onlyTheTransportNamesURLSession() throws {
         #expect(try SourceScan.files(in: Self.sources, matching: Self.networking, except: Self.allowedTransport) == ["\(Self.sources)/HTTPCore/Transport.swift"])
         // The app gets its client from `AppleClient`; it names no transport, the allowed one included.
-        #expect(try SourceScan.files(in: "App", matching: Self.networking).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.networking).isEmpty, "\(root)") }
     }
 
     /// Only the client builds the transport (and hands it to `HTTPClient`), and only `HTTPClient` sends through one.
@@ -67,11 +73,11 @@ struct RouteTests {
         let found = try SourceScan.files(in: Self.sources, matching: Self.allowedTransport)
         #expect(found == ["\(Self.sources)/AppleBusiness/AppleClient.swift", "\(Self.sources)/HTTPCore/Transport.swift"], "\(found)")
         #expect(try SourceScan.files(in: Self.sources, matching: Self.sends) == ["\(Self.sources)/HTTPCore/HTTPClient.swift"])
-        #expect(try SourceScan.files(in: "App", matching: Self.sends).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.sends).isEmpty, "\(root)") }
         // The name: `Transport` declares it, `URLSessionTransport` implements it, `HTTPClient` calls it, and the stubs.
         let named = try SourceScan.files(in: Self.sources, naming: Self.sendName).filter { !Self.isStub($0) }
         #expect(named == ["\(Self.sources)/HTTPCore/HTTPClient.swift", "\(Self.sources)/HTTPCore/Transport.swift"], "\(named)")
-        #expect(try SourceScan.files(in: "App", naming: Self.sendName).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, naming: Self.sendName).isEmpty, "\(root)") }
     }
 
     /// A stub, which implements `send`: TestSupport, which a Release build compiles out.
@@ -80,7 +86,7 @@ struct RouteTests {
     /// Nothing starts another program: a child inherits the sandbox's network entitlement and goes past the one door.
     @Test func nothingStartsAProgram() throws {
         #expect(try SourceScan.files(in: Self.sources, naming: Self.children).isEmpty)
-        #expect(try SourceScan.files(in: "App", naming: Self.children).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, naming: Self.children).isEmpty, "\(root)") }
     }
 
     /// What each `host:` call in `file`'s code is made on (`SourceScan.code`, a raw identifier's backticks dropped): the
@@ -94,7 +100,7 @@ struct RouteTests {
     static func otherHostCalls(_ file: SourceScan.File) -> [String] { hostCalls(file).filter { !hostCallees.contains($0) } }
 
     @Test func onlyARequestIsMadeWithAHost() throws {
-        for root in [Self.sources, "App"] {
+        for root in [Self.sources] + Self.appSide {
             for file in try SourceScan.swiftFiles(in: root) {
                 let others = Self.otherHostCalls(file)
                 #expect(others.isEmpty, "\(file.path) calls \(others) with host: first, as a request initializer is called")
@@ -106,7 +112,7 @@ struct RouteTests {
     @Test func onlyTheReadBuildersMakeAReadRequest() throws {
         let makers = try SourceScan.files(in: Self.sources, matching: Self.readMakers)
         #expect(makers == ["\(Self.sources)/AppleBusiness/AppleRead.swift", "\(Self.sources)/Wire/Requests.swift"], "\(makers)")
-        #expect(try SourceScan.files(in: "App", matching: Self.readMakers + Self.authMakers).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.readMakers + Self.authMakers).isEmpty, "\(root)") }
     }
 
     /// A credential exchange carries a secret: only the token broker builds one (Mosyle's session joins in Phase 7).
@@ -119,7 +125,7 @@ struct RouteTests {
     /// the scan above (Phase 1b gates verifier round 1). No file does either, the makers' own included: the types'
     /// conformances are declared with them, in `Wire`.
     @Test func noRequestTypeIsAliasedOrExtended() throws {
-        for root in [Self.sources, "App"] {
+        for root in [Self.sources] + Self.appSide {
             #expect(try SourceScan.files(in: root, matching: Self.requestExtensions).isEmpty)
             for file in try SourceScan.swiftFiles(in: root) {
                 #expect(Self.aliases(file).isEmpty, "\(file.path) names a request type in a typealias: \(Self.aliases(file))")
@@ -160,20 +166,21 @@ struct RouteTests {
         let found = try SourceScan.files(in: Self.sources, matching: Self.keychain)
         #expect(found == ["\(Self.sources)/Vault/KeychainStore.swift"], "\(found)")
         #expect(try SourceScan.files(in: "App", matching: Self.keychain) == ["App/Debug/Spikes.swift"])
+        #expect(try SourceScan.files(in: Self.appModels, matching: Self.keychain).isEmpty)
     }
 
     /// Nothing reads a URL outside the transport: `Data(contentsOf:)` and friends would fetch past the host allowlist
     /// (Phase 1a's review added one to AppleClient and the scans passed). Test fixtures are read in TestSupport only.
     @Test func nothingFetchesOutsideTheTransport() throws {
         #expect(try SourceScan.files(in: Self.sources, matching: Self.fetches) == ["\(Self.sources)/TestSupport/Fixtures.swift"])
-        #expect(try SourceScan.files(in: "App", matching: Self.fetches).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.fetches).isEmpty, "\(root)") }
     }
 
     /// A name scan holds only if code can't be found by a name it never spells: `objc_getClass("NSURL" + "Session")`
     /// would reach a session no scan above sees.
     @Test func nothingLooksCodeUpByName() throws {
         #expect(try SourceScan.files(in: Self.sources, matching: Self.lookups).isEmpty)
-        #expect(try SourceScan.files(in: "App", matching: Self.lookups).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.lookups).isEmpty, "\(root)") }
     }
 
     /// `package` access is the boundary that keeps the app from secrets and the write ticket. A `-package-name`
@@ -194,7 +201,7 @@ struct RouteTests {
     /// Reinterpreting memory could forge a value the type system guards.
     @Test func nothingReinterpretsMemory() throws {
         #expect(try SourceScan.files(in: Self.sources, matching: Self.casts).isEmpty)
-        #expect(try SourceScan.files(in: "App", matching: Self.casts).isEmpty)
+        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.casts).isEmpty, "\(root)") }
     }
 
     /// The scan must see the code it guards, or every check above passes vacuously.

@@ -50,7 +50,10 @@ public final class MemoryStore: SecretStore {
         var failures: [Operation: (status: OSStatus, skipping: Int)] = [:]
         var uses = 0
         var sessionsEnded = 0
+        var keyHold = KeyHold()
     }
+
+    private struct KeyHold { var armed = false, released = false, waiting = 0 }
 
     private let state = Mutex(State())
 
@@ -60,6 +63,14 @@ public final class MemoryStore: SecretStore {
     public func failNext(_ operation: Operation, with status: OSStatus, skipping: Int = 0) {
         state.withLock { $0.failures[operation] = (status, skipping) }
     }
+
+    /// The next `storeKey` waits, off the caller's thread as a Keychain call runs, until `releaseKeyHold()`: a test then
+    /// acts inside a save's Keychain window rather than racing it. It lives here, not in a wrapper store, because the
+    /// screen models' tests sit in another package and see only this public API (Phase 1b review).
+    public func holdNextKey() { state.withLock { $0.keyHold = KeyHold(armed: true) } }
+    public func releaseKeyHold() { state.withLock { $0.keyHold.released = true } }
+    /// Key writes waiting at the hold now.
+    public var keysWaiting: Int { state.withLock { $0.keyHold.waiting } }
 
     /// Reads and signatures so far: what a session would have prompted for.
     public var useCount: Int { state.withLock { $0.uses } }
@@ -100,6 +111,15 @@ public final class MemoryStore: SecretStore {
     }
 
     package func storeKey(_ key: P256.Signing.PrivateKey, as item: VaultItem) throws {
+        let held = state.withLock { state in
+            defer { state.keyHold.armed = false }
+            if state.keyHold.armed { state.keyHold.waiting += 1 }
+            return state.keyHold.armed
+        }
+        if held {
+            while !state.withLock({ $0.keyHold.released }) { usleep(500) }
+            state.withLock { $0.keyHold.waiting -= 1 }
+        }
         try state.withLock { state in
             try check(.storeKey, in: &state)
             state.keys[item] = key

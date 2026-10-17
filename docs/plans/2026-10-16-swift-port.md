@@ -322,9 +322,11 @@ SwiftAbapit/                          (D1)
     Sources/History/                  SnapshotStore (SQLite3), LogsStore, abapit import
     Sources/ChangeCore/               HeldPreview, Guard, Executor (actor), AuditLog, AuditScreen
     Sources/Assist/                   DraftProvider protocol + FoundationModels impl (imports Planners only)
-    Sources/AppModels/                @MainActor screen models (orgs, devices, inspector), tested in the package
     Sources/TestSupport/              StubURLProtocol, AppleStub, MosyleStub, Fixtures, MemoryStore, FakeClock
     Tests/<Module>Tests/              one Swift Testing target per module + SourceScanTests
+  Packages/AbapitApp/                 the screen models' package: AbapitKit's public API only, as the app sees it
+    Sources/AppModels/                @MainActor screen models (orgs, devices, inspector)
+    Tests/AppModelsTests/             invariant 8's screen-model tests
   Contracts/apple/                    business-2.6.json, school-1.7.json (generated, committed; §3.10)
   Contracts/device-management/        profiles-27.0.json (generated from apple/device-management, Phase 5)
   Tests/Fixtures/                     parity/ (golden from frozen abapit), docc/ (Apple examples),
@@ -342,7 +344,8 @@ job (§6.6).
 
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
-AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models; never HTTPCore, Wire or ChangeCore
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models, in Packages/AbapitApp (AbapitKit's
+                                                               products: its public API only); never HTTPCore, Wire or ChangeCore
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, MosyleModels}

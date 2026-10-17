@@ -21,15 +21,18 @@ struct TreeTests {
                 #expect(spots.isEmpty, "\(spots)")
             }
         }
-        // Both roots, each read: App/ alone holds a screen a regex could hide a fetch in.
-        #expect(Set(Self.roots) == ["App", "Packages/AbapitKit/Sources"])
-        #expect(Self.roots.allSatisfy { seen[$0, default: 0] > 10 }, "the scan reads \(seen)")
+        // Every root, each read: App/ alone holds a screen a regex could hide a fetch in, and the screen models' package
+        // holds three files (a scan that read none of them would pass vacuously).
+        #expect(Set(Self.roots) == ["App", "Packages/AbapitKit/Sources", "Packages/AbapitApp/Sources"])
+        let least = ["App": 10, "Packages/AbapitKit/Sources": 10, "Packages/AbapitApp/Sources": 3]
+        #expect(Self.roots.allSatisfy { seen[$0, default: 0] >= least[$0, default: 10] }, "the scan reads \(seen)")
     }
 
     /// What each root may hold: Swift, which the scans read, and in App/ the inert files an asset or string catalog
     /// needs. App/ is a synchronized folder, so Xcode compiles any source put there: `App/Leak.m`, whose `+load`
     /// opened an NSURLSession, built into Release past every scan and the gate.
-    static let kinds: [String: Set<String>] = ["App": ["swift", "json", "png", "pdf", "svg", "xcstrings"], "Packages/AbapitKit/Sources": ["swift"]]
+    static let kinds: [String: Set<String>] = ["App": ["swift", "json", "png", "pdf", "svg", "xcstrings"], "Packages/AbapitKit/Sources": ["swift"],
+                                               "Packages/AbapitApp/Sources": ["swift"]]
 
     /// Whether `path` (a file under `root`) is one the scans can't vouch for. Finder's `.DS_Store` is ignored.
     static func refused(_ path: String, in root: String) -> Bool {

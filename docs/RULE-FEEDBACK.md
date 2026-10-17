@@ -50,7 +50,8 @@ here and are already wired into the skills.
 - **Why it didn't hold:** the models lived in the app target, which `swift test` doesn't build, and no app test
   target existed, so the named home was empty and nothing said so.
 - **Would a rule have caught it?** Only if enforced differently: a home an invariant names should be a test target
-  that exists. The models are now the `AppModels` package module with `AppModelsTests`.
+  that exists. The models are now `AppModels`, in their own package (`Packages/AbapitApp`, AbapitKit's public API only),
+  with `AppModelsTests`.
 - **Enforcement home if changed:** tripwire test (a check that every enforcement home CLAUDE.md names exists).
 
 ## 2026-10-16 — Invariant 11 names an enforcement home that doesn't exist

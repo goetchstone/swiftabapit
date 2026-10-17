@@ -90,3 +90,13 @@
 - **Prevention:** a deny-list is held to what it denies, not to its own examples, and a hand-written lexer refuses
   the constructs it doesn't follow. View state has no test target, so a view keeps no copy of what a model holds:
   Settings' probe results were one.
+
+## At the merge (2026-10-17)
+- **What changed:** verifier round 4 found the boundary scan still missed a `package` read through implicit `self`
+  (`extension ImportedKey { … key.rawRepresentation }` in AppModels). A scan can't hold that line; the compiler can.
+  The screen models moved to their own package, `Packages/AbapitApp`, which depends on AbapitKit's products only.
+  `Secret.bytes`, `Vault.sign` and `ImportedKey.key` are compile errors there (each checked by mutant). The scan's
+  package-route half is gone; `BoundaryTests` keeps reflection, raw memory and `@testable`. `HeldStore` (a
+  `SecretStore` wrapper the tests built, package API) became `MemoryStore.holdNextKey()`, public and debug-only.
+- **Prevention:** a boundary the compiler can hold is not given to a scan. `scripts/check_graph.py` checks both
+  manifests, and `scripts/test.sh` runs both suites.

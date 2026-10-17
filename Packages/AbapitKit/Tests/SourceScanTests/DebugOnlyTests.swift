@@ -7,7 +7,7 @@ import TestSupport
 /// `ABAPIT_` in the app's or the package's code or string literals sits in the true branch of an `#if DEBUG`.
 @Suite("Debug-only code")
 struct DebugOnlyTests {
-    static let roots = ["App", "Packages/AbapitKit/Sources"]
+    static let roots = ["App", "Packages/AbapitKit/Sources", "Packages/AbapitApp/Sources"]
 
     @Test func everyDebugSwitchIsInDebugCode() throws {
         for root in Self.roots {

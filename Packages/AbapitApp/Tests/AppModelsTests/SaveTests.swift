@@ -39,13 +39,13 @@ struct SaveTests {
         #expect(world.orgs.store["b"]!.clientID == World.clientID("b"))
     }
 
-    /// Starts `save` and returns once it is inside its Keychain write, held there until `world.keychain.release()`:
+    /// Starts `save` and returns once it is inside its Keychain write, held there until `world.keychain.releaseKeyHold()`:
     /// the window an org can be removed, probed or added in while an editor saves. (Storing a key doesn't prompt; the
     /// window is the Keychain call, an await.)
     static func saveHeldAtTheKeychain(_ world: World, _ draft: OrgDraft, key: ImportedKey, editing id: String?) async -> Task<OrgProfile, any Error> {
         world.keychain.holdNextKey()
         let saving = Task { try await world.orgs.save(draft, key: key, editing: id) as OrgProfile }
-        await eventually("the save at the Keychain") { world.keychain.waiting == 1 }
+        await eventually("the save at the Keychain") { world.keychain.keysWaiting == 1 }
         return saving
     }
 
@@ -58,7 +58,7 @@ struct SaveTests {
         world.store.failNext(.delete, with: errSecInteractionNotAllowed)
         let saving = await Self.saveHeldAtTheKeychain(world, draft, key: try World.imported(P256.Signing.PrivateKey()), editing: "b")
         try await world.orgs.remove("b", deleteSecrets: false)
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         do {
             _ = try await saving.value
             Issue.record("an edit of a removed org was saved")
@@ -80,7 +80,7 @@ struct SaveTests {
         let draft = OrgDraft(world.orgs.store["b"]!)
         let saving = await Self.saveHeldAtTheKeychain(world, draft, key: try World.imported(P256.Signing.PrivateKey()), editing: "b")
         try await world.orgs.remove("b", deleteSecrets: false)
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         do {
             _ = try await saving.value
             Issue.record("an edit of a removed org was saved")
@@ -145,7 +145,7 @@ struct SaveTests {
         // While the key is being stored: a permissions check and a learned rate land.
         world.orgs.record([ProbeResult(section: .devices, status: ProbeResult.forbidden)], probed: world.orgs.store["b"]!)
         world.orgs.record(readsPerMinute: 42, for: "b")
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         let saved = try await saving.value
         let profile = world.orgs.store["b"]!
         #expect(saved == profile)
@@ -254,7 +254,7 @@ struct SaveTests {
         try await world.orgs.remove("b", deleteSecrets: true)
         let added = try await world.orgs.save(Self.draft("B", client: client, key: "k9"), key: World.imported(key), editing: nil)
         #expect(added.id != "b", "the Add took the id of an org whose edit is still saving")
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         do {
             _ = try await editing.value
             Issue.record("the edit of a removed org was saved")
@@ -405,7 +405,7 @@ struct SaveTests {
         var rename = OrgDraft(world.orgs.store["b"]!)
         rename.name = "Renamed"
         try await world.orgs.save(rename, key: nil, editing: "b")
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         _ = try await saving.value
         let profile = world.orgs.store["b"]!
         #expect(profile.name == "Renamed", "the held edit wrote back the name it opened with")
@@ -467,7 +467,7 @@ struct SaveTests {
         } catch {
             Issue.record("the second edit was refused: \(error)")
         }
-        world.keychain.release()
+        world.keychain.releaseKeyHold()
         _ = try await saving.value
         let profile = world.orgs.store["b"]!
         #expect(profile.name == "Org B, renamed" && profile.role == "Administrator", "\(profile.name), \(profile.role)")

@@ -152,6 +152,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5AB000000000000000000300 /* XCLocalSwiftPackageReference "Packages/AbapitKit" */,
+				5AB000000000000000000301 /* XCLocalSwiftPackageReference "Packages/AbapitApp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5AB000000000000000000031 /* Products */;
@@ -317,6 +318,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/AbapitKit;
 		};
+		5AB000000000000000000301 /* XCLocalSwiftPackageReference "Packages/AbapitApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AbapitApp;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -370,6 +375,7 @@
 		};
 		5AB000000000000000000212 /* AppModels */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 5AB000000000000000000301 /* XCLocalSwiftPackageReference "Packages/AbapitApp" */;
 			productName = AppModels;
 		};
 /* End XCSwiftPackageProductDependency section */

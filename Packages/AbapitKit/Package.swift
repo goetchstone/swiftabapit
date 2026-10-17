@@ -3,6 +3,8 @@
 // `package`-access symbol (the `WriteTicket`, `HTTPCore.send(_:ticket:)`, `Secret.bytes`, the read
 // builders) is invisible to views and App Intents by construction (plan §3.2, L9).
 //
+// The screen models live in Packages/AbapitApp, outside this package as the app is (Phase 1b review).
+//
 // The dependency edges below are the whole graph: `PackageGraphTests` parses this file and fails on any
 // edge not in its list. The pure modules (JSONAPI, AppleModels, MosyleModels, Wire, Planners, Reports,
 // ProfileSchema) import only Foundation, so they build on Linux for the fuzz job. Zero third-party
@@ -33,9 +35,6 @@ let package = Package(
         .library(name: "History", targets: ["History"]),
         .library(name: "ChangeCore", targets: ["ChangeCore"]),
         .library(name: "Assist", targets: ["Assist"]),
-        // The screen models (orgs, devices, the inspector): the app's views are thin over them, and here they can be
-        // tested (invariant 8's screen-model tests; Phase 1b review M6).
-        .library(name: "AppModels", targets: ["AppModels"]),
         // The strict stubs and the demo fleet: the app links it for its DEBUG demo org only (dead-stripped from
         // Release, which never references it; scripts/check_app.sh refuses the demo switch in a Release binary).
         .library(name: "TestSupport", targets: ["TestSupport"]),
@@ -58,8 +57,6 @@ let package = Package(
         .target(name: "History", dependencies: ["Orgs", "AppleModels", "MosyleModels", "Reports"], swiftSettings: settings),
         .target(name: "ChangeCore", dependencies: ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"], swiftSettings: settings),
         .target(name: "Assist", dependencies: ["Planners", "Reports"], swiftSettings: settings),
-        // App-facing: never HTTPCore, Wire or ChangeCore, so no read is built and no write is reachable from a screen model.
-        .target(name: "AppModels", dependencies: ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports"], swiftSettings: settings),
         .target(name: "TestSupport", dependencies: ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
                 swiftSettings: settings),
         // Tests: one target per module, plus the source scans.
@@ -83,8 +80,6 @@ let package = Package(
         .testTarget(name: "ChangeCoreTests", dependencies: ["ChangeCore", "HTTPCore", "Wire", "Planners", "Vault", "TestSupport"],
                     swiftSettings: settings),
         .testTarget(name: "AssistTests", dependencies: ["Assist", "Planners", "Reports", "TestSupport"], swiftSettings: settings),
-        .testTarget(name: "AppModelsTests", dependencies: ["AppModels", "AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI",
-                                                           "HTTPCore", "TestSupport"], swiftSettings: settings),
         .testTarget(name: "SourceScanTests", dependencies: ["TestSupport"], swiftSettings: settings),
     ]
 )

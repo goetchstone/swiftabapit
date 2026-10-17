@@ -195,7 +195,9 @@ struct ScannerTests {
         "extension `Transport` {}",
     ])
     func theSendNeedleFinds(_ code: String) {
-        #expect(Self.found(code, RouteTests.sends))
+        // The call through the needles, an unapplied reference (`transport.send`) through the whole name: `.send` as a
+        // substring also matched `Self.sendable(…)`, so the needle is `.send(` and the name check holds the rest.
+        #expect(Self.found(code, RouteTests.sends) || SourceScan.names(SourceScan.File(path: "x.swift", text: code), RouteTests.sendName))
     }
 
     static func named(_ code: String, _ names: [String]) -> Bool { SourceScan.names(SourceScan.File(path: "x.swift", text: code), names) }

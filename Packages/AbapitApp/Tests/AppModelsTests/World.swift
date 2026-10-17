@@ -22,7 +22,7 @@ struct World {
     let gates: [String: Gate]
     let store: MemoryStore
     /// The memory store as the Vault sees it, with a hold on the next key write.
-    let keychain: HeldStore
+    let keychain: MemoryStore
     let vault: Vault
     let keys: [String: P256.Signing.PrivateKey]
     let stall: Stall
@@ -35,8 +35,8 @@ struct World {
     /// two Apple orgs' profiles (an unusable org, none at all).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil) async throws -> World {
-        let store = MemoryStore(), keychain = HeldStore(store)
-        let vault = Vault(secretStore: keychain)
+        let keychain = MemoryStore()
+        let vault = Vault(store: keychain)
         var stubs: [String: AppleStub] = [:], gates: [String: Gate] = [:], keys: [String: P256.Signing.PrivateKey] = [:]
         var orgStore = OrgStore()
         for org in ["a", "b"] {
@@ -64,7 +64,7 @@ struct World {
                                pageCap: pageCap, sleep: { _ in })
         }
         return World(orgs: orgs, devices: DevicesModel(orgs: orgs), detail: DeviceDetailModel(orgs: orgs), stubs: stubs, gates: gates,
-                     store: store, keychain: keychain, vault: vault, keys: keys, stall: stall)
+                     store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
 
     /// Org `org`'s profile as the world makes it: Apple Business, its own client and key IDs.
@@ -169,44 +169,6 @@ final class Gate: Transport, Sendable {
     /// Device pages after the first: the walk is under way and has more to read.
     static let laterDevicePages: @Sendable (URL) -> Bool = { $0.path() == "/v1/orgDevices" && ($0.query() ?? "").contains("cursor=") }
     static let devicePages: @Sendable (URL) -> Bool = { $0.path() == "/v1/orgDevices" }
-}
-
-/// The memory store with a hold on the next key write: it waits there, off the main thread as a Keychain call runs,
-/// until released, so a test acts inside a save's Keychain window rather than racing it. Everything else passes through.
-final class HeldStore: SecretStore {
-    let base: MemoryStore
-    private struct Hold { var armed = false, released = false, waiting = 0 }
-    private let hold = Mutex(Hold())
-
-    init(_ base: MemoryStore) { self.base = base }
-
-    /// The next `storeKey` waits until `release()`.
-    func holdNextKey() { hold.withLock { $0 = Hold(armed: true) } }
-    func release() { hold.withLock { $0.released = true } }
-    /// Key writes waiting at the hold now.
-    var waiting: Int { hold.withLock { $0.waiting } }
-
-    func storeKey(_ key: P256.Signing.PrivateKey, as item: VaultItem) throws {
-        let held = hold.withLock { hold in
-            defer { hold.armed = false }
-            if hold.armed { hold.waiting += 1 }
-            return hold.armed
-        }
-        if held {
-            while !hold.withLock({ $0.released }) { usleep(500) }
-            hold.withLock { $0.waiting -= 1 }
-        }
-        try base.storeKey(key, as: item)
-    }
-
-    func read(_ item: VaultItem) throws -> Data? { try base.read(item) }
-    func write(_ data: Data, as item: VaultItem) throws { try base.write(data, as: item) }
-    func replace(_ data: Data, as item: VaultItem, ifCurrent expected: Data) throws -> Bool { try base.replace(data, as: item, ifCurrent: expected) }
-    func sign(_ message: Data, with item: VaultItem) throws -> Data? { try base.sign(message, with: item) }
-    func delete(_ item: VaultItem) throws { try base.delete(item) }
-    func inventory() throws -> [String: Set<VaultItem.Kind>] { try base.inventory() }
-    func forget(org: String) throws { try base.forget(org: org) }
-    func endSession() { base.endSession() }
 }
 
 /// Stalls the rate limiter of the client made for one client ID: its clock blocks until released, holding that
