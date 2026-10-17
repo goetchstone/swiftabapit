@@ -322,6 +322,7 @@ SwiftAbapit/                          (D1)
     Sources/History/                  SnapshotStore (SQLite3), LogsStore, abapit import
     Sources/ChangeCore/               HeldPreview, Guard, Executor (actor), AuditLog, AuditScreen
     Sources/Assist/                   DraftProvider protocol + FoundationModels impl (imports Planners only)
+    Sources/AppModels/                @MainActor screen models (orgs, devices, inspector), tested in the package
     Sources/TestSupport/              StubURLProtocol, AppleStub, MosyleStub, Fixtures, MemoryStore, FakeClock
     Tests/<Module>Tests/              one Swift Testing target per module + SourceScanTests
   Contracts/apple/                    business-2.6.json, school-1.7.json (generated, committed; §3.10)
@@ -340,7 +341,8 @@ Foundation. No CryptoKit, Security, SwiftUI or OSLog. That keeps them buildable 
 job (§6.6).
 
 ```
-App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, Vault(public API only)}
+App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models; never HTTPCore, Wire or ChangeCore
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, MosyleModels}

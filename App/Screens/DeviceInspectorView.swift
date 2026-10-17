@@ -1,4 +1,5 @@
 import AppleModels
+import AppModels
 import JSONAPI
 import SwiftUI
 
