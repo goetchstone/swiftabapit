@@ -168,10 +168,16 @@ public final class DevicesModel {
     /// How many services there are; nil (a dash, never a zero nobody counted) unless their list was read whole.
     public var serviceCount: Int? { servicesUnread == nil ? services.count : nil }
 
-    /// Devices known to be in no service; nil (a dash) unless the services and every service's device list were read
-    /// whole: a device whose service is unknown or not read yet is never counted as in none.
+    /// Whether the device list was read to its end: not loading, failed, refused or stopped at the page cap. The
+    /// Overview's device tiles count only such a list and show a dash otherwise, beside the banner that says why
+    /// (verifier round 2: "not assigned" read 0 while the devices loaded, and 1,000 after a walk failed part-way).
+    public var devicesReadWhole: Bool { if case .loaded = state { !truncated } else { false } }
+
+    /// Devices known to be in no service; nil (a dash) unless the devices, the services and every service's device
+    /// list were read whole: a device whose service is unknown or not read yet is never counted as in none, and a
+    /// count over a list still loading or cut short counts nobody knows what.
     public var unassignedCount: Int? {
-        guard case .loaded = servicesState, unknownNote == nil else { return nil }
+        guard devicesReadWhole, case .loaded = servicesState, unknownNote == nil else { return nil }
         return rows.filter { $0.assignment == .unassigned }.count
     }
 

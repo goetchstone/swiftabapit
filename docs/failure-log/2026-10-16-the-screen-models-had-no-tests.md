@@ -57,3 +57,36 @@
   shown to the operator is `Int?` unless its list was read whole, so a zero nobody counted can't be written; a
   RULE-FEEDBACK entry (2026-10-17) records the near-miss. Still a stub: a live slow MDM-servers read is Phase 1's
   operator check.
+
+## Verifier round 2 — branches no test drove, and a scan that failed open
+
+- **Symptom:** two verifiers re-attacked `e178034`. Twelve mutants survived all 59 tests, each killed by a probe:
+  `client(for:)` handing any org the active org's client (Settings' Test and Check Permissions would have tested
+  the active account and saved its locks as the other org's), `remove(deleteSecrets:)` swallowing a refused Keychain
+  removal with `try?`, one service's count or page-cap cut carried into the next, three inspector panels spinning
+  for an unusable org, an inspector 403 shown as a failure, the role never saved, a select of the active org or of
+  no org, a second edit of one org refused as a duplicate, an empty family offered, the loading count taken from the
+  last page. The boundary scan missed a use after a bare regex literal (`/"/` hid the rest of its line, `/"""/`
+  every line after it), and its route list could lose an entry, or miss a new `package` API, with the test green.
+  Two sheets on one org: the later save wrote back the earlier one's old name. Settings kept its own copy of a
+  probe's results, so an edit to another account still showed the old account's. Overview's "not assigned" read 0
+  while the devices loaded and 1,000 after a walk failed part-way, and the round-1 line "a count shown to the
+  operator is `Int?` unless its list was read whole" overstated it: the Devices and Added tiles counted partial
+  lists too.
+- **Cause:** the tests drove the paths the findings named and few of the branches beside them. The scan's lexer was
+  written from the constructs it knew, and a lexer fails open on every one it doesn't: a bare `/…/` regex, a raw
+  identifier holding a quote (`` `a"b` ``, Swift 6.2), a `\/` inside `#/…/#`, a lone CR ending a `//` comment for
+  swiftc. Its route list was checked only against itself. The editor's merge wrote all six fields, and the
+  failure-log line was written from the service tiles alone.
+- **Why not caught:** pre-commit item 14's "a test per guard" was walked for the guards the review named, not for
+  every branch of the moved code, and the scan's self-test listed spellings its author had thought of.
+- **Fix:** `fix(1b-models): verifier round 3`. A test per surviving mutant. The scan refuses what it can't read
+  (any `/` but spaced division, as `SourceScan.unreadable` does on the gates branch), follows raw identifiers,
+  regex escapes and CR line ends, and `everyPackageDeclarationTheModelsCanReachIsARoute` derives the `package`
+  declarations of every module AppModels reaches from Package.swift and fails on one the routes don't cover. An
+  edit writes only the fields its sheet changed from the profile it opened (`OrgDraft.base`); the account's four
+  fields go together, and always with a picked key. Settings shows what the profile holds. The Overview's device
+  tiles and `unassignedCount` show a dash unless the device list was read whole (`devicesReadWhole`).
+- **Prevention:** a deny-list is held to what it denies, not to its own examples, and a hand-written lexer refuses
+  the constructs it doesn't follow. View state has no test target, so a view keeps no copy of what a model holds:
+  Settings' probe results were one.

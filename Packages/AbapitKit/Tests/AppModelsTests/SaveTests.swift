@@ -365,4 +365,137 @@ struct SaveTests {
         let second = try await world.orgs.save(Self.draft("Two", client: World.clientID("c"), key: "k2"), key: World.imported(world.keys["a"]!), editing: nil)
         #expect(second.id == "two")
     }
+
+    // MARK: verifier round 2
+
+    /// Two sheets open on one org: each save writes only what its operator changed, so the later one never puts the
+    /// earlier one's old fields back (the later save wrote all six fields as its sheet had opened them, and both said
+    /// they had succeeded). The editor's role is saved (X14).
+    @Test func twoSheetsOnOneOrgKeepEachOthersChanges() async throws {
+        let world = try await World.make()
+        var rename = OrgDraft(world.orgs.store["b"]!), role = OrgDraft(world.orgs.store["b"]!)
+        rename.name = "Org B, renamed"
+        role.role = "Administrator"
+        try await world.orgs.save(rename, key: nil, editing: "b")
+        try await world.orgs.save(role, key: nil, editing: "b")
+        #expect(world.orgs.store["b"]!.name == "Org B, renamed", "the second sheet wrote back the name it opened with")
+        #expect(world.orgs.store["b"]!.role == "Administrator")
+
+        // An account edit, then a rename from a sheet opened before it: the rename keeps the new account.
+        var account = OrgDraft(world.orgs.store["b"]!), again = OrgDraft(world.orgs.store["b"]!)
+        account.clientID = World.clientID("c")
+        account.teamID = "TEAM000001"
+        again.name = "Org B"
+        try await world.orgs.save(account, key: nil, editing: "b")
+        try await world.orgs.save(again, key: nil, editing: "b")
+        let profile = world.orgs.store["b"]!
+        #expect(profile.clientID == World.clientID("c") && profile.teamID == "TEAM000001", "a rename put the old account back")
+        #expect(profile.name == "Org B" && profile.role == "Administrator")
+    }
+
+    /// The same, inside a save's Keychain window: an account edit held in its key write while a rename of the org
+    /// lands keeps the rename (the behaviour verifier's atk08).
+    @Test func anEditHeldAtTheKeychainKeepsARenameThatLandedMeanwhile() async throws {
+        let world = try await World.make()
+        let key = P256.Signing.PrivateKey()
+        world.stubs["b"]!.register(AppleStub.Account(clientID: World.clientID("c"), keyID: World.keyID("c"), publicKey: key.publicKey))
+        var account = OrgDraft(world.orgs.store["b"]!)
+        (account.clientID, account.keyID) = (World.clientID("c"), World.keyID("c"))
+        let saving = await Self.saveHeldAtTheKeychain(world, account, key: try World.imported(key), editing: "b")
+        var rename = OrgDraft(world.orgs.store["b"]!)
+        rename.name = "Renamed"
+        try await world.orgs.save(rename, key: nil, editing: "b")
+        world.keychain.release()
+        _ = try await saving.value
+        let profile = world.orgs.store["b"]!
+        #expect(profile.name == "Renamed", "the held edit wrote back the name it opened with")
+        #expect(profile.clientID == World.clientID("c") && profile.keyID == World.keyID("c"))
+        #expect(await world.keyWorks("b"))
+    }
+
+    /// A picked key goes with the IDs its sheet holds, even when another sheet changed them meanwhile: a key under
+    /// another account's IDs would mint nothing.
+    @Test func aPickedKeyKeepsTheIDsItWasPickedWith() async throws {
+        let world = try await World.make()
+        var other = OrgDraft(world.orgs.store["b"]!)
+        let rekey = OrgDraft(world.orgs.store["b"]!)
+        other.clientID = World.clientID("c")
+        try await world.orgs.save(other, key: nil, editing: "b")
+        try await world.orgs.save(rekey, key: World.imported(world.keys["b"]!), editing: "b")
+        #expect(world.orgs.store["b"]!.clientID == World.clientID("b"))
+        #expect(await world.keyWorks("b"))
+    }
+
+    /// And the trial before the Keychain checks those IDs: a key picked for a client ID another org has taken since is
+    /// refused there, before it replaces the org's key.
+    @Test func aPickedKeyWhoseIDsAreTakenIsRefusedBeforeTheKeychain() async throws {
+        let world = try await World.make()
+        let rekey = OrgDraft(world.orgs.store["b"]!)
+        var move = OrgDraft(world.orgs.store["b"]!)
+        move.clientID = World.clientID("c")
+        try await world.orgs.save(move, key: nil, editing: "b")
+        let key = P256.Signing.PrivateKey()
+        world.stubs["a"]!.register(AppleStub.Account(clientID: World.clientID("b"), keyID: "k9", publicKey: key.publicKey))
+        let taker = try await world.orgs.save(Self.draft("Taker", client: World.clientID("b"), key: "k9"), key: World.imported(key), editing: nil)
+        // Were the Keychain reached, this would be the failure.
+        world.store.failNext(.storeKey, with: errSecUserCanceled)
+        do {
+            try await world.orgs.save(rekey, key: World.imported(world.keys["b"]!), editing: "b")
+            Issue.record("two orgs hold one client ID")
+        } catch let failure as OrgsModel.SaveFailure {
+            guard case .refused(let why) = failure else {
+                Issue.record("not refused before the Keychain: \(failure)")
+                return
+            }
+            #expect(why.contains("already uses the client ID"))
+        }
+        #expect(world.orgs.store["b"]!.clientID == World.clientID("c"))
+        #expect(await world.keyWorks(taker.id))
+    }
+
+    /// Two edits of one org at once share its client ID: the second isn't refused as a duplicate (X17), and neither
+    /// undoes the other.
+    @Test func twoEditsOfOneOrgAtOnceAreNoDuplicate() async throws {
+        let world = try await World.make()
+        var rename = OrgDraft(world.orgs.store["b"]!)
+        rename.name = "Org B, renamed"
+        let saving = await Self.saveHeldAtTheKeychain(world, rename, key: try World.imported(world.keys["b"]!), editing: "b")
+        var role = OrgDraft(world.orgs.store["b"]!)
+        role.role = "Administrator"
+        do {
+            try await world.orgs.save(role, key: nil, editing: "b")
+        } catch {
+            Issue.record("the second edit was refused: \(error)")
+        }
+        world.keychain.release()
+        _ = try await saving.value
+        let profile = world.orgs.store["b"]!
+        #expect(profile.name == "Org B, renamed" && profile.role == "Administrator", "\(profile.name), \(profile.role)")
+    }
+
+    /// Settings → Test and Check Permissions on an org that isn't active use that org's own account, never the active
+    /// one's (X20: `client(for:)` handing back the active org's client passed every test, and would have recorded the
+    /// active org's locks as the other's).
+    @Test func aClientForAnotherOrgIsThatOrgs() async throws {
+        let world = try await World.make()
+        let before = (a: world.stubs["a"]!.requests.count, b: world.stubs["b"]!.requests.count)
+        let client = try #require(world.orgs.client(for: world.orgs.store["b"]!))
+        try await client.ping()
+        #expect(world.stubs["a"]!.requests.count == before.a, "org b's Test went to org a's account")
+        #expect(world.stubs["b"]!.requests.count > before.b)
+        // With b's key replaced by one its account doesn't know, b's Test fails, whatever a's key does.
+        try await world.vault.storeKey(World.imported(P256.Signing.PrivateKey()), as: VaultItem(org: "b", kind: .appleKey)!)
+        #expect(await world.keyWorks("a"))
+        #expect(await !world.keyWorks("b"), "org b was tested with org a's account")
+    }
+
+    /// A Keychain that refuses to remove an org's items keeps its profile, so the secrets stay reachable to remove
+    /// (defect 14; X13: a `try?` there passed every test).
+    @Test func aRefusedKeychainRemovalKeepsTheOrg() async throws {
+        let world = try await World.make()
+        world.store.failNext(.delete, with: errSecInteractionNotAllowed)
+        await #expect(throws: VaultError.keychain(errSecInteractionNotAllowed)) { try await world.orgs.remove("b", deleteSecrets: true) }
+        #expect(world.orgs.store["b"] != nil, "the profile went and its key stayed")
+        #expect(try await world.vault.inventory()["b"]?.contains(.appleKey) == true)
+    }
 }

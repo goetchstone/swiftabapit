@@ -7,7 +7,8 @@ import SwiftUI
 /// Overview (plan §8 Phase 1: the minimal dashboard): the fleet's counts, devices added per month, the
 /// unassigned ones, and services that haven't connected lately. Built from the Devices screen's load. An org that
 /// can't be read says why instead of showing zeros (Phase 1b review, LOW); so do the service tiles and the health box
-/// while the services are read, refused or failed (verifier round 1).
+/// while the services are read, refused or failed (verifier round 1), and the device tiles while the devices are
+/// (verifier round 2).
 struct OverviewView: View {
     let model: DevicesModel
     let hasOrg: Bool
@@ -42,8 +43,9 @@ struct OverviewView: View {
                     }
                     let stats = DeviceStats(model.devices.map(\.resource), now: Date())
                     HStack(spacing: 12) {
-                        Tile(title: "Devices", value: stats.total)
-                        Tile(title: "Added in 30 days", value: stats.added30)
+                        // A dash until the list is read whole; the banner says how far it got and why.
+                        Tile(title: "Devices", value: model.devicesReadWhole ? stats.total : nil)
+                        Tile(title: "Added in 30 days", value: model.devicesReadWhole ? stats.added30 : nil)
                         // A dash until every service's device list is read whole: unknown is never counted as none.
                         Tile(title: "Not assigned to a service", value: model.unassignedCount)
                         Tile(title: "Services", value: model.serviceCount)

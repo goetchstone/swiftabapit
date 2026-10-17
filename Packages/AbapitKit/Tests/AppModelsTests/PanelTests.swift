@@ -222,6 +222,7 @@ struct PanelTests {
         await world.settled(2)
         #expect(world.devices.truncated)
         #expect(world.devices.total == 2500)
+        #expect(!world.devices.devicesReadWhole, "a list the page cap stopped is counted on the Overview as if whole")
     }
 
     @Test func aWholeListExports() async throws {
@@ -246,6 +247,10 @@ struct PanelTests {
         #expect(world.devices.servicesState == world.devices.state)
         world.detail.show("ADEV0000001")
         if case .failed(let text) = world.detail.device { #expect(text.contains("can't be used")) } else { Issue.record("a spinner that can't end") }
+        // Every panel, not only the first (verifier round 2, X10: the other three spun for good).
+        if case .failed = world.detail.coverage {} else { Issue.record("AppleCare: a spinner that can't end") }
+        if case .failed = world.detail.lock {} else { Issue.record("Activation Lock: a spinner that can't end") }
+        if case .failed = world.detail.service {} else { Issue.record("Service: a spinner that can't end") }
     }
 
     @Test func aMosyleOrgOnAnAppleScreenSaysWhy() async throws {
@@ -266,5 +271,94 @@ struct PanelTests {
             return
         }
         #expect(why.contains("No organization yet"))
+    }
+
+    // MARK: verifier round 2
+
+    /// Each service counts only its own devices (X01: a count carried over into the next service's).
+    @Test func eachServiceCountsItsOwnDevices() async throws {
+        let world = try await World.make(devices: ["a": 3, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("s1", name: "Main MDM"), World.service("s2", name: "Lab MDM")])
+        stub.assign("ADEV0000000", to: "s1")
+        stub.assign("ADEV0000001", to: "s2")
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.deviceCount == ["s1": 1, "s2": 1], "\(world.devices.deviceCount)")
+    }
+
+    /// One service's list cut at the page cap leaves the next one, read whole, counted and known (X02: one cut list
+    /// marked every later service cut).
+    @Test func aServiceCutAtTheCapDoesntCutTheNext() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0], pageCap: 1)
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("s1", name: "Main MDM"), World.service("s2", name: "Lab MDM")])
+        for index in 0..<1001 { stub.assign(String(format: "AAAA%07d", index), to: "s1") }
+        stub.assign("ADEV0000001", to: "s2")
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.deviceCount == ["s2": 1], "\(world.devices.deviceCount)")
+        #expect(world.devices.serviceNote?.contains("Main MDM") == true)
+        #expect(world.devices.serviceNote?.contains("Lab MDM") == false, "\(world.devices.serviceNote ?? "nil")")
+        #expect(world.devices.rows.first { $0.serial == "ADEV0000001" }?.assignment == .service("Lab MDM"))
+    }
+
+    /// A 403 on one inspector panel says "your role can't read this" there, and the others load (X11: it showed as a
+    /// failure).
+    @Test func aRefusedInspectorPanelSaysSo() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.forbid("/v1/orgDevices/ADEV0000001/appleCareCoverage")
+        world.detail.show("ADEV0000001")
+        await eventually("four panels read") { world.detail.readsFinished == 4 }
+        if case .forbidden = world.detail.coverage {} else { Issue.record("AppleCare: \(world.detail.coverage)") }
+        if case .loaded = world.detail.device {} else { Issue.record("device: \(world.detail.device)") }
+    }
+
+    /// A device with no family or status offers no empty choice to the filters (X19).
+    @Test func theFiltersOfferNoEmptyChoice() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        world.stubs["a"]!.add(devices: [Resource(type: "orgDevices", id: "ZDEV0000001", attributes: ["serialNumber": .string("ZDEV0000001")])])
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.rows.count == 2)
+        #expect(world.devices.families == ["Mac"], "\(world.devices.families)")
+        #expect(world.devices.statuses == ["ASSIGNED"], "\(world.devices.statuses)")
+    }
+
+    /// "Loading… N so far" counts every row read so far, not the last page's (X22).
+    @Test func theLoadingCountIsEveryRowSoFar() async throws {
+        let world = try await World.make(devices: ["a": 2500, "b": 0])
+        world.gates["a"]!.hold("third", { $0.path() == "/v1/orgDevices" && ($0.query() ?? "").contains("cursor=2000") })
+        world.devices.load()
+        await eventually("two pages") { world.devices.rows.count == 2000 }
+        #expect(world.devices.state == .loading(count: 2000), "\(world.devices.state)")
+        world.gates["a"]!.release("third")
+        await world.settled(2)
+        #expect(world.devices.rows.count == 2500)
+    }
+
+    /// The Overview's device tiles count a whole list only: "not assigned" read 0 while the devices loaded, and 1,000
+    /// after a walk failed part-way, as if counted (behaviour verifier, round 2).
+    @Test func theDeviceTilesWaitForAWholeList() async throws {
+        let world = try await World.make(devices: ["a": 2500, "b": 0])
+        world.gates["a"]!.hold("later", Gate.laterDevicePages)
+        world.devices.load()
+        await eventually("a's first page and the services") {
+            if case .loaded = world.devices.servicesState { world.devices.rows.count == 1000 } else { false }
+        }
+        #expect(!world.devices.devicesReadWhole)
+        #expect(world.devices.unassignedCount == nil, "a \"not assigned\" tile of \(world.devices.unassignedCount ?? 0) while the devices load")
+        world.stubs["a"]!.failTransport(50)
+        world.gates["a"]!.release("later")
+        await world.settled(2)
+        #expect(world.devices.partialCount == 1000)
+        #expect(!world.devices.devicesReadWhole)
+        #expect(world.devices.unassignedCount == nil, "a \"not assigned\" tile of \(world.devices.unassignedCount ?? 0) over a partial list")
+        // Read whole, it is counted.
+        world.stubs["a"]!.failTransport(0)
+        world.devices.load(force: true)
+        await world.settled(4)
+        #expect(world.devices.devicesReadWhole)
+        #expect(world.devices.unassignedCount == 2500)
     }
 }

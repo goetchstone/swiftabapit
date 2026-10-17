@@ -394,4 +394,30 @@ struct OrgSwitchTests {
         await world.settled(4)
         #expect(world.orgs.store["a"]!.learnedReadsPerMinute == 0, "the old account's rate landed on the new account's profile")
     }
+
+    // MARK: verifier round 2
+
+    /// Choosing the org that is already active is no switch: nothing is cleared and nothing read again (X15).
+    @Test func choosingTheActiveOrgAgainReadsNothing() async throws {
+        let world = try await World.make()
+        world.devices.load()
+        await world.settled(2)
+        let generation = world.orgs.generation, requests = world.stubs["a"]!.requests.count
+        world.orgs.select("a")
+        #expect(world.orgs.generation == generation)
+        #expect(world.devices.rows.count == 3, "the screen was cleared for the org it already showed")
+        #expect(world.stubs["a"]!.requests.count == requests)
+    }
+
+    /// An id that isn't an org is ignored: the active org stays and its screen with it (X16).
+    @Test func choosingAnOrgThatIsntThereDoesNothing() async throws {
+        let world = try await World.make()
+        world.devices.load()
+        await world.settled(2)
+        let generation = world.orgs.generation
+        world.orgs.select("gone")
+        #expect(world.orgs.generation == generation)
+        #expect(world.orgs.active?.id == "a")
+        #expect(world.devices.rows.count == 3)
+    }
 }

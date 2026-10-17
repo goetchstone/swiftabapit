@@ -15,7 +15,6 @@ struct SettingsView: View {
     @State private var selected: String?
     @State private var editing: OrgEditor.Mode?
     @State private var removing: OrgProfile?
-    @State private var results: [String: [ProbeResult]] = [:]
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
     @State private var problem: String?
@@ -80,7 +79,9 @@ struct SettingsView: View {
                             .help("Every read this version makes; reports counts and unknown field names, never data (plan §7)")
                         #endif
                     }
-                    let found = results[profile.id] ?? Self.stored(profile)
+                    // What the profile holds, never a copy kept here: an edit to another account clears it there, and a
+                    // check of the old account is never recorded (verifier round 2: this view kept its own results).
+                    let found = Self.stored(profile)
                     if !found.isEmpty {
                         Section("Permissions\(profile.probedAt.isEmpty ? "" : " (checked \(profile.probedAt))")") {
                             ForEach(found, id: \.section) { result in
@@ -148,9 +149,7 @@ struct SettingsView: View {
         working = profile.id
         Task {
             defer { working = nil }
-            let found = await client.probeReads()
-            results[profile.id] = found
-            orgs.record(found, probed: profile)
+            orgs.record(await client.probeReads(), probed: profile)
         }
     }
 

@@ -13,13 +13,16 @@ public struct OrgDraft: Sendable, Equatable {
     public var keyID = ""
     public var teamID = ""
     public var role = ""
+    /// The profile as the editor opened it: `save` writes only the fields changed from it. Nil for an Add.
+    let base: OrgProfile?
 
-    public init() {}
+    public init() { base = nil }
 
     /// The editable fields of `profile`, as the editor opens them.
     public init(_ profile: OrgProfile) {
         (name, clientID, keyID, teamID, role) = (profile.name, profile.clientID, profile.keyID, profile.teamID, profile.role)
         scope = profile.scope.known ?? .business
+        base = profile
     }
 
     /// A name, a client ID and a key ID: what an Apple org can't be saved without.
@@ -151,9 +154,10 @@ public final class OrgsModel {
     /// Everything that can refuse is checked before any Keychain write: the fields, the id, the client ID against
     /// every org and every save in flight (Phase 1b review M4: a duplicate client ID was found only after the old
     /// key was deleted). An edit merges onto the profile as it is once the key is stored, not as the editor opened
-    /// it, so a probe or a learned rate recorded meanwhile survives; a changed account clears what was learned
-    /// about the old one. Its id stays reserved meanwhile, so the profile it merges onto is the org it opened or none.
-    /// A save that fails after its key was stored removes the key, and says so if it can't.
+    /// it, and writes only the fields the operator changed (`merged`), so a probe, a learned rate or another sheet's
+    /// save that landed meanwhile survives; a changed account clears what was learned about the old one. Its id stays
+    /// reserved meanwhile, so the profile it merges onto is the org it opened or none. A save that fails after its
+    /// key was stored removes the key, and says so if it can't.
     @discardableResult
     public func save(_ draft: OrgDraft, key: ImportedKey?, editing id: String?) async throws(SaveFailure) -> OrgProfile {
         guard draft.isComplete else { throw .refused("A name, a client ID and a key ID are needed.") }
@@ -183,7 +187,8 @@ public final class OrgsModel {
         }
         var trial = store
         do {
-            if id == nil { try trial.add(Self.merged(draft, onto: opened)) } else { try trial.update(Self.merged(draft, onto: opened)) }
+            let tried = Self.merged(draft, onto: opened, withKey: key != nil)
+            if id == nil { try trial.add(tried) } else { try trial.update(tried) }
         } catch {
             throw .refused(Self.message(error))
         }
@@ -204,7 +209,7 @@ public final class OrgsModel {
 
         // The profile as it is now: storing the key was an await, and a probe or a learned rate may have landed meanwhile.
         let before = id.flatMap { store[$0] }
-        let profile = Self.merged(draft, onto: before ?? opened)
+        let profile = Self.merged(draft, onto: before ?? opened, withKey: key != nil)
         do {
             if id == nil {
                 try store.add(profile)
@@ -274,18 +279,27 @@ public final class OrgsModel {
         }
     }
 
-    /// The editor's fields over `current`. A changed client ID, key ID or scope is another API account: what was
-    /// probed and learned belonged to the old one, so its section locks, probe date and rate go (Phase 1b review,
-    /// LOW: a changed client ID kept the old account's locks).
-    static func merged(_ draft: OrgDraft, onto current: OrgProfile) -> OrgProfile {
+    /// The editor's changes over `current`: only what the operator changed from the profile the sheet opened with
+    /// (`draft.base`; an Add writes everything), so a sheet opened before another's save never writes that save's
+    /// fields back (verifier round 2: two sheets on one org, and the later save put the earlier one's old name back).
+    /// The account's four fields go together, and always with a picked key, which belongs to the IDs it was picked
+    /// with. A changed client ID, key ID or scope is another API account: what was probed and learned belonged to
+    /// the old one, so its section locks, probe date and rate go (Phase 1b review, LOW: a changed client ID kept the
+    /// old account's locks).
+    static func merged(_ draft: OrgDraft, onto current: OrgProfile, withKey: Bool) -> OrgProfile {
         var profile = current
+        let base = draft.base?.id == current.id ? draft.base : nil
+        if base?.name != draft.name { profile.name = draft.name }
+        if base?.role != draft.role { profile.role = draft.role }
+        let accountEdited = base.map {
+            $0.scope != .known(draft.scope) || $0.clientID != draft.clientID || $0.keyID != draft.keyID || $0.teamID != draft.teamID
+        } ?? true
+        guard withKey || accountEdited else { return profile }
         let otherAccount = isOtherAccount(draft, than: current)
-        profile.name = draft.name
         profile.scope = .known(draft.scope)
         profile.clientID = draft.clientID
         profile.keyID = draft.keyID
         profile.teamID = draft.teamID
-        profile.role = draft.role
         if otherAccount {
             if !profile.capabilities.isEmpty { profile.capabilities = [:] }
             profile.probedAt = ""
