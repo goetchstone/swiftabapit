@@ -7,7 +7,8 @@
 # - hardened runtime on; a Release build is not debuggable (get-task-allow would let a same-user process
 #   read keys and tokens out of its memory);
 # - exactly one Mach-O in the bundle: Contents/MacOS/abapit, signed and verifying strictly;
-# - no listener: the binary imports no socket-server or listener API (plan L2), and no ATS exception;
+# - no listener: the binary imports no socket-server or listener API (plan L2), and no ATS exception; and no
+#   second door: it starts no other program (a child inherits the sandbox's network entitlement);
 # - no debug-only code: a Release binary reads no environment variable, launch argument or user default at all
 #   (so no debug switch, whatever its name: UserDefaults reads `-key value` launch arguments itself), and carries
 #   none of TestSupport's stubs or demo and no Vault MemoryStore, checked on the binary as built and on a copy
@@ -90,12 +91,19 @@ release_code() {  # binary, what to call it, what a hit means beyond itself
   # ProcessInfo's `environment` and `arguments` selectors, or either through key-value coding (`valueForKey:`, whose
   # key is an inline literal too); getenv and its kin; Swift's CommandLine; and UserDefaults, which reads a
   # `-key value` launch argument itself: its class, `standardUserDefaults`, SwiftUI's AppStorage, CFPreferences.
-  # `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")` passed the gate and the name scan before these.
+  # `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")` passed the gate and the name scan before these. Swift
+  # reads Darwin's `environ` through the overlay's getter (`_$s6Darwin7environ…vg`, never `_environ`), and sysctl's
+  # KERN_PROCARGS2 returns the process's own arguments and environment: both passed (gates verifier round 2).
   if hits="$(grep -E '[[:space:]](environment|arguments|standardUserDefaults|valueForKey:|valueForKeyPath:)$' <<<"$selectors")"; then
     fail "$name reads its environment, arguments or defaults (a debug switch outside #if DEBUG?): $(tr -s ' \n' ' ' <<<"$hits")$hint"
   fi
-  if hits="$(grep -E '^_(getenv|secure_getenv|environ|_NSGetEnviron|_NSGetArgv|_NSGetArgc)$|11CommandLineO|^_OBJC_CLASS_\$_NSUserDefaults|AppStorage|^_CFPreferences' <<<"$imports")"; then
+  if hits="$(grep -E '^_(getenv|secure_getenv|environ|_NSGetEnviron|_NSGetArgv|_NSGetArgc|sysctl|sysctlbyname|sysctlnametomib)$|6Darwin7environ|^_proc_pid|11CommandLineO|^_OBJC_CLASS_\$_NSUserDefaults|AppStorage|^_CFPreferences' <<<"$imports")"; then
     fail "$name reads its environment, arguments or defaults: $(tr '\n' ' ' <<<"$hits")$hint"
+  fi
+  # No second door: a child process (Process is NSTask; a script runs a shell) inherits the network entitlement and
+  # fetches past HTTPCore's host allowlist (RouteTests.nothingStartsAProgram holds the source).
+  if hits="$(grep -E '^_(posix_spawnp?|execv[ep]?)$|^_OBJC_CLASS_\$_(NSTask|NSAppleScript|OSAScript|NSUser(Unix|AppleScript|Automator)?Task)$' <<<"$imports")"; then
+    fail "$name can start another program: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
   # No debug-only code: TestSupport's strict stubs and demo, and Vault's MemoryStore, all compiled out under
   # #if DEBUG (linking alone would keep them, through Swift's conformance records). MemoryStore keeps a key in
@@ -120,4 +128,4 @@ release_code "$BINARY" "the binary" " (only its symbol table shows this: an arch
   || fail "the display name isn't the bundle's name, so macOS shows the file name"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "abapit" ] || fail "display name"
 [ "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "27.0" ] || fail "minimum macOS"
-echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, ATS exception, environment, argument or defaults read, or debug code, stripped or not)"
+echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or debug code, stripped or not)"

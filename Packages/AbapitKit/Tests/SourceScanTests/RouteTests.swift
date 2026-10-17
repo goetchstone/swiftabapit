@@ -18,10 +18,26 @@ struct RouteTests {
     /// A transport's `send`: called (`transport.send(request, limit:)`), taken as a function (`let s = t.send`), or
     /// called as `send(…)` in an extension of the protocol.
     static let sends = [".send", "extensionTransport", "extensionHTTPCore.Transport"]
+    /// The name itself, which an extension of a conforming type or of a protocol refining `Transport` calls bare:
+    /// `extension URLSessionTransport { … send(request, limit: 1) }` in AppleClient, and `protocol Sneaky: Transport`
+    /// with a default method doing the same, passed `sends` (Phase 1b gates verifier round 2).
+    static let sendName = ["send"]
+    /// What starts another program, which inherits the app's network entitlement and fetches past the transport:
+    /// `Process` running `/usr/bin/curl` from AppleBusiness passed every scan (Phase 1b gates verifier round 2).
+    /// (`system`, `popen`, `fork`, `vfork`, the variadic `execl…` and the name `NSTask` don't compile in Swift.)
+    static let children = ["Process", "posix_spawn", "posix_spawnp", "execv", "execve", "execvp", "NSAppleScript", "OSAScript", "NSUserScriptTask",
+                           "NSUserUnixTask", "NSUserAppleScriptTask", "NSUserAutomatorTask"]
+    /// What may be called with `host:` first: the two request types' initializers (`init` declares them), and
+    /// `URL.make(host:…)`. `[ReadRequest].Element(host:…)` made a read where no maker needle looks (Phase 1b gates
+    /// verifier round 2), and so would any other type expression that names a request type.
+    static let hostCallees: Set = ["ReadRequest", "AuthRequest", "init", "make"]
     /// Every spelling of the read initializer: `.init(host:` (Phase 1a's review evaded `ReadRequest(`), `Self(host:`,
-    /// and an associated type made the same type (`extension P where Made == ReadRequest`, then `Made(host:…)`).
-    static let readMakers = ["ReadRequest(", "ReadRequest.init", ".init(host:", "Self(host:", "==ReadRequest", "==Wire.ReadRequest"]
-    static let authMakers = ["AuthRequest(", "AuthRequest.init", "==AuthRequest", "==Wire.AuthRequest"]
+    /// an associated type made the same type (`extension P where Made == ReadRequest`, then `Made(host:…)`), and a
+    /// member of a type that holds it (`[ReadRequest].Element.init`, which a call needs no `host:` label through).
+    static let readMakers = ["ReadRequest(", "ReadRequest.init", ".init(host:", "Self(host:", "==ReadRequest", "==Wire.ReadRequest",
+                             "ReadRequest].", "ReadRequest>.", "ReadRequest)."]
+    static let authMakers = ["AuthRequest(", "AuthRequest.init", "==AuthRequest", "==Wire.AuthRequest", "AuthRequest].", "AuthRequest>.",
+                             "AuthRequest)."]
     /// An extension of a request type, which can add a maker or a conformance a generic `T(host:…)` makes one through.
     static let requestExtensions = ["extensionReadRequest", "extensionWire.ReadRequest", "extensionAuthRequest", "extensionWire.AuthRequest"]
     /// The Keychain's item, key and access-control calls, and the legacy `SecKeychain…` family.
@@ -52,6 +68,38 @@ struct RouteTests {
         #expect(found == ["\(Self.sources)/AppleBusiness/AppleClient.swift", "\(Self.sources)/HTTPCore/Transport.swift"], "\(found)")
         #expect(try SourceScan.files(in: Self.sources, matching: Self.sends) == ["\(Self.sources)/HTTPCore/HTTPClient.swift"])
         #expect(try SourceScan.files(in: "App", matching: Self.sends).isEmpty)
+        // The name: `Transport` declares it, `URLSessionTransport` implements it, `HTTPClient` calls it, and the stubs.
+        let named = try SourceScan.files(in: Self.sources, naming: Self.sendName).filter { !Self.isStub($0) }
+        #expect(named == ["\(Self.sources)/HTTPCore/HTTPClient.swift", "\(Self.sources)/HTTPCore/Transport.swift"], "\(named)")
+        #expect(try SourceScan.files(in: "App", naming: Self.sendName).isEmpty)
+    }
+
+    /// A stub, which implements `send`: TestSupport, which a Release build compiles out.
+    static func isStub(_ path: String) -> Bool { path.hasPrefix("\(sources)/TestSupport/") }
+
+    /// Nothing starts another program: a child inherits the sandbox's network entitlement and goes past the one door.
+    @Test func nothingStartsAProgram() throws {
+        #expect(try SourceScan.files(in: Self.sources, naming: Self.children).isEmpty)
+        #expect(try SourceScan.files(in: "App", naming: Self.children).isEmpty)
+    }
+
+    /// What each `host:` call in `file`'s code is made on (`SourceScan.code`, a raw identifier's backticks dropped): the
+    /// name before its `(`, or the bracket that ends a type expression there (`(ReadRequest)(host:…)`'s `)`).
+    static func hostCalls(_ file: SourceScan.File) -> [String] {
+        let code = SourceScan.code(file.text, strings: false).replacing("`", with: "")
+        return code.matches(of: #/([A-Za-z0-9_]+|[^\sA-Za-z0-9_])\s*\(\s*host\s*:/#).map { String($0.output.1) }
+    }
+
+    /// The `host:` calls in `file` made on something other than a request type's initializer or `URL.make`.
+    static func otherHostCalls(_ file: SourceScan.File) -> [String] { hostCalls(file).filter { !hostCallees.contains($0) } }
+
+    @Test func onlyARequestIsMadeWithAHost() throws {
+        for root in [Self.sources, "App"] {
+            for file in try SourceScan.swiftFiles(in: root) {
+                let others = Self.otherHostCalls(file)
+                #expect(others.isEmpty, "\(file.path) calls \(others) with host: first, as a request initializer is called")
+            }
+        }
     }
 
     /// Only the read builders make a read (invariant 2); `Wire` defines it and its `setting` copy.

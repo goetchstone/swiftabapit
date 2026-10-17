@@ -89,6 +89,13 @@ struct ScannerTests {
         "static func sneak() -> Self { Self(host: .business, path: p) }",
         "extension Maker where Made == ReadRequest { func make() -> Made { Made(host: .business, path: p) } }",
         "extension Maker where Made == Wire.ReadRequest { func make() -> Made { Made(host: .business, path: p) } }",
+        // A raw identifier is the name it holds, and a member of a type holding the request is the request's.
+        "let r = `ReadRequest`(host: .business, path: p)",
+        "let r = ReadRequest.`init`(host: .business, path: p)",
+        "let r: ReadRequest = .`init`(host: .business, path: p)",
+        "let make = [ReadRequest].Element.init",
+        "let make = (ReadRequest).init",
+        "let make = Dictionary<String, ReadRequest>.Value.init",
     ])
     func theReadMakerNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.readMakers))
@@ -101,6 +108,8 @@ struct ScannerTests {
         "let a = AuthRequest.init(host: .appleAccount, path: p, contentType: t, body: b)",
         "let make = AuthRequest.init",
         "extension Maker where Made == AuthRequest { func make() -> Made { Made(host: h, path: p, contentType: t, body: b) } }",
+        "let a = `AuthRequest`(host: h, path: p, contentType: t, body: b)",
+        "let make = [AuthRequest].Element.init",
     ])
     func theAuthMakerNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.authMakers))
@@ -129,6 +138,10 @@ struct ScannerTests {
         "let task = session.uploadTask(with: request, from: body)",
         "let view = WKWebView()",
         "let stream = CFReadStreamCreateWithFile(nil, url as CFURL)",
+        // Phase 1b gates verifier round 2: swiftc only warns that these backticks aren't needed.
+        "let data = try Data(`contentsOf`: url)",
+        "let data = try `Data`(`contentsOf` : url)",
+        "let task = session.`dataTask`(with: request)",
     ])
     func theFetchNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.fetches))
@@ -163,6 +176,9 @@ struct ScannerTests {
         #"let type = _typeByName("So12NSURLSessionC")"#,
         #"@_silgen_name("connect") func link(_ fd: Int32, _ address: UnsafeRawPointer, _ length: UInt32) -> Int32"#,
         #"@_extern(c, "connect") func link(_ fd: Int32, _ address: UnsafeRawPointer, _ length: UInt32) -> Int32"#,
+        "let session = `Mirror`(reflecting: transport).children.first?.value",
+        #"let s = `Selector`(("dataTaskWithRequest:"))"#,
+        #"let session = transport.`value`(forKey: "session")"#,
     ])
     func theLookupNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.lookups))
@@ -175,9 +191,93 @@ struct ScannerTests {
         "let send = transport.send",
         "extension Transport { func go(_ r: URLRequest) async throws { _ = try await send(r, limit: 1) } }",
         "extension HTTPCore.Transport {}",
+        "_ = try await URLSessionTransport().`send`(request, limit: 1)",
+        "extension `Transport` {}",
     ])
     func theSendNeedleFinds(_ code: String) {
         #expect(Self.found(code, RouteTests.sends))
+    }
+
+    static func named(_ code: String, _ names: [String]) -> Bool { SourceScan.names(SourceScan.File(path: "x.swift", text: code), names) }
+
+    /// `send` as a name, however it is reached: bare in an extension of `URLSessionTransport` or of a protocol refining
+    /// `Transport` (Phase 1b gates verifier round 2), taken as a function, or escaped.
+    @Test(arguments: [
+        "extension URLSessionTransport { func go(_ r: URLRequest) async throws { _ = try await send(r, limit: 1) } }",
+        "protocol Relay: Transport {}\nextension Relay { func go(_ r: URLRequest) async throws { _ = try await send (r, limit: 1) } }",
+        "let f = send",
+        "_ = try await `send`(r, limit: 1)",
+        "_ = try await self.send(r, limit: 1)",
+        "let s = t.send",
+        "#selector(send(_:limit:))",
+    ])
+    func theSendNameFinds(_ code: String) {
+        #expect(Self.named(code, RouteTests.sendName))
+    }
+
+    /// A name is whole: not inside a longer one, a comment or a string.
+    @Test(arguments: [
+        "func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }",
+        "let resend = 1", "let sends = 2", "let send2 = 3", "// send(r, limit: 1)", "/* send */ run()", #"let s = "send it""#,
+        "let `send it` = 1",
+    ])
+    func theSendNameIsWhole(_ code: String) {
+        #expect(!Self.named(code, RouteTests.sendName))
+    }
+
+    @Test(arguments: [
+        "let p = Process()",
+        "let p: Foundation.Process = .init()",
+        "try Process.run(url, arguments: []) { _ in }",
+        "let p = `Process`()",
+        "posix_spawn(&pid, path, nil, nil, argv, environ)",
+        "posix_spawnp(&pid, \"curl\", nil, nil, argv, nil)",
+        "execv(path, argv)",
+        "execve(path, argv, envp)",
+        "let s = NSAppleScript(source: text)",
+        "let s = OSAScript(source: text)",
+        "let t = try NSUserUnixTask(url: url)",
+    ])
+    func theChildNeedlesFind(_ code: String) {
+        #expect(Self.named(code, RouteTests.children))
+    }
+
+    @Test func aProcessIsNotItsInfo() {
+        #expect(!Self.named("let info = ProcessInfo.processInfo.processIdentifier", RouteTests.children))
+        #expect(!Self.named("let processes = 1; let execution = 2", RouteTests.children))
+    }
+
+    static func hostCallees(_ code: String) -> [String] { RouteTests.hostCalls(SourceScan.File(path: "x.swift", text: code)) }
+
+    /// What a `host:` call is made on, and which of those make a request where no maker needle looks.
+    @Test func aHostCallSaysWhatItIsMadeOn() {
+        #expect(Self.hostCallees("let r = [ReadRequest].Element(host: .business, path: p)") == ["Element"])
+        #expect(Self.hostCallees("let r = (ReadRequest)(host: .business, path: p)") == [")"])
+        #expect(Self.hostCallees("let r = Box<ReadRequest>.Inner (\n    host: .business, path: p)") == ["Inner"])
+        #expect(Self.hostCallees("let r = `Sneak`(`host`: .business, path: p)") == ["Sneak"])
+        #expect(Self.hostCallees("static func sneak() -> Self { Self(host: .business, path: p) }") == ["Self"])
+        #expect(Self.hostCallees("ReadRequest(host: h, path: p); URL.make(host: h, path: p); AuthRequest(host: h, path: p, contentType: t, body: b)")
+                == ["ReadRequest", "make", "AuthRequest"])
+        #expect(Self.hostCallees("package init(host: APIHost, path: String) {}; let r: ReadRequest = .init(host: h, path: p)") == ["init", "init"])
+        for code in ["page(items, url: url, host: host)", "func headers(for host: APIHost)", "// Sneak(host: h)", #"let s = "Sneak(host: h)""#] {
+            #expect(Self.hostCallees(code).isEmpty, "\(code)")
+        }
+        func others(_ code: String) -> [String] { RouteTests.otherHostCalls(SourceScan.File(path: "x.swift", text: code)) }
+        #expect(others("let r = [ReadRequest].Element(host: .business, path: p); let s = ReadRequest(host: h, path: p)") == ["Element"])
+        #expect(others("let r = (ReadRequest)(host: h, path: p); let u = URL.make(host: h, path: p)") == [")"])
+        #expect(others("let a = AuthRequest(host: h, path: p, contentType: t, body: b); let r: ReadRequest = .init(host: h, path: p)").isEmpty)
+    }
+
+    /// What the send-name scan excuses as a stub: TestSupport's files, never a client, a session or a screen.
+    @Test func onlyTestSupportIsAStub() {
+        let sources = RouteTests.sources
+        for path in ["\(sources)/TestSupport/AppleStub.swift", "\(sources)/TestSupport/MosyleStub.swift"] {
+            #expect(RouteTests.isStub(path), "\(path)")
+        }
+        for path in ["\(sources)/AppleBusiness/AppleClient.swift", "\(sources)/AppleBusiness/TokenBroker.swift", "\(sources)/HTTPCore/HTTPClient.swift",
+                     "\(sources)/Mosyle/MosyleSession.swift", "App/Screens/ServicesView.swift", "\(sources)/TestSupportShim/X.swift"] {
+            #expect(!RouteTests.isStub(path), "\(path)")
+        }
     }
 
     @Test(arguments: [
@@ -186,6 +286,7 @@ struct ScannerTests {
         "public extension Wire.ReadRequest {}",
         "extension AuthRequest: Maker {}",
         "extension\n    Wire.AuthRequest {}",
+        "extension `ReadRequest`: Maker {}",
     ])
     func theExtensionNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.requestExtensions))
@@ -217,9 +318,29 @@ struct ScannerTests {
         #"let suite = UserDefaults(suiteName: "x")"#,
         #"@AppStorage("demo") var demo = false"#,
         #"let v = CFPreferencesCopyAppValue("demo" as CFString, kCFPreferencesCurrentApplication)"#,
+        // Phase 1b gates verifier round 2: the process's own arguments and environment, through sysctl.
+        "var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, getpid()]",
+        "_ = sysctl(&mib, 3, &buffer, &size, nil, 0)",
+        #"_ = sysctlbyname("kern.procargs2", &buffer, &size, nil, 0)"#,
+        "let count = _NSGetArgc().pointee",
+        "_ = proc_pidpath(getpid(), &path, 4096)",
     ])
     func theProcessReadNeedlesFind(_ code: String) {
         #expect(Self.found(code, DebugOnlyTests.processReads))
+    }
+
+    /// Darwin's `environ`, a whole name in Release code, and `environment`, which isn't it.
+    @Test func theEnvironNameIsWhole() {
+        func spots(_ code: String) -> [SourceScan.Spot] {
+            SourceScan.outsideDebug(SourceScan.File(path: "x.swift", text: code), [], names: DebugOnlyTests.processReadNames, strings: false)
+        }
+        #expect(spots(#"if let first = environ.pointee, String(cString: first).hasPrefix("DEMO=") { demo() }"#).map(\.what) == ["environ outside #if DEBUG"])
+        #expect(!spots("let all = Darwin.environ").isEmpty)
+        #expect(!spots("let all = `environ`").isEmpty)
+        for code in ["#if DEBUG\nlet all = environ\n#endif", "content.environment(model)", "@Environment(\\.openURL) var openURL",
+                     "let environment = 1", "// environ", #"let s = "environ""#] {
+            #expect(spots(code).isEmpty, "\(code)")
+        }
     }
 
     @Test func theTestableNeedleFinds() {

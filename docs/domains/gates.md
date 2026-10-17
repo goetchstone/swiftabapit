@@ -32,23 +32,34 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **What it can't read, it refuses.** A bare `/…/` regex literal is the one construct the lexer doesn't follow,
   so `TreeTests` refuses any `/` in code that isn't division with a space on each side (`a / b`). Write a regex
   as `#/…/#`. App/ may hold Swift and the inert files a catalog needs; any other file there (an `.m`, a `.c`)
-  is refused, since Xcode compiles whatever is put in the synchronized folder.
+  is refused, since Xcode compiles whatever is put in the synchronized folder. No link may sit at or under a
+  root: SwiftPM compiles through a linked folder, and the scans' file walk doesn't descend into one.
 - **What counts.** Code and string literals count; comments never do. A string is how a run-time lookup
   names a class (`NSClassFromString("NSURLSession")`), and `nothingLooksCodeUpByName` refuses the lookups.
 - **How a needle matches.** Anywhere, inside a longer name too (`URLSession` finds `NSURLSession` and
-  `URLSessionConfiguration`), and across whitespace. Only a whole `except` name is excused
-  (`URLSessionTransport`, in the package only).
+  `URLSessionConfiguration`), and across whitespace and a raw identifier's backticks. Only a whole `except`
+  name is excused (`URLSessionTransport`, in the package only).
+- **How a name matches** (`SourceScan.names`, `outsideDebug(…, names:)`): whole, in code only, for a name that
+  sits inside common ones: `send` (not `sender`), `Process` (not `ProcessInfo`), `environ` (not `environment`).
 - **Debug-only code.** `outsideDebug` reads `#if`/`#elseif`/`#else`/`#endif` from the code alone and counts
   only the true branch of a condition that is exactly `DEBUG`, at any depth. Release code names no `ABAPIT_`
-  switch, and no `ProcessInfo`, `CommandLine`, `getenv`, `UserDefaults`, `AppStorage` or `CFPreferences`.
+  switch, and no `ProcessInfo`, `CommandLine`, `getenv`, `_NSGetArg…`, `UserDefaults`, `AppStorage`,
+  `CFPreferences`, `sysctl`, `KERN_PROC…`, `proc_pid…` or `environ`.
 - **Where the transport may be.** Only `AppleClient` builds `URLSessionTransport`, and only `HTTPClient` calls a
-  transport's `send` (it takes any `URLRequest`, past the host allowlist and the Executor).
+  transport's `send` (it takes any `URLRequest`, past the host allowlist and the Executor). The name `send`
+  appears in code only in `HTTPCore` and the stubs, so an extension of a conforming type can't call it bare.
+- **Who makes a request.** The read and auth makers' needles, and `onlyARequestIsMadeWithAHost`: a call with
+  `host:` first is made only on `ReadRequest`, `AuthRequest`, an `init` or `URL.make`, never on another name
+  or a bracket (`[ReadRequest].Element(host:…)`, `(ReadRequest)(host:…)`).
+- **No second door.** Nothing starts a program (`Process`, `posix_spawn`, `execv…`, an AppleScript or a user
+  script task): a child inherits the network entitlement and fetches past the transport.
 - **The Release gate's code checks** run on a stripped copy (`strip -D`, as an archive does) and then on the
   binary as built. Both must be clean. A hit only the second pass finds is in the symbol table alone: the gate
   says so, because an archive would ship that code unseen. It refuses the reads by their selectors and imports:
-  `environment`, `arguments`, `standardUserDefaults`, `valueForKey:`, `getenv` and kin, `CommandLine`, the
-  `NSUserDefaults` class, `AppStorage`, `CFPreferences`. It refuses TestSupport's names and Vault's
-  `MemoryStore` in `strings -a` and in `nm`.
+  `environment`, `arguments`, `standardUserDefaults`, `valueForKey:`, `getenv` and kin, Darwin's `environ`
+  getter, `sysctl`, `proc_pid…`, `CommandLine`, the `NSUserDefaults` class, `AppStorage`, `CFPreferences`. It
+  refuses a child process's imports (`NSTask`, which is `Process`; `posix_spawn`; `execv…`; the script tasks).
+  It refuses TestSupport's names and Vault's `MemoryStore` in `strings -a` and in `nm`.
 
 ## Invariants & failure history
 - failure-log 2026-10-16, "the gate checked names, not values" (Phase 0): exact entitlements, one Mach-O,
@@ -62,11 +73,23 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   compare scalars and use ASCII boundaries.
 - **Swift accepts whitespace in a call:** `ReadRequest (host:`, `ReadRequest .init(host:`, and `.init(` with
   `host:` on the next line. Needles have no spaces and are matched with whitespace removed.
+- **Swift accepts a backtick around any name**, a plain one included: `` Data(`contentsOf`: url) `` compiles
+  with a warning (the package doesn't treat warnings as errors). Needles are matched with backticks removed.
+- **An extension calls a method bare.** `extension URLSessionTransport { … send(r, limit: 1) }` has neither
+  `.send` nor `extension Transport`, so the scan holds the name `send` itself.
 - **A directive can follow code on its line** (`let a = 1; #if DEBUG`); its condition runs to the line's end.
 - **Swift keeps a string literal of 15 bytes or fewer inside the instructions.** `strings` never shows
   `ABAPIT_DEMO`, `ABAPIT_SCREEN` or `ABAPIT_SNAPSHOT`. So the gate refuses the *read*: ProcessInfo's
   `environment` and `arguments` selectors, `getenv` and its kin, Swift's `CommandLine`. `DebugOnlyTests`
   holds the names in the source, and `"ABAPIT" + "_DEMO"` passes a name scan, so it holds the reads too.
+- **Swift reads Darwin's `environ` through the overlay.** The import is `_$s6Darwin7environ…vg`, never
+  `_environ`, so an anchored `^_environ$` never fires for Swift code. `sysctl` with `KERN_PROCARGS2` returns the
+  process's own arguments and environment, through `_sysctl` alone.
+- **`system`, `popen`, `fork`, `vfork` and the variadic `execl…` are unavailable in Swift** (a compile error),
+  and `NSTask` is spelled `Process`. The source scan lists what compiles; the gate looks for `NSTask`, the class
+  `Process` imports.
+- **`FileManager.subpaths` doesn't descend into a symlinked folder**, and SwiftPM compiles through one. Git
+  commits a link as a link (mode 120000). Xcode's synchronized App/ folder doesn't follow one.
 - **`UserDefaults` reads launch arguments.** `-demoMode YES` sets the default `demoMode`, so
   `UserDefaults.standard.bool(forKey:)` and `@AppStorage` are debug switches too. Key-value coding
   (`value(forKey: "environment")`) reaches ProcessInfo's environment without its selector.
@@ -84,8 +107,10 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **Never `tool | grep -q` under `pipefail`.** `grep` exits at the first match and the writer dies of SIGPIPE
   once its output outgrows the pipe (64 KiB). The pipeline then fails, and `if` reads that as "no match".
   `nm` prints over 1 MB here: the old check never saw `MemoryStore` in any Release build, or the stub in
-  mutant E. Capture the output, then search it. `GateScriptTests` refuses a pipe into `grep -q`, `-m`, `-l`
-  or `head` in any script under `pipefail`.
+  mutant E. Capture the output, then search it. `GateScriptTests` refuses a pipe into `grep -q`, `-m`, `-l`,
+  `-L`, `head` or `read` in any script under `pipefail`, read as bash reads it: a line ending in `|` or `\` goes
+  on, `command`, `env` and `LC_ALL=C` run the next word, `/usr/bin/grep` is grep, and getopt_long takes
+  `--quie` for `--quiet`. Each of those passed a line-at-a-time read, and two blinded the gate on mutant FN.
 - **Vault's `MemoryStore` and `Vault.init(store: MemoryStore, …)` are debug code.** Public in every build, the
   store was picked unnamed: `Vault(store: .init(), now: …)` resolves to the only initializer that takes `now:`.
   Compiled out, that is a Release compile error, and the gate refuses its name. A package test needs a debug
@@ -97,6 +122,10 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - Not covered: a name assembled at run time beyond the lookups listed in `RouteTests.lookups`; a free
   function from TestSupport in a stripped (archive) build, which leaves no trace there. The source holds it
   (no Release code imports TestSupport, `PackageGraphTests`), and CI's unstripped Release build would show it.
+  A request initializer taken unapplied through a generic type whose last argument isn't the request
+  (`Box<ReadRequest, Int>.Inner.init`, then called without labels): `ReadRequest>.` and `].` catch the rest.
+  LaunchServices (`NSWorkspace`), which opens a URL in the browser by design. `sed …q` and `awk … exit` after a
+  pipe, which no script uses.
 - On a new Xcode, re-run the environment-read mutants (an `ABAPIT_DEMO` read, a `getenv`, a `CommandLine`
   read, a `UserDefaults` read, `@AppStorage`). The check reads ObjC selector names and C imports, which a
   Foundation rewrite could move.

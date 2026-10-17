@@ -58,3 +58,28 @@
   `grep -q` in any script under pipefail.
 - **Prevention:** a scan that reads a language must fail closed where it can't follow it. RULE-FEEDBACK
   2026-10-16, "a check that was never seen to fail", holds for a check's parser too.
+
+## The fix's verifiers, round 2
+
+- **Symptom:** the round-1 fix still passed spellings swiftc accepts.
+  - A backtick around a plain name: `` Data(`contentsOf`: url) ``, `` `ReadRequest`(host:…) ``,
+    `` URLSessionTransport().`send`(…) ``, `` `Mirror`(reflecting:…) ``. swiftc only warns.
+  - A bare `send(…)` in an extension of `URLSessionTransport`, or of a protocol refining `Transport`.
+  - `[ReadRequest].Element(host:…)`.
+  - `Process` running `/usr/bin/curl` from AppleBusiness.
+  - Darwin's `environ` and `sysctl(KERN_PROCARGS2)` in Release code passed the name scan and the gate. Swift
+    imports `environ` as the overlay's getter, `_$s6Darwin7environ…vg`, so the gate's `^_environ$` was dead.
+  - A symlinked folder in a package target: SwiftPM compiles it, and `FileManager.subpaths` doesn't descend
+    into it.
+  - `GateScriptTests` read one line at a time and the literal word `grep`. With the pipe ending its line, or
+    `| /usr/bin/grep -qE`, the nm re-pipe came back with every test green and blinded the gate on mutant FN.
+- **Cause:** the same shape as round 1. Each check held one spelling of a route, not the route.
+- **Fix:** needles match across a raw identifier's backticks. A new whole-name scan (`SourceScan.names`)
+  holds `send` to HTTPCore and the stubs, refuses the child-process APIs everywhere, and holds `environ` to
+  debug code. `onlyARequestIsMadeWithAHost` refuses any `(host:` call that isn't a request type's initializer
+  or `URL.make`. `processReads` adds `sysctl`, `KERN_PROC`, `proc_pid` and `_NSGetArgc`. The gate refuses the
+  `environ` getter, `sysctl` and the child-process imports (`NSTask`, `posix_spawn`, `execv…`). `TreeTests`
+  refuses any link at or under a root. `GateScriptTests` reads commands as bash does: continued lines,
+  wrappers and assignments, a reader's file name, and getopt_long's abbreviations.
+- **Prevention:** a check names the route and every spelling the compiler accepts for it, and a Release
+  mutant for each new gate entry shows it is the only check that fails that mutant.

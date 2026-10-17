@@ -21,15 +21,18 @@ struct DebugOnlyTests {
     /// What Release code may not touch: each reads the environment, the launch arguments or the user defaults, and
     /// `UserDefaults` (so `@AppStorage`) reads a `-key value` launch argument itself. The name scan above held only the
     /// names: `environment["ABAPIT" + "_DEMO"]` passed it, and `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")`
-    /// passed it and the gate (Phase 1b gates verifier round 1). A Release use of `ProcessInfo` for anything else is a
-    /// reviewed change to this list.
-    static let processReads = ["ProcessInfo", "CommandLine", "getenv", "_NSGetEnviron", "_NSGetArgv", "UserDefaults", "AppStorage",
-                               "CFPreferences"]
+    /// passed it and the gate (Phase 1b gates verifier round 1). Darwin's `environ` and `sysctl` with `KERN_PROCARGS2`
+    /// (the process's own arguments and environment) passed both too (round 2); `proc_pid…` reads a process's path and
+    /// state. A Release use of `ProcessInfo` for anything else is a reviewed change to this list.
+    static let processReads = ["ProcessInfo", "CommandLine", "getenv", "_NSGetEnviron", "_NSGetArgv", "_NSGetArgc", "UserDefaults", "AppStorage",
+                               "CFPreferences", "sysctl", "KERN_PROC", "proc_pid"]
+    /// Whole names only: `environ` sits inside `environment`, which a SwiftUI view calls.
+    static let processReadNames = ["environ"]
 
     @Test func releaseCodeReadsNoEnvironmentArgumentOrDefault() throws {
         for root in Self.roots {
             for file in try SourceScan.swiftFiles(in: root) {
-                let spots = SourceScan.outsideDebug(file, Self.processReads, strings: false)
+                let spots = SourceScan.outsideDebug(file, Self.processReads, names: Self.processReadNames, strings: false)
                 #expect(spots.isEmpty, "\(spots)")
             }
         }
@@ -40,15 +43,18 @@ struct DebugOnlyTests {
     /// now: …)` resolved to it, past the old name scan and the gate (Phase 1b gates verifier round 1). This holds the
     /// definitions and every use to debug code.
     @Test func theMemoryStoreIsDebugCode() throws {
-        var seen = 0
+        var seen: Set<String> = []
         for root in Self.roots {
             for file in try SourceScan.swiftFiles(in: root) {
-                seen += SourceScan.mentions(file, ["MemoryStore"]) ? 1 : 0
+                if SourceScan.mentions(file, ["MemoryStore"]) { seen.insert(file.path) }
                 let spots = SourceScan.outsideDebug(file, ["MemoryStore"], strings: false)
                 #expect(spots.isEmpty, "\(spots)")
             }
         }
-        #expect(seen >= 3, "the MemoryStore's definition, its Vault initializer and the demo's use aren't where the scan looks")
+        // Its definition, its Vault initializer and the demo's use, each where the scan looks; a new use is a reviewed
+        // change here. A count (`seen >= 3`) could be relaxed with every test green (Phase 1b gates verifier round 2).
+        let sources = "Packages/AbapitKit/Sources"
+        #expect(seen == ["\(sources)/Vault/SecretStore.swift", "\(sources)/Vault/Vault.swift", "\(sources)/TestSupport/DemoOrg.swift"], "\(seen)")
     }
 
     /// The scan must see the switches it guards, or it passes vacuously.

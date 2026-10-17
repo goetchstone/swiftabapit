@@ -74,7 +74,9 @@ public enum SourceScan {
 
     /// Whether `file`'s code or string literals mention any of `needles`; comments don't count. A needle matches
     /// anywhere, inside a longer name too (`NSURLSession`, `URLSessionConfiguration`), and across whitespace,
-    /// which Swift accepts in `ReadRequest (host:`, `ReadRequest .init(host:` and `.init(` before a line break.
+    /// which Swift accepts in `ReadRequest (host:`, `ReadRequest .init(host:` and `.init(` before a line break,
+    /// and across a raw identifier's backticks, which name what they hold: `` Data(`contentsOf`: url) `` is
+    /// `Data(contentsOf: url)`, and passed `contentsOf:` while the backticks stayed (Phase 1b gates verifier round 2).
     /// It never matches inside a whole `except` name, bounded by ASCII punctuation or space on both sides
     /// (`URLSessionTransport` is not `URLSession`). Phase 1b review H3: `\bURLSession\b` uses Unicode word
     /// boundaries, which don't split `URLSession.shared`, so `URLSession.shared.upload(…)` passed the transport scan.
@@ -86,8 +88,22 @@ public enum SourceScan {
                 for index in start..<start + length { scalars[index] = " " }
             }
         }
-        let squeezed = scalars.filter { !$0.properties.isWhitespace }
+        let squeezed = scalars.filter { !$0.properties.isWhitespace && $0 != "`" }
         return needles.contains { !offsets(of: $0, in: squeezed).isEmpty }
+    }
+
+    /// The files under `directory` whose code names any of `names` (`names(_:_:)`).
+    public static func files(in directory: String, naming names: [String]) throws -> Set<String> {
+        Set(try swiftFiles(in: directory).filter { Self.names($0, names) }.map(\.path))
+    }
+
+    /// Whether `file`'s code holds any of `names` whole: with no `[A-Za-z0-9_]` right before or after it, so
+    /// `` `send` ``, `t.send` and `send (r, limit: 1)` hold `send`, and `sender` doesn't. Comments and string literals
+    /// don't count. For a name a substring needle can't hold, since it sits inside common ones (`send` in `sender`,
+    /// `Process` in `ProcessInfo`, `environ` in `environment`).
+    public static func names(_ file: File, _ names: [String]) -> Bool {
+        let code = codeScalars(file.text, strings: false)
+        return names.contains { !nameOffsets(of: $0, in: code).isEmpty }
     }
 
     /// What a scan reports: `what` on line `line` (from 1) of `path`.
@@ -126,8 +142,9 @@ public enum SourceScan {
     /// code alone, so one in a comment or a string is text, and one after code on its line (`let a = 1; #if
     /// DEBUG`, which Swift accepts) still counts. A directive that doesn't balance is a spot too. Phase 1b review
     /// M1: a switch name of 15 bytes or fewer never reaches `strings` (Swift keeps it inside the instructions), so
-    /// `scripts/check_app.sh` can't see `ABAPIT_DEMO`; this scan can.
-    public static func outsideDebug(_ file: File, _ needles: [String], strings: Bool) -> [Spot] {
+    /// `scripts/check_app.sh` can't see `ABAPIT_DEMO`; this scan can. Each of `names` counts only whole, as in
+    /// `names(_:_:)`: `environ`, not `environment`.
+    public static func outsideDebug(_ file: File, _ needles: [String], names: [String] = [], strings: Bool) -> [Spot] {
         let code = codeScalars(file.text, strings: false)
         let searched = strings ? codeScalars(file.text, strings: true) : code
         var events: [(offset: Int, directive: String?, text: String)] = []
@@ -146,6 +163,9 @@ public enum SourceScan {
         }
         for needle in needles {
             events += offsets(of: needle, in: searched).map { ($0, nil, needle) }
+        }
+        for name in names {
+            events += nameOffsets(of: name, in: searched).map { ($0, nil, name) }
         }
         var branches: [Bool] = [], spots: [Spot] = []
         func spot(_ offset: Int, _ what: String) { spots.append(Spot(file, offset, what)) }
@@ -302,6 +322,14 @@ public enum SourceScan {
         return (0...(scalars.count - pattern.count)).filter { start in
             scalars[start] == first && scalars[start..<start + pattern.count].elementsEqual(pattern)
         }
+    }
+
+    /// Every offset in `scalars` where `name` stands whole: no `[A-Za-z0-9_]` right before or after it. Any other
+    /// scalar ends a name here, one outside ASCII too, so a scan for a name finds more, never less.
+    static func nameOffsets(of name: String, in scalars: [Unicode.Scalar]) -> [Int] {
+        let length = name.unicodeScalars.count
+        func inName(_ offset: Int) -> Bool { scalars.indices.contains(offset) && isNameScalar(scalars[offset]) }
+        return offsets(of: name, in: scalars).filter { !inName($0 - 1) && !inName($0 + length) }
     }
 
     /// LF or CR: Swift's lexer ends a line at either (a CRLF is two, which changes nothing here).

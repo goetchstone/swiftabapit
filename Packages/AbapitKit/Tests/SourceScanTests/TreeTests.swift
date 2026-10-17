@@ -53,6 +53,52 @@ struct TreeTests {
         }
     }
 
+    /// The links at and under `base`, relative to it (`.` for `base` itself). SwiftPM compiles a target's sources
+    /// through a linked folder, and `FileManager.subpaths` lists the link but not what it holds, so no scan read it:
+    /// `Sources/AppleBusiness/Linked -> ../../../../Extra` holding `URLSession.shared.upload(…)` passed every test
+    /// (Phase 1b gates verifier round 2). Git commits a link as a link (mode 120000), so it can arrive in a pull request.
+    static func links(under base: URL) -> [String] {
+        let inside = (FileManager.default.subpaths(atPath: base.path) ?? []).filter { isLink(base.appending(path: $0)) }
+        return ((isLink(base) ? ["."] : []) + inside).sorted()
+    }
+
+    static func isLink(_ url: URL) -> Bool { (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil }
+
+    /// The links a scan of `root` (relative to `base`) reads through: a folder above it (`Packages` linked elsewhere),
+    /// `root` itself, or anything under it.
+    static func links(reading root: String, from base: URL) -> [String] {
+        let parts = root.split(separator: "/").map(String.init)
+        let above = (1..<max(parts.count, 1)).map { parts.prefix($0).joined(separator: "/") }.filter { isLink(base.appending(path: $0)) }
+        return above + links(under: base.appending(path: root)).map { $0 == "." ? root : "\(root)/\($0)" }
+    }
+
+    @Test func nothingIsALink() throws {
+        for root in Self.roots {
+            let found = Self.links(reading: root, from: Fixtures.repoRoot)
+            #expect(found.isEmpty, "\(found): a link, which the scans don't follow")
+        }
+    }
+
+    @Test func aLinkIsFound() throws {
+        let manager = FileManager.default
+        let base = manager.temporaryDirectory.appending(path: "abapit-links-\(UUID().uuidString)")
+        defer { try? manager.removeItem(at: base) }
+        for folder in ["Target/Sub", "Extra"] { try manager.createDirectory(at: base.appending(path: folder), withIntermediateDirectories: true) }
+        for file in ["Target/A.swift", "Extra/F.swift"] { try Data().write(to: base.appending(path: file)) }
+        try manager.createSymbolicLink(atPath: base.appending(path: "Target/Linked").path, withDestinationPath: "../Extra")
+        try manager.createSymbolicLink(atPath: base.appending(path: "Target/Sub/F.swift").path, withDestinationPath: "../../Extra/F.swift")
+        try manager.createSymbolicLink(atPath: base.appending(path: "Root").path, withDestinationPath: "Target")
+        #expect(Self.links(under: base.appending(path: "Target")) == ["Linked", "Sub/F.swift"])
+        #expect(Self.links(under: base.appending(path: "Root")).contains("."))
+        #expect(Self.links(under: base.appending(path: "Extra")).isEmpty)
+        // A folder above a root, the root, and what it holds.
+        try manager.createDirectory(at: base.appending(path: "Real/Kit/Sources"), withIntermediateDirectories: true)
+        try manager.createSymbolicLink(atPath: base.appending(path: "Linked").path, withDestinationPath: "Real")
+        #expect(Self.links(reading: "Linked/Kit/Sources", from: base) == ["Linked"])
+        #expect(Self.links(reading: "Root", from: base) == ["Root", "Root/Linked", "Root/Sub/F.swift"])
+        #expect(Self.links(reading: "Real/Kit/Sources", from: base).isEmpty)
+    }
+
     /// Sources Xcode or SwiftPM would compile or link, and what a catalog holds.
     @Test func whatIsRefused() {
         for path in ["Leak.m", "Leak.mm", "leak.c", "leak.cpp", "leak.s", "Shader.metal", "libleak.a", "leak.dylib", "Leak.framework/Leak",
