@@ -29,3 +29,31 @@
 - **Prevention:** `AppModelsTests` is invariant 8's home now. A RULE-FEEDBACK entry records that an invariant
   named a home that didn't exist. Still only a stub: a live org switch and a live 403 on MDM servers are Phase 1's
   operator checks.
+
+## Verifier round 1 — the fix's own gaps
+
+- **Symptom:** two verifiers re-attacked `fix1b-models` (d54619f). Every guard in `readServices` could be deleted, and
+  so could the switch paths (a reset that kept the old note or assignments, a remove of the active org that didn't
+  switch, handlers run before the generation moved), with all 29 tests green. Splitting the panels had made the
+  services silent on Devices and Overview: while they were read, rows showed a blank Service, as if unassigned,
+  the "not assigned" and Services tiles read 0, and a 403 on services showed "every service has connected". An edit
+  didn't reserve its id, so with the org removed during the edit's Keychain write, an Add of the same name took
+  the id and the edit merged onto it. The boundary scan erased interpolations with the literals around them, so
+  `"\(vault.secret(item))"` passed. An unused JSONAPI edge had been added.
+- **Cause:** the first round's tests drove `readDevices` only. The split moved the services' state onto
+  `servicesState`, which only the Services screen showed. Only an Add reserved its id. The scan's literal regex
+  swallowed `\( … )`.
+- **Why not caught:** pre-commit item 14 asks for a test per guard; the list of guards wasn't walked for the second
+  task. The saves' windows were `Task.yield()` races, which can't hold an edit inside its Keychain write, and the
+  rate-read window couldn't be reached at all.
+- **Fix:** `fix(1b-models): verifier round 2`. A test per guard and per switch path; `serviceNote` says the
+  services are being read, a pending row reads "Reading…", and `serviceCount`/`unassignedCount`/`quietServices`
+  are nil (a dash, with `servicesUnread`) until their lists are read whole; failed services say "Partial: N"; an
+  edit reserves its id; the scan tokenizes literals and keeps interpolations as code; the JSONAPI edge is gone. The
+  tests hold their windows: `HeldStore` (a save inside its Keychain write), `Stall` (a load inside its rate read).
+  The first fix's open item is closed too: a permissions check that was running when its org was edited to another
+  account no longer records the old account's locks onto the new one (`record(_:probed:)`).
+- **Prevention:** the mutant script for this unit covers every verifier survivor and this round's new code. A count
+  shown to the operator is `Int?` unless its list was read whole, so a zero nobody counted can't be written; a
+  RULE-FEEDBACK entry (2026-10-17) records the near-miss. Still a stub: a live slow MDM-servers read is Phase 1's
+  operator check.

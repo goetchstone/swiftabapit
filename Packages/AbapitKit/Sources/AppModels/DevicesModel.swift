@@ -41,7 +41,8 @@ public struct DeviceRow: Identifiable, Sendable {
     public let family: String
     public let status: String
     public let assignment: Assignment
-    /// The Service column: the service's name; empty while unassigned or not read yet; "Unknown" when it can't be told.
+    /// The Service column: the service's name; empty when unassigned; "Reading…" while the services are read, so a
+    /// row not read yet never looks unassigned (verifier round 1); "Unknown" when it can't be told.
     public let service: String
     public let added: Date?
     public let ordered: Date?
@@ -56,7 +57,8 @@ public struct DeviceRow: Identifiable, Sendable {
         status = device.status?.rawValue ?? ""
         self.assignment = assignment
         switch assignment {
-        case .pending, .unassigned: service = ""
+        case .pending: service = "Reading…"
+        case .unassigned: service = ""
         case .service(let name): service = name
         case .unknown: service = "Unknown"
         }
@@ -86,8 +88,8 @@ public final class DevicesModel {
     public private(set) var servicesTruncated = false
     /// Devices per service, for each service whose device list was read whole.
     public private(set) var deviceCount: [String: Int] = [:]
-    /// Why some devices' service shows as Unknown, in words; nil when every service's devices were read whole.
-    public private(set) var serviceNote: String?
+    /// Why some devices' service shows as Unknown, in words, once the services read has ended.
+    private var unknownNote: String?
 
     public var search = ""
     public var family = ""
@@ -138,6 +140,52 @@ public final class DevicesModel {
     public var partialCount: Int? {
         switch state {
         case .failed, .forbidden: rows.isEmpty ? nil : rows.count
+        default: nil
+        }
+    }
+
+    /// The line about the Service column, in words: the services are still being read, or why some devices' service
+    /// shows as Unknown; nil when every device's service is known. Devices and services load side by side, so the
+    /// devices can say "loaded" while the services are still read: this says so (verifier round 1: the Service column
+    /// was blank, as if unassigned, and nothing said why).
+    public var serviceNote: String? {
+        servicesState.isLoading ? "Reading the device management services: each device's service shows once they're read." : unknownNote
+    }
+
+    /// Why the services' count and health can't be told, in words; nil once their list is read whole. The Overview
+    /// shows it in place of a Services tile of 0 and "every service has connected", which were built from a list
+    /// nobody read while it loaded, was refused or failed (verifier round 1).
+    public var servicesUnread: String? {
+        switch servicesState {
+        case .idle, .loading: "Reading the device management services…"
+        case .loaded: servicesTruncated ? "The list of services stopped at the page limit." : nil
+        case .forbidden: "Your role can't read device management services."
+        case .failed(let why): "The services couldn't be read: \(why)"
+        case .unusable(let why): why
+        }
+    }
+
+    /// How many services there are; nil (a dash, never a zero nobody counted) unless their list was read whole.
+    public var serviceCount: Int? { servicesUnread == nil ? services.count : nil }
+
+    /// Devices known to be in no service; nil (a dash) unless the services and every service's device list were read
+    /// whole: a device whose service is unknown or not read yet is never counted as in none.
+    public var unassignedCount: Int? {
+        guard case .loaded = servicesState, unknownNote == nil else { return nil }
+        return rows.filter { $0.assignment == .unassigned }.count
+    }
+
+    /// The services that haven't connected for more than `days`; nil while the list isn't read whole, so "every
+    /// service has connected" is never said of a list nobody read.
+    public func quietServices(after days: Int, now: Date = Date()) -> [MDMService]? {
+        guard servicesUnread == nil else { return nil }
+        return services.filter { ($0.daysSinceConnected(now: now) ?? .max) > days }
+    }
+
+    /// The services a failed or refused read left on screen: said to be partial, as the devices are.
+    public var servicesPartialCount: Int? {
+        switch servicesState {
+        case .failed, .forbidden: services.isEmpty ? nil : services.count
         default: nil
         }
     }
@@ -212,7 +260,7 @@ public final class DevicesModel {
         services = []
         servicesTruncated = false
         deviceCount = [:]
-        serviceNote = nil
+        unknownNote = nil
     }
 
     /// Whether the load holding `token` may still write: not superseded, not cancelled. Checked after every await
@@ -258,7 +306,7 @@ public final class DevicesModel {
             servicesState = Self.state(after: error)
             assignments = .unreadable
             rows = rows.map { DeviceRow($0.device, assignment: .unknown) }
-            serviceNote = servicesState == .forbidden
+            unknownNote = servicesState == .forbidden
                 ? "Your role can't read device management services, so each device's service is unknown."
                 : "The services couldn't be read (\(Self.message(error))), so each device's service is unknown."
             return
@@ -286,7 +334,7 @@ public final class DevicesModel {
         deviceCount = counts
         assignments = .read(names: names, complete: unread.isEmpty)
         rows = rows.map { DeviceRow($0.device, assignment: assignment(of: $0.serial)) }
-        serviceNote = unread.isEmpty ? nil
+        unknownNote = unread.isEmpty ? nil
             : "A device not found in a service shows its service as Unknown: \(unread.joined(separator: "; "))."
         servicesState = .loaded(at: Date())
     }

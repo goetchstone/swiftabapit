@@ -11,7 +11,8 @@ struct ServicesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            StatusBanner(state: model.servicesState, shown: model.services.count, truncated: model.servicesTruncated) { model.load(force: true) }
+            StatusBanner(state: model.servicesState, shown: model.services.count, truncated: model.servicesTruncated,
+                         partial: model.servicesPartialCount) { model.load(force: true) }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
             Table(model.services) {

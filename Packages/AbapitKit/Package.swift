@@ -59,7 +59,7 @@ let package = Package(
         .target(name: "ChangeCore", dependencies: ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"], swiftSettings: settings),
         .target(name: "Assist", dependencies: ["Planners", "Reports"], swiftSettings: settings),
         // App-facing: never HTTPCore, Wire or ChangeCore, so no read is built and no write is reachable from a screen model.
-        .target(name: "AppModels", dependencies: ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI"], swiftSettings: settings),
+        .target(name: "AppModels", dependencies: ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports"], swiftSettings: settings),
         .target(name: "TestSupport", dependencies: ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
                 swiftSettings: settings),
         // Tests: one target per module, plus the source scans.

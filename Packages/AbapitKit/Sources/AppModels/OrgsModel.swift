@@ -81,10 +81,11 @@ public final class OrgsModel {
     private let makeClient: @MainActor (TokenBroker.Account, Double?) -> AppleClient
     @ObservationIgnored private var cached: (account: TokenBroker.Account, generation: Int, client: AppleClient)?
     @ObservationIgnored private var switchHandlers: [@MainActor () -> Void] = []
-    /// Ids an Add has taken and not yet saved, and the client IDs saves in flight are writing: two editors open at
-    /// once never get the same id or both take one client ID (Phase 1b review, LOW: the second Add replaced the
-    /// first's key, then its clean-up deleted it).
-    @ObservationIgnored private var reservedIDs: Set<String> = []
+    /// The ids saves in flight are writing, an Add's new one and an edit's own (one entry per save), and the client
+    /// IDs they are writing: two editors open at once never get the same id or both take one client ID (Phase 1b
+    /// review, LOW: the second Add replaced the first's key, then its clean-up deleted it), and an Add never takes the
+    /// id of an org removed while its edit is saving, which the edit would then have merged onto (verifier round 1).
+    @ObservationIgnored private var reservedIDs: [String] = []
     @ObservationIgnored private var reservedClientIDs: [(org: String, client: String)] = []
 
     public init(storage: Storage, vault: Vault, store: OrgStore? = nil,
@@ -151,7 +152,8 @@ public final class OrgsModel {
     /// every org and every save in flight (Phase 1b review M4: a duplicate client ID was found only after the old
     /// key was deleted). An edit merges onto the profile as it is once the key is stored, not as the editor opened
     /// it, so a probe or a learned rate recorded meanwhile survives; a changed account clears what was learned
-    /// about the old one. An Add that fails after its key was stored removes the key, and says so if it can't.
+    /// about the old one. Its id stays reserved meanwhile, so the profile it merges onto is the org it opened or none.
+    /// A save that fails after its key was stored removes the key, and says so if it can't.
     @discardableResult
     public func save(_ draft: OrgDraft, key: ImportedKey?, editing id: String?) async throws(SaveFailure) -> OrgProfile {
         guard draft.isComplete else { throw .refused("A name, a client ID and a key ID are needed.") }
@@ -185,10 +187,10 @@ public final class OrgsModel {
         } catch {
             throw .refused(Self.message(error))
         }
-        if id == nil { reservedIDs.insert(orgID) }
+        reservedIDs.append(orgID)
         reservedClientIDs.append((orgID, client))
         defer {
-            if id == nil { reservedIDs.remove(orgID) }
+            if let index = reservedIDs.firstIndex(of: orgID) { reservedIDs.remove(at: index) }
             if let index = reservedClientIDs.firstIndex(where: { $0.org == orgID && $0.client == client }) { reservedClientIDs.remove(at: index) }
         }
 
@@ -200,7 +202,7 @@ public final class OrgsModel {
             }
         }
 
-        // The profile as it is now: a Touch ID prompt may have taken a while, and a probe may have landed meanwhile.
+        // The profile as it is now: storing the key was an await, and a probe or a learned rate may have landed meanwhile.
         let before = id.flatMap { store[$0] }
         let profile = Self.merged(draft, onto: before ?? opened)
         do {
@@ -241,9 +243,12 @@ public final class OrgsModel {
         save()
     }
 
-    /// What Settings → Permissions found, kept so sections show locked without probing again.
-    public func record(_ results: [ProbeResult], for id: String, at date: Date = Date()) {
-        guard var profile = store[id] else { return }
+    /// What Settings → Permissions found, kept so sections show locked without probing again. `probed` is the
+    /// profile as the probe started: if the org was edited to another account while the probe ran, the results
+    /// are the old account's and are dropped, so they never put back the locks that edit cleared (the first fix's
+    /// open item).
+    public func record(_ results: [ProbeResult], probed: OrgProfile, at date: Date = Date()) {
+        guard var profile = store[probed.id], !Self.isOtherAccount(OrgDraft(probed), than: profile) else { return }
         profile.capabilities = Dictionary(uniqueKeysWithValues: results.map { ($0.section.rawValue, $0.status) })
         profile.probedAt = ISO8601DateFormatter().string(from: date)
         try? store.update(profile)
@@ -274,9 +279,7 @@ public final class OrgsModel {
     /// LOW: a changed client ID kept the old account's locks).
     static func merged(_ draft: OrgDraft, onto current: OrgProfile) -> OrgProfile {
         var profile = current
-        let otherAccount = clientKey(current.clientID) != clientKey(draft.clientID)
-            || current.keyID.trimmingCharacters(in: .whitespacesAndNewlines) != draft.keyID.trimmingCharacters(in: .whitespacesAndNewlines)
-            || current.scope != .known(draft.scope)
+        let otherAccount = isOtherAccount(draft, than: current)
         profile.name = draft.name
         profile.scope = .known(draft.scope)
         profile.clientID = draft.clientID
@@ -289,6 +292,13 @@ public final class OrgsModel {
             profile.learnedReadsPerMinute = 0
         }
         return profile
+    }
+
+    /// Whether `draft` names another API account than `profile`: a changed client ID, key ID or scope.
+    static func isOtherAccount(_ draft: OrgDraft, than profile: OrgProfile) -> Bool {
+        clientKey(profile.clientID) != clientKey(draft.clientID)
+            || profile.keyID.trimmingCharacters(in: .whitespacesAndNewlines) != draft.keyID.trimmingCharacters(in: .whitespacesAndNewlines)
+            || profile.scope != .known(draft.scope)
     }
 
     /// Client IDs compare as `OrgStore` compares them: trimmed, case-insensitive.

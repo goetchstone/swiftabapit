@@ -27,6 +27,9 @@ public final class DeviceDetailModel {
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     /// The current request's token: a read for a device shown before, even the same serial, never lands.
     @ObservationIgnored private var token = 0
+    /// Panel reads that have returned, superseded ones included: what tests wait on instead of the clock. `package`:
+    /// the app never sees it.
+    @ObservationIgnored package private(set) var readsFinished = 0
 
     public init(orgs: OrgsModel) {
         self.orgs = orgs
@@ -49,6 +52,7 @@ public final class DeviceDetailModel {
         let token = token
         func run<T>(_ read: @escaping @Sendable () async throws -> T, _ assign: @escaping (Panel<T>) -> Void) {
             tasks.append(Task { [weak self] in
+                defer { self?.readsFinished += 1 }
                 let result: Panel<T>
                 do {
                     result = .loaded(try await read())

@@ -342,7 +342,7 @@ job (§6.6).
 
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
-AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, JSONAPI}   the screen models; never HTTPCore, Wire or ChangeCore
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models; never HTTPCore, Wire or ChangeCore
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, MosyleModels}

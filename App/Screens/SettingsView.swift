@@ -150,7 +150,7 @@ struct SettingsView: View {
             defer { working = nil }
             let found = await client.probeReads()
             results[profile.id] = found
-            orgs.record(found, for: profile.id)
+            orgs.record(found, probed: profile)
         }
     }
 

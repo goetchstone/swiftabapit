@@ -62,6 +62,106 @@ struct PanelTests {
         #expect(by == ["ADEV0000000": .unassigned, "ADEV0000001": .unassigned, "ADEV0000002": .service("Main MDM")])
         #expect(world.devices.serviceNote == nil)
         #expect(world.devices.deviceCount == ["s1": 1])
+        // What the Overview counts, now that every list was read whole.
+        #expect(world.devices.servicesUnread == nil)
+        #expect(world.devices.serviceCount == 1)
+        #expect(world.devices.unassignedCount == 2)
+        let lastConnected = try #require(ISO8601DateFormatter().date(from: "2026-10-01T00:00:00Z"))
+        #expect(world.devices.quietServices(after: 30, now: lastConnected.addingTimeInterval(10 * 86_400))?.isEmpty == true)
+        #expect(world.devices.quietServices(after: 30, now: lastConnected.addingTimeInterval(31 * 86_400))?.map(\.name) == ["Main MDM"])
+    }
+
+    /// Devices and services load side by side, so the devices can be loaded while the services are still read. That
+    /// was silent: the Service column blank as if unassigned, the "not assigned" tile 0, the Services tile 0 and the
+    /// health box green (verifier round 1).
+    @Test func servicesStillBeingReadAreSaid() async throws {
+        let world = try await World.make(devices: ["a": 3, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("s1", name: "Main MDM")])
+        stub.assign("ADEV0000002", to: "s1")
+        world.gates["a"]!.hold("list", { $0.path().hasPrefix("/v1/mdmServers/s1/") })
+        world.devices.load()
+        await eventually("s1's device list held") { world.gates["a"]!.held == 1 && world.devices.services.count == 1 }
+        await world.settled(1)
+        if case .loaded = world.devices.state {} else { Issue.record("devices: \(world.devices.state)") }
+        #expect(world.devices.servicesState.isLoading, "services aren't loaded before their device lists are: \(world.devices.servicesState)")
+        #expect(world.devices.rows.allSatisfy { $0.assignment == .pending && $0.service == "Reading…" }, "\(world.devices.rows.map(\.service))")
+        #expect(world.devices.serviceNote?.hasPrefix("Reading the device management services") == true, "\(world.devices.serviceNote ?? "nil")")
+        #expect(world.devices.servicesUnread != nil)
+        #expect(world.devices.serviceCount == nil, "a Services tile of \(world.devices.serviceCount ?? 0) while they're read")
+        #expect(world.devices.unassignedCount == nil, "a \"not assigned\" tile of \(world.devices.unassignedCount ?? 0) while they're read")
+        #expect(world.devices.quietServices(after: 30) == nil, "a health verdict on a list still being read")
+        world.gates["a"]!.release("list")
+        await world.settled(2)
+        #expect(world.devices.serviceNote == nil)
+        #expect(world.devices.unassignedCount == 2)
+    }
+
+    /// A role that can't read services: the Overview said "Services 0" and "every service has connected".
+    @Test func refusedServicesShowNoCountsAndNoHealth() async throws {
+        let world = try await World.make(devices: ["a": 5, "b": 0])
+        world.stubs["a"]!.forbid("/v1/mdmServers")
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.servicesUnread?.contains("can't read device management services") == true, "\(world.devices.servicesUnread ?? "nil")")
+        #expect(world.devices.serviceCount == nil)
+        #expect(world.devices.unassignedCount == nil)
+        #expect(world.devices.quietServices(after: 30) == nil)
+        #expect(world.devices.servicesPartialCount == nil, "nothing was read, so nothing is partial")
+    }
+
+    /// A services list that fails part-way: what was read stays listed, said to be partial, and counts nothing.
+    @Test func aServicesReadThatFailsPartWayIsPartial() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0])
+        world.stubs["a"]!.add(services: (0..<1001).map { World.service(String(format: "s%05d", $0), name: "MDM \($0)") })
+        world.gates["a"]!.hold("later", { $0.path() == "/v1/mdmServers" && ($0.query() ?? "").contains("cursor=") })
+        world.devices.load()
+        await eventually("the first page of services") { world.devices.services.count == 1000 }
+        await world.settled(1)
+        world.stubs["a"]!.failTransport(50)
+        world.gates["a"]!.release("later")
+        await world.settled(2)
+        guard case .failed = world.devices.servicesState else {
+            Issue.record("\(world.devices.servicesState)")
+            return
+        }
+        #expect(world.devices.servicesPartialCount == 1000)
+        #expect(world.devices.servicesUnread?.hasPrefix("The services couldn't be read") == true, "\(world.devices.servicesUnread ?? "nil")")
+        #expect(world.devices.serviceCount == nil, "the Services tile counted a partial list")
+        #expect(world.devices.quietServices(after: 30) == nil)
+        #expect(world.devices.rows.allSatisfy { $0.assignment == .unknown })
+    }
+
+    /// A services list refused part-way (a 403 on a later page) is partial too, and counts nothing.
+    @Test func aServicesReadRefusedPartWayIsPartial() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0])
+        world.stubs["a"]!.add(services: (0..<1001).map { World.service(String(format: "s%05d", $0), name: "MDM \($0)") })
+        world.gates["a"]!.hold("later", { $0.path() == "/v1/mdmServers" && ($0.query() ?? "").contains("cursor=") })
+        world.devices.load()
+        await eventually("the first page of services") { world.devices.services.count == 1000 }
+        await world.settled(1)
+        world.stubs["a"]!.forbid("/v1/mdmServers")
+        world.gates["a"]!.release("later")
+        await world.settled(2)
+        #expect(world.devices.servicesState == .forbidden)
+        #expect(world.devices.servicesPartialCount == 1000, "the services read before the refusal aren't said to be partial")
+        #expect(world.devices.serviceCount == nil)
+        #expect(world.devices.rows.allSatisfy { $0.assignment == .unknown })
+    }
+
+    /// A services list cut at the page cap: a device in none of the lists read is unknown, not unassigned, and the
+    /// Overview counts neither.
+    @Test func aServicesListCutAtTheCapLeavesDevicesUnknown() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0], pageCap: 1)
+        world.stubs["a"]!.add(services: (0..<1001).map { World.service(String(format: "s%05d", $0), name: "MDM \($0)") })
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.servicesTruncated)
+        #expect(!world.devices.rows.contains { $0.assignment == .unassigned }, "\(world.devices.rows.map(\.assignment))")
+        #expect(world.devices.serviceNote?.contains("list of services stopped at the page limit") == true, "\(world.devices.serviceNote ?? "nil")")
+        #expect(world.devices.servicesUnread?.contains("page limit") == true)
+        #expect(world.devices.serviceCount == nil)
+        #expect(world.devices.unassignedCount == nil)
     }
 
     /// A service's device list cut at the page cap doesn't make the rest "unassigned".
@@ -100,6 +200,30 @@ struct PanelTests {
         #expect(world.devices.exportBlocked?.contains("partial") == true)
     }
 
+    /// A walk refused part-way (a 403 on a later page) is partial too, and doesn't export.
+    @Test func aRefusedWalkIsPartialToo() async throws {
+        let world = try await World.make(devices: ["a": 2500, "b": 0])
+        world.gates["a"]!.hold("later", Gate.laterDevicePages)
+        world.devices.load()
+        await eventually("a's first page") { world.devices.rows.count == 1000 }
+        world.stubs["a"]!.forbid("/v1/orgDevices")
+        world.gates["a"]!.release("later")
+        await world.settled(2)
+        #expect(world.devices.state == .forbidden)
+        #expect(world.devices.partialCount == 1000)
+        #expect(world.devices.exportBlocked?.contains("partial") == true)
+    }
+
+    /// Apple's total, when it sends one, is kept for "showing N of M".
+    @Test func applesTotalIsKept() async throws {
+        let world = try await World.make(devices: ["a": 2500, "b": 0], pageCap: 1)
+        world.stubs["a"]!.reportTotals()
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.truncated)
+        #expect(world.devices.total == 2500)
+    }
+
     @Test func aWholeListExports() async throws {
         let world = try await World.make()
         world.devices.load()
@@ -112,9 +236,7 @@ struct PanelTests {
     /// The active org had no Apple account (an unknown scope): the state was idle, the banner empty and the
     /// Overview zeros.
     @Test func anOrgThisVersionCantUseSaysWhy() async throws {
-        let unusable = OrgProfile(raw: ["id": .string("district"), "name": .string("District"), "provider": .string("apple"),
-                                        "scope": .string("district"), "client_id": .string("SCHOOLAPI.x"), "key_id": .string("k")])
-        let world = try await World.make(profiles: [unusable])
+        let world = try await World.make(profiles: [World.unusable])
         world.devices.load()
         guard case .unusable(let why) = world.devices.state else {
             Issue.record("\(world.devices.state)")

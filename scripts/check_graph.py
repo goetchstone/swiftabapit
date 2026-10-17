@@ -44,7 +44,7 @@ EDGES = {
     "History": {"Orgs", "AppleModels", "MosyleModels", "Reports"},
     "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault", "Orgs"},
     "Assist": {"Planners", "Reports"},
-    "AppModels": {"AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "JSONAPI"},
+    "AppModels": {"AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports"},
     "TestSupport": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"},
 }
 

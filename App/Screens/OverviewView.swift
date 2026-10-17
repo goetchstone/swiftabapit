@@ -6,7 +6,8 @@ import SwiftUI
 
 /// Overview (plan §8 Phase 1: the minimal dashboard): the fleet's counts, devices added per month, the
 /// unassigned ones, and services that haven't connected lately. Built from the Devices screen's load. An org that
-/// can't be read says why instead of showing zeros (Phase 1b review, LOW).
+/// can't be read says why instead of showing zeros (Phase 1b review, LOW); so do the service tiles and the health box
+/// while the services are read, refused or failed (verifier round 1).
 struct OverviewView: View {
     let model: DevicesModel
     let hasOrg: Bool
@@ -40,13 +41,12 @@ struct OverviewView: View {
                         Label(note, systemImage: "questionmark.circle").font(.callout).foregroundStyle(.secondary)
                     }
                     let stats = DeviceStats(model.devices.map(\.resource), now: Date())
-                    // Only devices known to be unassigned: an unknown or not-yet-read service isn't counted as none.
-                    let unassigned = model.rows.filter { $0.assignment == .unassigned }.count
                     HStack(spacing: 12) {
                         Tile(title: "Devices", value: stats.total)
                         Tile(title: "Added in 30 days", value: stats.added30)
-                        Tile(title: "Not assigned to a service", value: unassigned)
-                        Tile(title: "Services", value: model.services.count)
+                        // A dash until every service's device list is read whole: unknown is never counted as none.
+                        Tile(title: "Not assigned to a service", value: model.unassignedCount)
+                        Tile(title: "Services", value: model.serviceCount)
                     }
                     GroupBox("By family") {
                         Chart(stats.byFamily, id: \.name) { tally in
@@ -62,17 +62,20 @@ struct OverviewView: View {
                         .frame(height: 160)
                         .accessibilityLabel("Devices added per month, last 12 months: " + stats.addedByMonth.map { "\($0.name) \($0.count)" }.joined(separator: ", "))
                     }
-                    let quiet = model.services.filter { ($0.daysSinceConnected(now: Date()) ?? .max) > ServicesView.staleAfter }
                     GroupBox("Service health") {
-                        if quiet.isEmpty {
-                            Label("Every service has connected in the last \(ServicesView.staleAfter) days.", systemImage: "checkmark.circle")
+                        if let why = model.servicesUnread {
+                            Label(why, systemImage: "questionmark.circle")
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
+                        } else if let quiet = model.quietServices(after: ServicesView.staleAfter), !quiet.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(quiet) { service in
                                     HStack { Text(service.name); Spacer(); LastConnected(service: service) }
                                 }
                             }
+                        } else {
+                            Label("Every service has connected in the last \(ServicesView.staleAfter) days.", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
@@ -83,13 +86,15 @@ struct OverviewView: View {
     }
 }
 
+/// A count, or a dash when nobody could count it (never a zero; the reason is said beside it).
 struct Tile: View {
     let title: String
-    let value: Int
+    let value: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value.formatted()).font(.title.bold()).monospacedDigit()
+            Text(value?.formatted() ?? "—").font(.title.bold()).monospacedDigit()
+                .accessibilityLabel(value?.formatted() ?? "Not known")
             Text(title).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

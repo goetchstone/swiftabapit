@@ -21,8 +21,11 @@ struct World {
     let stubs: [String: AppleStub]
     let gates: [String: Gate]
     let store: MemoryStore
+    /// The memory store as the Vault sees it, with a hold on the next key write.
+    let keychain: HeldStore
     let vault: Vault
     let keys: [String: P256.Signing.PrivateKey]
+    let stall: Stall
 
     static func clientID(_ org: String) -> String { "BUSINESSAPI.00000000-0000-4000-8000-0000000000\(org == "a" ? "a1" : org == "b" ? "b1" : "c1")" }
     static func keyID(_ org: String) -> String { "00000000-0000-4000-8000-0000000000\(org == "a" ? "a2" : org == "b" ? "b2" : "c2")" }
@@ -32,8 +35,8 @@ struct World {
     /// two Apple orgs' profiles (an unusable org, none at all).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil) async throws -> World {
-        let store = MemoryStore()
-        let vault = Vault(store: store)
+        let store = MemoryStore(), keychain = HeldStore(store)
+        let vault = Vault(secretStore: keychain)
         var stubs: [String: AppleStub] = [:], gates: [String: Gate] = [:], keys: [String: P256.Signing.PrivateKey] = [:]
         var orgStore = OrgStore()
         for org in ["a", "b"] {
@@ -45,30 +48,38 @@ struct World {
             stub.add(devices: (0..<(devices[org] ?? 0)).map { device(prefix(org), $0) })
             stubs[org] = stub
             gates[org] = Gate(stub)
-            if profiles == nil {
-                var profile = OrgProfile(id: org, name: "Org \(org)", provider: .apple)
-                profile.scope = .known(.business)
-                profile.clientID = clientID(org)
-                profile.keyID = keyID(org)
-                profile.learnedReadsPerMinute = rates[org] ?? 0
-                try orgStore.add(profile)
-            }
+            if profiles == nil { try orgStore.add(profile(org, rate: rates[org] ?? 0)) }
         }
         for profile in profiles ?? [] { try orgStore.add(profile) }
         orgStore.activeID = orgStore.orgs.first?.id
-        let routes = gates
+        let routes = gates, stall = Stall()
         // The limiter's sleeps move its own clock, and the client's retry sleeps return at once: nothing here
-        // waits on real time but the gates.
+        // waits on real time but the gates and the stall.
         let orgs = OrgsModel(storage: .memory, vault: vault, store: orgStore) { account, rate in
-            let clock = ManualClock()
+            let clock = ManualClock(), clientID = account.clientID
             // An org a test adds is served by org a's stub, where the test registers its account.
             return AppleClient(account: account, vault: vault, transport: routes[account.org] ?? routes["a"]!,
-                               limiter: RateLimiter(readsPerMinute: rate ?? 600, now: { clock.now }, sleep: { clock.advance($0) }),
+                               limiter: RateLimiter(readsPerMinute: rate ?? 600, now: { stall.pass(clientID); return clock.now },
+                                                    sleep: { clock.advance($0) }),
                                pageCap: pageCap, sleep: { _ in })
         }
         return World(orgs: orgs, devices: DevicesModel(orgs: orgs), detail: DeviceDetailModel(orgs: orgs), stubs: stubs, gates: gates,
-                     store: store, vault: vault, keys: keys)
+                     store: store, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
+
+    /// Org `org`'s profile as the world makes it: Apple Business, its own client and key IDs.
+    static func profile(_ org: String, rate: Double = 0) -> OrgProfile {
+        var profile = OrgProfile(id: org, name: "Org \(org)", provider: .apple)
+        profile.scope = .known(.business)
+        profile.clientID = clientID(org)
+        profile.keyID = keyID(org)
+        profile.learnedReadsPerMinute = rate
+        return profile
+    }
+
+    /// An org this version can't read: a scope it doesn't know.
+    static let unusable = OrgProfile(raw: ["id": .string("district"), "name": .string("District"), "provider": .string("apple"),
+                                           "scope": .string("district"), "client_id": .string("SCHOOLAPI.x"), "key_id": .string("k")])
 
     static func device(_ prefix: String, _ index: Int) -> Resource {
         let serial = String(format: "\(prefix)%07d", index)
@@ -89,6 +100,17 @@ struct World {
     /// Waits for both halves of every load started so far, the superseded ones too, to have returned.
     func settled(_ reads: Int) async {
         await eventually("\(reads) reads finished, \(devices.readsFinished) so far") { devices.readsFinished >= reads }
+    }
+
+    /// Releases `name` on `org`'s gate while holding the main actor until the stub has answered `count` more requests,
+    /// and a little longer: what was answered waits, unread, in the old load's stream, for a loop a switch or a
+    /// Refresh is about to cancel (a cancelled loop can still be handed it).
+    func buffer(_ org: String, release name: String, count: Int = 1) {
+        let gate = gates[org]!, answered = gate.answered
+        gate.release(name)
+        let clock = ContinuousClock(), end = clock.now + .seconds(20)
+        while gate.answered < answered + count, clock.now < end { usleep(500) }
+        usleep(200_000)
     }
 
     /// Whether `org`'s stored key is the one its stub trusts: a token mints and a read answers.
@@ -147,6 +169,63 @@ final class Gate: Transport, Sendable {
     /// Device pages after the first: the walk is under way and has more to read.
     static let laterDevicePages: @Sendable (URL) -> Bool = { $0.path() == "/v1/orgDevices" && ($0.query() ?? "").contains("cursor=") }
     static let devicePages: @Sendable (URL) -> Bool = { $0.path() == "/v1/orgDevices" }
+}
+
+/// The memory store with a hold on the next key write: it waits there, off the main thread as a Keychain call runs,
+/// until released, so a test acts inside a save's Keychain window rather than racing it. Everything else passes through.
+final class HeldStore: SecretStore {
+    let base: MemoryStore
+    private struct Hold { var armed = false, released = false, waiting = 0 }
+    private let hold = Mutex(Hold())
+
+    init(_ base: MemoryStore) { self.base = base }
+
+    /// The next `storeKey` waits until `release()`.
+    func holdNextKey() { hold.withLock { $0 = Hold(armed: true) } }
+    func release() { hold.withLock { $0.released = true } }
+    /// Key writes waiting at the hold now.
+    var waiting: Int { hold.withLock { $0.waiting } }
+
+    func storeKey(_ key: P256.Signing.PrivateKey, as item: VaultItem) throws {
+        let held = hold.withLock { hold in
+            defer { hold.armed = false }
+            if hold.armed { hold.waiting += 1 }
+            return hold.armed
+        }
+        if held {
+            while !hold.withLock({ $0.released }) { usleep(500) }
+            hold.withLock { $0.waiting -= 1 }
+        }
+        try base.storeKey(key, as: item)
+    }
+
+    func read(_ item: VaultItem) throws -> Data? { try base.read(item) }
+    func write(_ data: Data, as item: VaultItem) throws { try base.write(data, as: item) }
+    func replace(_ data: Data, as item: VaultItem, ifCurrent expected: Data) throws -> Bool { try base.replace(data, as: item, ifCurrent: expected) }
+    func sign(_ message: Data, with item: VaultItem) throws -> Data? { try base.sign(message, with: item) }
+    func delete(_ item: VaultItem) throws { try base.delete(item) }
+    func inventory() throws -> [String: Set<VaultItem.Kind>] { try base.inventory() }
+    func forget(org: String) throws { try base.forget(org: org) }
+    func endSession() { base.endSession() }
+}
+
+/// Stalls the rate limiter of the client made for one client ID: its clock blocks until released, holding that
+/// limiter's actor, so a read of the learned rate waits there, as it would behind a slow limiter. Nothing else waits.
+final class Stall: Sendable {
+    private let target = Mutex<String?>(nil)
+    private let inside = Mutex(false)
+
+    func hold(_ clientID: String) { target.withLock { $0 = clientID } }
+    func release() { target.withLock { $0 = nil } }
+    /// Whether a limiter is stalled now.
+    var entered: Bool { inside.withLock { $0 } }
+
+    func pass(_ clientID: String) {
+        guard target.withLock({ $0 == clientID }) else { return }
+        inside.withLock { $0 = true }
+        while target.withLock({ $0 == clientID }) { usleep(500) }
+        inside.withLock { $0 = false }
+    }
 }
 
 /// A clock only the limiter's sleeps move.

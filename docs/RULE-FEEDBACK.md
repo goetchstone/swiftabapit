@@ -27,6 +27,20 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-17 — A fix for invariant 8 made other data silent
+- **What happened:** the first fix for Phase 1b's M3 loaded devices and services side by side, each with its own
+  state, but only the Services screen showed the services' state. While they were read, or after a 403, Devices
+  showed a blank Service column (read as unassigned) and Overview showed a Services tile of 0, an unassigned tile of
+  0 and "every service has connected". Every guard in the services read could also be deleted with the tests green
+  (failure-log 2026-10-16, "the screen models had no tests", verifier round 1).
+- **Invariant in force:** #8, "stale or truncated data is never silent", home "screen-model tests".
+- **Why it didn't hold:** the home now existed, but its tests followed the half of the code the review had named.
+  A count or verdict built from a list nobody read whole looks the same as one built from a whole list.
+- **Would a rule have caught it?** Only if enforced differently: pre-commit item 14's "a test per guard" was in
+  force but not walked for the new half. A model-level rule would: a count shown to the operator is optional
+  (`Int?`, a dash) unless the list it counts was read whole, so the type, not a reviewer, refuses the zero.
+- **Enforcement home if changed:** skill (item 14: walk every guard of each new task, not only the named one).
+
 ## 2026-10-16 — Invariant 8 named a home that didn't exist
 - **What happened:** Phase 1b's review found the screen models (`App/Models`) untested: an org switch kept the
   old org's rows, CSV and Find; a superseded load said "loaded" and saved its rate on the next org; one failing
