@@ -64,6 +64,20 @@ here and are already wired into the skills.
 - **Enforcement home if changed:** CLAUDE.md #11's home becomes "the compiler (`ExportPolicy.Columns` has an
   internal init) and `ExportPolicyTests`", plus the Mosyle adapter's test when Phase 7 writes it.
 
+## 2026-10-16 — A check that was never seen to fail
+- **What happened:** Phase 1b's review got past the URLSession scan, the Release gate's debug-switch check
+  and the `#if DEBUG` import check. Fixing them showed the gate's `nm` check had never run: a pipe under
+  `pipefail` turned every match into "no match" (failure-log 2026-10-16, "the gate looked for what it could
+  not see").
+- **Invariant in force:** #4 (no listener; its scans) and plan §3.9 (no debug code in Release).
+- **Why it didn't hold:** not covered as a check. Each check was written to find a shape, and none was run
+  against something it must refuse. The stub entry below is the same lesson for stubs.
+- **Would a rule have caught it?** yes, if stated as a check: every scan and gate has a test, or a recorded
+  mutant run, that it fails. A scan gets a self-test of the spellings it must find. A binary gate is run on
+  mutant builds made from a scratch copy.
+- **Enforcement home if changed:** tripwire tests (`ScannerTests` for the scanner; `DebugOnlyTests`) and the
+  `pre-commit` skill's item 13, which could add "show each new check failing once".
+
 ## 2026-10-16 — "Stubs fail like the APIs" was read as "refuse like the APIs"
 - **What happened:** Phase 1a's strict stub refused every request Apple would refuse, and could not
   produce a dropped connection, a revoked account, a short-lived token or an oversized body. 13 of the

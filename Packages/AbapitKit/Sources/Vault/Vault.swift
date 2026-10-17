@@ -21,11 +21,13 @@ public actor Vault {
         self.init(secretStore: store, sessionLifetime: sessionLifetime)
     }
 
-    /// Memory, for the demo org and tests.
+    #if DEBUG
+    /// Memory, for the demo org and tests: debug builds only, with `MemoryStore`.
     public init(store: MemoryStore, sessionLifetime: Duration = Vault.defaultSessionLifetime,
                 now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }) {
         self.init(secretStore: store, sessionLifetime: sessionLifetime, now: now)
     }
+    #endif
 
     package init(secretStore store: any SecretStore, sessionLifetime: Duration = Vault.defaultSessionLifetime,
                  now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }) {
