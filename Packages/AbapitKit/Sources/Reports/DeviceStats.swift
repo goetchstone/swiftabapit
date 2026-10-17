@@ -101,16 +101,19 @@ public struct AssignmentSummary: Sendable, Equatable {
     public let unassigned: [String]
     public let assignedCount: Int
 
+    /// Serials are sets by code point (UTF-8 bytes), as Python's are: a `Set<String>` merges canonically
+    /// equivalent serials, so `\u{E9}X` and `e\u{301}X` were one device (verifier round 1, the H1 class).
     public init(devices: [Resource], services: [Resource], deviceIDs: [String: [String]]) {
-        let all = Set(devices.map(\.id))
-        var assigned: Set<String> = []
+        var all: [[UInt8]: String] = [:]
+        for device in devices { all[Array(device.id.utf8)] = device.id }
+        var assigned: Set<[UInt8]> = []
         perService = services.map { service in
-            let ids = Set(deviceIDs[service.id] ?? [])
+            let ids = Set((deviceIDs[service.id] ?? []).map { Array($0.utf8) })
             assigned.formUnion(ids)
             return PerService(service: service, count: ids.count)
         }
-        unassigned = all.subtracting(assigned).filter { !$0.isEmpty }
+        unassigned = all.filter { !$0.value.isEmpty && !assigned.contains($0.key) }.map(\.value)
             .sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) }
-        assignedCount = assigned.intersection(all).count
+        assignedCount = assigned.filter { all[$0] != nil }.count
     }
 }

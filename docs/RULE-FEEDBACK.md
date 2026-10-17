@@ -53,6 +53,17 @@ here and are already wired into the skills.
   that exists. The models are now the `AppModels` package module with `AppModelsTests`.
 - **Enforcement home if changed:** tripwire test (a check that every enforcement home CLAUDE.md names exists).
 
+## 2026-10-16 — Invariant 11 names an enforcement home that doesn't exist
+- **What happened:** Phase 1b's review found CSV export was a denylist (M2), and its verifier found the fix
+  held only by convention: any caller could pass `Array(item.attributes.keys)` as the column list. Invariant
+  11 names `RedactionTests` and `SourceScanTests` as its home; no `RedactionTests` exists, and no scan looks
+  at CSV export. Fixed in `fix1b-reports`: `CSV.text` takes an `ExportPolicy.Columns` only Reports can make.
+- **Invariant in force:** #11 (sensitive fields never leave; CSV export is an allowlist).
+- **Why it didn't hold:** wrong layer: the wording was right, and the home named a test nobody wrote.
+- **Would a rule have caught it?** only if enforced differently: by the compiler, as #1 is.
+- **Enforcement home if changed:** CLAUDE.md #11's home becomes "the compiler (`ExportPolicy.Columns` has an
+  internal init) and `ExportPolicyTests`", plus the Mosyle adapter's test when Phase 7 writes it.
+
 ## 2026-10-16 — "Stubs fail like the APIs" was read as "refuse like the APIs"
 - **What happened:** Phase 1a's strict stub refused every request Apple would refuse, and could not
   produce a dropped connection, a revoked account, a short-lived token or an oversized body. 13 of the

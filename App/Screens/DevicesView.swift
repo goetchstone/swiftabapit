@@ -58,7 +58,7 @@ struct DevicesView: View {
                 .accessibilityIdentifier("devices.status")
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
                     .disabled(model.shown.isEmpty || model.exportBlocked != nil)
-                    .help(model.exportBlocked ?? "Exports the devices shown, every attribute that may leave the app")
+                    .help(model.exportBlocked ?? "Exports the devices shown, with the Devices columns only")
                     .accessibilityIdentifier("devices.export")
             }
         }

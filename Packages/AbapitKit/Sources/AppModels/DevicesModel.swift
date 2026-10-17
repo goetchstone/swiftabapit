@@ -236,9 +236,10 @@ public final class DevicesModel {
     /// The error in the operator's words.
     public static func message(_ error: any Error) -> String { OrgsModel.message(error) }
 
-    /// The CSV of what the table shows, every attribute Apple sent that may leave the app, in Apple's order.
+    /// The CSV of what the table shows: the Devices columns (`ExportPolicy.devices`), never an attribute off that list
+    /// (invariant 11).
     public func csv() -> String {
-        CSV.text(shown.map { CSV.Item($0.device.resource) }, allowing: ExportPolicy.allowing())
+        CSV.text(shown.map { CSV.Item($0.device.resource) }, columns: ExportPolicy.devices)
     }
 
     // MARK: loading
