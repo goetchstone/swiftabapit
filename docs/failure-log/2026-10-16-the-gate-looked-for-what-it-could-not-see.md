@@ -36,3 +36,25 @@
 - **Prevention:** the mutants are now tests or recorded gate runs, all killed: the reviewer's A, B, E3 and
   both H3 mutants, the comment-import, a `getenv` read, a `CommandLine` read, and 16 mutants of the scanner
   itself. `docs/domains/gates.md` lists the traps. RULE-FEEDBACK: a check needs a test that it fails.
+
+## The fix's own verifiers (round 1), and Phase 7a's review H1
+
+- **Symptom:** the fix above passed mutants it was written to stop.
+  - `_ = /\/*/` (a bare regex) before `URLSession.shared.upload(…)`, and `_ = 1 // note`, a lone CR, then a
+    fetch: `RouteTests` stayed green on both. The old line scan had caught the regex one.
+  - `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")` passed the name scan and the gate.
+  - `Vault(store: .init(), now: …)` in Release picked `MemoryStore` without naming it.
+  - `App/Leak.m` opened an NSURLSession from `+load`, past every scan.
+  - `URLSessionTransport().send(…)` from AppleClient passed, since the name was excused package-wide.
+  - Phase 7a's review found the same SIGPIPE pipe on another branch and the 101 MemoryStore symbols.
+- **Cause:** the lexer disagreed with swiftc in two places (a CR ends a `//` comment; Swift 6 lexes bare
+  regex literals), and it failed open: what it misread, it blanked. The other checks held names, not the
+  reads or the files that compile. `strings -a` reads sections, not the symbol table.
+- **Fix:** the lexer ends lines at CR and follows raw identifiers. `TreeTests` refuses a bare regex (any `/`
+  that isn't spaced division) and any non-Swift source in App/. `DebugOnlyTests` refuses the environment,
+  argument and defaults reads in Release code; the gate refuses their selectors and imports. `MemoryStore`
+  and its Vault initializer are compiled out of Release, and the gate looks for the name in `strings -a` and
+  `nm`. Only AppleClient builds the transport and only HTTPClient sends. `GateScriptTests` refuses a pipe into
+  `grep -q` in any script under pipefail.
+- **Prevention:** a scan that reads a language must fail closed where it can't follow it. RULE-FEEDBACK
+  2026-10-16, "a check that was never seen to fail", holds for a check's parser too.

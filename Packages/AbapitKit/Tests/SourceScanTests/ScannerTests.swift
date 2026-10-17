@@ -38,6 +38,21 @@ struct ScannerTests {
         "let fd = socket(AF_INET, SOCK_STREAM, 0)",
         "let fd = socket (AF_INET, SOCK_STREAM, 0)",
         "let c = NSURLConnection(request: request, delegate: nil)",
+        // One case per lexer branch that, misread, hides what follows (Phase 1b gates verifier round 1): an escaped
+        // quote, an interpolation's own parentheses and string, an escape in a regex literal, a raw string's quote.
+        #"let s = "a\"b // c"; let t = URLSession.shared"#,
+        #"let s = "\(f(a) + "x // y")"; let t = URLSession.shared"#,
+        #"let r = #/a\/#//x/#; let s = URLSession.shared"#,
+        ##"let r = #"a"//"#; let s = URLSession.shared"##,
+        // A line ends at CR as well as LF, for swiftc and so for the scan.
+        "_ = 1 // note\rlet s = URLSession.shared",
+        "_ = 1 // note\r\nlet s = URLSession.shared",
+        "/* a */ _ = 1 // note\r    let s = URLSession.shared",
+        // A raw identifier is one name: its `//`, `"` or `/*` opens nothing. A plain one is the name itself.
+        "let `a // b` = 1; let s = URLSession.shared",
+        "let `a \"b` = 1; let s = URLSession.shared",
+        "let `a /* b` = 1; let s = URLSession.shared",
+        "let s = `URLSession`.shared",
     ])
     func theNetworkingNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.networking, except: RouteTests.allowedTransport))
@@ -53,6 +68,8 @@ struct ScannerTests {
         "/* URLSession.shared */ run()",
         "/* outer /* nested */ URLSession.shared */ run()",
         "run() /* a\n URLSession.shared\n */",
+        "run() // a\r\n// URLSession.shared",
+        "let `a // URLSession` = 1",
     ])
     func theNetworkingNeedlesExcuse(_ code: String) {
         #expect(!Self.found(code, RouteTests.networking, except: RouteTests.allowedTransport))
@@ -69,6 +86,9 @@ struct ScannerTests {
         "let r = ReadRequest\n    .init(host: .business, path: p)",
         "let make = ReadRequest.init",
         "let r = type(of: template).init(host: .business, path: p)",
+        "static func sneak() -> Self { Self(host: .business, path: p) }",
+        "extension Maker where Made == ReadRequest { func make() -> Made { Made(host: .business, path: p) } }",
+        "extension Maker where Made == Wire.ReadRequest { func make() -> Made { Made(host: .business, path: p) } }",
     ])
     func theReadMakerNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.readMakers))
@@ -80,6 +100,7 @@ struct ScannerTests {
         "let a = AuthRequest (host: .appleAccount, path: p, contentType: t, body: b)",
         "let a = AuthRequest.init(host: .appleAccount, path: p, contentType: t, body: b)",
         "let make = AuthRequest.init",
+        "extension Maker where Made == AuthRequest { func make() -> Made { Made(host: h, path: p, contentType: t, body: b) } }",
     ])
     func theAuthMakerNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.authMakers))
@@ -134,9 +155,71 @@ struct ScannerTests {
         "let session = Mirror(reflecting: transport).children.first?.value",
         #"let session = transport.value(forKey: "session")"#,
         "let invocation: NSInvocation? = nil",
+        #"let type: AnyClass? = Bundle.main.classNamed("NSURL" + "Session")"#,
+        "let type: AnyClass? = bundle.principalClass",
+        #"let p = NSProtocolFromString("NSURLSessionDelegate")"#,
+        #"let f = CFBundleGetFunctionPointerForName(bundle, "connect" as CFString)"#,
+        #"let d = CFBundleGetDataPointerForName(bundle, "environ" as CFString)"#,
+        #"let type = _typeByName("So12NSURLSessionC")"#,
+        #"@_silgen_name("connect") func link(_ fd: Int32, _ address: UnsafeRawPointer, _ length: UInt32) -> Int32"#,
+        #"@_extern(c, "connect") func link(_ fd: Int32, _ address: UnsafeRawPointer, _ length: UInt32) -> Int32"#,
     ])
     func theLookupNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.lookups))
+    }
+
+    @Test(arguments: [
+        "let (body, http) = try await transport.send(request, limit: bodyLimit)",
+        "_ = try await URLSessionTransport().send(request, limit: 1)",
+        "_ = try await t\n    .send (request, limit: 1)",
+        "let send = transport.send",
+        "extension Transport { func go(_ r: URLRequest) async throws { _ = try await send(r, limit: 1) } }",
+        "extension HTTPCore.Transport {}",
+    ])
+    func theSendNeedleFinds(_ code: String) {
+        #expect(Self.found(code, RouteTests.sends))
+    }
+
+    @Test(arguments: [
+        "extension ReadRequest { static func sneak() -> Self { Self(host: .business, path: p) } }",
+        "extension ReadRequest: Maker {}",
+        "public extension Wire.ReadRequest {}",
+        "extension AuthRequest: Maker {}",
+        "extension\n    Wire.AuthRequest {}",
+    ])
+    func theExtensionNeedlesFind(_ code: String) {
+        #expect(Self.found(code, RouteTests.requestExtensions))
+    }
+
+    static func aliases(_ code: String) -> [String] { RouteTests.aliases(SourceScan.File(path: "x.swift", text: code)) }
+
+    /// `typealias Sneak = ReadRequest`, however spelled, and the near misses that alias something else.
+    @Test func theAliasScanFindsARequestTypeUnderAnotherName() {
+        let aliased = ["typealias Sneak = ReadRequest", "typealias Sneak = Wire.ReadRequest", "public typealias S<T> = ReadRequest",
+                       "typealias Sneak =\n    ReadRequest", "typealias Sneak = Optional<AuthRequest>", "associatedtype R = ReadRequest",
+                       "let a = 1; typealias Sneak = ReadRequest", "typealias Sneak = Dictionary<Int,\n    ReadRequest>",
+                       "typealias Make = (Int) -> ReadRequest", "typealias Sneak = ReadRequest; let a = 1"]
+        for code in aliased { #expect(!Self.aliases(code).isEmpty, "\(code)") }
+        let other = ["typealias Handler = (Int) -> Void\nfunc read() -> ReadRequest { make() }", "let r = ReadRequest(host: h, path: p)",
+                     "// typealias Sneak = ReadRequest", "let s = \"typealias Sneak = ReadRequest\"", "typealias Pair = (Int, Int)\nlet r: ReadRequest",
+                     "let mytypealias = ReadRequest.self", "typealias Pair = (Int, Int); let r = ReadRequest(host: h, path: p)"]
+        for code in other { #expect(Self.aliases(code).isEmpty, "\(code)") }
+    }
+
+    /// The reads `DebugOnlyTests` keeps out of Release code, each spelled as a debug switch could be.
+    @Test(arguments: [
+        #"if ProcessInfo.processInfo.environment["ABAPIT" + "_DEMO"] == "1" { demo() }"#,
+        #"let info = NSProcessInfo.processInfo"#,
+        "let all = CommandLine.arguments",
+        #"let value = getenv("X")"#,
+        "let env = _NSGetEnviron()",
+        #"if UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO") { demo() }"#,
+        #"let suite = UserDefaults(suiteName: "x")"#,
+        #"@AppStorage("demo") var demo = false"#,
+        #"let v = CFPreferencesCopyAppValue("demo" as CFString, kCFPreferencesCurrentApplication)"#,
+    ])
+    func theProcessReadNeedlesFind(_ code: String) {
+        #expect(Self.found(code, DebugOnlyTests.processReads))
     }
 
     @Test func theTestableNeedleFinds() {
@@ -144,8 +227,8 @@ struct ScannerTests {
     }
 
     /// Every needle of every list: named in a string literal it counts; named in a comment it doesn't.
-    @Test(arguments: [RouteTests.networking, RouteTests.readMakers, RouteTests.authMakers, RouteTests.keychain,
-                      RouteTests.fetches, RouteTests.casts, RouteTests.lookups, ["@testable"]])
+    @Test(arguments: [RouteTests.networking, RouteTests.readMakers, RouteTests.authMakers, RouteTests.requestExtensions, RouteTests.keychain,
+                      RouteTests.fetches, RouteTests.casts, RouteTests.lookups, RouteTests.sends, DebugOnlyTests.processReads, ["@testable"]])
     func aStringIsAUseAndACommentIsNot(_ needles: [String]) {
         for needle in needles {
             #expect(Self.found("let name = \"\(needle)\"", needles), "\(needle) in a string")
@@ -167,8 +250,52 @@ struct ScannerTests {
         // An interpolation is code: its comment is blanked even with the string kept, and its `)` ends it.
         #expect(code(#""\(a /* " */) b""#, strings: false) == Array(#""  a        )  ""#.utf8))
         #expect(code(#""\(a /* " */) b""#, strings: true) == Array(#""\(a        ) b""#.utf8))
-        #expect(code("let r = #/a//b/#; t", strings: false) == Array("let r = #/    /#; t".utf8))
+        // A regex literal's slashes are blanked with its contents: no `/` outside code is left for `unreadable`.
+        #expect(code("let r = #/a//b/#; t", strings: false) == Array("let r = #      #; t".utf8))
         #expect(code("a /* x /* y */ z */ b", strings: true) == Array(("a " + String(repeating: " ", count: 17) + " b").utf8))
+        // Phase 1b gates verifier round 1: each of these branches had no case, and a misreading hid what follows.
+        // A line ends at CR too; an unterminated string ends with its line (swiftc reports it; the scan reads on).
+        #expect(code("a // b\rc", strings: true) == Array("a     \rc".utf8))
+        #expect(code("/* a\rb */c", strings: true) == Array("    \r    c".utf8))
+        // A raw identifier ends with its line, as swiftc's does: a backtick left open is a backtick.
+        #expect(code("let a = `b\nlet s = `c`", strings: true) == Array("let a = `b\nlet s = `c`".utf8))
+        #expect(code("let s = \"a\nb", strings: false) == Array("let s = \" \nb".utf8))
+        #expect(code("let s = \"a\rb", strings: false) == Array("let s = \" \rb".utf8))
+        // A plain escape takes the scalar after it, so `\"` doesn't close the string.
+        #expect(code(#"let s = "a\"b // c"; t"#, strings: false) == Array(#"let s = "         "; t"#.utf8))
+        // A raw string closes only at a quote followed by its hashes.
+        #expect(code(##"let r = #"a"//"#; t"##, strings: false) == Array(##"let r = #"    "#; t"##.utf8))
+        // An escape in a regex literal takes the scalar after it, so `\/#` doesn't close it.
+        #expect(code(#"let r = #/a\/#//x/#; t"#, strings: false) == Array("let r = #         #; t".utf8))
+        // An interpolation counts its own parentheses, and a string inside it is a string.
+        #expect(code(#""\(f(a) + "x // y") z""#, strings: false) == Array(#""  f(a) + "      ")  ""#.utf8))
+        // A raw identifier is one name: what it holds is no comment, string or directive. A plain one is kept.
+        #expect(code("let `a // b` = 1; t", strings: true) == Array("let `      ` = 1; t".utf8))
+        #expect(code("let `a\"b` = 1; let c = \"d\"", strings: false) == Array("let `   ` = 1; let c = \" \"".utf8))
+        #expect(code("let s = `URLSession`.shared", strings: false) == Array("let s = `URLSession`.shared".utf8))
+    }
+
+    static func unreadable(_ code: String) -> [SourceScan.Spot] { SourceScan.unreadable(SourceScan.File(path: "x.swift", text: code)) }
+
+    /// A bare regex literal: Swift 6 lexes one wherever an expression can start, and this lexer doesn't. `/\/*/` opened a
+    /// block comment and `/"/` a string here, hiding the code after them (Phase 1b gates verifier round 1). Each shape
+    /// below is one swiftc accepts; a division without spaces is refused with them. So is `a/ b`, which swiftc
+    /// rejects: a `/` needs a space on both sides, not on either.
+    @Test(arguments: [
+        #"_ = /\/*/"#, #"let r = /\/\//; _ = r"#, #"_ = /"/; _ = "/*""#, "return/x/", "let r = /=a/", "_ = [/a/, /b/]", "_ = (/c/)",
+        "_ = !/x/", "/x/.firstMatch(in: s)", "let c = a/b", "x /= 2", "let c = a /b", "let c = a/ b", "let c = a/\n    b",
+    ])
+    func aBareSlashIsUnreadable(_ code: String) {
+        #expect(!Self.unreadable(code).isEmpty)
+    }
+
+    @Test(arguments: [
+        "let c = a / b", "let c = (a / 2) / b", "let c = a\n    / b", "let c = a /\n    b", #"let u = "https://example.com/v1/x""#,
+        "// a/b", "/* a/b */", "/// `/x/`", "let r = #/a/b/#", "let r = ##/a/#b/##", #""\(a / b)""#, "let m = \"\"\"\n  /x/\n  \"\"\"",
+        ##"let s = #"a/b"#"##,
+    ])
+    func spacedDivisionAndLiteralsAreReadable(_ code: String) {
+        #expect(Self.unreadable(code).isEmpty, "\(Self.unreadable(code))")
     }
 
     static func spots(_ code: String, _ needles: [String] = ["ABAPIT_"], strings: Bool = true) -> [SourceScan.Spot] {
@@ -185,6 +312,12 @@ struct ScannerTests {
         "#if DEBUG /* the snapshot harness */\nlet a = \"ABAPIT_X\"\n#endif",
         "// ABAPIT_DEMO=1 fills the window from the demo org",
         "/* ABAPIT_SPIKE */ let a = 1",
+        // DEBUG inside another condition is debug code at any depth.
+        "#if os(macOS)\n#if DEBUG\nlet a = \"ABAPIT_X\"\n#endif\n#endif",
+        // A directive's line ends at CR as well as LF; a raw identifier that holds `#endif` is a name.
+        "#if DEBUG\rlet a = \"ABAPIT_X\"\r#endif",
+        "#if DEBUG // the harness\rlet a = \"ABAPIT_X\"\r\n#endif",
+        "#if DEBUG\nlet `#endif` = 1\nlet a = \"ABAPIT_X\"\n#endif",
     ])
     func debugCodeIsDebug(_ code: String) {
         #expect(Self.spots(code).isEmpty, "\(Self.spots(code))")
@@ -210,6 +343,9 @@ struct ScannerTests {
         "let s = \"#if DEBUG\"\nlet a = \"ABAPIT_X\"\nlet t = \"#endif\"",
         "#if DEBUG\nlet a = 1\n#endif\n#endif\nlet b = \"ABAPIT_X\"",
         "#if DEBUG\nlet a = \"ABAPIT_X\"",
+        // A comment after `#endif` ends at CR, and the code after it is Release code (Phase 1b gates verifier round 1).
+        "#if DEBUG\nlet a = 1\n#endif // demo\rlet b = \"ABAPIT_X\"",
+        "let `#if DEBUG` = 1\nlet a = \"ABAPIT_X\"\nlet `#endif` = 2",
     ])
     func releaseCodeIsRelease(_ code: String) {
         #expect(!Self.spots(code).isEmpty)
@@ -219,6 +355,10 @@ struct ScannerTests {
         #expect(Self.spots("let a = 1\nlet b = \"ABAPIT_X\"").map(\.description) == ["x.swift:2: ABAPIT_ outside #if DEBUG"])
         #expect(Self.spots("#if DEBUG\n#endif\n#endif").map(\.what) == ["#endif without an #if"])
         #expect(Self.spots("#if DEBUG\n").map(\.what) == ["an #if is never closed"])
+        // Lines are Swift's: a lone CR ends one, a CRLF ends one.
+        #expect(Self.spots("let a = 1\rlet b = \"ABAPIT_X\"").map(\.line) == [2])
+        #expect(Self.spots("let a = 1\r\nlet b = 2\r\nlet c = \"ABAPIT_X\"").map(\.line) == [3])
+        #expect(Self.unreadable("let a = 1\n_ = /\\/*/\nlet b = 2").map(\.line) == [2])
     }
 
     /// The app's `TestSupport` import (PackageGraphTests): code only, so a trailing comment can't pass it off

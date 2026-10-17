@@ -90,12 +90,34 @@ public enum SourceScan {
         return needles.contains { !offsets(of: $0, in: squeezed).isEmpty }
     }
 
-    /// A place a Release build compiles that it must not: `what` on line `line` (from 1) of `path`.
+    /// What a scan reports: `what` on line `line` (from 1) of `path`.
     public struct Spot: Sendable, Equatable, CustomStringConvertible {
         public let path: String
         public let line: Int
         public let what: String
         public var description: String { "\(path):\(line): \(what)" }
+
+        /// The spot at scalar `offset` of `file`. A line ends at LF, CR or CRLF, as it does for Swift's lexer.
+        init(_ file: File, _ offset: Int, _ what: String) {
+            let text = Array(file.text.unicodeScalars)
+            path = file.path
+            line = (0..<min(offset, text.count)).count { text[$0] == "\n" || (text[$0] == "\r" && ($0 + 1 == text.count || text[$0 + 1] != "\n")) } + 1
+            self.what = what
+        }
+    }
+
+    /// Where `file` holds code the lexer under every scan can't vouch for reading as Swift does: a `/` in code that
+    /// isn't division written with a space on each side (` / `). Swift 6 lexes a bare `/…/` regex literal wherever an
+    /// expression can start (`= /x/`, `return/x/`, `!/x/`, `(/x/`), and this lexer doesn't follow one: `/\/*/` opened a
+    /// block comment here that swiftc never saw and blanked the code after it, and `/"/` a string (Phase 1b gates
+    /// verifier round 1). A regex literal can't begin with a space, so ` / ` is always division. Write a regex as
+    /// `#/…/#`, which the lexer follows, and division with spaces: the scans then read every file whole.
+    public static func unreadable(_ file: File) -> [Spot] {
+        let code = codeScalars(file.text, strings: false)
+        func spaced(_ offset: Int) -> Bool { code.indices.contains(offset) && [" ", "\t", "\n", "\r"].contains(code[offset]) }
+        return code.indices.filter { code[$0] == "/" && !(spaced($0 - 1) && spaced($0 + 1)) }.map {
+            Spot(file, $0, "a / that isn't spaced division (a bare regex literal hides code from the scans: write #/…/# or a / b)")
+        }
     }
 
     /// Where `file` mentions one of `needles` outside the true branch of an `#if DEBUG`, nested at any depth: an
@@ -117,7 +139,7 @@ public enum SourceScan {
             let word = String(String.UnicodeScalarView(code[index + 1..<end]))
             guard ["if", "elseif", "else", "endif"].contains(word) else { index = end; continue }
             var lineEnd = end
-            while lineEnd < code.count, code[lineEnd] != "\n" { lineEnd += 1 }
+            while lineEnd < code.count, !isLineEnd(code[lineEnd]) { lineEnd += 1 }
             let condition = String(String.UnicodeScalarView(code[end..<lineEnd])).trimmingCharacters(in: .whitespacesAndNewlines)
             events.append((index, word, condition))
             index = lineEnd
@@ -126,9 +148,7 @@ public enum SourceScan {
             events += offsets(of: needle, in: searched).map { ($0, nil, needle) }
         }
         var branches: [Bool] = [], spots: [Spot] = []
-        func spot(_ offset: Int, _ what: String) {
-            spots.append(Spot(path: file.path, line: code[..<offset].count { $0 == "\n" } + 1, what: what))
-        }
+        func spot(_ offset: Int, _ what: String) { spots.append(Spot(file, offset, what)) }
         for event in events.sorted(by: { $0.offset < $1.offset }) {
             switch event.directive {
             case "if": branches.append(event.text == "DEBUG")
@@ -176,9 +196,11 @@ public enum SourceScan {
     /// contents too unless `strings` is true, one space per scalar with line breaks kept, so an offset or a line
     /// is the one in the source. It follows Swift's lexer through raw strings (`#"…"#`, where `\` is a
     /// backslash), multi-line strings, escapes, interpolations (`\(…)`: code again, its comments and strings
-    /// too) and extended regex literals (`#/…/#`, blanked like a string), so a `//` or `/*` inside a literal
-    /// can't hide the code after it and a directive inside one is text. Not followed: a bare `/…/` regex
-    /// literal, read as code (none is in the tree; a `"` in one would open a string here).
+    /// too), extended regex literals (`#/…/#`, blanked like a string, its slashes too) and raw identifiers (`` `a // b` ``, Swift
+    /// 6.2: blanked unless the name is plain, as `` `URLSession` `` is), so a `//` or `/*` inside one can't hide
+    /// the code after it and a directive inside one is text. A line ends at LF or CR, as it does for swiftc: a
+    /// lone CR ended a `//` comment there and not here, and hid the code after it (Phase 1b gates verifier
+    /// round 1). Not followed: a bare `/…/` regex literal, which `unreadable(_:)` refuses instead.
     public static func code(_ text: String, strings: Bool) -> String {
         String(String.UnicodeScalarView(codeScalars(text, strings: strings)))
     }
@@ -193,7 +215,7 @@ public enum SourceScan {
             while at(end) == "#" { end += 1 }
             return end - offset
         }
-        func blank(_ range: Range<Int>) { for offset in range where source[offset] != "\n" { out[offset] = " " } }
+        func blank(_ range: Range<Int>) { for offset in range where !isLineEnd(source[offset]) { out[offset] = " " } }
         func literal(_ range: Range<Int>) { if !strings { blank(range) } }
         while index < source.count {
             let scalar = source[index]
@@ -202,8 +224,14 @@ public enum SourceScan {
                 let count = hashes(from: index)
                 if scalar == "/", at(index + 1) == "/" {
                     let start = index
-                    while index < source.count, source[index] != "\n" { index += 1 }
+                    while index < source.count, !isLineEnd(source[index]) { index += 1 }
                     blank(start..<index)
+                } else if scalar == "`", let close = (index + 1..<source.count).first(where: { source[$0] == "`" || isLineEnd(source[$0]) }),
+                          source[close] == "`" {
+                    // A raw identifier is one name, whatever it holds. A plain one is kept (`` `URLSession` `` is URLSession);
+                    // any other is a name no API has, and is blanked.
+                    if !source[index + 1..<close].allSatisfy(isNameScalar) { blank(index + 1..<close) }
+                    index = close + 1
                 } else if scalar == "/", at(index + 1) == "*" {
                     let start = index
                     var depth = 0
@@ -218,6 +246,7 @@ public enum SourceScan {
                     index += count + (multiline ? 3 : 1)
                     stack.append(.string(hashes: count, multiline: multiline))
                 } else if count > 0, at(index + count) == "/" {
+                    literal(index + count..<index + count + 1)  // a delimiter's `/` isn't code: `unreadable` reads every other
                     index += count + 1
                     stack.append(.regex(hashes: count))
                 } else {
@@ -241,7 +270,7 @@ public enum SourceScan {
                 } else if scalar == "\"", (0..<quotes).allSatisfy({ at(index + $0) == "\"" }), hashes(from: index + quotes) >= count {
                     index += quotes + count
                     stack.removeLast()
-                } else if scalar == "\n", !multiline {
+                } else if isLineEnd(scalar), !multiline {
                     stack.removeLast()  // unterminated: Swift's lexer ends it at the line break too
                 } else {
                     literal(index..<index + 1)
@@ -253,6 +282,7 @@ public enum SourceScan {
                     literal(index..<end)
                     index = end
                 } else if scalar == "/", hashes(from: index + 1) >= count {
+                    literal(index..<index + 1)
                     index += 1 + count
                     stack.removeLast()
                 } else {
@@ -273,6 +303,9 @@ public enum SourceScan {
             scalars[start] == first && scalars[start..<start + pattern.count].elementsEqual(pattern)
         }
     }
+
+    /// LF or CR: Swift's lexer ends a line at either (a CRLF is two, which changes nothing here).
+    static func isLineEnd(_ scalar: Unicode.Scalar) -> Bool { scalar == "\n" || scalar == "\r" }
 
     /// `[A-Za-z0-9_]`.
     static func isNameScalar(_ scalar: Unicode.Scalar) -> Bool {

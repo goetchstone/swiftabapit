@@ -18,20 +18,37 @@ struct DebugOnlyTests {
         }
     }
 
-    /// Vault's `MemoryStore` keeps an org's key in memory: for tests and the demo org only. It is public and in
-    /// every build, so `scripts/check_app.sh` can't tell a use of it from its presence; the source holds that
-    /// only debug code uses it, outside its own definition and the Vault initializer that takes it.
-    @Test func onlyDebugCodeUsesTheMemoryStore() throws {
-        let definitions: Set = ["Packages/AbapitKit/Sources/Vault/SecretStore.swift", "Packages/AbapitKit/Sources/Vault/Vault.swift"]
+    /// What Release code may not touch: each reads the environment, the launch arguments or the user defaults, and
+    /// `UserDefaults` (so `@AppStorage`) reads a `-key value` launch argument itself. The name scan above held only the
+    /// names: `environment["ABAPIT" + "_DEMO"]` passed it, and `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")`
+    /// passed it and the gate (Phase 1b gates verifier round 1). A Release use of `ProcessInfo` for anything else is a
+    /// reviewed change to this list.
+    static let processReads = ["ProcessInfo", "CommandLine", "getenv", "_NSGetEnviron", "_NSGetArgv", "UserDefaults", "AppStorage",
+                               "CFPreferences"]
+
+    @Test func releaseCodeReadsNoEnvironmentArgumentOrDefault() throws {
+        for root in Self.roots {
+            for file in try SourceScan.swiftFiles(in: root) {
+                let spots = SourceScan.outsideDebug(file, Self.processReads, strings: false)
+                #expect(spots.isEmpty, "\(spots)")
+            }
+        }
+    }
+
+    /// Vault's `MemoryStore` keeps an org's key in memory: for tests and the demo org only. It and the Vault
+    /// initializer that takes it are debug code, so a Release build can't pick it even unnamed: `Vault(store: .init(),
+    /// now: …)` resolved to it, past the old name scan and the gate (Phase 1b gates verifier round 1). This holds the
+    /// definitions and every use to debug code.
+    @Test func theMemoryStoreIsDebugCode() throws {
         var seen = 0
         for root in Self.roots {
-            for file in try SourceScan.swiftFiles(in: root) where !definitions.contains(file.path) {
+            for file in try SourceScan.swiftFiles(in: root) {
                 seen += SourceScan.mentions(file, ["MemoryStore"]) ? 1 : 0
                 let spots = SourceScan.outsideDebug(file, ["MemoryStore"], strings: false)
                 #expect(spots.isEmpty, "\(spots)")
             }
         }
-        #expect(seen > 0, "the demo's use of the MemoryStore isn't where the scan looks")
+        #expect(seen >= 3, "the MemoryStore's definition, its Vault initializer and the demo's use aren't where the scan looks")
     }
 
     /// The scan must see the switches it guards, or it passes vacuously.

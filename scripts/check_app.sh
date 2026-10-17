@@ -8,9 +8,10 @@
 #   read keys and tokens out of its memory);
 # - exactly one Mach-O in the bundle: Contents/MacOS/abapit, signed and verifying strictly;
 # - no listener: the binary imports no socket-server or listener API (plan L2), and no ATS exception;
-# - no debug-only code: a Release binary reads no environment variable or launch argument at all (so no debug
-#   switch, whatever its name), and carries none of TestSupport's stubs or demo, checked on the binary as built
-#   and on a copy stripped as an archive build strips it (Phase 1b's review, M1);
+# - no debug-only code: a Release binary reads no environment variable, launch argument or user default at all
+#   (so no debug switch, whatever its name: UserDefaults reads `-key value` launch arguments itself), and carries
+#   none of TestSupport's stubs or demo and no Vault MemoryStore, checked on the binary as built and on a copy
+#   stripped as an archive build strips it (Phase 1b's review M1 and its gates verifier round 1; Phase 7a's H1);
 # - the bundle's identity: bundle ID, display name = bundle name (macOS reads any other as a rename,
 #   SwiftGamGui failure-log 2026-10-10), minimum macOS 27.0.
 # It checks a Release build. Usage: scripts/check_app.sh path/to/Release/abapit.app
@@ -64,14 +65,15 @@ if plutil -extract NSAppTransportSecurity raw -o - "$PLIST" >/dev/null 2>&1; the
 # What the code must not do or carry, checked twice: on a copy stripped the way an archive build strips it
 # (DEPLOYMENT_POSTPROCESSING=YES runs `strip -D`: no symbol table), then on the binary as built. Phase 1b's review
 # linked the stub into a stripped build and this gate passed it, because only `nm` looked for the stub. A hit
-# only the second pass finds lives in the symbol table alone, which an archive drops: its strings need a needle.
+# only the second pass finds lives in the symbol table alone, which an archive drops.
 # Each tool's output is captured before it is searched: under pipefail, `tool | grep -q` reads a match as no
 # match once the output outgrows the pipe (grep exits, the writer dies of SIGPIPE). `nm | grep -q` missed the
 # linked stub that way, and MemoryStore in every Release build (failure-log 2026-10-16, "the gate looked for what
-# it could not see").
+# it could not see"; Phase 7a's review H1). SourceScanTests' GateScriptTests refuse that pipe in scripts/.
 copy="$(mktemp -d)"
 trap 'rm -rf "$copy"' EXIT
 xcrun strip -D -o "$copy/abapit" "$BINARY" 2>/dev/null || fail "can't make a stripped copy of the binary"
+DEBUG_ONLY='ABAPIT_[A-Z_]*|stub-token-|Example Business \(demo\)|TestSupport|AppleStub|MosyleStub|DemoFleet|DemoOrg|MemoryStore'
 release_code() {  # binary, what to call it, what a hit means beyond itself
   local bin="$1" name="$2" hint="$3" imports selectors text names hits
   imports="$(nm -u "$bin" 2>/dev/null)" || fail "can't read $name's imported symbols"
@@ -82,35 +84,40 @@ release_code() {  # binary, what to call it, what a hit means beyond itself
   if hits="$(grep -E '^_(bind|listen|accept|accept4)$|nw_listener|NWListener|NSSocketPort|SocketPort|CFSocketCreate|CFSocketSetAddress|NSNetService|DNSServiceRegister|GCDWebServer|HTTPServer' <<<"$imports")"; then
     fail "$name imports listener APIs: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
-  # No debug switch: Release reads no environment variable and no launch argument. The switch names can't be
-  # looked for: Swift keeps a string literal of 15 bytes or fewer inside the instructions, so `strings` never
+  # No debug switch: Release reads no environment variable, launch argument or user default. The switch names can't
+  # be looked for: Swift keeps a string literal of 15 bytes or fewer inside the instructions, so `strings` never
   # shows ABAPIT_DEMO (11 bytes); SourceScanTests' DebugOnlyTests hold the names in the source. The read can be:
-  # ProcessInfo's `environment` and `arguments` selectors, getenv and its kin, Swift's CommandLine.
-  if hits="$(grep -E '[[:space:]](environment|arguments)$' <<<"$selectors")"; then
-    fail "$name reads its environment or arguments (a debug switch outside #if DEBUG?): $(tr -s ' \n' ' ' <<<"$hits")$hint"
+  # ProcessInfo's `environment` and `arguments` selectors, or either through key-value coding (`valueForKey:`, whose
+  # key is an inline literal too); getenv and its kin; Swift's CommandLine; and UserDefaults, which reads a
+  # `-key value` launch argument itself: its class, `standardUserDefaults`, SwiftUI's AppStorage, CFPreferences.
+  # `UserDefaults.standard.bool(forKey: "ABAPIT" + "_DEMO")` passed the gate and the name scan before these.
+  if hits="$(grep -E '[[:space:]](environment|arguments|standardUserDefaults|valueForKey:|valueForKeyPath:)$' <<<"$selectors")"; then
+    fail "$name reads its environment, arguments or defaults (a debug switch outside #if DEBUG?): $(tr -s ' \n' ' ' <<<"$hits")$hint"
   fi
-  if hits="$(grep -E '^_(getenv|secure_getenv|environ|_NSGetEnviron|_NSGetArgv|_NSGetArgc)$|11CommandLineO' <<<"$imports")"; then
-    fail "$name reads its environment or arguments: $(tr '\n' ' ' <<<"$hits")$hint"
+  if hits="$(grep -E '^_(getenv|secure_getenv|environ|_NSGetEnviron|_NSGetArgv|_NSGetArgc)$|11CommandLineO|^_OBJC_CLASS_\$_NSUserDefaults|AppStorage|^_CFPreferences' <<<"$imports")"; then
+    fail "$name reads its environment, arguments or defaults: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
-  # No debug-only code: TestSupport's strict stubs and demo, compiled out under #if DEBUG (linking alone would
-  # keep them, through Swift's conformance records). A strip keeps their class names (_TtC11TestSupport9AppleStub)
-  # and #filePath paths (.../Sources/TestSupport/...), which `TestSupport` matches; a longer ABAPIT_ string (a
-  # message naming a switch); the stub's token prefix and the demo org's name. Not Vault's MemoryStore: it is
-  # public and in every build, so the binary can't tell a use from its presence (the old `nm | grep -q` named it
-  # and never ran); DebugOnlyTests hold that only debug code uses it.
-  if hits="$(grep -oE 'ABAPIT_[A-Z_]*|stub-token-|Example Business \(demo\)|TestSupport|AppleStub|MosyleStub|DemoFleet|DemoOrg' <<<"$text" | sort -u)"; then
+  # No debug-only code: TestSupport's strict stubs and demo, and Vault's MemoryStore, all compiled out under
+  # #if DEBUG (linking alone would keep them, through Swift's conformance records). MemoryStore keeps a key in
+  # memory; it was public and in every Release build (101 symbols), and the piped `nm | grep -q` never said so
+  # (Phase 7a's review H1). A strip keeps their class names (_TtC11TestSupport9AppleStub, MemoryStore's) and
+  # #filePath paths (.../Sources/TestSupport/...), which `TestSupport` matches; a longer ABAPIT_ string (a message
+  # naming a switch); the stub's token prefix and the demo org's name. `strings -a` reads every section but not the
+  # symbol table, so the same needles are looked for in `nm` too: a TestSupport free function linked into Release
+  # shows nowhere else (mutant FN, in the gates repair after Phase 1b's verifier round 1).
+  if hits="$(grep -oE "$DEBUG_ONLY" <<<"$text" | sort -u)"; then
     fail "debug-only code or strings are in $name: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
-  if hits="$(grep -oE 'TestSupport|AppleStub|MosyleStub|DemoFleet|DemoOrg' <<<"$names" | sort -u)"; then
+  if hits="$(grep -oE "$DEBUG_ONLY" <<<"$names" | sort -u)"; then
     fail "test or demo code is linked into $name: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
 }
 release_code "$copy/abapit" "the stripped binary" ""
-release_code "$BINARY" "the binary" " (only its symbol table shows this, which an archive build strips: add a strings needle above)"
+release_code "$BINARY" "the binary" " (only its symbol table shows this: an archive build strips it and would ship the code unseen)"
 
 [ "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "$BUNDLE_ID" ] || fail "bundle identifier"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "$(basename "$APP" .app)" ] \
   || fail "the display name isn't the bundle's name, so macOS shows the file name"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "abapit" ] || fail "display name"
 [ "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "27.0" ] || fail "minimum macOS"
-echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, ATS exception, environment read or debug code, stripped or not)"
+echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, ATS exception, environment, argument or defaults read, or debug code, stripped or not)"
