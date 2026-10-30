@@ -42,5 +42,9 @@
   - L1: `ResourceView.unreadNested` and `AuditEventPayload.unreadNested` name the keys inside the objects a view reads,
     and the pass counts them as `attribute.key` (users' phone numbers and roles, list and single read; a custom
     setting's values; both audit role lists), each part filtered as a word.
+  - L2: new stems (`psk`, `sharedkey`, encryption, client, access and licence keys) and `PW` as a word; a number is
+    masked when its key's last word ends in a secret word and no policy word is in it; a string holding a PEM private
+    key, as text or base64, is masked whatever its key; keys merged by normalization are counted and said
+    (`ProfileText.note`). L4: a KELVIN SIGN lookalike key, and a binary chain of a hundred dictionaries.
 - **Prevention:** each fix has a test that fails on the unfixed code or its mutant (listed in the fix's report). Still
   only a stub: what Apple sends in `eventDataPropertyKey` and in the fourteen field-less payloads is a Phase 2 live check.

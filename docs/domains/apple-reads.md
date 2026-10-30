@@ -193,6 +193,15 @@ org editor's save).
   error (checked by mutant). The detail shows `customSettings?.profileText`. So the device inspector's
   every-attribute pattern is safe for a configuration. `aCustomSettingsProfileReachesNoPublicValue` (a canary through
   the strict stub), `aConfigurationsCSVHoldsNoProfile`, and `BoundaryTests.theAppSideNeverNamesTheRawProfile`.
+- **What `ProfileText` masks** (Phase 2a review L2): every value under a key whose fold holds a stem (`password`,
+  `secret`, `token`, `psk`, `sharedkey`, an encryption, client, access or licence key, …) or that has `PIN` or `PW` as
+  a word, unless it is a flag, a date, or a number that isn't a secret; a number whose key's last word ends in a secret
+  word (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`) unless a policy word is in the key (`MaxPIN`,
+  `PasscodeMinLength`); every string holding a PEM private key, as text or base64, whatever its key; every data blob.
+  A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. Two keys equal once normalized merge when
+  Foundation's dictionary becomes Swift's: `.plist`'s `merged` counts them and `note` says it. Not caught: a secret
+  under a key no stem or word names that isn't a PEM key (a homoglyph spelling, an unusual name), and a key wrapped
+  twice (base64 of base64).
 - **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
   the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds
   it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value

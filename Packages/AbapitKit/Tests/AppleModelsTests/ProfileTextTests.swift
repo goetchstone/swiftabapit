@@ -84,16 +84,18 @@ struct ProfileTextTests {
     static let masked = 12
 
     static func shown(_ text: String) throws -> (text: String, masked: Int) {
-        guard case .plist(let shown, let masked) = ProfileText(text) else {
+        guard case .plist(let shown, let masked, let merged) = ProfileText(text) else {
             Issue.record("not shown as a plist: \(ProfileText(text))")
             throw CancellationError()
         }
+        #expect(merged == 0, "\(text)")
         return (shown, masked)
     }
 
     @Test func aProfileIsShownWithEverySecretMasked() throws {
         let (text, masked) = try Self.shown(Self.profile)
         #expect(masked == Self.masked)
+        #expect(ProfileText(Self.profile).note == "12 values masked")
         for secret in Self.secrets { #expect(!text.contains(secret), "\(secret) was shown") }
         for kept in ["Office", "front-desk", "vpn.example.com", "identity.p12", "https://scep.example.com", "token one", "kept",
                      "<integer>90</integer>", "<integer>25</integer>", "Office network", "com.apple.security.pkcs12"] {
@@ -138,6 +140,10 @@ struct ProfileTextTests {
         ("PrivateKey", true), ("PIN", true), ("pin", true), ("UserPIN", true), ("PINCode", true), ("P\u{200B}INCode", true), ("pinCode", true), ("user_pin", true),
         ("VPNPIN", true), ("Shipping", false), ("AllowPinning", false), ("Opinion", false), ("SSID_STR", false), ("UserName", false),
         ("RemoteAddress", false), ("PayloadDisplayName", false),
+        // Phase 2a review L2: each of these was shown.
+        ("PreSharedKey", true), ("PSK", true), ("WPA_PSK", true), ("SharedKey", true), ("EncryptionKey", true), ("ClientKey", true),
+        ("AccessKey", true), ("LicenseKey", true), ("AdminPW", true), ("PW", true), ("pw_value", true),
+        ("EncryptionType", false), ("Power", false), ("PWR", false), ("KeySize", false), ("ClientID", false),
     ])
     func aSecretKeyIsFoundHoweverItIsSpelled(key: String, secret: Bool) throws {
         let plist = "<plist version=\"1.0\"><dict><key>\(key)</key><string>s3cr3t-value</string></dict></plist>"
@@ -158,6 +164,76 @@ struct ProfileTextTests {
         #expect(masked == 2)
         for secret in ["one-secret", "two-secret", "three-secret"] { #expect(!text.contains(secret)) }
         #expect(text.contains("<true/>") && text.contains("<integer>5</integer>") && text.contains("<date>2026-01-01T00:00:00Z</date>"))
+    }
+
+    /// A number is masked when its key's last word is a secret word (a numeric passcode, PIN or unlock code), unless a
+    /// policy word is in the key too: `MaxPINAgeInDays` and `PasscodeMinLength` are rules about a secret, not one (Phase
+    /// 2a review L2: `UnlockCode` and `Passcode` integers were shown). A flag under any of these keys is never masked.
+    @Test(arguments: [
+        ("Passcode", true), ("devicePasscode", true), ("DevicePassword", true), ("UserPIN", true), ("PIN", true), ("PINCode", true),
+        ("PINNumber", true), ("UnlockCode", true), ("unlock_code", true), ("Unlockcode", true), ("AdminPW", true), ("UserPwd", true),
+        ("\u{FF30}\u{FF29}\u{FF2E}", true),
+        ("MaxPINAgeInDays", false), ("PasscodeMinLength", false), ("pinHistory", false), ("MaxPIN", false), ("MinimumPasscode", false),
+        ("maxFailedAttempts", false), ("PasswordAttempts", false), ("PasscodeComplexity", false), ("RequiredPIN", false), ("ComplexPasscode", false),
+        ("PasscodeAgeDays", false), ("PasswordHistoryLength", false), ("Port", false), ("AuthCode", false), ("PINTimeout", false),
+        // Each policy word on its own before a secret last word.
+        ("MaximumPIN", false), ("MinPIN", false), ("AgeOfPasscode", false), ("LengthOfPIN", false), ("HistoryOfPasscode", false),
+        ("AttemptBeforePIN", false), ("AttemptsBeforePIN", false), ("ComplexityOfPIN", false),
+        // A last word ending in `pin` is a secret one, as for strings: over-masked, never shown.
+        ("Spin", true),
+    ])
+    func aNumberUnderASecretWordIsMaskedAndAPolicyIsNot(key: String, secret: Bool) throws {
+        for (value, written) in [("<integer>4321</integer>", "4321"), ("<real>43.5</real>", "43.5"), ("<integer>0</integer>", "<integer>0</integer>")] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>\(key)</key>\(value)</dict></plist>")
+            #expect(text.contains(written) != secret && masked == (secret ? 1 : 0), "\(key) \(value)")
+        }
+        for flag in ["<true/>", "<false/>"] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>\(key)</key>\(flag)</dict></plist>")
+            #expect(text.contains(flag) && masked == 0, "\(key) \(flag)")
+            let tree = try PropertyListSerialization.propertyList(from: Data("<plist version=\"1.0\"><dict><key>\(key)</key>\(flag)</dict></plist>".utf8), format: nil)
+            let binary = try PropertyListSerialization.data(fromPropertyList: tree, format: .binary, options: 0)
+            #expect(try Self.shown(binary.base64EncodedString()).masked == 0, "\(key) \(flag), binary")
+        }
+    }
+
+    /// A PEM private key is masked whatever its key, as text or as base64 of the text, in a dictionary or a list, in any
+    /// of its labels and either case; a certificate is public and shown (Phase 2a review L2: one under `Identity` was
+    /// shown).
+    @Test func aPrivateKeyIsMaskedWhateverItsKey() throws {
+        let body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7"
+        for label in ["PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "OPENSSH PRIVATE KEY", "PGP PRIVATE KEY BLOCK"] {
+            for pem in ["-----BEGIN \(label)-----\n\(body)\n-----END \(label)-----\n", "-----begin \(label.lowercased())-----\r\n\(body)"] {
+                for value in [pem, Data(pem.utf8).base64EncodedString(), Data(pem.utf8).base64EncodedString(options: .lineLength64Characters)] {
+                    let plist = "<plist version=\"1.0\"><dict><key>Identity</key><string>\(value)</string><key>Chain</key><array><string>\(value)</string></array></dict></plist>"
+                    let (text, masked) = try Self.shown(plist)
+                    #expect(!text.contains(body) && !text.contains(value) && masked == 2, "\(label): \(value)")
+                }
+            }
+        }
+        let certificate = "-----BEGIN CERTIFICATE-----\n\(body)\n-----END CERTIFICATE-----"
+        // The label is the BEGIN line's alone: a certificate followed by words about its private key is still public.
+        for value in [certificate, Data(certificate.utf8).base64EncodedString(), "a note on the private key policy", "BEGIN PRIVATE KEY",
+                      certificate + "\nThe private key stays on the device.", "-----BEGIN CERTIFICATE\nprivate key"] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>Certificate</key><string>\(value)</string></dict></plist>")
+            #expect(text.contains(value) && masked == 0, "\(value)")
+        }
+    }
+
+    /// Two keys that differ only in Unicode normalization merge when Foundation's dictionary becomes Swift's, and one
+    /// value is lost: the count says how many, and the note says it, never silent (Phase 2a review L2).
+    @Test func keysMergedByNormalizationAreSaid() throws {
+        let plist = "<plist version=\"1.0\"><dict><key>caf\u{E9}</key><string>one</string><key>cafe\u{301}</key><string>two</string>"
+            + "<key>Inner</key><dict><key>\u{C5}</key><integer>1</integer><key>A\u{30A}</key><integer>2</integer><key>\u{212B}</key><integer>3</integer></dict>"
+            + "<key>Password</key><string>hunter2</string></dict></plist>"
+        guard case .plist(let text, let masked, let merged) = ProfileText(plist) else {
+            Issue.record("not shown: \(ProfileText(plist))")
+            return
+        }
+        #expect(merged == 3 && masked == 1 && !text.contains("hunter2"))
+        #expect(text.contains("<string>one</string>") != text.contains("<string>two</string>"), "one of the two is shown")
+        #expect(ProfileText(plist).note == "1 value masked · 3 keys not shown: each reads as another key once normalized")
+        #expect(try Self.shown(Self.plist(bytes: 100)).masked == 0 && ProfileText(Self.plist(bytes: 100)).note == nil)
+        #expect(ProfileText("nope").note == nil)
     }
 
     /// Secrets inside arrays inside arrays, any depth.
@@ -347,6 +423,25 @@ struct ProfileTextTests {
         #expect(ProfileText(Self.bplist(chain).base64EncodedString()) == .notShown(ProfileText.tooDeep))
         chain.removeLast()
         #expect(try Self.shown(Self.bplist(chain).base64EncodedString()).masked == 0)
+    }
+
+    /// Dictionaries one inside the next, about a hundred: under the container count, so Foundation reads them, and the
+    /// walk refuses them past `maximumDepth` (Phase 2a review L4: with the walk's dictionary bound deleted, every test
+    /// stayed green, since no binary plist nested 65 to 256 dictionaries).
+    @Test func aDeepBinaryChainOfDictionariesIsTooDeep() throws {
+        func chain(_ count: Int) -> Data {
+            var objects: [[UInt8]] = [[0x51, 0x6B], [0x09]]
+            for _ in 0..<count {
+                let value = objects.count - 1
+                objects.append([0xD1, 0x00, 0x00, UInt8(value >> 8), UInt8(value & 0xFF)])
+            }
+            return Self.bplist(objects)
+        }
+        #expect(ProfileText.binaryContainers(Array(chain(100))) == 100)
+        #expect(ProfileText(chain(100).base64EncodedString()) == .notShown(ProfileText.tooDeep))
+        #expect(ProfileText(chain(ProfileText.maximumDepth + 1).base64EncodedString()) == .notShown(ProfileText.tooDeep))
+        let atBound = try Self.shown(chain(ProfileText.maximumDepth).base64EncodedString())
+        #expect(atBound.masked == 0 && atBound.text.contains("<key>k</key>") && atBound.text.contains("<true/>"))
     }
 
     /// A trailer or offset table that points outside the bytes is refused, never handed on.

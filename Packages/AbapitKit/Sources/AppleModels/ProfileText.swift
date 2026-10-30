@@ -11,8 +11,9 @@ import Foundation
 /// `maximumDepth`; a binary one has its object table checked and its containers counted. Pure Foundation, so it builds
 /// on Linux for the fuzz job.
 public enum ProfileText: Sendable, Equatable {
-    /// The profile as XML, with `masked` values replaced by `mask`.
-    case plist(String, masked: Int)
+    /// The profile as XML, with `masked` values replaced by `mask`, and `merged` keys that read as one once normalized
+    /// (Swift's dictionaries compare canonically): one value of each such pair isn't in the text, and `note` says so.
+    case plist(String, masked: Int, merged: Int)
     /// A signed profile (CMS SignedData): its content holds the profile, secrets and all, in the clear.
     case signed(bytes: Int)
     /// Not shown, and why.
@@ -40,10 +41,20 @@ public enum ProfileText: Sendable, Equatable {
     /// What the detail view shows.
     public var text: String {
         switch self {
-        case .plist(let text, _): text
+        case .plist(let text, _, _): text
         case .signed(let bytes): "signed profile, \(bytes) bytes, not shown"
         case .notShown(let reason): reason
         }
+    }
+
+    /// What the detail view says under a shown profile: how many values were masked, and how many keys aren't shown
+    /// because each reads as another key once normalized, rather than gone unsaid (Phase 2a review L2).
+    public var note: String? {
+        guard case .plist(_, let masked, let merged) = self else { return nil }
+        let parts = [masked == 0 ? nil : "\(masked) value\(masked == 1 ? "" : "s") masked",
+                     merged == 0 ? nil : "\(merged) key\(merged == 1 ? "" : "s") not shown: each reads as another key once normalized"]
+        let said = parts.compactMap { $0 }
+        return said.isEmpty ? nil : said.joined(separator: " · ")
     }
 
     public init(_ configurationProfile: String) {
@@ -94,7 +105,7 @@ public enum ProfileText: Sendable, Equatable {
         guard let out = try? PropertyListSerialization.data(fromPropertyList: masked, format: .xml, options: 0) else {
             return .notShown(unreadable)
         }
-        return .plist(String(decoding: out, as: UTF8.self), masked: walk.masked)
+        return .plist(String(decoding: out, as: UTF8.self), masked: walk.masked, merged: walk.merged)
     }
 
     // MARK: XML, scanned before the parser sees it
@@ -225,9 +236,9 @@ public enum ProfileText: Sendable, Equatable {
         return bytes[start...].firstRange(of: needle)?.lowerBound
     }
 
-    private static func isSpace(_ byte: UInt8) -> Bool { byte == 0x20 || byte == 0x09 || byte == 0x0A || byte == 0x0D }
+    fileprivate static func isSpace(_ byte: UInt8) -> Bool { byte == 0x20 || byte == 0x09 || byte == 0x0A || byte == 0x0D }
 
-    private static func isBase64(_ byte: UInt8) -> Bool {
+    fileprivate static func isBase64(_ byte: UInt8) -> Bool {
         switch byte {
         case UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "0")...UInt8(ascii: "9"),
              UInt8(ascii: "+"), UInt8(ascii: "/"), UInt8(ascii: "="): true
@@ -235,29 +246,33 @@ public enum ProfileText: Sendable, Equatable {
         }
     }
 
-    private static func lower(_ byte: UInt8) -> UInt8 {
+    fileprivate static func lower(_ byte: UInt8) -> UInt8 {
         (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(byte) ? byte + 32 : byte
     }
 }
 
-/// The walk that masks: every value under a secret key, whole, unless it is a flag, a number or a date (those are
-/// policies: `PasswordRequired`, `maxPINAgeInDays`); and every data blob, wherever it is (a certificate, a PKCS#12
-/// identity, a shared secret: none readable, some secret, and an Exchange payload carries an identity outside any
-/// certificate payload). Bounded in depth and in the values it visits.
+/// The walk that masks: every value under a secret key, whole, unless it is a flag, a date, or a number whose key doesn't
+/// end in a secret word or names a policy (`PasswordRequired`, `maxPINAgeInDays`, `PasscodeMinLength` are policies; a
+/// numeric `Passcode` or `UnlockCode` isn't); every string holding a PEM private key, wherever it is; and every data
+/// blob, wherever it is (a certificate, a PKCS#12 identity, a shared secret: none readable, some secret, and an Exchange
+/// payload carries an identity outside any certificate payload). Bounded in depth and in the values it visits.
 private struct MaskingWalk {
-    var masked = 0, visited = 0
+    var masked = 0, merged = 0, visited = 0
     var refusal = ProfileText.unreadable
 
     mutating func mask(_ value: Any, depth: Int) -> Any? {
         visited += 1
         guard visited <= ProfileText.maximumValues else { refusal = ProfileText.tooMany; return nil }
-        // A Swift dictionary merges keys that differ only in Unicode normalization, so one of two such keys is dropped
-        // from the text: never a secret shown, since both fold alike and are masked alike.
         if let dictionary = value as? [String: Any] {
             guard depth < ProfileText.maximumDepth else { refusal = ProfileText.tooDeep; return nil }
+            // Bridged to a Swift dictionary, keys that differ only in Unicode normalization merge and one value of each
+            // pair is gone: counted, so `ProfileText.note` says it (Phase 2a review L2: it was dropped unsaid). Never a
+            // secret shown: both keys fold alike and are masked alike. Foundation's reader on Linux may merge them first.
+            merged += max(0, ((value as? NSDictionary)?.count ?? dictionary.count) - dictionary.count)
             var out: [String: Any] = [:]
             for (key, item) in dictionary {
-                if ProfileSecrets.isSecret(key), item is String || item is Data || item is [Any] || item is [String: Any] {
+                if ProfileSecrets.isSecret(key) && (item is String || item is Data || item is [Any] || item is [String: Any])
+                    || ProfileSecrets.isNumber(item) && ProfileSecrets.endsInASecretWord(key) {
                     out[key] = ProfileText.mask
                     masked += 1
                 } else {
@@ -276,7 +291,7 @@ private struct MaskingWalk {
             }
             return out
         }
-        if value is Data {
+        if value is Data || (value as? String).map(ProfileSecrets.holdsPrivateKey) == true {
             masked += 1
             return ProfileText.mask
         }
@@ -286,18 +301,74 @@ private struct MaskingWalk {
 
 /// Which keys hold secrets. A key is read folded as the CSV denylist reads one (`ExportPolicy.fold` in Reports, which
 /// this module can't import): compatibility-decomposed, lowercased, letters and numbers only, so case, a full-width
-/// spelling, an invisible split or punctuation don't hide `password`. A PIN is one by its own word (`UserPIN`,
-/// `PINCode`, `pin_code`), so `Shipping` and `AllowPinning` aren't.
+/// spelling, an invisible split or punctuation don't hide `password`. A PIN and a `PW` are one by their own word
+/// (`UserPIN`, `PINCode`, `pin_code`, `AdminPW`), so `Shipping`, `AllowPinning` and `Power` aren't.
 enum ProfileSecrets {
+    /// Phase 2a review L2 added the keys: a Wi-Fi or VPN pre-shared key (`PSK`; `SharedKey`, which holds `PreSharedKey`,
+    /// so that stem would be dead: its mutant survived), and an encryption, client, access or licence key, which no stem
+    /// held.
     static let stems = ["password", "passwd", "passphrase", "passcode", "pwd", "secret", "token", "credential", "privatekey",
-                        "apikey", "recoverykey", "escrow", "challenge", "bearer", "jwt"]
+                        "apikey", "recoverykey", "escrow", "challenge", "bearer", "jwt", "psk", "sharedkey", "encryptionkey",
+                        "clientkey", "accesskey", "licensekey"]
 
     static func isSecret(_ key: String) -> Bool {
         let folded = Array(fold(key).utf8)
         return stems.contains { folded.firstRange(of: Array($0.utf8)) != nil }
             || folded.count >= 3 && folded.suffix(3).elementsEqual("pin".utf8)
-            || words(key).contains { $0.utf8.elementsEqual("pin".utf8) }
+            || words(key).contains { same($0, "pin") || same($0, "pw") }
     }
+
+    /// The words a number is a secret under when the key's last word ends in one (`Passcode`, `DevicePassword`,
+    /// `UserPIN`), or is `PW`, or is `code` or `number` after one or after `unlock` (`PINCode`, `UnlockCode`).
+    static let numberWords = ["password", "passwd", "passcode", "passphrase", "pwd", "pin", "unlockcode"]
+    /// A word that makes such a number a rule about a secret, not one: `MaxPIN`, `MinimumPasscode`.
+    static let policyWords = ["max", "maximum", "min", "minimum", "age", "length", "history", "attempt", "attempts", "required", "complex",
+                              "complexity"]
+
+    /// Whether a number under `key` is a secret: a numeric passcode, PIN or unlock code was shown as it came, since only
+    /// strings, data and containers were masked (Phase 2a review L2).
+    static func endsInASecretWord(_ key: String) -> Bool {
+        let words = words(key)
+        guard let last = words.last, !words.contains(where: { word in policyWords.contains { same($0, word) } }) else { return false }
+        func secret(_ word: String) -> Bool {
+            same(word, "pw") || numberWords.contains { Array(word.utf8).suffix($0.utf8.count).elementsEqual($0.utf8) }
+        }
+        let before = words.dropLast().last
+        return secret(last) || (same(last, "code") || same(last, "number")) && before.map { secret($0) || same($0, "unlock") } == true
+    }
+
+    /// A plist number, not a flag: Foundation hands both over as `NSNumber`, a flag as a `CFBoolean`, whose `objCType`
+    /// is `c` (checked on macOS 27: integers are `q` or `i`, reals `d`).
+    static func isNumber(_ value: Any) -> Bool {
+        guard let number = value as? NSNumber else { return false }
+        return !(String(cString: number.objCType) == "c" && value is Bool)
+    }
+
+    /// A PEM private key, whatever its key (`-----BEGIN PRIVATE KEY-----`, and RSA, EC, ENCRYPTED, OPENSSH or PGP's
+    /// `PRIVATE KEY BLOCK`, in any case), as text or as base64 of the text: under a key no stem names (`Identity`), it
+    /// was shown (Phase 2a review L2). A certificate's `-----BEGIN CERTIFICATE-----` is public, and shown.
+    static func holdsPrivateKey(_ text: String) -> Bool {
+        let bytes = Array(text.utf8)
+        if pemPrivateKey(in: bytes) { return true }
+        let stripped = bytes.filter { !ProfileText.isSpace($0) }
+        guard stripped.count >= 16, stripped.allSatisfy(ProfileText.isBase64) else { return false }
+        let padded = stripped + Array(repeating: UInt8(ascii: "="), count: (4 - stripped.count % 4) % 4)
+        return Data(base64Encoded: Data(padded)).map { pemPrivateKey(in: Array($0)) } ?? false
+    }
+
+    private static func pemPrivateKey(in bytes: [UInt8]) -> Bool {
+        let lower = bytes.map(ProfileText.lower)
+        var start = lower.startIndex
+        while let begin = lower[start...].firstRange(of: Array("-----begin ".utf8)) {
+            let label = lower[begin.upperBound...].prefix { $0 != UInt8(ascii: "-") && $0 != 0x0A && $0 != 0x0D }
+            if label.firstRange(of: Array("private key".utf8)) != nil { return true }
+            start = begin.upperBound
+        }
+        return false
+    }
+
+    /// Words compared by their bytes, as everything here is.
+    private static func same(_ word: String, _ other: String) -> Bool { word.utf8.elementsEqual(other.utf8) }
 
     static func fold(_ key: String) -> String {
         let scalars = key.decomposedStringWithCompatibilityMapping.lowercased().unicodeScalars

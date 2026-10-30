@@ -253,6 +253,14 @@ struct ModelContractTests {
         let device = MDMDevice(resource: Resource(type: "mdmDevices", id: "m", attributes: ["deviceNam\u{E9}": .string("x")]))
         #expect(device.unreadAttributes == ["deviceNam\u{E9}"])
         #expect(device.deviceName == nil)
+        // U+212A KELVIN SIGN is canonically `K`, so `String ==` calls these keys a field and every typed read misses
+        // them: compared as bytes, each is unread (Phase 2a review L4: the `==` mutant left every test green). Asserted as
+        // bytes too, since `==` on the names would pass either way.
+        let kelvin = "eventDataProperty\u{212A}ey", typeKey = "eventDataApiAccountCreatedWith\u{212A}ey"
+        let event = AuditEvent(resource: Resource(type: "auditEvents", id: "e", attributes: [
+            "type": .string("API_ACCOUNT_CREATED_WITH_KEY"), kelvin: .string("eventDataApiAccountCreatedWithKey"), typeKey: .object([:])]))
+        #expect(event.unreadAttributes.map { Array($0.utf8) } == [Array(kelvin.utf8), Array(typeKey.utf8)])
+        #expect(event.eventDataPropertyKey == nil && event.payload == nil)
     }
 
     @Test func findMatchesEveryIdentifier() {
