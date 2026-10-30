@@ -38,10 +38,12 @@ public struct AcceptanceReport: Sendable, Equatable {
         public let status: Status
         /// Items read, up to where the check ended; nil when nothing was sent (skipped) or nothing is counted (a probe).
         public let count: Int?
-        /// Attribute names this version doesn't read, and `field=value`s it doesn't know, each as `acceptanceWord` shows it.
+        /// Attribute names this version doesn't read, keys inside the objects it reads (`phoneNumbers.isPrimary`), and
+        /// `field=value`s it doesn't know, each name and value as `acceptanceWord` shows it.
         public let unknownKeys: [String]
         public let unknownValues: [String]
-        /// An audit payload's fields its type doesn't document (`AuditEventPayload.unreadFields`), as `acceptanceWord` shows them.
+        /// An audit payload's fields its type doesn't document (`AuditEventPayload.unreadFields`) and keys inside its role
+        /// locations (`accountRoleLocationList.scope`), as `acceptanceWord` shows them.
         public let unknownPayloadKeys: [String]
         /// What was cut, where a loop stopped, Apple's error `code` (only when code-shaped) and `source.parameter` (only a
         /// documented one), the token endpoint's code, this app's words for a malformed answer, the Vault's guidance.
@@ -275,6 +277,7 @@ extension AppleClient {
             }
             found.keys = Set(events.flatMap(\.unreadAttributes))
             found.payloadKeys = Set(events.flatMap { $0.payload?.unreadFields ?? [] })
+            found.unread(events.flatMap { $0.payload?.unreadNested ?? [] }, payload: true)
             for event in events {
                 found.unknown("type", event.type)
                 found.unknown("category", event.category)
@@ -309,6 +312,7 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(items.flatMap(\.unreadAttributes))
+            found.unread(items.flatMap(\.unreadNested))
             for item in items { values(item, &found) }
         }
         return (line, items)
@@ -325,6 +329,7 @@ extension AppleClient {
             let item = try Self.typed([await read(Self.sendable(id))], asked: asked ? id : nil)[0]
             found.count = 1
             found.keys = Set(item.unreadAttributes)
+            found.unread(item.unreadNested)
             values(item, &found)
         }
     }
@@ -404,6 +409,16 @@ extension AppleClient {
             guard page.truncated else { return }
             truncation = "stopped at the page cap with more to come" + (page.total.map { " (Apple's total \($0))" } ?? "")
         }
+
+        /// Keys inside the objects a view reads (`phoneNumbers.isPrimary`), as the text shows them; `payload` puts them
+        /// with the payload's keys. The attribute and Apple's key stay apart until here, each shown as `acceptanceWord`
+        /// shows it, so a key can't forge a line as a `.`-joined string would (Phase 2a review L1: nested objects'
+        /// unknown keys were never counted).
+        private(set) var nestedKeys: Set<String> = [], nestedPayloadKeys: Set<String> = []
+        mutating func unread(_ keys: [NestedKey], payload: Bool = false) {
+            let shown = keys.map { "\(AppleClient.acceptanceWord($0.attribute)).\(AppleClient.acceptanceWord($0.key))" }
+            if payload { nestedPayloadKeys.formUnion(shown) } else { nestedKeys.formUnion(shown) }
+        }
     }
 
     /// One resource's line: not sent when the pass was cancelled or `skip` says why; else what `body` found, cut short, or
@@ -430,8 +445,9 @@ extension AppleClient {
         }
         let note = notes.compactMap { $0 }.joined(separator: " · ")
         return .init(resource: resource, status: status, count: counted ? found.count : nil,
-                     unknownKeys: Set(found.keys.map(acceptanceWord)).sorted(), unknownValues: found.values.sorted(),
-                     unknownPayloadKeys: Set(found.payloadKeys.map(acceptanceWord)).sorted(), note: note.isEmpty ? nil : note)
+                     unknownKeys: Set(found.keys.map(acceptanceWord)).union(found.nestedKeys).sorted(), unknownValues: found.values.sorted(),
+                     unknownPayloadKeys: Set(found.payloadKeys.map(acceptanceWord)).union(found.nestedPayloadKeys).sorted(),
+                     note: note.isEmpty ? nil : note)
     }
 
     /// Why a check that reads `prerequisite`'s items has none: it found none, or it stopped short, failed or cut at the

@@ -97,6 +97,40 @@ struct AcceptanceBusinessTests {
         #expect(!report.text.contains("secret-ish") && !report.text.contains("sub-"))
     }
 
+    /// Keys inside the objects a view reads are counted under their attribute's name, each object's: a user's phone
+    /// numbers and roles in the list and the single read, a custom setting's values, either audit role list. A key that
+    /// isn't a word is `(not shown)` and forges no line (Phase 2a review L1: none was counted).
+    @Test func keysInsideNestedObjectsAreCounted() async throws {
+        let recent = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+        let harness = try await Harness()
+        harness.stub.add([Resource(type: "users", id: "U9", attributes: [
+            "firstName": .string("Ana"),
+            "phoneNumbers": .array([.object(["phoneNumber": .string("+1 555 0100"), "type": .string("WORK"), "isPrimary": .bool(true)])]),
+            "roleOuList": .array([.object(["roleName": .string("Admin"), "ouId": .string("OU1"), "scopeName": .string("all"),
+                                           "x\nprobe users: ok": .string("secret-ish")])]),
+        ])])
+        harness.stub.add([Resource(type: "configurations", id: "C1", attributes: ["type": .string("CUSTOM_SETTING"), "customSettingsValues": .object([
+            "configurationProfile": .string("<plist version=\"1.0\"><dict/></plist>"), "filename": .string("a.mobileconfig"), "signed": .bool(true)])])])
+        harness.stub.add([
+            Resource(type: "auditEvents", id: "E1", attributes: [
+                "eventDateTime": .string(recent), "type": .string("ACCOUNT_ROLE_LOCATION_CHANGED"),
+                "eventDataAccountRoleLocationChanged": .object(["accountRoleLocationList": .array([.object(["roleName": .string("R"), "scope": .string("all")])])])]),
+            Resource(type: "auditEvents", id: "E2", attributes: [
+                "eventDateTime": .string(recent), "type": .string("API_ACCOUNT_ROLE_LOCATION_CHANGED"),
+                "eventDataApiAccountRoleLocationChanged": .object(["apiAccountRoleLocationList": .array([.object(["roleName": .string("R"), "expiry": .string("x")])])])]),
+        ])
+        let report = await harness.client.acceptancePass()
+        for line in [
+            "users: ok, 1 item · unknown keys phoneNumbers.isPrimary, roleOuList.(not shown), roleOuList.scopeName",
+            "users/{id}: ok, 1 item · unknown keys phoneNumbers.isPrimary, roleOuList.(not shown), roleOuList.scopeName",
+            "configurations: ok, 1 item",
+            "configurations/{id}: ok, 1 item · unknown keys customSettingsValues.signed",
+            "auditEvents: ok, 2 items · unknown payload keys accountRoleLocationList.scope, apiAccountRoleLocationList.expiry · the last day",
+        ] { #expect(report.text.contains("\n\(line)\n"), "\(line)\n\(report.text)") }
+        #expect(report.text.split(separator: "\n").count == 8 + AcceptancePassTests.businessLines + AppleSection.allCases.count, "no forged line")
+        #expect(!report.text.contains("secret-ish") && !report.text.contains("Ana"))
+    }
+
     /// Each Business section's failure is its own: a forbidden or failing list skips its detail and members saying why,
     /// and the other sections still read.
     @Test func eachSectionsFailureIsItsOwn() async throws {

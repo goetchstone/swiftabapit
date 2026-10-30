@@ -47,6 +47,12 @@ struct ViewTests {
         #expect(phone.unreadFields == ["extension"])
         let role = UserRoleOuMapping(["roleName": .number("1"), "ouId": .string("OU1"), "scope": .string("x")])
         #expect(role.roleName == nil && role.ouID == "OU1" && role.unreadFields == ["scope"])
+        // The user says them as its own, under the attribute that holds each object, every item's (Phase 2a review L1).
+        let user = User(resource: Self.resource("users", ["phoneNumbers": .array([.object(phone.object), .object(["isPrimary": .bool(true)])]),
+                                                          "roleOuList": .array([.object(role.object)])]))
+        #expect(user.unreadNested == [NestedKey(attribute: "phoneNumbers", key: "extension"), NestedKey(attribute: "phoneNumbers", key: "isPrimary"),
+                                      NestedKey(attribute: "roleOuList", key: "scope")])
+        #expect(User(resource: Self.resource("users", [:])).unreadNested.isEmpty && UserGroup(resource: Self.resource("userGroups", [:])).unreadNested.isEmpty)
     }
 
     @Test func groupsUnitsAppsAndPackagesReadNilForWhatIsMissingOrMistyped() {
@@ -159,6 +165,7 @@ struct ViewTests {
         #expect(single.type?.known?.isWritable == true)
         #expect(single.customSettings?.configurationProfile == "<plist/>" && single.customSettings?.filename == "x.mobileconfig")
         #expect(single.customSettings?.unreadFields == ["signed"])
+        #expect(single.unreadNested == [NestedKey(attribute: "customSettingsValues", key: "signed")] && listed.unreadNested.isEmpty)
         for attributes in [JSONObject(), Self.mistyped(Configuration.fields)] {
             let configuration = Configuration(resource: Self.resource("configurations", attributes))
             #expect(configuration.name == nil && configuration.type == nil && configuration.platforms == nil)

@@ -54,12 +54,28 @@ public protocol ResourceView: Sendable, Identifiable where ID == String {
     /// requirement, so a view whose read attributes depend on its values (an audit event's payload key) is asked
     /// the same way wherever it is used as a `ResourceView`.
     var unreadAttributes: [String] { get }
+    /// Keys Apple sent inside the objects this view reads (`ObjectView`s: a user's phone numbers) that this version
+    /// doesn't: counted by the acceptance pass too (Phase 2a review L1: only an audit payload's were). None by default.
+    var unreadNested: [NestedKey] { get }
 }
 
 extension ResourceView {
     public var id: String { resource.id }
     public var attributes: JSONObject { resource.attributes }
     public var unreadAttributes: [String] { attributes.keys(notIn: Self.fields) }
+    public var unreadNested: [NestedKey] { [] }
+}
+
+/// A key inside an object a view reads that this version doesn't: the attribute holding the object (this version's
+/// name) and Apple's key, kept apart so the acceptance pass shows Apple's key only as a word (`phoneNumbers.isPrimary`).
+public struct NestedKey: Sendable, Hashable {
+    public let attribute: String
+    public let key: String
+
+    public init(attribute: String, key: String) {
+        self.attribute = attribute
+        self.key = key
+    }
 }
 
 /// A typed view over an object nested in an attribute (a user's phone number, a configuration's custom settings),
@@ -78,5 +94,10 @@ extension ObjectView {
     /// The attribute as a list of these objects; nil as `JSONObject.list(_:_:)` says.
     static func list(_ key: String, in attributes: JSONObject) -> [Self]? {
         attributes.list(key) { $0.object.map(Self.init) }
+    }
+
+    /// Each of `objects`' unread fields, under `attribute`.
+    static func unread(_ objects: [Self]?, in attribute: String) -> [NestedKey] {
+        (objects ?? []).flatMap { $0.unreadFields.map { NestedKey(attribute: attribute, key: $0) } }
     }
 }

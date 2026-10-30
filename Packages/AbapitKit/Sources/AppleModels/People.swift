@@ -36,6 +36,10 @@ public struct User: ResourceView {
     public var created: ISODate? { attributes.date("createdDateTime") }
     public var updated: ISODate? { attributes.date("updatedDateTime") }
     public var phoneNumbers: [UserPhoneNumber]? { UserPhoneNumber.list("phoneNumbers", in: attributes) }
+
+    public var unreadNested: [NestedKey] {
+        UserPhoneNumber.unread(phoneNumbers, in: "phoneNumbers") + UserRoleOuMapping.unread(roleOuList, in: "roleOuList")
+    }
 }
 
 /// `UserPhoneNumber`: one of a user's numbers.

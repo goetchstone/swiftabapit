@@ -103,6 +103,14 @@ public struct AuditEventPayload: Sendable, Equatable {
     /// Fields Apple sent that its type doesn't list. None for an unknown type: the type itself is what's unknown.
     public var unreadFields: [String] { fields.map { object.keys(notIn: $0) } ?? [] }
 
+    /// Keys inside the role locations its type documents (`accountRoleLocationList.scope`) that this version doesn't
+    /// read (Phase 2a review L1).
+    public var unreadNested: [NestedKey] {
+        ["accountRoleLocationList", "apiAccountRoleLocationList"].flatMap { field in
+            AuditEventRoleLocation.unread(value(field)?.list { $0.object.map(AuditEventRoleLocation.init) }, in: field)
+        }
+    }
+
     /// A field's value, only where the type documents the field: what isn't documented is unread and shown raw,
     /// never read as if it were.
     private func value(_ field: String) -> JSONValue? {

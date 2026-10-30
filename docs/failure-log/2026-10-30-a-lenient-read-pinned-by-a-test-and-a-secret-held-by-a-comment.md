@@ -39,5 +39,8 @@
     abapit's every-key CSV of the resource holds none; `profileText` still shows the profile masked. In
     `Packages/AbapitApp`, naming `configurationProfile` or `received` is a compile error (both checked by mutant), and
     `BoundaryTests` keeps the names out of App/ and the screen models.
+  - L1: `ResourceView.unreadNested` and `AuditEventPayload.unreadNested` name the keys inside the objects a view reads,
+    and the pass counts them as `attribute.key` (users' phone numbers and roles, list and single read; a custom
+    setting's values; both audit role lists), each part filtered as a word.
 - **Prevention:** each fix has a test that fails on the unfixed code or its mutant (listed in the fix's report). Still
   only a stub: what Apple sends in `eventDataPropertyKey` and in the fourteen field-less payloads is a Phase 2 live check.

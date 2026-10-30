@@ -150,6 +150,8 @@ public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugS
     public var created: ISODate? { attributes.date("createdDateTime") }
     public var updated: ISODate? { attributes.date("updatedDateTime") }
 
+    public var unreadNested: [NestedKey] { CustomSettingsValues.unread(customSettings.map { [$0] }, in: "customSettingsValues") }
+
     /// `resource` with `customSettingsValues` withheld: an object as `CustomSettingsValues.withholding` leaves it, any
     /// other value but `null` replaced by `CustomSettingsValues.withheld`. Any resource, whatever its type: a blueprint's
     /// `included` goes through it too, so a profile Apple includes with a configuration is withheld there as well.

@@ -115,10 +115,11 @@ struct BusinessReadTests {
         #expect(included.attributes["customSettingsValues"]?["configurationProfile"] == .string(CustomSettingsValues.withheld))
         #expect(!leaks(Self.printed(read)) && !leaks(JSONValue.array(read.included.map(\.asJSON)).jsonText))
 
-        // The acceptance pass reads the custom setting alone, and its text names none of it.
+        // The acceptance pass reads the custom setting alone, and its text names its keys and none of its values.
         let report = await harness.client.acceptancePass()
         #expect(harness.reads.contains { $0.hasPrefix("GET api-business.apple.com/v1/configurations/C1") })
-        #expect(report.text.contains("\nconfigurations/{id}: ok, 1 item\n") && !leaks(report.text) && !leaks(Self.printed(report)), "\(report.text)")
+        #expect(report.text.contains("\nconfigurations/{id}: ok, 1 item · unknown keys customSettingsValues.note, customSettingsValues.signedProfile\n"))
+        #expect(!leaks(report.text) && !leaks(Self.printed(report)), "\(report.text)")
     }
 
     /// The Apple-managed devices and each one's posture from the documented `/details`: the stub has no route for

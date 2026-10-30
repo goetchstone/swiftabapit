@@ -174,6 +174,11 @@ org editor's save).
   as "no payload", the event's serial or subscription went unread, its unknown fields uncounted, and the pass said
   `ok`. `AuditEvent.payloadProblems` holds a named key that is absent, `""` or not a string, and a payload that isn't an
   object (`null` included); the pass's note says each with a count (`payload key named but absent in 1 event`).
+- **Keys inside the objects a view reads are counted too** (Phase 2a review L1): a user's `phoneNumbers` and
+  `roleOuList`, a custom setting's `customSettingsValues` and an audit payload's role locations, as `attribute.key`
+  (`phoneNumbers.isPrimary`, `accountRoleLocationList.scope`), the attribute this version's name and Apple's key each
+  shown as `acceptanceWord` shows it. `ResourceView.unreadNested` (none by default) and `AuditEventPayload.unreadNested`;
+  a view that reads a new `ObjectView` adds it there.
 - **A member list is a list of linkages of its type, on every page**: a group's or an org unit's `users`, each
   blueprint relationship's own type, a service's `orgDevices`. Another type, a lookalike (`Users`, `usersX`) or an
   empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.

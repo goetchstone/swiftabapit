@@ -276,5 +276,13 @@ struct AuditEventTests {
         let location = try Self.payload(.accountRoleLocationChanged, ["accountRoleLocationList": .array([.object(["roleName": .string("R"),
                                                                                                                    "scope": .string("all")])])])
         #expect(location.roleLocations?.first?.unreadFields == ["scope"])
+        // The payload says them under the field that holds them, for either list, and only where its type documents the
+        // list (Phase 2a review L1).
+        #expect(location.unreadNested == [NestedKey(attribute: "accountRoleLocationList", key: "scope")])
+        let api = try Self.payload(.apiAccountRoleLocationChanged, ["apiAccountRoleLocationList": .array([.object(["expiry": .string("x")]),
+                                                                                                          .object(["scope": .string("all")])])])
+        #expect(api.unreadNested == [NestedKey(attribute: "apiAccountRoleLocationList", key: "expiry"), NestedKey(attribute: "apiAccountRoleLocationList", key: "scope")])
+        let undocumented = try Self.payload(.accountAdded, ["accountRoleLocationList": .array([.object(["scope": .string("all")])])])
+        #expect(undocumented.unreadNested.isEmpty && undocumented.unreadFields == ["accountRoleLocationList"])
     }
 }
