@@ -53,11 +53,25 @@
     families read nil, not the items that fit); `AuditView` built from `AuditEventType` cases, its strings unchanged;
     `ConfigurationType.isWritable` dropped until Phase 5; "fifteen" field-less payloads corrected to fourteen. The two
     quiet-service rules stay until 2b, as recorded.
+  - Verifier round 1 (`fix(2a): verifier round 1`): nine mutants of the fix survived. The pass's payload-problem count
+    was never held (every test had one event per problem), so `in 1 event` written in passed: a second miss of one kind
+    now reads `in 2 events`. Five of `ProfileText`'s new arms had no test (a policy word matched as a prefix, so
+    `AgentPIN` read as `age`; `passphrase` and `passwd` dropped from the number words; base64 never padded; the PEM scan
+    stopping at a certificate before the key): each has one. The `package` level of the raw profile's three holders was
+    held by no test, only by the app-side name scan: `BoundaryTests.whatHoldsTheRawProfileStaysPackage` holds it, a
+    widening and a move into a `public extension` both killed. And a number under `Passcode1`, `DevicePIN2`,
+    `PasscodeValue` or `PINValue` was shown, and a string under `DevicePIN2` or `VPNPIN2` too (the verifier took the
+    string to be masked; it wasn't: the digit joined `pin` into one word, `pin2`): a key's words now split where
+    letters meet numbers, the number rule skips the numbers, the fold's `pin` ending skips trailing ones, and `value`
+    after a secret word is a secret, as `code` and `number` are.
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant; the fix's report lists every
-  mutant and what killed it (84: 81 by a test, 2 by the compiler, and `presharedkey`, an equivalent stem, removed).
-  Two lessons, in RULE-FEEDBACK 2026-10-30: a test that asserts nil or empty for an odd shape must also assert the odd
-  shape is said (counted or noted), or it pins the silence; and a view whose resource holds a secret hands out a
-  withheld copy and keeps the raw at `package`, so the compiler, not a comment, holds invariant 11 there. Still only a
-  stub: what Apple sends in `eventDataPropertyKey`, in the fourteen field-less payloads and in a custom setting's
-  values is a Phase 2 live check; and `ProfileText`'s masking is still a denylist, so a secret under a key no stem or
-  word names, that isn't a PEM key, is shown.
+  mutant and what killed it (84: 81 by a test, 2 by the compiler, and `presharedkey`, an equivalent stem, removed), and
+  verifier round 1's report the 15 it added (14 by a test, one equivalent). Three lessons, in RULE-FEEDBACK
+  2026-10-30: a test that asserts nil or empty for an odd shape must also assert the odd shape is said (counted or
+  noted), or it pins the silence; a view whose resource holds a secret hands out a withheld copy and keeps the raw at
+  `package`, so the compiler, not a comment, holds invariant 11 there; and (verifier round 1) a boundary the compiler
+  holds lasts only while its modifier does, so a test holds the modifier. The round's count mutant is the history
+  runbook's "a golden needs two of a kind" again: a count one test sees only as 1 isn't held. Still only a stub: what
+  Apple sends in `eventDataPropertyKey`, in the fourteen field-less payloads and in a custom setting's values is a Phase
+  2 live check; and `ProfileText`'s masking is still a denylist, so a secret under a key no stem or word names, that
+  isn't a PEM key, is shown.

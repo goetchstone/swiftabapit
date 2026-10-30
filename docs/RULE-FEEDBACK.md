@@ -27,6 +27,22 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-30 — "The compiler holds it" held only while a modifier did, and no test held the modifier
+- **What happened:** Phase 2a's verifier round 1 widened `Configuration.received`, `CustomSettingsValues.received` and
+  `.configurationProfile` to `public`, one at a time: `scripts/test.sh` stayed green in both packages. Only the app-side
+  name scan stood behind the claim, from the M2 fix just before, that the compiler holds the raw profile (failure-log
+  2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #11 (sensitive fields never leave), and #3's `Secret`'s `package` bytes the same way.
+- **Why it didn't hold:** the access level is the enforcement, and nothing tests it: a mutant of one word passes
+  everything. `Secret.bytes` and `ExportPolicy.Columns.init` rest on a modifier too, and no test in the packages pins
+  either (`noBuildSettingOpensThePackageBoundary` refuses a flag that would open them, not a widened declaration).
+- **Would a rule have caught it?** only if enforced differently: an invariant whose home is "the compiler" names a
+  test that pins the modifiers it depends on, as `BoundaryTests.whatHoldsTheRawProfileStaysPackage` now does for the
+  raw profile (a widening and a move into a `public extension` both fail it).
+- **Enforcement home if changed:** tripwire test: one source scan listing each `package` or `internal` declaration an
+  invariant's home names (`Secret.bytes`, `Columns.init`, the raw profile, later `WriteTicket.init`), each held at that
+  level and only that.
+
 ## 2026-10-30 — A secret held by a doc comment, again: invariant 11 for a model, not only for CSV
 - **What happened:** Phase 2a's review found a custom setting's plaintext profile public on `Configuration`'s resource,
   its custom settings' object and a blueprint's `included`; only "show it through `profileText`, never raw" kept it off a

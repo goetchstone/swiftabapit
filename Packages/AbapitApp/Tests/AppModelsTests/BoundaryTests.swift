@@ -72,4 +72,27 @@ struct BoundaryTests {
         #expect(SourceScan.names(SourceScan.File(path: "x.swift", text: "let raw = configuration.customSettings?.configurationProfile"), Self.rawProfile))
         #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// configurationProfile\nlet shown = settings.profileText"), Self.rawProfile))
     }
+
+    /// The compiler's half of the line above: every declaration in AppleModels of what holds the profile as Apple sent it
+    /// (`Configuration.received`, `CustomSettingsValues.received` and `.configurationProfile`) is `package` and only that,
+    /// so naming one here or in the app is a compile error. Widened to `public`, or moved into a `public extension`, each
+    /// left every test green with only the name scan behind it (verifier round 1).
+    @Test func whatHoldsTheRawProfileStaysPackage() throws {
+        let declaration = try Regex(#"^\s*(.*?)\b(?:let|var)\s+(received|configurationProfile)\b"#)
+        func declarations(_ code: String) -> [String] {
+            code.split(separator: "\n").compactMap { line in
+                (try? declaration.firstMatch(in: String(line))).flatMap { $0 }.map { match in
+                    let modifiers = match.output[1].substring.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+                    return "\(modifiers) \(match.output[2].substring ?? "")"
+                }
+            }
+        }
+        let files = try SourceScan.swiftFiles(in: "Packages/AbapitKit/Sources/AppleModels")
+        #expect(files.contains { $0.path.hasSuffix("/AppleModels/Content.swift") })
+        let found = files.flatMap { declarations(SourceScan.code($0.text, strings: false)) }
+        #expect(found == ["package received", "package received", "package configurationProfile"], "\(found)")
+        // The scan reads what a widening would write, and not a comment.
+        #expect(declarations("    public let received: Resource\n    var configurationProfile: String? { nil }") == ["public received", " configurationProfile"])
+        #expect(declarations(SourceScan.code("/// package let received\n", strings: false)).isEmpty)
+    }
 }

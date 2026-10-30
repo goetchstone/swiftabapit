@@ -199,12 +199,21 @@ org editor's save).
   snapshots and Phase 5's writer read it in AbapitKit, and in the app or the screen models naming either is a compile
   error (checked by mutant). The detail shows `customSettings?.profileText`. So the device inspector's
   every-attribute pattern is safe for a configuration. `aCustomSettingsProfileReachesNoPublicValue` (a canary through
-  the strict stub), `aConfigurationsCSVHoldsNoProfile`, and `BoundaryTests.theAppSideNeverNamesTheRawProfile`.
+  the strict stub), `aConfigurationsCSVHoldsNoProfile`, `BoundaryTests.theAppSideNeverNamesTheRawProfile`, and
+  `BoundaryTests.whatHoldsTheRawProfileStaysPackage`, which holds the three declarations at `package` and only that
+  (verifier round 1: widened to `public`, each left every test green behind the name scan alone). Not withheld: an
+  attribute Apple adds beside `customSettingsValues` at the top level of a configuration is shown raw (invariant 10). If
+  Apple moved the profile there, the pass names it as an unknown key, and once the contract documents it
+  `aViewReadsApplesAttributes` fails until the view lists it, which is where it gets withheld.
 - **What `ProfileText` masks** (Phase 2a review L2): every value under a key whose fold holds a stem (`password`,
   `secret`, `token`, `psk`, `sharedkey`, an encryption, client, access or licence key, …) or that has `PIN` or `PW` as
   a word, unless it is a flag, a date, or a number that isn't a secret; a number whose key's last word ends in a secret
-  word (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`) unless a policy word is in the key (`MaxPIN`,
-  `PasscodeMinLength`); every string holding a PEM private key, as text or base64, whatever its key; every data blob.
+  word (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`, `PINValue`) unless a policy word is in the key, whole (`MaxPIN`,
+  `PasscodeMinLength`; `AgentPIN` isn't `age`); every string holding a PEM private key, as text or base64, padded or not,
+  whatever its key and wherever it sits in the string (after a certificate, as in an identity bundle); every data blob.
+  A key's words split where letters meet numbers, and the number rule skips the numbers, so `DevicePIN2`, `VPNPIN2`,
+  `Passcode1` and `PIN1Code` read as their letters (verifier round 1: a string under `DevicePIN2` and a number under
+  each were shown). A policy word wins, so a number under `AgePIN` or `Max2PIN` is shown.
   A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. Two keys equal once normalized merge when
   Foundation's dictionary becomes Swift's: `.plist`'s `merged` counts them and `note` says it. Not caught: a secret
   under a key no stem or word names that isn't a PEM key (a homoglyph spelling, an unusual name), and a key wrapped

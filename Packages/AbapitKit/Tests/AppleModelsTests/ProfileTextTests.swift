@@ -144,6 +144,9 @@ struct ProfileTextTests {
         ("PreSharedKey", true), ("PSK", true), ("WPA_PSK", true), ("SharedKey", true), ("EncryptionKey", true), ("ClientKey", true),
         ("AccessKey", true), ("LicenseKey", true), ("AdminPW", true), ("PW", true), ("pw_value", true),
         ("EncryptionType", false), ("Power", false), ("PWR", false), ("KeySize", false), ("ClientID", false),
+        // Verifier round 1: a number after a PIN or a PW hid it, whether the key ended there or went on.
+        ("DevicePIN2", true), ("VPNPIN2", true), ("PIN2Code", true), ("AdminPW2", true), ("Passcode1", true),
+        ("AllowPinning2", false), ("Port2", false), ("WEP40Key", false), ("IPv6Address", false),
     ])
     func aSecretKeyIsFoundHoweverItIsSpelled(key: String, secret: Bool) throws {
         let plist = "<plist version=\"1.0\"><dict><key>\(key)</key><string>s3cr3t-value</string></dict></plist>"
@@ -181,6 +184,11 @@ struct ProfileTextTests {
         ("AttemptBeforePIN", false), ("AttemptsBeforePIN", false), ("ComplexityOfPIN", false),
         // A last word ending in `pin` is a secret one, as for strings: over-masked, never shown.
         ("Spin", true),
+        // Verifier round 1: a policy word only whole (`Agent` isn't `age`); each secret word; a number in the key, which is
+        // no word of its own; and `value` after a secret word. A number under each of the last five was shown.
+        ("AgentPIN", true), ("AdminPassphrase", true), ("UserPasswd", true),
+        ("Passcode1", true), ("DevicePIN2", true), ("PIN1Code", true), ("PINValue", true), ("PasscodeValue", true),
+        ("MaxPIN2", false), ("Port1", false), ("MaxPINValue", false), ("TimeoutValue", false),
     ])
     func aNumberUnderASecretWordIsMaskedAndAPolicyIsNot(key: String, secret: Bool) throws {
         for (value, written) in [("<integer>4321</integer>", "4321"), ("<real>43.5</real>", "43.5"), ("<integer>0</integer>", "<integer>0</integer>")] {
@@ -201,16 +209,23 @@ struct ProfileTextTests {
     /// shown).
     @Test func aPrivateKeyIsMaskedWhateverItsKey() throws {
         let body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7"
+        let certificate = "-----BEGIN CERTIFICATE-----\n\(body)\n-----END CERTIFICATE-----"
+        var unpadded = 0
         for label in ["PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "OPENSSH PRIVATE KEY", "PGP PRIVATE KEY BLOCK"] {
-            for pem in ["-----BEGIN \(label)-----\n\(body)\n-----END \(label)-----\n", "-----begin \(label.lowercased())-----\r\n\(body)"] {
-                for value in [pem, Data(pem.utf8).base64EncodedString(), Data(pem.utf8).base64EncodedString(options: .lineLength64Characters)] {
+            // Verifier round 1: the key after a certificate in one string (a PEM identity bundle), and base64 without its
+            // padding, were each untested.
+            for pem in ["-----BEGIN \(label)-----\n\(body)\n-----END \(label)-----\n", "-----begin \(label.lowercased())-----\r\n\(body)",
+                        "\(certificate)\n-----BEGIN \(label)-----\n\(body)\n-----END \(label)-----\n"] {
+                let base64 = Data(pem.utf8).base64EncodedString()
+                if base64.hasSuffix("=") { unpadded += 1 }
+                for value in [pem, base64, Data(pem.utf8).base64EncodedString(options: .lineLength64Characters), String(base64.filter { $0 != "=" })] {
                     let plist = "<plist version=\"1.0\"><dict><key>Identity</key><string>\(value)</string><key>Chain</key><array><string>\(value)</string></array></dict></plist>"
                     let (text, masked) = try Self.shown(plist)
                     #expect(!text.contains(body) && !text.contains(value) && masked == 2, "\(label): \(value)")
                 }
             }
         }
-        let certificate = "-----BEGIN CERTIFICATE-----\n\(body)\n-----END CERTIFICATE-----"
+        #expect(unpadded >= 6, "base64 with its padding dropped was tested")
         // The label is the BEGIN line's alone: a certificate followed by words about its private key is still public.
         for value in [certificate, Data(certificate.utf8).base64EncodedString(), "a note on the private key policy", "BEGIN PRIVATE KEY",
                       certificate + "\nThe private key stays on the device.", "-----BEGIN CERTIFICATE\nprivate key"] {

@@ -302,7 +302,7 @@ private struct MaskingWalk {
 /// Which keys hold secrets. A key is read folded as the CSV denylist reads one (`ExportPolicy.fold` in Reports, which
 /// this module can't import): compatibility-decomposed, lowercased, letters and numbers only, so case, a full-width
 /// spelling, an invisible split or punctuation don't hide `password`. A PIN and a `PW` are one by their own word
-/// (`UserPIN`, `PINCode`, `pin_code`, `AdminPW`), so `Shipping`, `AllowPinning` and `Power` aren't.
+/// (`UserPIN`, `PINCode`, `pin_code`, `AdminPW`, `DevicePIN2`), so `Shipping`, `AllowPinning` and `Power` aren't.
 enum ProfileSecrets {
     /// Phase 2a review L2 added the keys: a Wi-Fi or VPN pre-shared key (`PSK`; `SharedKey`, which holds `PreSharedKey`,
     /// so that stem would be dead: its mutant survived), and an encryption, client, access or licence key, which no stem
@@ -312,15 +312,23 @@ enum ProfileSecrets {
                         "clientkey", "accesskey", "licensekey"]
 
     static func isSecret(_ key: String) -> Bool {
-        let folded = Array(fold(key).utf8)
-        return stems.contains { folded.firstRange(of: Array($0.utf8)) != nil }
-            || folded.count >= 3 && folded.suffix(3).elementsEqual("pin".utf8)
+        let folded = fold(key)
+        // The letters before any trailing number: `VPNPIN2` ends in `pin` as `VPNPIN` does (verifier round 1: a string
+        // under `DevicePIN2` or `VPNPIN2` was shown).
+        var letters = Array(folded.unicodeScalars)
+        while letters.last.map(isNumeral) == true { letters.removeLast() }
+        return stems.contains { Array(folded.utf8).firstRange(of: Array($0.utf8)) != nil }
+            || String(String.UnicodeScalarView(letters.suffix(3))).utf8.elementsEqual("pin".utf8)
             || words(key).contains { same($0, "pin") || same($0, "pw") }
     }
 
     /// The words a number is a secret under when the key's last word ends in one (`Passcode`, `DevicePassword`,
-    /// `UserPIN`), or is `PW`, or is `code` or `number` after one or after `unlock` (`PINCode`, `UnlockCode`).
+    /// `UserPIN`), or is `PW`, or is one of `trailingWords` after one or after `unlock` (`PINCode`, `UnlockCode`,
+    /// `PasscodeValue`).
     static let numberWords = ["password", "passwd", "passcode", "passphrase", "pwd", "pin", "unlockcode"]
+    /// A last word that names the secret before it rather than a rule about it (verifier round 1: a number under
+    /// `PINValue` or `PasscodeValue` was shown).
+    static let trailingWords = ["code", "number", "value"]
     /// A word that makes such a number a rule about a secret, not one: `MaxPIN`, `MinimumPasscode`.
     static let policyWords = ["max", "maximum", "min", "minimum", "age", "length", "history", "attempt", "attempts", "required", "complex",
                               "complexity"]
@@ -328,13 +336,15 @@ enum ProfileSecrets {
     /// Whether a number under `key` is a secret: a numeric passcode, PIN or unlock code was shown as it came, since only
     /// strings, data and containers were masked (Phase 2a review L2).
     static func endsInASecretWord(_ key: String) -> Bool {
-        let words = words(key)
+        // A number in a key is no word here: `Passcode1`, `DevicePIN2` and `PIN1Code` read as `Passcode`, `DevicePIN` and
+        // `PINCode` (verifier round 1: a number under each was shown, its last word `1`, `2` or `code` after `1`).
+        let words = words(key).filter { !$0.unicodeScalars.allSatisfy(isNumeral) }
         guard let last = words.last, !words.contains(where: { word in policyWords.contains { same($0, word) } }) else { return false }
         func secret(_ word: String) -> Bool {
             same(word, "pw") || numberWords.contains { Array(word.utf8).suffix($0.utf8.count).elementsEqual($0.utf8) }
         }
         let before = words.dropLast().last
-        return secret(last) || (same(last, "code") || same(last, "number")) && before.map { secret($0) || same($0, "unlock") } == true
+        return secret(last) || trailingWords.contains { same(last, $0) } && before.map { secret($0) || same($0, "unlock") } == true
     }
 
     /// A plist number, not a flag: Foundation hands both over as `NSNumber`, a flag as a `CFBoolean`, whose `objCType`
@@ -376,8 +386,9 @@ enum ProfileSecrets {
     }
 
     /// A key's words, lowercased: split at anything not a letter or number but a mark or an invisible format character
-    /// (which are dropped, as the fold drops them), before a capital that follows a lowercase letter, and before the
-    /// last capital of a run that a lowercase letter follows (`PINCode` is `pin`, `code`).
+    /// (which are dropped, as the fold drops them), before a capital that follows a lowercase letter, before the
+    /// last capital of a run that a lowercase letter follows (`PINCode` is `pin`, `code`), and where letters meet
+    /// numbers (`DevicePIN2` is `device`, `pin`, `2`: verifier round 1, it was `device`, `pin2`, no PIN).
     static func words(_ key: String) -> [String] {
         let scalars = Array(key.decomposedStringWithCompatibilityMapping.unicodeScalars)
         var words: [String] = [], word = String.UnicodeScalarView()
@@ -397,11 +408,19 @@ enum ProfileSecrets {
                 let upper = scalar.properties.isUppercase
                 if upper && previous.properties.isLowercase { end() }
                 if upper && previous.properties.isUppercase, let next, next.properties.isLowercase { end() }
+                if isNumeral(scalar) != isNumeral(previous) { end() }
             }
             word.append(scalar)
         }
         end()
         return words
+    }
+
+    private static func isNumeral(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .decimalNumber, .letterNumber, .otherNumber: true
+        default: false
+        }
     }
 
     private static func isLetterOrNumber(_ scalar: Unicode.Scalar) -> Bool {

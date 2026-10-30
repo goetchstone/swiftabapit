@@ -91,9 +91,15 @@ struct AcceptanceBusinessTests {
                 "eventDataSubjectHasAppleCarePurchaseRemoved": .object(["subscriptionId": .string("sub-2"), "otherNewField": .string("secret-ish")])]),
             Resource(type: "auditEvents", id: "X3", attributes: [
                 "eventDateTime": .string(recent), "type": .string("DEVICE_IS_ERASED"), "eventDataDeviceIsErased": .array([])]),
+            // A second miss of one kind, so the note's count is held and not only its words (verifier round 1: `in 1 event`
+            // written in passed).
+            Resource(type: "auditEvents", id: "X4", attributes: [
+                "eventDateTime": .string(recent), "type": .string("SUBJECT_HAS_APPLECARE_PURCHASE_ADDED"),
+                "eventDataPropertyKey": .string("eventDataSubjectHasApplecarePurchaseAdded"),
+                "eventDataSubjectHasAppleCarePurchaseAdded": .object(["subscriptionId": .string("sub-4")])]),
         ])
         let report = await harness.client.acceptancePass()
-        #expect(report.text.contains("\nauditEvents: ok, 3 items · unknown payload keys brandNewField, otherNewField · payload key named but absent in 1 event · "
+        #expect(report.text.contains("\nauditEvents: ok, 4 items · unknown payload keys brandNewField, otherNewField · payload key named but absent in 2 events · "
                                      + "payload key named empty in 1 event · payload not an object in 1 event · the last day\n"), "\(report.text)")
         #expect(!report.text.contains("secret-ish") && !report.text.contains("sub-"))
     }
