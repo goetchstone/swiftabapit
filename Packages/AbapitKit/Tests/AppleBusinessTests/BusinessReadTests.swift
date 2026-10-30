@@ -138,6 +138,8 @@ struct BusinessReadTests {
         let harness = try await Self.examples()
         harness.stub.queue(200, for: "/v1/apps", body: #"{"data":{"type":"apps","id":"1"}}"#)
         await #expect(throws: AppleAPIError.malformed("a page of /v1/apps")) { _ = try await Harness.all(harness.client.apps()) }
+        harness.stub.queue(200, for: "/v1/packages", body: #"{"data":[{"type":"packages","id":"P1"},{"type":"packages","attributes":{}}]}"#)
+        await #expect(throws: AppleAPIError.malformed("a page of /v1/packages")) { _ = try await Harness.all(harness.client.packages()) }
         harness.stub.queue(200, for: "/v1/users/1234567890", body: #"{"data":[]}"#)
         await #expect(throws: AppleAPIError.malformed("a single /v1/users/{id}")) { _ = try await harness.client.user("1234567890") }
         harness.stub.queue(200, for: "/v1/mdmDevices/MD1/details", body: #"{"data":null}"#)

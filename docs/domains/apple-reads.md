@@ -7,24 +7,35 @@ and checked against Apple's DocC contract (plan §3.3, Appendix A).
 
 **Enforcement home:** `ModelContractTests` (each view reads exactly Apple's attributes; enums are Apple's
 values; Apple's examples decode), `ReadContractTests` (every read is a documented endpoint, parameter and
-`fields` value, for both scopes), `AppleClientTests` against the strict `AppleStub`, and `AppModelsTests`
+`fields` value, for both scopes; the Business-only reads are exactly what School's contract lacks), `AppleClientTests`,
+`BusinessReadTests`, `BlueprintTests` and `AuditTests` against the strict `AppleStub`, `AppleStubTests` (the stub's own
+parameter table is the contract's, and it names nothing of the client's), and `AppModelsTests`
 (invariant 8's screen-model tests: org switches, superseded loads, panels, partial and unusable states, the
 org editor's save).
 
 ## Files
 - `Sources/JSONAPI/` — `JSONValue`/`JSONObject` (Python-faithful, ordered, exact text; from SwiftGamGui),
   `Document`/`Resource`/`Linkage`, `ErrorBody`, `OpenEnum`, `ISODate` (abapit's `parse_iso`, golden-held).
-- `Sources/AppleModels/` — `OrgDevice`, `AppleCareCoverage`, `ActivationLockStatus`, `MDMService` as
-  `ResourceView`s that keep the resource: the inspector shows every attribute, CSV keeps Apple's order,
-  snapshots store what came. `unreadAttributes` feeds the acceptance pass.
-- `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here),
-  `AppleClient` (pages as an `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; read
-  probes), `AppleAPIError` (status + Apple `code`, never prose), `AcceptancePass` (the DEBUG pass, plan §7).
+- `Sources/AppleModels/` — `OrgDevice`, `AppleCareCoverage`, `ActivationLockStatus`, `MDMService`, and for Phase 2
+  `User`, `UserGroup`, `OrganizationalUnit`, `ContentApp`, `ContentPackage`, `Blueprint` (`related`, `included`),
+  `Configuration` and `CustomSettingsValues`, `MDMDevice`, `MDMDeviceDetail`, `AuditEvent` and `AuditEventPayload`
+  (`AuditEventType.payload` holds the 50-row table), as `ResourceView`s that keep the resource: the inspector shows
+  every attribute, CSV keeps Apple's order, snapshots store what came. `unreadAttributes` (and an audit payload's
+  `unreadFields`) feed the acceptance pass. `ProfileText` shows a custom setting's profile with its secrets masked.
+  `Sections.swift`: `AppleSection.businessOnly`.
+- `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
+  builders take no scope; `AuditQuery`, the audit read's checked range and filters), `AppleClient` (pages as an
+  `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; member lists as linkage streams; read
+  probes; `BlueprintRead`, a blueprint with its included members and `includeRefused`), `AppleAPIError` (status +
+  Apple `code`, never prose; `.notInScope(section)` for a Business-only read asked of a School org), `AcceptancePass`
+  (the DEBUG pass, plan §7: Phase 1's eight lines, then 25 for the Business-only reads, then the probes).
 - `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
   package so the compiler gives them AbapitKit's public API only, as it gives the app:
   `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
   services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector).
-- `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3).
+- `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3): `parameters` (every GET's query parameters and
+  allowed values, written out from the contract) and `paged`; `add(_:)`, `relate(_:_:_:to:)`, `setDetails(_:_:)` for the
+  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`.
 
 ## Gotchas / stub-lies traps
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing**, and can still be handed a
@@ -124,9 +135,72 @@ org editor's save).
   (`Interceptor`), since it is the caller's, not Apple's.
 - **A Keychain refusal while signing is `AppleAPIError.vault(guidance)`** (Touch ID cancelled, a locked Mac,
   no key stored): nothing is sent, and the next read signs again. `MemoryStore.failNext(.sign, with:)` drives it.
-- School has no people, content or audit endpoints: `AppleSection.businessOnly`, and the stub fails a School
-  request for them as unhandled.
+- **School has no people, content, Apple MDM or audit endpoints** (plan §2.4): `AppleSection.businessOnly`. Their
+  builders take no scope and build for the Business host only; `AppleClient` throws `.notInScope(section)` before
+  anything is built, so a School org sends nothing, not even a token request (and its broker would refuse the
+  Business host anyway: `.wrongHost`). The stub fails a School request for them as unhandled, and
+  `theBusinessOnlyReadsAreWhatSchoolLacks` holds the gate to the two contracts. The acceptance pass gives a School org
+  each of those lines as `skipped: not in Apple School Manager's API`.
+- **The blueprint include fallback** (abapit `client.py` `blueprint`): Apple refuses the whole blueprint read when the
+  role can't read one of the included relationships (abapit saw a role that gets 403 on users and user groups get a
+  400 here). `blueprint(_:include:)` reads once more without the include on a 400 or a 403, and only when something
+  was included; any other status, a 400 with nothing included, and a failure of the second read are thrown. The
+  answer's `includeRefused` holds Apple's refusal, `related` and `included` are empty, and the acceptance pass's line is
+  the refusal's status (`error 400`, `forbidden`), never `ok` (invariant 8). An include asks each relationship at
+  `limit[<name>]=1000` (Apple's maximum); a relationship that limit cut is `Related.isTruncated`, one Apple didn't
+  list is absent from `related`, and the pass says both as `truncated`. An included relationship whose `data` isn't a
+  list of linkages of its own type is `.malformed("the blueprint's <name>")`. The stub's default without
+  `limit[<name>]` is 10 (an assumption, small on purpose).
+- **Apple MDM posture is `mdmDevices/{id}/details`**, the documented read; abapit called the undocumented
+  `mdmDevices/{id}` (plan §2.3, defect 11). The stub has no route for it, so a read of it fails the test. The pass
+  doesn't hold the details' `id` to the device's: neither is documented.
+- **The audit log pages by cursor**: each next page is the first read again with `cursor` set to Apple's
+  `meta.paging.nextCursor` (or the `cursor` its next link carries), so the required range and every filter go with
+  every page. Its next link is never followed: Apple's examples' next links carry only the cursor, and the stub's do
+  too, so following one gets the 400 for a missing range. A next page with no cursor is malformed, never the end.
+- **A cursor or next link Apple gives twice is malformed** on every list (`a repeated cursor on <template>`), never 200
+  identical pages to the cap. The stub's `repeatCursors(on:)` drives it.
+- **Apple filters, the client doesn't** (plan §2.1: abapit filtered audit by subject itself). `AuditQuery` checks what
+  goes out when it is made: both bounds cut to whole seconds, UTC, `Z`, the start before the end, at most 365 days
+  (`longestSpan`, abapit's view cap), 1970 to 9999; `filter[type]` from `AuditEventType` only (an `.unknown` value
+  read from an event throws `.unknownType`), each once, joined by commas; `filter[actorId]` and `filter[subjectId]`
+  one identifier each, `isPathSafe`'s shape, so a comma (a second value), `&`, `=`, `#`, `%`, a space, a line break or
+  anything non-ASCII is refused, and `URL.make` percent-encodes every value anyway. The stub really filters by range,
+  type, actor and subject.
+- **A member list is a list of linkages of its type, on every page**: a group's or an org unit's `users`, each
+  blueprint relationship's own type, a service's `orgDevices`. Another type, a lookalike (`Users`, `usersX`) or an
+  empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.
+- **The configuration list sends a custom setting's `customSettingsValues` as null** (abapit); only
+  `configuration(_:)` carries it, and the pass reads a custom setting alone when the org has one.
+- **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
+  the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds
+  it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value
+  list. A paged endpoint takes `cursor` (Apple's own next link carries it); a cursor the stub never gave is a 400, as
+  is an empty value in a listed set (`include=`, `apps,,users`).
+- **Assumed, check live (Phase 2 live check):**
+  - Does Apple cap the audit range? The client caps it at 365 days; the stub has no cap.
+  - Is the audit range inclusive at both ends (the stub's choice), and is a range that ends before it starts a 400
+    (the stub's choice; the client never sends one)?
+  - Does `filter[type]` take several types joined by commas (the contract types it `[string]`)?
+  - The shape of an actor's and a subject's id: the client refuses anything but letters, digits, `-`, `_` and `.`.
+  - Does the audit log's next link carry the range and filters? The client never follows it.
+  - Is a refused include a 400 (what abapit saw) or a 403, with which `code`? Both are handled.
+  - How many members an included relationship lists without `limit[<name>]` (the stub: 10), whether an empty one
+    comes as `data: []` (the pass reads a missing one as `not listed`), and whether `meta.paging` on an included
+    relationship has `nextCursor` and `total`.
+  - Does a role that can't read users also get 403 on `blueprints/{id}/relationships/users`? The stub refuses it only
+    when that path is forbidden itself.
+  - Does `mdmDevices/{id}/details` 404 for a device with no details on record (the stub's choice), is its id the
+    `mdmDevices` id (the serial?), and is the details' own `id` the same?
+  - Does the configuration list send `customSettingsValues` as null (abapit) or leave it out?
+  - The models unit's: what the 15 audit payloads Apple documents with no fields carry; whether
+    `eventDataPropertyKey` always equals the type's key; whether a domain event's domain is its `subjectName`;
+    `mdmDevices`' `productFamily` values; whether `storageFreeCapacity`/`storageTotalCapacity` are bytes and what
+    `platform` holds; and whether a signed profile comes back as base64 DER.
 
 ## Testing / live-verification status
 - Offline: green. Live (operator, Phase 1): device count and a 20-serial sample against abapit; Activation
   Lock for 20 serials (rate); a forbidden section reading "your role can't read this".
+- Live (operator, Phase 2): the acceptance pass on a Business org, its 25 Business-only lines read whole and each
+  "Assumed, check live" item above answered; a blueprint read with a role that can't read users (the fallback); a
+  School org's pass sending no Business-only read.

@@ -194,14 +194,16 @@ struct AuditTests {
     @Test func theStubRefusesWhatTheContractRefuses() async throws {
         let harness = try await Harness()
         let start = ("filter[startTimestamp]", "2026-10-15T12:00:00Z"), end = ("filter[endTimestamp]", "2026-10-16T12:00:00Z")
-        func refused(_ query: [(String, String)]) async throws -> String? {
+        func refused(_ query: [(String, String)], code: String = "PARAMETER_ERROR.INVALID") async throws -> String? {
             let answer = try await harness.raw("/v1/auditEvents", query)
-            #expect(answer.status == 400, "\(query)")
-            return answer.body?["errors"]?.array?.first?["source"]?["parameter"]?.string
+            let error = answer.body?["errors"]?.array?.first
+            #expect(answer.status == 400 && error?["code"]?.string == code, "\(query)")
+            return error?["source"]?["parameter"]?.string
         }
-        #expect(try await refused([]) == "filter[startTimestamp]")
-        #expect(try await refused([start]) == "filter[endTimestamp]")
-        #expect(try await refused([end]) == "filter[startTimestamp]")
+        // A missing bound is Apple's "required", not an invalid value.
+        #expect(try await refused([], code: "PARAMETER_ERROR.REQUIRED") == "filter[startTimestamp]")
+        #expect(try await refused([start], code: "PARAMETER_ERROR.REQUIRED") == "filter[endTimestamp]")
+        #expect(try await refused([end], code: "PARAMETER_ERROR.REQUIRED") == "filter[startTimestamp]")
         #expect(try await refused([start, end, ("filter[type]", "FUTURE_TYPE")]) == "filter[type]")
         #expect(try await refused([start, end, ("filter[type]", "ROLE_CREATED,")]) == "filter[type]")
         #expect(try await refused([("filter[startTimestamp]", "yesterday"), end]) == "filter[startTimestamp]")
