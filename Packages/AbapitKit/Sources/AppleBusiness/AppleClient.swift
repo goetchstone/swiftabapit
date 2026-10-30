@@ -135,12 +135,176 @@ public actor AppleClient {
         return try await MDMService(resource: one(read))
     }
 
-    /// The serials assigned to a service.
+    /// The serials assigned to a service: `orgDevices` linkages, each checked.
     public nonisolated func serviceDeviceIDs(_ id: String) -> AsyncThrowingStream<Page<String>, any Error> {
-        guard let read = AppleRead.serviceDevices(account.scope, id: id) else {
-            return AsyncThrowingStream { $0.finish(throwing: AppleAPIError.notFound) }
+        guard let read = AppleRead.serviceDevices(account.scope, id: id) else { return Self.failed(AppleAPIError.notFound) }
+        return pages(read, linkagesOf: OrgDevice.resourceType).map(\.id)
+    }
+
+    // MARK: people (Business only)
+
+    public nonisolated func users() -> AsyncThrowingStream<Page<User>, any Error> {
+        isBusiness ? pages(AppleRead.users()).map(User.init) : Self.failed(.notInScope(.users))
+    }
+
+    public func user(_ id: String) async throws -> User {
+        try businessOnly(.users)
+        guard let read = AppleRead.user(id: id) else { throw AppleAPIError.notFound }
+        return try await User(resource: one(read))
+    }
+
+    public nonisolated func userGroups() -> AsyncThrowingStream<Page<UserGroup>, any Error> {
+        isBusiness ? pages(AppleRead.userGroups()).map(UserGroup.init) : Self.failed(.notInScope(.userGroups))
+    }
+
+    public func userGroup(_ id: String) async throws -> UserGroup {
+        try businessOnly(.userGroups)
+        guard let read = AppleRead.userGroup(id: id) else { throw AppleAPIError.notFound }
+        return try await UserGroup(resource: one(read))
+    }
+
+    /// A group's members' ids: `users` linkages, each checked.
+    public nonisolated func userGroupMemberIDs(_ id: String) -> AsyncThrowingStream<Page<String>, any Error> {
+        guard isBusiness else { return Self.failed(.notInScope(.userGroups)) }
+        guard let read = AppleRead.userGroupMembers(id: id) else { return Self.failed(.notFound) }
+        return pages(read, linkagesOf: User.resourceType).map(\.id)
+    }
+
+    public nonisolated func organizationalUnits() -> AsyncThrowingStream<Page<OrganizationalUnit>, any Error> {
+        isBusiness ? pages(AppleRead.organizationalUnits()).map(OrganizationalUnit.init) : Self.failed(.notInScope(.orgUnits))
+    }
+
+    public func organizationalUnit(_ id: String) async throws -> OrganizationalUnit {
+        try businessOnly(.orgUnits)
+        guard let read = AppleRead.organizationalUnit(id: id) else { throw AppleAPIError.notFound }
+        return try await OrganizationalUnit(resource: one(read))
+    }
+
+    /// An org unit's members' ids: `users` linkages, each checked.
+    public nonisolated func organizationalUnitMemberIDs(_ id: String) -> AsyncThrowingStream<Page<String>, any Error> {
+        guard isBusiness else { return Self.failed(.notInScope(.orgUnits)) }
+        guard let read = AppleRead.organizationalUnitMembers(id: id) else { return Self.failed(.notFound) }
+        return pages(read, linkagesOf: User.resourceType).map(\.id)
+    }
+
+    // MARK: content (Business only)
+
+    public nonisolated func apps() -> AsyncThrowingStream<Page<ContentApp>, any Error> {
+        isBusiness ? pages(AppleRead.apps()).map(ContentApp.init) : Self.failed(.notInScope(.apps))
+    }
+
+    public func app(_ id: String) async throws -> ContentApp {
+        try businessOnly(.apps)
+        guard let read = AppleRead.app(id: id) else { throw AppleAPIError.notFound }
+        return try await ContentApp(resource: one(read))
+    }
+
+    public nonisolated func packages() -> AsyncThrowingStream<Page<ContentPackage>, any Error> {
+        isBusiness ? pages(AppleRead.packages()).map(ContentPackage.init) : Self.failed(.notInScope(.packages))
+    }
+
+    public func package(_ id: String) async throws -> ContentPackage {
+        try businessOnly(.packages)
+        guard let read = AppleRead.package(id: id) else { throw AppleAPIError.notFound }
+        return try await ContentPackage(resource: one(read))
+    }
+
+    public nonisolated func blueprints() -> AsyncThrowingStream<Page<Blueprint>, any Error> {
+        isBusiness ? pages(AppleRead.blueprints()).map(Blueprint.init) : Self.failed(.notInScope(.blueprints))
+    }
+
+    /// One blueprint, with the members of `include` (abapit's `blueprint`). Apple refuses the whole read when the role
+    /// can't read one of the included relationships (abapit saw a 403 on users and user groups turn into a 400): on a
+    /// 400 or a 403, and only when something was included, it is read once more without the include, and the answer
+    /// says so (`includeRefused`, invariant 8), never as if the blueprint had no members. Any other failure is thrown,
+    /// and so is a failure of the second read.
+    public func blueprint(_ id: String, include: Set<Blueprint.Relationship> = []) async throws -> BlueprintRead {
+        try businessOnly(.blueprints)
+        guard let read = AppleRead.blueprint(id: id, include: include) else { throw AppleAPIError.notFound }
+        var document: Document
+        var refused: AppleAPIError?
+        do {
+            document = try await documentOf(read)
+        } catch let error as AppleAPIError where !include.isEmpty && Self.refusesInclude(error) {
+            guard let bare = AppleRead.blueprint(id: id) else { throw AppleAPIError.notFound }
+            document = try await documentOf(bare)
+            refused = error
         }
-        return pages(read).map(\.id)
+        let blueprint = try Blueprint(resource: Self.resource(of: document, read.template))
+        var related: [Blueprint.Relationship: Blueprint.Related] = [:]
+        if refused == nil {
+            for relationship in include {
+                do {
+                    related[relationship] = try blueprint.related(relationship)
+                } catch {
+                    throw AppleAPIError.malformed("the blueprint's \(relationship.rawValue)")
+                }
+            }
+        }
+        return BlueprintRead(blueprint: blueprint, related: related, included: refused == nil ? document.included : [], includeRefused: refused)
+    }
+
+    /// Apple's answer to an include it won't serve: a 400 (what abapit saw) or a 403. Nothing else is retried.
+    static func refusesInclude(_ error: AppleAPIError) -> Bool {
+        switch error {
+        case .badRequest, .forbidden: true
+        default: false
+        }
+    }
+
+    /// A blueprint's members of one relationship: linkages of its type, each checked.
+    public nonisolated func blueprintMemberIDs(_ id: String, _ relationship: Blueprint.Relationship) -> AsyncThrowingStream<Page<String>, any Error> {
+        guard isBusiness else { return Self.failed(.notInScope(.blueprints)) }
+        guard let read = AppleRead.blueprintMembers(id: id, relationship) else { return Self.failed(.notFound) }
+        return pages(read, linkagesOf: relationship.resourceType).map(\.id)
+    }
+
+    /// The configurations; a custom setting's profile is null here (`configuration(_:)` reads it).
+    public nonisolated func configurations() -> AsyncThrowingStream<Page<Configuration>, any Error> {
+        isBusiness ? pages(AppleRead.configurations()).map(Configuration.init) : Self.failed(.notInScope(.configurations))
+    }
+
+    /// One configuration: the only read that carries a custom setting's `customSettingsValues`.
+    public func configuration(_ id: String) async throws -> Configuration {
+        try businessOnly(.configurations)
+        guard let read = AppleRead.configuration(id: id) else { throw AppleAPIError.notFound }
+        return try await Configuration(resource: one(read))
+    }
+
+    // MARK: Apple MDM (Business only)
+
+    public nonisolated func mdmDevices() -> AsyncThrowingStream<Page<MDMDevice>, any Error> {
+        isBusiness ? pages(AppleRead.mdmDevices()).map(MDMDevice.init) : Self.failed(.notInScope(.mdmEnrolled))
+    }
+
+    /// An Apple-managed device's posture, from the documented `mdmDevices/{id}/details`.
+    public func mdmDeviceDetails(_ id: String) async throws -> MDMDeviceDetail {
+        try businessOnly(.mdmEnrolled)
+        guard let read = AppleRead.mdmDeviceDetails(id: id) else { throw AppleAPIError.notFound }
+        return try await MDMDeviceDetail(resource: one(read))
+    }
+
+    // MARK: audit (Business only)
+
+    /// The audit log over `query`, as Apple filtered it, a cursor at a time: each next page is this read again with
+    /// Apple's `meta.paging.nextCursor`, so the range and the filters go with every page. A cursor Apple gives twice is
+    /// malformed, not a loop to the page cap.
+    public nonisolated func auditEvents(_ query: AuditQuery) -> AsyncThrowingStream<Page<AuditEvent>, any Error> {
+        isBusiness ? pages(AppleRead.auditEvents(query), cursorPaging: true).map(AuditEvent.init) : Self.failed(.notInScope(.auditEvents))
+    }
+
+    // MARK: Business only
+
+    /// School has no people, content, Apple MDM or audit endpoints (plan §2.4): asked of a School org, those reads throw
+    /// `.notInScope` before anything is built, so nothing is sent.
+    nonisolated var isBusiness: Bool { account.scope == .business }
+
+    private func businessOnly(_ section: AppleSection) throws {
+        guard isBusiness else { throw AppleAPIError.notInScope(section) }
+    }
+
+    private nonisolated static func failed<Item>(_ error: AppleAPIError) -> AsyncThrowingStream<Page<Item>, any Error> {
+        AsyncThrowingStream { $0.finish(throwing: error) }
     }
 
     // MARK: probes and health
@@ -216,9 +380,11 @@ public actor AppleClient {
     /// The single resource a `GET …/{id}` returns. A 2xx without one is malformed, never "not found": only Apple's
     /// 404 says that.
     private func one(_ read: ReadRequest) async throws -> Resource {
-        guard let resource = try await documentOf(read).resource, !resource.id.isEmpty else {
-            throw AppleAPIError.malformed("a single \(read.template)")
-        }
+        try await Self.resource(of: documentOf(read), read.template)
+    }
+
+    private static func resource(of document: Document, _ template: String) throws -> Resource {
+        guard let resource = document.resource, !resource.id.isEmpty else { throw AppleAPIError.malformed("a single \(template)") }
         return resource
     }
 
@@ -238,12 +404,16 @@ public actor AppleClient {
         return resources
     }
 
-    /// Follows `links.next` (or `meta.paging.nextCursor`) up to the page cap, a page at a time.
-    nonisolated func pages(_ first: ReadRequest) -> AsyncThrowingStream<Page<Resource>, any Error> {
+    /// Follows `links.next` (or `meta.paging.nextCursor`) up to the page cap, a page at a time. `cursorPaging` (the audit
+    /// log) asks each next page as the first was, with Apple's cursor set, so its required range and filters go with
+    /// every page. `linkagesOf` checks every item is a linkage of that type: a member list of another type is malformed,
+    /// as an assigned server that isn't one is.
+    nonisolated func pages(_ first: ReadRequest, cursorPaging: Bool = false, linkagesOf type: String? = nil)
+        -> AsyncThrowingStream<Page<Resource>, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await self.walk(first) { continuation.yield($0) }
+                    try await self.walk(first, cursorPaging: cursorPaging, linkagesOf: type) { continuation.yield($0) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -253,28 +423,61 @@ public actor AppleClient {
         }
     }
 
-    private func walk(_ first: ReadRequest, _ yield: (Page<Resource>) -> Void) async throws {
+    private func walk(_ first: ReadRequest, cursorPaging: Bool, linkagesOf type: String?, _ yield: (Page<Resource>) -> Void) async throws {
         var response = try await http.read(first, authorizer: broker)
         var number = 1
+        // Every next page asked so far: one Apple gives again would walk the same pages to the cap.
+        var asked: Set<String> = []
         while true {
             try Task.checkCancellation()
             let document = try document(from: response)
             let items = try Self.list(document, first.template)
+            if let type, !items.allSatisfy({ $0.type.utf8.elementsEqual(type.utf8) && !$0.id.isEmpty }) {
+                throw AppleAPIError.malformed("linkages of type \(type)")
+            }
             let more = document.next != nil || document.nextCursor != nil
             let capped = more && number >= pageCap
             yield(Page(items: items, number: number, truncated: capped, total: document.total))
             guard more, !capped else { return }
             number += 1
-            if let next = document.next, let url = URL(string: next) {
+            let repeated = AppleAPIError.malformed("a repeated cursor on \(first.template)")
+            if cursorPaging {
+                // Apple's cursor, or the one its next link carries: never a next link followed, which may drop the filters.
+                guard let cursor = document.nextCursor ?? document.next.flatMap(Self.cursor(in:)) else {
+                    throw AppleAPIError.malformed("a next page of \(first.template) without a cursor")
+                }
+                guard asked.insert(cursor).inserted else { throw repeated }
+                response = try await http.read(first.setting("cursor", to: cursor), authorizer: broker)
+            } else if let next = document.next, let url = URL(string: next) {
+                guard asked.insert(next).inserted else { throw repeated }
                 response = try await http.read(next: url, on: first.host, template: first.template,
                                                keeping: first.query.first { $0.name == "limit" }?.value, authorizer: broker)
             } else if let cursor = document.nextCursor {
+                guard asked.insert(cursor).inserted else { throw repeated }
                 response = try await http.read(first.setting("cursor", to: cursor), authorizer: broker)
             } else {
                 throw AppleAPIError.notJSON(bytes: 0)
             }
         }
     }
+
+    /// The `cursor` a next link carries.
+    private static func cursor(in next: String) -> String? {
+        URLComponents(string: next)?.queryItems?.first { $0.name == "cursor" }?.value.flatMap { $0.isEmpty ? nil : $0 }
+    }
+}
+
+/// One blueprint as `AppleClient.blueprint(_:include:)` read it.
+public struct BlueprintRead: Sendable {
+    public let blueprint: Blueprint
+    /// Each included relationship Apple listed, with its linkages and whether the include's limit cut it; one Apple sent
+    /// links for only is absent. Empty when the include was refused.
+    public let related: [Blueprint.Relationship: Blueprint.Related]
+    /// The resources Apple included, in its order.
+    public let included: [Resource]
+    /// Apple refused the include (a 400 or a 403) and the blueprint was read again without it: its members weren't read,
+    /// and the screen says so (invariant 8), with "your role can't read this" for a 403.
+    public let includeRefused: AppleAPIError?
 }
 
 extension AsyncThrowingStream where Element == Page<Resource>, Failure == any Error {

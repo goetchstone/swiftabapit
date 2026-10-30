@@ -6,8 +6,10 @@ import HTTPCore
 import JSONAPI
 import Orgs
 import Synchronization
+import Testing
 import TestSupport
 import Vault
+import Wire
 
 /// A client wired to a strict `AppleStub`, a memory Vault holding a fresh key, and a sleep that records
 /// instead of waiting.
@@ -73,4 +75,32 @@ extension KeyImport {
 final class Recorder: Sendable {
     let value = Mutex<[Duration]>([])
     var all: [Duration] { value.withLock { $0 } }
+}
+
+extension Harness {
+    /// The resources of Apple's own example answer (`Tests/Fixtures/docc/business/<name>.response.json`): a list's items, or
+    /// the single item.
+    static func example(_ name: String) throws -> [Resource] {
+        try Document.parse(Data(contentsOf: Fixtures.docc.appending(path: "business/\(name).response.json"))).resources
+    }
+
+    /// What the stub answers a GET the client would never build (another parameter, a bad value), sent with this org's
+    /// token straight to the stub: its own checks, not the client's, decide.
+    func raw(_ path: String, _ query: [(String, String)] = [], host: APIHost = .appleBusiness) async throws -> (status: Int, body: JSONValue?) {
+        let broker = TokenBroker(account: await client.account, vault: vault, http: HTTPClient(transport: stub, limiter: RateLimiter(sleep: { _ in })))
+        var request = URLRequest(url: try #require(URL.make(host: host, path: path, query: query.map { QueryItem($0.0, $0.1) })))
+        for (name, value) in try await broker.headers(for: host) { request.setValue(value, forHTTPHeaderField: name) }
+        let (data, response) = try await stub.send(request, limit: 1 << 24)
+        return (response.statusCode, JSONValue.parse(String(decoding: data, as: UTF8.self)))
+    }
+
+    /// Every page of `stream`'s items.
+    static func all<Item>(_ stream: AsyncThrowingStream<Page<Item>, any Error>) async throws -> [Item] {
+        var items: [Item] = []
+        for try await page in stream { items += page.items }
+        return items
+    }
+
+    /// The GETs the stub was sent (the token requests left out).
+    var reads: [String] { stub.requests.filter { $0.hasPrefix("GET ") } }
 }

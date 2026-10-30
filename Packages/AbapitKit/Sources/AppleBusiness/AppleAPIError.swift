@@ -1,3 +1,4 @@
+import AppleModels
 import Foundation
 import HTTPCore
 import JSONAPI
@@ -23,6 +24,9 @@ public enum AppleAPIError: Error, Equatable, Sendable {
     case token(TokenFailure)
     case vault(String)
     case wrongHost(String)
+    /// A Business-only read asked of a School org: School has no people, content, Apple MDM or audit endpoints (plan
+    /// §2.4). Thrown before anything is built or sent.
+    case notInScope(AppleSection)
 
     /// A non-2xx response as an error.
     init(_ response: HTTPResponse) {
@@ -59,6 +63,7 @@ public enum AppleAPIError: Error, Equatable, Sendable {
         case .token(let failure): failure.message
         case .vault(let guidance): guidance
         case .wrongHost(let host): "A request for \(host) was refused: it isn't this organization's API."
+        case .notInScope(let section): "Apple School Manager's API has no \(section.displayName.lowercased()) to read."
         }
     }
 }

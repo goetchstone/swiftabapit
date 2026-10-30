@@ -20,9 +20,18 @@ import Wire
 ///   registered public key (a DER signature, the classic ES256 bug, fails). Anything else is
 ///   `invalid_client`. The form must be in the body.
 /// - Resources check the bearer (unknown, expired, or another scope's token is 401), validate every query
-///   parameter (unknown name, `limit` over 1000, a `fields[…]` value Apple doesn't allow: 400), and page
-///   with real `links.next` URLs.
-/// - Failures can be queued: 401 once, 403 for a section, 429 with or without `Retry-After`.
+///   parameter against the contract's own table, written out here (`parameters`: an unknown name, a `limit` outside 1
+///   to 1000, a value outside a listed set such as an `include` name or an audit type: 400), and page with real
+///   `links.next` URLs and cursors (a cursor it never gave is 400). An endpoint Apple doesn't document (abapit's
+///   `mdmDevices/{id}`) and any School read of a Business-only collection are unhandled.
+/// - The Business-only reads serve what `add(_:)`, `relate(_:_:_:to:)` and `setDetails(_:_:)` hold: the configuration
+///   list sends a custom setting's profile as null, a blueprint lists the members it was asked to include up to
+///   `limit[<name>]` and includes their resources, and the audit log requires its range and really filters by it, the
+///   types, the actor and the subject.
+/// - Failures can be queued: 401 once, 403 for a section, 429 with or without `Retry-After`, any status or body for a
+///   path (`queue`, which may go on into the query: `/v1/blueprints/B1?include=` fails only the read that includes);
+///   a blueprint read whose include names a forbidden collection is refused (`refuseIncludes(with:)`, 400 by default,
+///   as abapit saw); `repeatCursors(on:)` makes a list's cursor never move.
 public final class AppleStub: Transport, Sendable {
     public struct Account: Sendable {
         public let clientID: String
@@ -54,6 +63,15 @@ public final class AppleStub: Transport, Sendable {
         var assignments: [String: String] = [:]
         var coverage: [String: [Resource]] = [:]
         var locks: [String: Resource] = [:]
+        /// The Business-only collections, by type: users, userGroups, organizationalUnits, apps, packages, blueprints,
+        /// configurations, mdmDevices, auditEvents.
+        var collections: [String: [Resource]] = [:]
+        /// Members by `<collection>/<id>/<relationship>`: a group's or an org unit's users, a blueprint's members.
+        var members: [String: [String]] = [:]
+        /// `mdmDevices/{id}/details` by the device's id.
+        var details: [String: Resource] = [:]
+        var includeRefusal = 400
+        var repeatingCursors: Set<String> = []
         var forbiddenPaths: Set<String> = []
         var queued: [(path: String, status: Int, headers: [String: String], body: Data?)] = []
         var unauthorizedOnce = false
@@ -86,6 +104,25 @@ public final class AppleStub: Transport, Sendable {
                                          attributes: ["isLocked": .bool(isLocked), "lockType": .string(lockType)])
         }
     }
+    /// Resources of the Business-only collections, each filed by its `type`: `users`, `userGroups`,
+    /// `organizationalUnits`, `apps`, `packages`, `blueprints`, `configurations` (with `customSettingsValues`, which only
+    /// the single read sends), `mdmDevices` and `auditEvents` (their `eventDateTime`, `type`, `actorId` and `subjectId`
+    /// are what the filters match).
+    public func add(_ resources: [Resource]) {
+        state.withLock { state in for resource in resources { state.collections[resource.type, default: []].append(resource) } }
+    }
+    /// `ids` as the members of `relationship` of the `collection` item `id`: a group's or an org unit's `users`, or a
+    /// blueprint's `apps`, `packages`, `configurations`, `orgDevices`, `users` or `userGroups` (each a linkage of that type).
+    public func relate(_ collection: String, _ id: String, _ relationship: String, to ids: [String]) {
+        state.withLock { $0.members["\(collection)/\(id)/\(relationship)"] = ids }
+    }
+    /// An Apple-managed device's `mdmDevices/{id}/details`.
+    public func setDetails(_ device: String, _ details: Resource) { state.withLock { $0.details[device] = details } }
+    /// The status a blueprint read answers when its `include` names a relationship `forbid` refused: 400 unless set (what
+    /// abapit saw), or 403.
+    public func refuseIncludes(with status: Int) { state.withLock { $0.includeRefusal = status } }
+    /// Every page under `path` names its own cursor as the next one, as a broken cursor would: the client must stop.
+    public func repeatCursors(on path: String) { state.withLock { _ = $0.repeatingCursors.insert(path) } }
     /// Every request under `path` answers 403, as a role without that permission gets.
     public func forbid(_ path: String) { state.withLock { _ = $0.forbiddenPaths.insert(path) } }
     /// The next request under `path` answers `status` (429 with `Retry-After` in `headers`, 500, …) with Apple's
@@ -213,7 +250,7 @@ public final class AppleStub: Transport, Sendable {
             let (status, headers, body) = Self.error(queued.0, "QUEUED", "Queued failure", "A failure the test queued.")
             return (status, queued.1.merging(headers) { a, _ in a }, body)
         }
-        if state.withLock({ $0.forbiddenPaths.contains { path.hasPrefix($0) } }) {
+        if forbidden(path) {
             return Self.error(403, "FORBIDDEN_ERROR", "This request is forbidden for security reasons", "The API account's role doesn't allow it.")
         }
         let query = Self.query(url)
@@ -223,107 +260,443 @@ public final class AppleStub: Transport, Sendable {
         if scope == "school", !schoolSections.contains(segments[1]) {
             throw StubFailure.unhandled("School has no \(segments[1]) endpoint")
         }
-        switch Array(segments.dropFirst()) {
-        case ["orgDevices"]:
-            if let bad = Self.check(query, allowed: ["limit", "cursor", "fields[orgDevices]"], fields: ("fields[orgDevices]", Self.orgDeviceFields)) {
-                return bad
-            }
+        // The endpoint Apple documents for this path, or none: `mdmDevices/{id}` (abapit's read) is unhandled.
+        let template = "/v1/" + ([segments[1]] + (segments.count > 2 ? ["{id}"] + segments.dropFirst(3) : [])).joined(separator: "/")
+        guard Self.parameters[template] != nil else { throw StubFailure.unhandled("GET \(path)") }
+        if let bad = Self.check(query, template: template) { return bad }
+        let id = segments.count > 2 ? segments[2] : ""
+        switch template {
+        case "/v1/orgDevices":
             return page(state.withLock { $0.devices }, url: url, query: query, host: host)
-        case let s where s.count == 2 && s[0] == "orgDevices":
-            if let bad = Self.check(query, allowed: ["fields[orgDevices]"], fields: ("fields[orgDevices]", Self.orgDeviceFields)) { return bad }
-            guard let device = state.withLock({ $0.devices.first { $0.id == s[1] } }) else { return Self.notFound(path) }
+        case "/v1/orgDevices/{id}":
+            guard let device = state.withLock({ $0.devices.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": device.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
-        case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "appleCareCoverage":
-            if let bad = Self.check(query, allowed: ["limit", "cursor", "fields[appleCareCoverage]"], fields: nil) { return bad }
-            guard state.withLock({ $0.devices.contains { $0.id == s[1] } }) else { return Self.notFound(path) }
-            return page(state.withLock { $0.coverage[s[1]] ?? [] }, url: url, query: query, host: host)
-        case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "activationLockStatus":
-            if let bad = Self.check(query, allowed: ["fields[activationLockStatus]"], fields: nil) { return bad }
-            guard let lock = state.withLock({ $0.locks[s[1]] }) else { return Self.notFound(path) }
+        case "/v1/orgDevices/{id}/appleCareCoverage":
+            guard state.withLock({ $0.devices.contains { $0.id == id } }) else { return Self.notFound(path) }
+            return page(state.withLock { $0.coverage[id] ?? [] }, url: url, query: query, host: host)
+        case "/v1/orgDevices/{id}/activationLockStatus":
+            guard let lock = state.withLock({ $0.locks[id] }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": lock.asJSON]))
-        case let s where s.count == 3 && s[0] == "orgDevices" && s[2] == "assignedServer":
+        case "/v1/orgDevices/{id}/assignedServer":
             // abapit saw 404 for an unassigned device (client.py:176-182).
-            if let bad = Self.check(query, allowed: ["fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) { return bad }
-            guard let id = state.withLock({ $0.assignments[s[1]] }),
-                  let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
+            guard let service = state.withLock({ state in state.assignments[id].flatMap { service in state.services.first { $0.id == service } } })
+            else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
-        case let s where s.count == 4 && s[0] == "orgDevices" && s[2] == "relationships" && s[3] == "assignedServer":
+        case "/v1/orgDevices/{id}/relationships/assignedServer":
             // Assumed to match the full read's 404 (docs/domains/apple-reads.md: check live).
-            if let bad = Self.check(query, allowed: [], fields: nil) { return bad }
-            guard let id = state.withLock({ $0.assignments[s[1]] }) else { return Self.notFound(path) }
-            return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(id)])]))
-        case ["mdmServers"]:
-            if let bad = Self.check(query, allowed: ["limit", "cursor", "fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) {
-                return bad
-            }
+            guard let service = state.withLock({ $0.assignments[id] }) else { return Self.notFound(path) }
+            return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(service)])]))
+        case "/v1/mdmServers":
             return page(state.withLock { $0.services }, url: url, query: query, host: host)
-        case let s where s.count == 2 && s[0] == "mdmServers":
-            if let bad = Self.check(query, allowed: ["fields[mdmServers]"], fields: ("fields[mdmServers]", Self.serviceFields)) { return bad }
-            guard let service = state.withLock({ $0.services.first { $0.id == s[1] } }) else { return Self.notFound(path) }
+        case "/v1/mdmServers/{id}":
+            guard let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
-        case let s where s.count == 4 && s[0] == "mdmServers" && s[2] == "relationships" && s[3] == "devices":
-            if let bad = Self.check(query, allowed: ["limit", "cursor"], fields: nil) { return bad }
-            guard state.withLock({ $0.services.contains { $0.id == s[1] } }) else { return Self.notFound(path) }
+        case "/v1/mdmServers/{id}/relationships/devices":
+            guard state.withLock({ $0.services.contains { $0.id == id } }) else { return Self.notFound(path) }
             let linkages = state.withLock { state in
-                state.assignments.filter { $0.value == s[1] }.keys.sorted().map { Resource(type: "orgDevices", id: $0) }
+                state.assignments.filter { $0.value == id }.keys.sorted().map { Resource(type: "orgDevices", id: $0) }
             }
             return page(linkages, url: url, query: query, host: host, linkagesOnly: true)
-        case ["auditEvents"]:
-            if let bad = Self.check(query, allowed: ["cursor", "fields[auditEvents]", "filter[actorId]", "filter[endTimestamp]", "filter[startTimestamp]",
-                                                     "filter[subjectId]", "filter[type]", "limit"], fields: nil) { return bad }
-            guard query["filter[startTimestamp]"] != nil, query["filter[endTimestamp]"] != nil else {
-                return Self.error(400, "PARAMETER_ERROR.REQUIRED", "A parameter is required", "filter[startTimestamp] and filter[endTimestamp] are required.",
-                                  parameter: "filter[startTimestamp]")
+        case "/v1/auditEvents":
+            return auditEvents(url: url, query: query, host: host)
+        case "/v1/configurations":
+            // abapit: the list sends a custom setting's `customSettingsValues` as null; only the single read carries it.
+            let listed = collection("configurations").map { configuration in
+                var attributes = configuration.attributes
+                if attributes["customSettingsValues"] != nil { attributes["customSettingsValues"] = .null }
+                return Resource(type: configuration.type, id: configuration.id, attributes: attributes)
             }
-            return page([], url: url, query: query, host: host)
-        case ["mdmDevices"], ["users"], ["userGroups"], ["organizationalUnits"], ["apps"], ["packages"], ["blueprints"], ["configurations"]:
-            if let bad = Self.check(query, allowed: ["limit", "cursor"], fields: nil) { return bad }
-            return page([], url: url, query: query, host: host)
+            return page(listed, url: url, query: query, host: host)
+        case "/v1/blueprints":
+            let include = query["include"].map { $0.split(separator: ",").map(String.init) } ?? []
+            var included: [Resource] = []
+            let blueprints = collection("blueprints").map { blueprint in
+                let (json, resources) = blueprintJSON(blueprint, include: include, query: query, host: host)
+                included += resources
+                return json
+            }
+            return page(blueprints, url: url, query: query, host: host, included: included)
+        case "/v1/blueprints/{id}":
+            guard let blueprint = collection("blueprints").first(where: { $0.id == id }) else { return Self.notFound(path) }
+            let include = query["include"].map { $0.split(separator: ",").map(String.init) } ?? []
+            if let refused = refusal(include) { return refused }
+            let (json, included) = blueprintJSON(blueprint, include: include, query: query, host: host)
+            var body: JSONObject = ["data": json, "links": .object(["self": .string(url.absoluteString)])]
+            if !include.isEmpty { body["included"] = .array(included.map(\.asJSON)) }
+            return (200, [:], Self.json(body))
+        case _ where segments.count == 5 && segments[3] == "relationships":
+            // A group's or an org unit's users, a blueprint's members: linkages of the relationship's own type.
+            guard collection(segments[1]).contains(where: { $0.id == id }) else { return Self.notFound(path) }
+            let ids = state.withLock { $0.members["\(segments[1])/\(id)/\(segments[4])"] ?? [] }
+            return page(ids.map { Resource(type: segments[4], id: $0) }, url: url, query: query, host: host, linkagesOnly: true)
+        case "/v1/mdmDevices/{id}/details":
+            // Assumed: a device with no details on record answers 404 (check live).
+            guard let details = state.withLock({ $0.details[id] }) else { return Self.notFound(path) }
+            return (200, [:], Self.json(["data": details.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
+        case _ where segments.count == 2:
+            return page(collection(segments[1]), url: url, query: query, host: host)
+        case _ where segments.count == 3:
+            guard let item = collection(segments[1]).first(where: { $0.id == id }) else { return Self.notFound(path) }
+            return (200, [:], Self.json(["data": item.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
         default:
             throw StubFailure.unhandled("GET \(path)")
         }
     }
 
-    /// A page of `items` from the `cursor` offset, `limit` long, with `links.next` when more remain.
-    private func page(_ items: [Resource], url: URL, query: [String: String], host: APIHost, linkagesOnly: Bool = false)
-        -> (Int, [String: String], Data) {
+    private func forbidden(_ path: String) -> Bool { state.withLock { $0.forbiddenPaths.contains { path.hasPrefix($0) } } }
+
+    private func collection(_ name: String) -> [Resource] { state.withLock { $0.collections[name] ?? [] } }
+
+    /// Apple refuses a blueprint read whose `include` names a relationship the role can't read: abapit saw a role that
+    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`).
+    private func refusal(_ include: [String]) -> (Int, [String: String], Data)? {
+        guard include.contains(where: { forbidden("/v1/\($0)") }) else { return nil }
+        let status = state.withLock { $0.includeRefusal }
+        return status == 403
+            ? Self.error(403, "FORBIDDEN_ERROR", "This request is forbidden for security reasons", "The API account's role can't read an included relationship.")
+            : Self.error(status, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "An included relationship can't be read.", parameter: "include")
+    }
+
+    /// A blueprint as `Blueprint` documents it: its six relationships with Apple's links, and for each included one its
+    /// linkages up to `limit[<name>]` with `meta.paging` (the next cursor when more remain, the total when asked), and
+    /// the resources of those linkages that the stub holds.
+    private func blueprintJSON(_ blueprint: Resource, include: [String], query: [String: String], host: APIHost) -> (JSONValue, [Resource]) {
+        let base = "https://\(host.rawValue)/v1/blueprints/\(blueprint.id)"
+        var relationships: JSONObject = [:], included: [Resource] = []
+        for name in Self.blueprintRelationships {
+            var relationship: JSONObject = ["links": .object(["self": .string("\(base)/relationships/\(name)"), "include": .string("\(base)?include=\(name)")])]
+            if include.contains(name) {
+                let ids = state.withLock { $0.members["blueprints/\(blueprint.id)/\(name)"] ?? [] }
+                let limit = query["limit[\(name)]"].flatMap(Int.init) ?? Self.includeLimit
+                let shown = Array(ids.prefix(limit))
+                relationship["data"] = .array(shown.map { .object(["type": .string(name), "id": .string($0)]) })
+                var paging: JSONObject = ["limit": .number(String(limit))]
+                if ids.count > shown.count { paging["nextCursor"] = .string(String(shown.count)) }
+                if state.withLock({ $0.reportsTotal }) { paging["total"] = .number(String(ids.count)) }
+                relationship["meta"] = .object(["paging": .object(paging)])
+                let held = name == "orgDevices" ? state.withLock { $0.devices } : collection(name)
+                included += shown.compactMap { id in held.first { $0.id == id } }
+            }
+            relationships[name] = .object(relationship)
+        }
+        return (.object(["type": .string(blueprint.type), "id": .string(blueprint.id), "attributes": .object(blueprint.attributes),
+                         "relationships": .object(relationships)]), included)
+    }
+
+    /// `GET auditEvents`: both timestamps required (400 as Apple's contract marks them), each ISO 8601; the events in
+    /// the range, of the types asked, by the actor and of the subject asked, a cursor at a time. Apple filters, so the
+    /// stub really does.
+    private func auditEvents(url: URL, query: [String: String], host: APIHost) -> (Int, [String: String], Data) {
+        for name in ["filter[startTimestamp]", "filter[endTimestamp]"] where query[name] == nil {
+            return Self.error(400, "PARAMETER_ERROR.REQUIRED", "A parameter is required", "\(name) is required.", parameter: name)
+        }
+        guard let start = Self.instant(query["filter[startTimestamp]"]) else {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Not an ISO 8601 timestamp.", parameter: "filter[startTimestamp]")
+        }
+        guard let end = Self.instant(query["filter[endTimestamp]"]) else {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Not an ISO 8601 timestamp.", parameter: "filter[endTimestamp]")
+        }
+        // Assumed: a range that ends before it starts is refused (check live).
+        guard start <= end else {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "The range ends before it starts.", parameter: "filter[endTimestamp]")
+        }
+        let types = query["filter[type]"].map { Set($0.split(separator: ",").map(String.init)) }
+        func same(_ attribute: JSONValue?, _ asked: String?) -> Bool {
+            asked.map { asked in attribute?.string.map { $0.utf8.elementsEqual(asked.utf8) } ?? false } ?? true
+        }
+        let events = collection("auditEvents").filter { event in
+            let attributes = event.attributes
+            guard let when = Self.instant(attributes["eventDateTime"]?.string), start <= when, when <= end else { return false }
+            return (types.map { types in attributes["type"]?.string.map(types.contains) ?? false } ?? true)
+                && same(attributes["actorId"], query["filter[actorId]"]) && same(attributes["subjectId"], query["filter[subjectId]"])
+        }
+        return page(events, url: url, query: query, host: host)
+    }
+
+    private static func instant(_ text: String?) -> Date? {
+        guard let text else { return nil }
+        let format = ISO8601DateFormatter()
+        format.formatOptions = [.withInternetDateTime]
+        if let date = format.date(from: text) { return date }
+        format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return format.date(from: text)
+    }
+
+    /// A page of `items` from the `cursor` offset, `limit` long, with `links.next` when more remain. A cursor the stub
+    /// never gave is refused, as Apple refuses one; under `repeatCursors(on:)` every page names its own cursor as next.
+    private func page(_ items: [Resource], url: URL, query: [String: String], host: APIHost, linkagesOnly: Bool = false) -> (Int, [String: String], Data) {
+        page(items.map { linkagesOnly ? JSONValue.object(["type": .string($0.type), "id": .string($0.id)]) : $0.asJSON }, url: url, query: query,
+             host: host)
+    }
+
+    private func page(_ items: [JSONValue], url: URL, query: [String: String], host: APIHost, included: [Resource]? = nil) -> (Int, [String: String], Data) {
         let limit = query["limit"].flatMap(Int.init) ?? 100
-        let start = query["cursor"].flatMap(Int.init) ?? 0
+        let start: Int
+        if let cursor = query["cursor"] {
+            guard let offset = Int(cursor), offset >= 0, String(offset) == cursor else {
+                return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "The cursor isn't one this endpoint gave.", parameter: "cursor")
+            }
+            start = offset
+        } else {
+            start = 0
+        }
+        let target = url.path(percentEncoded: false)
+        let repeats = state.withLock { $0.repeatingCursors.contains { target.hasPrefix($0) } }
         let slice = items.dropFirst(start).prefix(limit)
         var links: JSONObject = ["self": .string(url.absoluteString)]
         var paging: JSONObject = ["limit": .number(String(limit))]
-        if start + slice.count < items.count {
+        if repeats || start + slice.count < items.count {
+            let next = repeats ? start : start + slice.count
             // As Apple's example: the next link carries the cursor alone (get-org-devices.response.json).
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "cursor", value: String(start + slice.count))]
+            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))]
             links["next"] = .string(components.url!.absoluteString)
-            paging["nextCursor"] = .string(String(start + slice.count))
+            paging["nextCursor"] = .string(String(next))
         }
         if state.withLock({ $0.reportsTotal }) { paging["total"] = .number(String(items.count)) }
-        let data = slice.map { linkagesOnly ? JSONValue.object(["type": .string($0.type), "id": .string($0.id)]) : $0.asJSON }
-        return (200, [:], Self.json(["data": .array(Array(data)), "links": .object(links),
-                                     "meta": .object(["paging": .object(paging)])]))
+        var body: JSONObject = ["data": .array(Array(slice)), "links": .object(links), "meta": .object(["paging": .object(paging)])]
+        if let included, query["include"] != nil { body["included"] = .array(included.map(\.asJSON)) }
+        return (200, [:], Self.json(body))
     }
 
     // MARK: validation and bodies
 
-    /// `fields[orgDevices]`'s allowed values (Contracts/apple/business-2.6.json).
-    public static let orgDeviceFields: Set = ["serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel",
-                                              "productFamily", "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status",
-                                              "orderDateTime", "imei", "meid", "eid", "purchaseSourceId", "purchaseSourceType", "wifiMacAddress",
-                                              "bluetoothMacAddress", "ethernetMacAddress", "assignedServer", "appleCareCoverage"]
-    public static let serviceFields: Set = ["serverName", "enableMdmDisownFlag", "defaultProductFamilies", "status", "serverType", "deviceCount",
-                                            "lastConnectedDateTime", "lastConnectedIp", "createdDateTime", "updatedDateTime", "devices"]
+    /// A blueprint's relationships, each named for the type it holds, in the order the contract lists them.
+    static let blueprintRelationships = ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"]
+    /// How many members of an included relationship come without `limit[<name>]`. Undocumented: assumed small, so a client
+    /// that leaves the limit out sees its blueprints cut (check live).
+    public static let includeLimit = 10
 
-    private static func check(_ query: [String: String], allowed: Set<String>, fields: (String, Set<String>)?) -> (Int, [String: String], Data)? {
+    /// Every GET's query parameters, written out from Contracts/apple/business-2.6.json (School's are the same where it has
+    /// the endpoint), never from the client: each name, and the values it allows when the contract lists them. `limit` and
+    /// `limit[…]` take 1 to 1000 (the contract's `maximum`). `AppleStubTests` holds the table to both contracts.
+    public static let parameters: [String: [String: [String]?]] = [
+        "/v1/apps": [
+            "fields[apps]": ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
+            "limit": nil,
+        ],
+        "/v1/apps/{id}": [
+            "fields[apps]": ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
+        ],
+        "/v1/auditEvents": [
+            "cursor": nil,
+            "fields[auditEvents]": [
+                "eventDateTime", "type", "category", "actorType", "actorId", "actorName", "subjectType", "subjectId", "subjectName", "outcome",
+                "groupId", "eventDataPropertyKey", "eventDataDeviceAddedToOrg", "eventDataDeviceRemovedFromOrg", "eventDataDeviceAssignedToServer",
+                "eventDataDeviceIsErased", "eventDataDeviceUnassignedFromServer", "eventDataSubjectHasICloudStoragePurchaseAdded",
+                "eventDataSubjectHasICloudStoragePurchaseRemoved", "eventDataSubjectHasAppleCarePurchaseAdded",
+                "eventDataSubjectHasAppleCarePurchaseRemoved", "eventDataConfigSettingsCreated", "eventDataConfigSettingsUpdated",
+                "eventDataConfigSettingsDeleted", "eventDataCollectionCreated", "eventDataCollectionUpdated", "eventDataCollectionDeleted",
+                "eventDataSubscriptionCreated", "eventDataSubscriptionUpdated", "eventDataSubscriptionDeleted", "eventDataAccountRoleLocationChanged",
+                "eventDataAccountAdded", "eventDataAccountDeleted", "eventDataExternalAccountAssociated", "eventDataExternalAccountDisassociated",
+                "eventDataDomainAdded", "eventDataDomainRemoved", "eventDataDomainVerified", "eventDataApiAccountCreatedWithKey",
+                "eventDataApiAccountCreatedWithoutKey", "eventDataApiAccountDeleted", "eventDataApiAccountKeyGenerated",
+                "eventDataApiAccountKeyRevoked", "eventDataApiAccountNameChanged", "eventDataApiAccountRoleLocationChanged", "eventDataRoleCreated",
+                "eventDataRoleUpdated", "eventDataTermsAccepted", "eventDataDomainFederationEnabled", "eventDataDomainFederationDisabled",
+                "eventDataBatchPasswordResetInitiated", "eventDataExternalAccountInvited", "eventDataAccountImageSet",
+                "eventDataAccountImageReplaced", "eventDataAccountImageRemoved", "eventDataIdpCreated", "eventDataIdpUpdated", "eventDataIdpDeleted",
+                "eventDataIdpAccountSyncEnabled", "eventDataIdpAccountSyncDisabled", "eventDataAppleServicesSettingsUpdated",
+                "eventDataAccountPasswordChanged"
+            ],
+            "filter[actorId]": nil,
+            "filter[endTimestamp]": nil,
+            "filter[startTimestamp]": nil,
+            "filter[subjectId]": nil,
+            "filter[type]": [
+                "DEVICE_ADDED_TO_ORG", "DEVICE_REMOVED_FROM_ORG", "DEVICE_ASSIGNED_TO_SERVER", "DEVICE_UNASSIGNED_FROM_SERVER",
+                "SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED", "SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_REMOVED", "SUBJECT_HAS_APPLECARE_PURCHASE_ADDED",
+                "SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED", "DEVICE_IS_ERASED", "CONFIG_SETTINGS_CREATED", "CONFIG_SETTINGS_UPDATED",
+                "CONFIG_SETTINGS_DELETED", "COLLECTION_CREATED", "COLLECTION_UPDATED", "COLLECTION_DELETED", "SUBSCRIPTION_CREATED",
+                "SUBSCRIPTION_UPDATED", "SUBSCRIPTION_DELETED", "ACCOUNT_ROLE_LOCATION_CHANGED", "ACCOUNT_ADDED", "ACCOUNT_DELETED",
+                "EXTERNAL_ACCOUNT_ASSOCIATED", "EXTERNAL_ACCOUNT_DISASSOCIATED", "DOMAIN_ADDED", "DOMAIN_REMOVED", "DOMAIN_VERIFIED",
+                "API_ACCOUNT_CREATED_WITH_KEY", "API_ACCOUNT_CREATED_WITHOUT_KEY", "API_ACCOUNT_DELETED", "API_ACCOUNT_KEY_REVOKED",
+                "API_ACCOUNT_KEY_GENERATED", "API_ACCOUNT_ROLE_LOCATION_CHANGED", "API_ACCOUNT_NAME_CHANGED", "ROLE_CREATED", "ROLE_UPDATED",
+                "TERMS_ACCEPTED", "DOMAIN_FEDERATION_ENABLED", "DOMAIN_FEDERATION_DISABLED", "BATCH_PASSWORD_RESET_INITIATED",
+                "EXTERNAL_ACCOUNT_INVITED", "ACCOUNT_IMAGE_SET", "ACCOUNT_IMAGE_REPLACED", "ACCOUNT_IMAGE_REMOVED", "IDP_CREATED", "IDP_UPDATED",
+                "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "APPLE_SERVICES_SETTINGS_UPDATED", "ACCOUNT_PASSWORD_CHANGED"
+            ],
+            "limit": nil,
+        ],
+        "/v1/blueprints": [
+            "fields[blueprints]": [
+                "name", "description", "status", "createdDateTime", "updatedDateTime", "appLicenseDeficient", "apps", "packages", "configurations",
+                "orgDevices", "users", "userGroups"
+            ],
+            "include": ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"],
+            "limit": nil,
+            "limit[apps]": nil,
+            "limit[configurations]": nil,
+            "limit[orgDevices]": nil,
+            "limit[packages]": nil,
+            "limit[userGroups]": nil,
+            "limit[users]": nil,
+        ],
+        "/v1/blueprints/{id}": [
+            "fields[blueprints]": [
+                "name", "description", "status", "createdDateTime", "updatedDateTime", "appLicenseDeficient", "apps", "packages", "configurations",
+                "orgDevices", "users", "userGroups"
+            ],
+            "include": ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"],
+            "limit[apps]": nil,
+            "limit[configurations]": nil,
+            "limit[orgDevices]": nil,
+            "limit[packages]": nil,
+            "limit[userGroups]": nil,
+            "limit[users]": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/apps": [
+            "limit": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/configurations": [
+            "limit": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/orgDevices": [
+            "limit": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/packages": [
+            "limit": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/userGroups": [
+            "limit": nil,
+        ],
+        "/v1/blueprints/{id}/relationships/users": [
+            "limit": nil,
+        ],
+        "/v1/configurations": [
+            "fields[configurations]": ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"],
+            "limit": nil,
+        ],
+        "/v1/configurations/{id}": [
+            "fields[configurations]": ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"],
+        ],
+        "/v1/mdmDevices": [
+            "fields[mdmDevices]": ["serialNumber", "deviceName", "productFamily", "enrolledUserId", "details"],
+            "limit": nil,
+        ],
+        "/v1/mdmDevices/{id}/details": [
+            "fields[mdmDeviceDetails]": [
+                "serialNumber", "deviceName", "deviceModel", "osVersion", "platform", "imei", "meid", "wifiMacAddress", "bluetoothMacAddress",
+                "ethernetMacAddress", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled", "storageFreeCapacity", "storageTotalCapacity",
+                "deviceLockStatus", "deviceEraseStatus", "lostModeStatus"
+            ],
+        ],
+        "/v1/mdmServers": [
+            "fields[mdmServers]": [
+                "serverName", "enableMdmDisownFlag", "defaultProductFamilies", "status", "serverType", "deviceCount", "lastConnectedDateTime",
+                "lastConnectedIp", "createdDateTime", "updatedDateTime", "devices"
+            ],
+            "limit": nil,
+        ],
+        "/v1/mdmServers/{id}": [
+            "fields[mdmServers]": [
+                "serverName", "enableMdmDisownFlag", "defaultProductFamilies", "status", "serverType", "deviceCount", "lastConnectedDateTime",
+                "lastConnectedIp", "createdDateTime", "updatedDateTime", "devices"
+            ],
+        ],
+        "/v1/mdmServers/{id}/relationships/devices": [
+            "limit": nil,
+        ],
+        "/v1/orgDeviceActivities/{id}": [
+            "fields[orgDeviceActivities]": ["status", "subStatus", "createdDateTime", "completedDateTime", "downloadUrl"],
+        ],
+        "/v1/orgDevices": [
+            "fields[orgDevices]": [
+                "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
+                "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid", "purchaseSourceId",
+                "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "assignedServer", "appleCareCoverage"
+            ],
+            "limit": nil,
+        ],
+        "/v1/orgDevices/{id}": [
+            "fields[orgDevices]": [
+                "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
+                "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid", "purchaseSourceId",
+                "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "assignedServer", "appleCareCoverage"
+            ],
+        ],
+        "/v1/orgDevices/{id}/activationLockStatus": [
+            "fields[activationLockStatus]": ["isLocked", "lockType"],
+        ],
+        "/v1/orgDevices/{id}/appleCareCoverage": [
+            "fields[appleCareCoverage]": [
+                "status", "paymentType", "description", "agreementNumber", "startDateTime", "endDateTime", "isRenewable", "isCanceled",
+                "contractCancelDateTime"
+            ],
+            "limit": nil,
+        ],
+        "/v1/orgDevices/{id}/assignedServer": [
+            "fields[mdmServers]": ["serverName", "serverType", "createdDateTime", "updatedDateTime", "devices"],
+        ],
+        "/v1/orgDevices/{id}/relationships/assignedServer": [:],
+        "/v1/organizationalUnits": [
+            "fields[organizationalUnits]": ["name", "description", "createdDateTime", "updatedDateTime", "users"],
+            "limit": nil,
+        ],
+        "/v1/organizationalUnits/{id}": [
+            "fields[organizationalUnits]": ["name", "description", "createdDateTime", "updatedDateTime", "users"],
+        ],
+        "/v1/organizationalUnits/{id}/relationships/users": [
+            "limit": nil,
+        ],
+        "/v1/packages": [
+            "fields[packages]": ["name", "url", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
+            "limit": nil,
+        ],
+        "/v1/packages/{id}": [
+            "fields[packages]": ["name", "url", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
+        ],
+        "/v1/userGroups": [
+            "fields[userGroups]": ["ouId", "name", "type", "totalMemberCount", "createdDateTime", "updatedDateTime", "status", "users"],
+            "limit": nil,
+        ],
+        "/v1/userGroups/{id}": [
+            "fields[userGroups]": ["ouId", "name", "type", "totalMemberCount", "createdDateTime", "updatedDateTime", "status", "users"],
+        ],
+        "/v1/userGroups/{id}/relationships/users": [
+            "limit": nil,
+        ],
+        "/v1/users": [
+            "fields[users]": [
+                "firstName", "lastName", "middleName", "status", "managedAppleAccount", "isExternalUser", "roleOuList", "email", "employeeNumber",
+                "costCenter", "division", "department", "jobTitle", "startDateTime", "createdDateTime", "updatedDateTime", "phoneNumbers"
+            ],
+            "limit": nil,
+        ],
+        "/v1/users/{id}": [
+            "fields[users]": [
+                "firstName", "lastName", "middleName", "status", "managedAppleAccount", "isExternalUser", "roleOuList", "email", "employeeNumber",
+                "costCenter", "division", "department", "jobTitle", "startDateTime", "createdDateTime", "updatedDateTime", "phoneNumbers"
+            ],
+        ],
+    ]
+
+    /// The endpoints whose answer is a page (`PagedDocumentLinks`): they take the `cursor` Apple's own next link carries,
+    /// documented or not (only `auditEvents` documents it).
+    public static let paged: Set = [
+        "/v1/apps", "/v1/auditEvents", "/v1/blueprints", "/v1/blueprints/{id}/relationships/apps", "/v1/blueprints/{id}/relationships/configurations",
+        "/v1/blueprints/{id}/relationships/orgDevices", "/v1/blueprints/{id}/relationships/packages", "/v1/blueprints/{id}/relationships/userGroups",
+        "/v1/blueprints/{id}/relationships/users", "/v1/configurations", "/v1/mdmDevices", "/v1/mdmServers", "/v1/mdmServers/{id}/relationships/devices",
+        "/v1/orgDevices", "/v1/orgDevices/{id}/appleCareCoverage", "/v1/organizationalUnits", "/v1/organizationalUnits/{id}/relationships/users",
+        "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users",
+    ]
+
+    /// A query Apple would refuse with 400: a parameter the endpoint doesn't document, a `limit` outside 1 to 1000, or a
+    /// value outside a listed set (an empty one included: `include=` and `apps,,users` aren't lists of names).
+    private static func check(_ query: [String: String], template: String) -> (Int, [String: String], Data)? {
+        let documented = parameters[template] ?? [:]
+        let allowed = Set(documented.keys).union(paged.contains(template) ? ["cursor"] : [])
         if let unknown = query.keys.sorted().first(where: { !allowed.contains($0) }) {
             return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(unknown) isn't a parameter of this endpoint.", parameter: unknown)
         }
-        if let limit = query["limit"], Int(limit).map({ !(1...1000).contains($0) }) ?? true {
-            return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "limit must be 1 to 1000.", parameter: "limit")
+        for (name, value) in query.sorted(by: { $0.key < $1.key }) where name == "limit" || name.hasPrefix("limit[") {
+            guard let number = Int(value), (1...1000).contains(number) else {
+                return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(name) must be 1 to 1000.", parameter: name)
+            }
         }
-        if let (name, values) = fields, let given = query[name],
-           let bad = given.split(separator: ",").map(String.init).first(where: { !values.contains($0) }) {
+        for (name, given) in query.sorted(by: { $0.key < $1.key }) {
+            guard let values = documented[name] ?? nil,
+                  let bad = given.split(separator: ",", omittingEmptySubsequences: false).map(String.init).first(where: { !values.contains($0) })
+            else { continue }
             return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(bad) isn't allowed in \(name).", parameter: name)
         }
         return nil
