@@ -197,6 +197,14 @@ org editor's save).
     `eventDataPropertyKey` always equals the type's key; whether a domain event's domain is its `subjectName`;
     `mdmDevices`' `productFamily` values; whether `storageFreeCapacity`/`storageTotalCapacity` are bytes and what
     `platform` holds; and whether a signed profile comes back as base64 DER.
+  - Reports' (`docs/domains/history.md`): the format and offset of an audit event's `eventDateTime` (fractional
+    seconds, `Z` or `+00:00`; DocC has no audit example); the order Apple sends audit events in (there is no
+    `sort`: if oldest first, a list cut at the page cap lacks the newest, so its recent ten aren't the newest and the
+    screen must say the list was cut); what `TERMS_ACCEPTED`, `APPLE_SERVICES_SETTINGS_UPDATED` and `COLLECTION_*`
+    events record (actor, subject, category), to confirm their places in the audit views; what a never-connected
+    service's `lastConnectedDateTime` is (absent and null read as never, any other non-date as unreadable); whether
+    `APPLE_CONFIGURATOR` and `APPLE_MDM` services ever set it (if not, they read as never connected for good and may
+    need leaving out by `serverType`); and whether an `INACTIVE` service still connects (only `DELETED` is skipped).
 
 ## Testing / live-verification status
 - Offline: green. Live (operator, Phase 1): device count and a 20-serial sample against abapit; Activation

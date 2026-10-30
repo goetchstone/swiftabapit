@@ -1061,7 +1061,13 @@ the JWS code.
 
 ### Phase 2: Apple read parity and new reads
 
-**Status:** not started.
+**Status:** split in two for review size (2026-10-30). **2a** (package: AppleModels for people, content, Apple
+MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every
+Phase 2 read in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's
+checked range, filters and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports'
+audit digests with the new Access & Security view, services not connected in N days and recent events): on branch
+`phase-2a-apple-reads`. **2b** (the People, Content, Apple MDM, Audit and Dashboard screens, their screen models in
+Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.
