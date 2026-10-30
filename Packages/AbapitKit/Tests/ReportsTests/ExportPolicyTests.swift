@@ -147,4 +147,20 @@ struct ExportPolicyTests {
         #expect(every.contains("customSettingsValues") && every.contains("Office.mobileconfig") && !every.contains(canary), "\(every)")
         #expect(!CSV.text(items, columns: ExportPolicy.devices).contains(canary))
     }
+
+    /// What CSV never exports, a profile never shows: a string under a key holding each of the denylist's stems is masked.
+    /// `ProfileText` keeps its own list, since AppleModels can't import Reports, and it lacked `bypass` (an Activation Lock
+    /// bypass code, invariant 11's first), `assertion` and `unlockpin` with nothing holding the two lists to each other
+    /// (verifier round 2).
+    @Test func aProfileMasksEveryStemCSVWithholds() {
+        for stem in ExportPolicy.sensitiveStems {
+            for key in [stem, "Device_\(stem)_x"] {
+                guard case .plist(let text, let masked, _) = ProfileText("<plist version=\"1.0\"><dict><key>\(key)</key><string>canary-value</string></dict></plist>") else {
+                    Issue.record("\(key) not shown as a plist")
+                    continue
+                }
+                #expect(masked == 1 && !text.contains("canary-value"), "\(key)")
+            }
+        }
+    }
 }

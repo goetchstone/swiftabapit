@@ -69,6 +69,12 @@ are below.
 
 ## Gotchas / stub-lies traps
 
+- **Open for Phase 3 (operator): a configuration's custom-setting profile in a snapshot.** `Configuration.resource`
+  withholds it; the profile as Apple sent it (`Configuration.received`, `package`) holds Wi-Fi and VPN passwords and a
+  certificate's key, and a snapshot is SQLite on disk, outside the Keychain (invariants 3, 11). Until the operator
+  decides, a collector stores the withheld resource (`docs/domains/apple-reads.md`; Phase 2a verifier round 2: the
+  docs had named the snapshots as a use of the raw profile).
+
 - **`String` APIs match `Character`s; Python matches code points.** `replacingOccurrences(of:with:)`,
   `contains(_:)`, `first` and `==` on a `String` see `"` + U+0301 as one `Character` that isn't `"`, and a
   CR LF as one `Character` that is neither CR nor LF. Anything ported from Python that tests or edits

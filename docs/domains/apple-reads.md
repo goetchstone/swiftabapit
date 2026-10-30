@@ -195,29 +195,46 @@ org editor's save).
   every public value a configuration gives (`resource`, `attributes`, `customSettings.object`, a description, a mirror
   or a dump, a blueprint's `included`) has `customSettingsValues` withheld: its keys kept, `null` and a string
   `filename` as they came, every other value `CustomSettingsValues.withheld`. The profile as Apple sent it is
-  `Configuration.received` and `CustomSettingsValues.configurationProfile`, both `package`: `ProfileText`, Phase 3's
-  snapshots and Phase 5's writer read it in AbapitKit, and in the app or the screen models naming either is a compile
-  error (checked by mutant). The detail shows `customSettings?.profileText`. So the device inspector's
-  every-attribute pattern is safe for a configuration. `aCustomSettingsProfileReachesNoPublicValue` (a canary through
-  the strict stub), `aConfigurationsCSVHoldsNoProfile`, `BoundaryTests.theAppSideNeverNamesTheRawProfile`, and
-  `BoundaryTests.whatHoldsTheRawProfileStaysPackage`, which holds the three declarations at `package` and only that
-  (verifier round 1: widened to `public`, each left every test green behind the name scan alone). Not withheld: an
+  `Configuration.received` and `CustomSettingsValues.configurationProfile`, both `package`: `ProfileText` and Phase 5's
+  writer read it in AbapitKit, and in the app or the screen models naming either is a compile error (checked by mutant).
+  Whether Phase 3's snapshots keep it is an open operator decision, not a use: SQLite on disk is outside the Keychain
+  (invariants 3, 11), so until it is decided a snapshot stores the withheld `resource`. The detail shows
+  `customSettings?.profileText`. So the device inspector's every-attribute pattern is safe for a configuration.
+  `aCustomSettingsProfileReachesNoPublicValue` (a canary through the strict stub), `aConfigurationsCSVHoldsNoProfile`,
+  `BoundaryTests.theAppSideNeverNamesTheRawProfile`, `BoundaryTests.whatHoldsTheRawProfileStaysPackage`, which holds the
+  three declarations at `package` and only that (verifier round 1: widened to `public`, each left every test green
+  behind the name scan alone), `BoundaryTests.onlyTheListedLinesReadTheRawProfile`, which lists every line in AbapitKit
+  that names either, and `whatAConfigurationStoresIsTheTwoCopies`, which holds the two types' stored layout (verifier
+  round 2: a public accessor of another name, in any AbapitKit module, left every test green; a new stored copy would
+  name neither). `CustomSettingsValues`' `==` compares the withheld object and the masked text: Swift's compared the raw
+  profile, so the app could test a guessed secret. A custom setting of another shape is said, never read as none:
+  `Configuration.profileProblems` (`custom settings not an object`, `profile not a string`), with a count on the list's
+  and the single read's lines (`aCustomSettingOfAnotherShapeIsSaid`). Not withheld: an
   attribute Apple adds beside `customSettingsValues` at the top level of a configuration is shown raw (invariant 10). If
   Apple moved the profile there, the pass names it as an unknown key, and once the contract documents it
   `aViewReadsApplesAttributes` fails until the view lists it, which is where it gets withheld.
-- **What `ProfileText` masks** (Phase 2a review L2): every value under a key whose fold holds a stem (`password`,
-  `secret`, `token`, `psk`, `sharedkey`, an encryption, client, access or licence key, …) or that has `PIN` or `PW` as
-  a word, unless it is a flag, a date, or a number that isn't a secret; a number whose key's last word ends in a secret
-  word (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`, `PINValue`) unless a policy word is in the key, whole (`MaxPIN`,
-  `PasscodeMinLength`; `AgentPIN` isn't `age`); every string holding a PEM private key, as text or base64, padded or not,
-  whatever its key and wherever it sits in the string (after a certificate, as in an identity bundle); every data blob.
-  A key's words split where letters meet numbers, and the number rule skips the numbers, so `DevicePIN2`, `VPNPIN2`,
-  `Passcode1` and `PIN1Code` read as their letters (verifier round 1: a string under `DevicePIN2` and a number under
-  each were shown). A policy word wins, so a number under `AgePIN` or `Max2PIN` is shown.
-  A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. Two keys equal once normalized merge when
-  Foundation's dictionary becomes Swift's: `.plist`'s `merged` counts them and `note` says it. Not caught: a secret
-  under a key no stem or word names that isn't a PEM key (a homoglyph spelling, an unusual name), and a key wrapped
-  twice (base64 of base64).
+- **What `ProfileText` masks** (Phase 2a review L2): every value under a key whose fold, without its numbers, holds a
+  stem (`password`, `secret`, `token`, `psk`, `sharedkey`, an encryption, client, access or licence key, `bypass`,
+  `assertion`, an unlock or access code, a WEP key, …; every stem of `ExportPolicy.sensitiveStems`, which
+  `aProfileMasksEveryStemCSVWithholds` holds), or that has `PIN`, `PW` or `PUK` as a word or a plural one (`PINs`), or
+  whose fold ends in one past a plural and the trailing words `code`, `number`, `value` (`pincode`, `rootpw`, `SIMPINs`),
+  unless it is a flag, a date, or a number that isn't a secret; a number whose fold ends in a stem or one of those
+  words, past the same (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`, `PassCode`, `SharedSecret`, `LicenseKey`,
+  `Passwords`), unless a policy word is in the key, whole (`MaxPIN`, `PasscodeMinLength`; `AgentPIN` isn't `age`; a
+  string under a policy-worded key is masked all the same); every string holding a private key, whatever its key and
+  wherever it sits in the string (after a certificate, as in an identity bundle): a PEM one, a PuTTY key file or a JWK
+  with its private member (`d`, or `k`), as text, base64 (padded or not) or a `data:` URL; every data blob. A key's
+  words split where letters meet numbers, and a plural `s` stays with its acronym (`PINs`, not `pi`, `ns`: verifier
+  round 2), so `DevicePIN2`, `VPNPIN2`, `Passcode1` and `PIN1Code` read as their letters (verifier round 1: a string
+  under `DevicePIN2` and a number under each were shown). A policy word wins, so a number under `AgePIN` or `Max2PIN`
+  is shown. A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. A key written twice alike
+  (Foundation's reader keeps one, the last) and two keys equal once normalized (merged when Foundation's dictionary
+  becomes Swift's) are counted in `.plist`'s `merged`, the first from the XML's own keys, and `note` says it. Not
+  caught: a secret under a key no stem or word names that isn't a private key in a form above (a homoglyph spelling,
+  an unusual name, a number under `AuthCode`), a key wrapped twice (base64 of base64), and a binary plist's repeated
+  keys (its dictionaries can be shared, so its table isn't the tree). Over-masked, the safe way: a policy value under
+  a secret word, such as Kerberos' `pwReqText` and `pwChangeURL` or `passwordContentRegex`; the key shows, and the
+  note counts it.
 - **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
   the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds
   it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value

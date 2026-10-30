@@ -123,6 +123,30 @@ struct BusinessReadTests {
         #expect(!leaks(report.text) && !leaks(Self.printed(report)), "\(report.text)")
     }
 
+    /// A custom setting whose values aren't an object, or whose profile isn't a string, reads as no profile: the pass says
+    /// which with a count, on the single read and on the list, never `ok` with nothing said (verifier round 2: both read
+    /// `configurations/{id}: ok, 1 item`). The contract types the values as an object holding a string profile.
+    @Test func aCustomSettingOfAnotherShapeIsSaid() async throws {
+        let base64 = Data("<plist version=\"1.0\"><dict><key>SSID_STR</key><string>Office</string></dict></plist>".utf8).base64EncodedString()
+        for (values, said) in [(JSONValue.string(base64), "custom settings not an object"),
+                               (.object(["configurationProfile": .object(["SSID_STR": .string("Office")]), "filename": .string("x.mobileconfig")]),
+                                "profile not a string")] {
+            let harness = try await Harness()
+            func custom(_ id: String) -> Resource {
+                Resource(type: "configurations", id: id, attributes: ["type": .string("CUSTOM_SETTING"), "customSettingsValues": values])
+            }
+            harness.stub.add([custom("C1")])
+            #expect(try await harness.client.configuration("C1").customSettings?.profileText == nil)
+            var report = await harness.client.acceptancePass()
+            #expect(report.text.contains("\nconfigurations: ok, 1 item\n"), "the list's null is no problem: \(report.text)")
+            #expect(report.text.contains("\nconfigurations/{id}: ok, 1 item · \(said) in 1 item\n"), "\(report.text)")
+            // Had Apple sent them on the list: two of a kind, counted as two.
+            harness.stub.queue(200, for: "/v1/configurations?", body: "{\"data\":[\(custom("C1").asJSON.jsonText),\(custom("C2").asJSON.jsonText)]}")
+            report = await harness.client.acceptancePass()
+            #expect(report.text.contains("\nconfigurations: ok, 2 items · \(said) in 2 items\n"), "\(report.text)")
+        }
+    }
+
     /// The Apple-managed devices and each one's posture from the documented `/details`: the stub has no route for
     /// abapit's undocumented `mdmDevices/{id}`, so a read of it would fail the test.
     @Test func anAppleManagedDevicesPostureComesFromDetails() async throws {

@@ -146,7 +146,17 @@ struct ProfileTextTests {
         ("EncryptionType", false), ("Power", false), ("PWR", false), ("KeySize", false), ("ClientID", false),
         // Verifier round 1: a number after a PIN or a PW hid it, whether the key ended there or went on.
         ("DevicePIN2", true), ("VPNPIN2", true), ("PIN2Code", true), ("AdminPW2", true), ("Passcode1", true),
-        ("AllowPinning2", false), ("Port2", false), ("WEP40Key", false), ("IPv6Address", false),
+        ("AllowPinning2", false), ("Port2", false), ("IPv6Address", false),
+        // Verifier round 2: a string under a policy word is a secret all the same (the number rule's exception is the
+        // number rule's); a plural acronym, a compound in one case and the CSV denylist's stems were each shown.
+        ("RequiredPassword", true), ("MaxPINString", true), ("ComplexPasscode", true), ("PasscodeMinLength", true),
+        ("PasswordHistory", true), ("PINAgeText", true),
+        ("PINs", true), ("UserPINs", true), ("DevicePINs", true), ("SIMPINs", true), ("PWs", true), ("AdminPWs", true), ("PINsForUsers", true),
+        ("pincode", true), ("Pincode", true), ("PINCODE", true), ("devicepincode", true), ("pinnumber", true), ("pinvalue", true),
+        ("adminpw", true), ("ADMINPW", true), ("rootpw", true), ("wifipw", true), ("PUK", true), ("SIMPUK", true), ("puk_code", true),
+        ("ActivationLockBypass", true), ("ClientAssertion", true), ("unlockpinx", true), ("UnlockCode", true), ("AccessCode", true),
+        ("WEP40Key", true),
+        ("URLs", false), ("IPsec", false), ("Spinner", false), ("Passes", false), ("IPv4Address", false), ("Pinning", false),
     ])
     func aSecretKeyIsFoundHoweverItIsSpelled(key: String, secret: Bool) throws {
         let plist = "<plist version=\"1.0\"><dict><key>\(key)</key><string>s3cr3t-value</string></dict></plist>"
@@ -189,6 +199,13 @@ struct ProfileTextTests {
         ("AgentPIN", true), ("AdminPassphrase", true), ("UserPasswd", true),
         ("Passcode1", true), ("DevicePIN2", true), ("PIN1Code", true), ("PINValue", true), ("PasscodeValue", true),
         ("MaxPIN2", false), ("Port1", false), ("MaxPINValue", false), ("TimeoutValue", false),
+        // Verifier round 2: a key whose fold ends in a stem, or in a secret word its words split (`PassCode`), a plural or a
+        // compound in one case. A number under each was shown, the string masked.
+        ("SharedSecret", true), ("Secret", true), ("PSK", true), ("Token", true), ("Challenge", true), ("LicenseKey", true),
+        ("APIKey", true), ("AccessCode", true), ("PassCode", true), ("Passcodes", true), ("PINs", true), ("Passwords", true),
+        ("PUK", true), ("SIMPIN", true), ("pincode", true), ("adminpw", true), ("PINCodeValue", true), ("WEP40Key", true),
+        ("TokenExpiry", false), ("SecretRotationDays", false), ("KeySize", false), ("ChallengeRetries", false), ("Pinning", false),
+        ("MaxPasscodes", false), ("PINsRequired", false),
     ])
     func aNumberUnderASecretWordIsMaskedAndAPolicyIsNot(key: String, secret: Bool) throws {
         for (value, written) in [("<integer>4321</integer>", "4321"), ("<real>43.5</real>", "43.5"), ("<integer>0</integer>", "<integer>0</integer>")] {
@@ -234,6 +251,73 @@ struct ProfileTextTests {
         }
     }
 
+    /// A key's words, as the PIN, PW and policy rules read them (verifier round 2: `PINs` was `pi`, `ns`).
+    @Test func aKeysWordsSplitAtItsCapitalsNumbersAndPlurals() {
+        for (key, words) in [("PINs", ["pins"]), ("UserPINs", ["user", "pins"]), ("PWs", ["pws"]), ("AdminPWs", ["admin", "pws"]),
+                             ("PINsCount", ["pins", "count"]), ("PINSet", ["pin", "set"]), ("PINCode", ["pin", "code"]), ("IPsec", ["i", "psec"]),
+                             ("DevicePIN2", ["device", "pin", "2"]), ("pin_code", ["pin", "code"]), ("URLSession", ["url", "session"])] {
+            #expect(ProfileSecrets.words(key) == words, "\(key): \(ProfileSecrets.words(key))")
+        }
+    }
+
+    /// A private key in another form is masked as a PEM one is: in a `data:` URL, base64 or percent-encoded; a PuTTY key
+    /// file; a JWK with its private member, `d` (RSA, EC, OKP) or `k` (a symmetric key), as text or base64. A public JWK is
+    /// shown (verifier round 2: each private form was shown).
+    @Test func aPrivateKeyInAnotherFormIsMasked() throws {
+        let pem = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n"
+        let putty = "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\nPublic-Lines: 2\nAAAAC3NzaC1lZDI1NTE5\nPrivate-Lines: 1\nAAAAIGJ2c2Vj\n"
+        let rsa = "{\"kty\":\"RSA\",\"n\":\"0vx7agoebGcQ\",\"e\":\"AQAB\",\"d\":\"X4cTteJY_gn4\"}"
+        let symmetric = "{ \"kty\" : \"oct\", \"k\" : \"GawgguFyGrWKav7AX4VKUg\" }"
+        let set = "{\"keys\":[{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"f83O\",\"y\":\"x_FE\",\"d\":\"jpsQ\"}]}"
+        for value in ["data:application/x-pem-file;base64,\(Data(pem.utf8).base64EncodedString())", "DATA:;BASE64,\(Data(pem.utf8).base64EncodedString())",
+                      "data:text/plain,\(pem.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)", " data:,\(pem)",
+                      putty, Data(putty.utf8).base64EncodedString(), rsa, symmetric, set, Data(rsa.utf8).base64EncodedString()] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>Identity</key><string>\(Self.escaped(value))</string></dict></plist>")
+            #expect(masked == 1 && !text.contains("MIIEvQ") && !text.contains("AAAAIGJ2") && !text.contains("X4cTte") && !text.contains("GawgguFy")
+                    && !text.contains("jpsQ"), "\(value)")
+        }
+        // Public: a JWK with no private member (`e` and `kid` aren't), a `d` that is a value, not a member, and a data URL of a
+        // certificate.
+        let certificate = "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n-----END CERTIFICATE-----"
+        for (value, shown) in [("{\"kty\":\"RSA\",\"n\":\"0vx7agoebGcQ\",\"e\":\"AQAB\",\"kid\":\"d\"}", "0vx7agoebGcQ"), ("{\"x\":\"d\", \"kty\":\"EC\"}", "kty"),
+                               ("data:application/x-pem-file;base64,\(Data(certificate.utf8).base64EncodedString())", Data(certificate.utf8).base64EncodedString()),
+                               ("PuTTY-User-Key-File-3 notes, no key", "notes, no key")] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>Identity</key><string>\(Self.escaped(value))</string></dict></plist>")
+            #expect(masked == 0 && text.contains(shown), "\(value)")
+        }
+    }
+
+    /// Text as an XML plist's `<string>` holds it.
+    static func escaped(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    /// A key written twice alike is read once by Foundation's reader, its other value gone: counted from the XML's own
+    /// keys, so the note says it (verifier round 2: `merged` counted only keys equal once normalized). A `<key>` element
+    /// where a value goes is a string to the reader, and no key.
+    @Test func aKeyWrittenTwiceIsSaid() throws {
+        let twice = "<plist version=\"1.0\"><dict><key>Name</key><string>first-value</string><key>Name</key><string>second-value</string>"
+            + "<key>Inner</key><dict><key>A</key><true/><key>A</key><false/><key>B</key><integer>1</integer><key>B</key><integer>2</integer></dict>"
+            + "<key>Password</key><dict><key>x</key><string>one</string><key>x</key><string>two</string></dict></dict></plist>"
+        guard case .plist(let text, let masked, let merged) = ProfileText(twice) else {
+            Issue.record("not shown: \(ProfileText(twice))")
+            return
+        }
+        #expect(merged == 4 && masked == 1 && !text.contains("one") && !text.contains("two"))
+        #expect(text.contains("first-value") != text.contains("second-value"), "one of the two is shown")
+        #expect(ProfileText(twice).note == "1 value masked · 4 keys not shown: each repeats another key, as written or once normalized")
+        // A `<key>` as a value, in a list or a dictionary, an empty key, and a key that is a value's text: no key repeated.
+        let values = "<plist version=\"1.0\"><dict><key>List</key><array><key>Name</key><key>Name</key></array><key>Name</key><key>Name</key>"
+            + "<key/><string>empty</string><key>Text</key><string>&lt;key&gt;Name&lt;/key&gt;</string><!-- <key>Name</key> -->"
+            + "<key>Data</key><string><![CDATA[<key>Name</key>]]></string></dict></plist>"
+        let read = try Self.shown(values)
+        #expect(read.masked == 0 && read.text.contains("<key>List</key>") && ProfileText(values).note == nil)
+        // A binary plist's keys aren't counted: its dictionaries can be shared, so its table isn't the tree.
+        let tree = try PropertyListSerialization.propertyList(from: Data(values.utf8), format: nil)
+        let binary = try PropertyListSerialization.data(fromPropertyList: tree, format: .binary, options: 0)
+        #expect(try Self.shown(binary.base64EncodedString()).masked == 0)
+    }
+
     /// Two keys that differ only in Unicode normalization merge when Foundation's dictionary becomes Swift's, and one
     /// value is lost: the count says how many, and the note says it, never silent (Phase 2a review L2).
     @Test func keysMergedByNormalizationAreSaid() throws {
@@ -246,7 +330,7 @@ struct ProfileTextTests {
         }
         #expect(merged == 3 && masked == 1 && !text.contains("hunter2"))
         #expect(text.contains("<string>one</string>") != text.contains("<string>two</string>"), "one of the two is shown")
-        #expect(ProfileText(plist).note == "1 value masked · 3 keys not shown: each reads as another key once normalized")
+        #expect(ProfileText(plist).note == "1 value masked · 3 keys not shown: each repeats another key, as written or once normalized")
         #expect(try Self.shown(Self.plist(bytes: 100)).masked == 0 && ProfileText(Self.plist(bytes: 100)).note == nil)
         #expect(ProfileText("nope").note == nil)
     }

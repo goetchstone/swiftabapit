@@ -249,13 +249,16 @@ extension AppleClient {
         let configurations = await listCheck("configurations", unless: school, { self.configurations() }) { configuration, found in
             found.unknown("type", configuration.type)
             for platform in configuration.platforms ?? [] { found.unknown("configuredForPlatforms", platform) }
+            found.profileProblems += configuration.profileProblems
         }
         lines.append(configurations.line)
         // A custom setting's when there is one: only it carries a profile.
         let custom = configurations.items.first { $0.type?.known == .customSetting }
         let sampled = (line: configurations.line, items: custom.map { [$0] } ?? configurations.items)
         lines.append(await detailCheck("configurations/{id}", sampled, "configuration", unless: school, { try await self.configuration($0) }) {
-            configuration, found in found.unknown("type", configuration.type)
+            configuration, found in
+            found.unknown("type", configuration.type)
+            found.profileProblems += configuration.profileProblems
         })
         let devices = await listCheck("mdmDevices", unless: school, { self.mdmDevices() }) { device, found in
             found.unknown("productFamily", device.productFamily)
@@ -388,6 +391,15 @@ extension AppleClient {
         var position: String?
         /// Counts said on success ("1 of 4 unassigned").
         var note: String?
+        /// Each configuration's `profileProblems`: said with a count (`profile not a string in 1 item`), never `ok` with
+        /// nothing said (verifier round 2: a string `customSettingsValues` read `configurations/{id}: ok, 1 item`).
+        var profileProblems: [Configuration.ProfileProblem] = []
+        var profileNote: String? {
+            Configuration.ProfileProblem.allCases.compactMap { problem in
+                let count = profileProblems.count { $0 == problem }
+                return count == 0 ? nil : "\(problem.rawValue) in \(count) item\(count == 1 ? "" : "s")"
+            }.joined(separator: " · ").nonEmpty
+        }
 
         /// On to a loop's next item: where the line says it stopped if it fails there, and nothing more is sent once the
         /// pass is cancelled (verifier round 2: over a transport that answers anyway, as the stub does, a check cancelled
@@ -439,7 +451,7 @@ extension AppleClient {
             // the cancellation cut short read `ok` with what it had (verifier round 1).
             try Task.checkCancellation()
             status = found.status ?? (found.truncation == nil ? .ok : .truncated)
-            notes = [found.truncation, found.note]
+            notes = [found.truncation, found.profileNote, found.note]
         } catch {
             let failed = acceptanceFailure(error)
             status = failed.status

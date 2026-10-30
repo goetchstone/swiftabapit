@@ -95,4 +95,50 @@ struct BoundaryTests {
         #expect(declarations("    public let received: Resource\n    var configurationProfile: String? { nil }") == ["public received", " configurationProfile"])
         #expect(declarations(SourceScan.code("/// package let received\n", strings: false)).isEmpty)
     }
+
+    /// Every line of code in AbapitKit that names the profile as Apple sent it (`received`, `configurationProfile`), as it
+    /// reads with its blanks collapsed: the modifiers above hold the three declarations, and this holds what reads them,
+    /// so a public accessor of another name (`public var rawText: String? { configurationProfile }`, `public extension
+    /// Configuration { var sent: Resource { received } }`), in any AbapitKit module, fails here (verifier round 2: each
+    /// left every test green). A line that must read the profile (Phase 5's writer) is added here, where review sees it.
+    static let rawReaders = [
+        "Packages/AbapitKit/Sources/AppleModels/Content.swift: package let received: Resource",
+        "Packages/AbapitKit/Sources/AppleModels/Content.swift: received = resource",
+        #"Packages/AbapitKit/Sources/AppleModels/Content.swift: public var customSettings: CustomSettingsValues? { received.attributes["customSettingsValues"]?.object.map(CustomSettingsValues.init) }"#,
+        #"Packages/AbapitKit/Sources/AppleModels/Content.swift: switch received.attributes["customSettingsValues"] {"#,
+        "Packages/AbapitKit/Sources/AppleModels/Content.swift: package let received: JSONObject",
+        "Packages/AbapitKit/Sources/AppleModels/Content.swift: received = object",
+        #"Packages/AbapitKit/Sources/AppleModels/Content.swift: package var configurationProfile: String? { received.string("configurationProfile") }"#,
+        #"Packages/AbapitKit/Sources/AppleModels/Content.swift: public var filename: String? { received.string("filename") }"#,
+        "Packages/AbapitKit/Sources/AppleModels/Content.swift: public var profileText: ProfileText? { configurationProfile.map(ProfileText.init) }",
+    ]
+
+    /// The lines of `file`'s code that name any of `names` whole, comments and string literals not counting, each with its
+    /// literals as written and its blanks collapsed.
+    static func lines(of file: SourceScan.File, naming names: [String]) -> [String] {
+        let code = SourceScan.code(file.text, strings: false).split(separator: "\n", omittingEmptySubsequences: false)
+        let shown = SourceScan.code(file.text, strings: true).split(separator: "\n", omittingEmptySubsequences: false)
+        return zip(code, shown).compactMap { code, shown in
+            guard SourceScan.names(SourceScan.File(path: file.path, text: String(code)), names) else { return nil }
+            return "\(file.path): " + shown.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        }
+    }
+
+    @Test func onlyTheListedLinesReadTheRawProfile() throws {
+        let files = try SourceScan.swiftFiles(in: "Packages/AbapitKit/Sources")
+        #expect(files.count >= 50 && files.contains { $0.path.hasSuffix("/AppleBusiness/AppleClient.swift") }, "the scan sees AbapitKit")
+        let found = files.flatMap { Self.lines(of: $0, naming: ["received", "configurationProfile"]) }
+        #expect(found == Self.rawReaders, "\(found.joined(separator: "\n"))")
+        // It reads the accessors the verifier added, and not a comment or a string naming either.
+        let mutants = SourceScan.File(path: "x.swift", text: """
+            public extension Configuration { var sent: Resource { received } }
+                public var rawText: String? {
+                    `configurationProfile`
+                }
+            // received
+            let key = "configurationProfile"
+            """)
+        #expect(Self.lines(of: mutants, naming: ["received", "configurationProfile"])
+                == ["x.swift: public extension Configuration { var sent: Resource { received } }", "x.swift: `configurationProfile`"])
+    }
 }

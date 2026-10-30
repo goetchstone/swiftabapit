@@ -11,8 +11,9 @@ import Foundation
 /// `maximumDepth`; a binary one has its object table checked and its containers counted. Pure Foundation, so it builds
 /// on Linux for the fuzz job.
 public enum ProfileText: Sendable, Equatable {
-    /// The profile as XML, with `masked` values replaced by `mask`, and `merged` keys that read as one once normalized
-    /// (Swift's dictionaries compare canonically): one value of each such pair isn't in the text, and `note` says so.
+    /// The profile as XML, with `masked` values replaced by `mask`, and `merged` keys that read as another: written twice
+    /// alike (Foundation's reader keeps one), or equal once normalized (Swift's dictionaries compare canonically). One
+    /// value of each such pair isn't in the text, and `note` says so.
     case plist(String, masked: Int, merged: Int)
     /// A signed profile (CMS SignedData): its content holds the profile, secrets and all, in the clear.
     case signed(bytes: Int)
@@ -48,22 +49,23 @@ public enum ProfileText: Sendable, Equatable {
     }
 
     /// What the detail view says under a shown profile: how many values were masked, and how many keys aren't shown
-    /// because each reads as another key once normalized, rather than gone unsaid (Phase 2a review L2).
+    /// because each repeats another, as written or once normalized, rather than gone unsaid (Phase 2a review L2; verifier
+    /// round 2: a key written twice alike was dropped unsaid, as Foundation's reader keeps one).
     public var note: String? {
         guard case .plist(_, let masked, let merged) = self else { return nil }
         let parts = [masked == 0 ? nil : "\(masked) value\(masked == 1 ? "" : "s") masked",
-                     merged == 0 ? nil : "\(merged) key\(merged == 1 ? "" : "s") not shown: each reads as another key once normalized"]
+                     merged == 0 ? nil : "\(merged) key\(merged == 1 ? "" : "s") not shown: each repeats another key, as written or once normalized"]
         let said = parts.compactMap { $0 }
         return said.isEmpty ? nil : said.joined(separator: " · ")
     }
 
-    public init(_ configurationProfile: String) {
-        let size = configurationProfile.utf8.count
+    public init(_ profile: String) {
+        let size = profile.utf8.count
         guard size <= Self.maximumBytes else {
             self = .notShown(Self.tooLarge(bytes: size))
             return
         }
-        guard let bytes = Self.bytes(of: Array(configurationProfile.utf8)) else {
+        guard let bytes = Self.bytes(of: Array(profile.utf8)) else {
             self = .notShown(Self.unreadable)
             return
         }
@@ -89,13 +91,16 @@ public enum ProfileText: Sendable, Equatable {
             return parse(bytes, as: .binary)
         }
         if let start = xmlStart(bytes) {
-            if let refusal = xmlRefusal(bytes, from: start) { return .notShown(refusal) }
-            return parse(Array(bytes[start...]), as: .xml)
+            let scan = xmlScan(bytes, from: start)
+            if let refusal = scan.refusal { return .notShown(refusal) }
+            return parse(Array(bytes[start...]), as: .xml, keys: scan.keys)
         }
         return isSignedData(bytes) ? .signed(bytes: bytes.count) : .notShown(unreadable)
     }
 
-    private static func parse(_ bytes: [UInt8], as expected: PropertyListSerialization.PropertyListFormat) -> ProfileText {
+    /// `keys`, for XML: how many keys the text holds, so the ones Foundation's reader kept once for two are counted. A
+    /// binary plist's aren't counted: one of its dictionaries can be referenced twice, so its table isn't the tree.
+    private static func parse(_ bytes: [UInt8], as expected: PropertyListSerialization.PropertyListFormat, keys: Int? = nil) -> ProfileText {
         var format = expected
         // Read only as the format the bytes were checked as: Foundation also reads OpenStep text, which the checks don't.
         guard let tree = try? PropertyListSerialization.propertyList(from: Data(bytes), options: [], format: &format),
@@ -105,7 +110,16 @@ public enum ProfileText: Sendable, Equatable {
         guard let out = try? PropertyListSerialization.data(fromPropertyList: masked, format: .xml, options: 0) else {
             return .notShown(unreadable)
         }
-        return .plist(String(decoding: out, as: UTF8.self), masked: walk.masked, merged: walk.merged)
+        let repeated = keys.map { max(0, $0 - keyCount(tree)) } ?? 0
+        return .plist(String(decoding: out, as: UTF8.self), masked: walk.masked, merged: walk.merged + repeated)
+    }
+
+    /// The keys of every dictionary in a tree the scan bounded (an XML one: no object in it is shared), masked ones too.
+    private static func keyCount(_ value: Any) -> Int {
+        if let dictionary = value as? NSDictionary { return dictionary.count + dictionary.allValues.reduce(0) { $0 + keyCount($1) } }
+        if let dictionary = value as? [String: Any] { return dictionary.count + dictionary.values.reduce(0) { $0 + keyCount($1) } }
+        if let array = value as? [Any] { return array.reduce(0) { $0 + keyCount($1) } }
+        return 0
     }
 
     // MARK: XML, scanned before the parser sees it
@@ -126,48 +140,65 @@ public enum ProfileText: Sendable, Equatable {
     /// reader does, so a declaration or a level of nesting can't hide from it inside what the reader takes as text; a
     /// tag ends at its first `>` (the reader takes no attributes on a dictionary or an array). Foundation's reader also
     /// refuses a DTD's internal subset (checked on macOS 27): this refuses it first, whatever reader runs.
-    static func xmlRefusal(_ bytes: [UInt8], from start: Int) -> String? {
-        if bytes.contains(0) { return notUTF8 }
+    static func xmlRefusal(_ bytes: [UInt8], from start: Int) -> String? { xmlScan(bytes, from: start).refusal }
+
+    /// `xmlRefusal`'s answer, and how many keys the XML holds: a `<key>` where a dictionary's key goes, every other
+    /// element in it, since Foundation's reader takes a `<key>` anywhere else as a string (checked on macOS 27).
+    static func xmlScan(_ bytes: [UInt8], from start: Int) -> (refusal: String?, keys: Int) {
+        if bytes.contains(0) { return (notUTF8, 0) }
         if bytes[start...].starts(with: Array("<?xml".utf8)) {
-            guard let end = find(Array("?>".utf8), in: bytes, from: start) else { return unreadable }
+            guard let end = find(Array("?>".utf8), in: bytes, from: start) else { return (unreadable, 0) }
             if let encoding = attribute("encoding", in: Array(bytes[start..<end])),
-               !encoding.map(lower).elementsEqual("utf-8".utf8) { return notUTF8 }
+               !encoding.map(lower).elementsEqual("utf-8".utf8) { return (notUTF8, 0) }
         }
-        var index = start, depth = 0, doctypes = 0
+        var index = start, depth = 0, doctypes = 0, keys = 0
+        // Each element still open: whether it is a dictionary, and how many elements it holds so far. A dictionary's
+        // keys are its even ones, as its values are its odd ones.
+        var elements: [(dictionary: Bool, children: Int)] = []
         while let open = bytes[index...].firstIndex(of: UInt8(ascii: "<")) {
             let rest = bytes[open...]
             if rest.starts(with: Array("<!--".utf8)) {
-                guard let end = find(Array("-->".utf8), in: bytes, from: open + 4) else { return unreadable }
+                guard let end = find(Array("-->".utf8), in: bytes, from: open + 4) else { return (unreadable, keys) }
                 index = end + 3
             } else if rest.starts(with: Array("<![CDATA[".utf8)) {
-                guard let end = find(Array("]]>".utf8), in: bytes, from: open + 9) else { return unreadable }
+                guard let end = find(Array("]]>".utf8), in: bytes, from: open + 9) else { return (unreadable, keys) }
                 index = end + 3
             } else if rest.starts(with: Array("<?".utf8)) {
-                guard let end = find(Array("?>".utf8), in: bytes, from: open + 2) else { return unreadable }
+                guard let end = find(Array("?>".utf8), in: bytes, from: open + 2) else { return (unreadable, keys) }
                 index = end + 2
             } else if rest.starts(with: Array("<!".utf8)) {
-                guard let close = bytes[open...].firstIndex(of: UInt8(ascii: ">")) else { return unreadable }
+                guard let close = bytes[open...].firstIndex(of: UInt8(ascii: ">")) else { return (unreadable, keys) }
                 doctypes += 1
-                guard doctypes == 1, Self.doctypes.contains(collapsed(bytes[open...close])) else { return declaration }
+                guard doctypes == 1, Self.doctypes.contains(collapsed(bytes[open...close])) else { return (declaration, keys) }
                 index = close + 1
             } else {
-                guard let close = bytes[open...].firstIndex(of: UInt8(ascii: ">")) else { return unreadable }
+                guard let close = bytes[open...].firstIndex(of: UInt8(ascii: ">")) else { return (unreadable, keys) }
                 let closing = bytes[open + 1] == UInt8(ascii: "/")
                 let nameStart = closing ? open + 2 : open + 1
                 let name = bytes[nameStart..<close].prefix { !isSpace($0) && $0 != UInt8(ascii: "/") }
+                let empty = bytes[close - 1] == UInt8(ascii: "/")
                 if name.elementsEqual("dict".utf8) || name.elementsEqual("array".utf8) {
                     if closing {
                         depth -= 1
-                        if depth < 0 { return unreadable }
-                    } else if bytes[close - 1] != UInt8(ascii: "/") {
+                        if depth < 0 { return (unreadable, keys) }
+                    } else if !empty {
                         depth += 1
-                        if depth > maximumDepth { return tooDeep }
+                        if depth > maximumDepth { return (tooDeep, keys) }
                     }
+                }
+                if closing {
+                    _ = elements.popLast()
+                } else {
+                    if let parent = elements.last, parent.dictionary {
+                        if parent.children.isMultiple(of: 2), name.elementsEqual("key".utf8) { keys += 1 }
+                        elements[elements.count - 1].children += 1
+                    }
+                    if !empty { elements.append((name.elementsEqual("dict".utf8), 0)) }
                 }
                 index = close + 1
             }
         }
-        return nil
+        return (nil, keys)
     }
 
     /// The value of `name="…"` or `name='…'` in an XML declaration.
@@ -253,7 +284,7 @@ public enum ProfileText: Sendable, Equatable {
 
 /// The walk that masks: every value under a secret key, whole, unless it is a flag, a date, or a number whose key doesn't
 /// end in a secret word or names a policy (`PasswordRequired`, `maxPINAgeInDays`, `PasscodeMinLength` are policies; a
-/// numeric `Passcode` or `UnlockCode` isn't); every string holding a PEM private key, wherever it is; and every data
+/// numeric `Passcode`, `UnlockCode` or `SharedSecret` isn't); every string holding a private key, wherever it is; and every data
 /// blob, wherever it is (a certificate, a PKCS#12 identity, a shared secret: none readable, some secret, and an Exchange
 /// payload carries an identity outside any certificate payload). Bounded in depth and in the values it visits.
 private struct MaskingWalk {
@@ -301,50 +332,61 @@ private struct MaskingWalk {
 
 /// Which keys hold secrets. A key is read folded as the CSV denylist reads one (`ExportPolicy.fold` in Reports, which
 /// this module can't import): compatibility-decomposed, lowercased, letters and numbers only, so case, a full-width
-/// spelling, an invisible split or punctuation don't hide `password`. A PIN and a `PW` are one by their own word
-/// (`UserPIN`, `PINCode`, `pin_code`, `AdminPW`, `DevicePIN2`), so `Shipping`, `AllowPinning` and `Power` aren't.
+/// spelling, an invisible split or punctuation don't hide `password`; then without its numbers, so `WEP40Key` reads
+/// `wepkey` and `VPNPIN2` ends in `pin` (verifier rounds 1 and 2). A PIN, a `PW` and a `PUK` are one by their own word or
+/// the folded key's ending (`UserPIN`, `PINCode`, `pin_code`, `AdminPW`, `rootpw`, `pincode`, `PINs`), so `Shipping`,
+/// `AllowPinning` and `Power` aren't.
 enum ProfileSecrets {
     /// Phase 2a review L2 added the keys: a Wi-Fi or VPN pre-shared key (`PSK`; `SharedKey`, which holds `PreSharedKey`,
     /// so that stem would be dead: its mutant survived), and an encryption, client, access or licence key, which no stem
-    /// held.
+    /// held. Verifier round 2 added `ExportPolicy.sensitiveStems`' three this list lacked (`bypass`, the Activation Lock
+    /// bypass code invariant 11 names first; `assertion`; `unlockpin`), which `ExportPolicyTests` now holds it to; an
+    /// unlock or access code, which only a number was masked under; and a WEP key.
     static let stems = ["password", "passwd", "passphrase", "passcode", "pwd", "secret", "token", "credential", "privatekey",
                         "apikey", "recoverykey", "escrow", "challenge", "bearer", "jwt", "psk", "sharedkey", "encryptionkey",
-                        "clientkey", "accesskey", "licensekey"]
+                        "clientkey", "accesskey", "licensekey", "bypass", "assertion", "unlockpin", "unlockcode", "accesscode", "wepkey"]
+    /// A secret by its own word, or as the folded key's ending: too short to find inside a longer word.
+    static let secretWords = ["pin", "pw", "puk"]
 
     static func isSecret(_ key: String) -> Bool {
-        let folded = fold(key)
-        // The letters before any trailing number: `VPNPIN2` ends in `pin` as `VPNPIN` does (verifier round 1: a string
-        // under `DevicePIN2` or `VPNPIN2` was shown).
-        var letters = Array(folded.unicodeScalars)
-        while letters.last.map(isNumeral) == true { letters.removeLast() }
-        return stems.contains { Array(folded.utf8).firstRange(of: Array($0.utf8)) != nil }
-            || String(String.UnicodeScalarView(letters.suffix(3))).utf8.elementsEqual("pin".utf8)
-            || words(key).contains { same($0, "pin") || same($0, "pw") }
+        let letters = letters(key)
+        return stems.contains { Array(letters.utf8).firstRange(of: Array($0.utf8)) != nil }
+            || endsIn(letters, secretWords)
+            || words(key).contains { word in secretWords.contains { same(word, $0) || same(word, $0 + "s") } }
     }
 
-    /// The words a number is a secret under when the key's last word ends in one (`Passcode`, `DevicePassword`,
-    /// `UserPIN`), or is `PW`, or is one of `trailingWords` after one or after `unlock` (`PINCode`, `UnlockCode`,
-    /// `PasscodeValue`).
-    static let numberWords = ["password", "passwd", "passcode", "passphrase", "pwd", "pin", "unlockcode"]
-    /// A last word that names the secret before it rather than a rule about it (verifier round 1: a number under
-    /// `PINValue` or `PasscodeValue` was shown).
+    /// A last word that names the secret before it rather than a rule about it: `PINCode`, `PINNumber`, `PasscodeValue`
+    /// (verifier round 1: a number under `PINValue` or `PasscodeValue` was shown).
     static let trailingWords = ["code", "number", "value"]
     /// A word that makes such a number a rule about a secret, not one: `MaxPIN`, `MinimumPasscode`.
     static let policyWords = ["max", "maximum", "min", "minimum", "age", "length", "history", "attempt", "attempts", "required", "complex",
                               "complexity"]
 
-    /// Whether a number under `key` is a secret: a numeric passcode, PIN or unlock code was shown as it came, since only
-    /// strings, data and containers were masked (Phase 2a review L2).
+    /// Whether a number under `key` is a secret: when the folded key ends in a stem or one of `words` (`Passcode`,
+    /// `UserPIN`, `UnlockCode`, `SharedSecret`, `LicenseKey`, `adminpw`), past a plural and trailing words (`PINs`,
+    /// `PINCode`, `PasscodeValue`), and no policy word is in it (Phase 2a review L2: a numeric passcode, PIN or unlock code
+    /// was shown, since only strings, data and containers were masked). Verifier round 2: read from the fold, not the
+    /// last word, so `PassCode`, `pincode` and `SharedSecret` end in one, and a number under each was shown.
     static func endsInASecretWord(_ key: String) -> Bool {
-        // A number in a key is no word here: `Passcode1`, `DevicePIN2` and `PIN1Code` read as `Passcode`, `DevicePIN` and
-        // `PINCode` (verifier round 1: a number under each was shown, its last word `1`, `2` or `code` after `1`).
-        let words = words(key).filter { !$0.unicodeScalars.allSatisfy(isNumeral) }
-        guard let last = words.last, !words.contains(where: { word in policyWords.contains { same($0, word) } }) else { return false }
-        func secret(_ word: String) -> Bool {
-            same(word, "pw") || numberWords.contains { Array(word.utf8).suffix($0.utf8.count).elementsEqual($0.utf8) }
+        let words = words(key)
+        guard !words.contains(where: { word in policyWords.contains { same($0, word) } }) else { return false }
+        return endsIn(letters(key), stems + secretWords)
+    }
+
+    /// Whether `text` ends in one of `ends`, past any plural `s` and `trailingWords` at its end: `pins`, `pincode`,
+    /// `devicepincodes`, `passcodevalue`.
+    static func endsIn(_ text: String, _ ends: [String]) -> Bool {
+        var pending = [Array(text.utf8)], seen: Set<[UInt8]> = []
+        while let word = pending.popLast() {
+            guard seen.insert(word).inserted, !word.isEmpty else { continue }
+            func endsIn(_ end: String) -> Bool { word.suffix(end.utf8.count).elementsEqual(end.utf8) }
+            if ends.contains(where: endsIn) { return true }
+            if word.last == UInt8(ascii: "s") { pending.append(Array(word.dropLast())) }
+            for trailing in trailingWords where word.count > trailing.utf8.count && endsIn(trailing) {
+                pending.append(Array(word.dropLast(trailing.utf8.count)))
+            }
         }
-        let before = words.dropLast().last
-        return secret(last) || trailingWords.contains { same(last, $0) } && before.map { secret($0) || same($0, "unlock") } == true
+        return false
     }
 
     /// A plist number, not a flag: Foundation hands both over as `NSNumber`, a flag as a `CFBoolean`, whose `objCType`
@@ -354,25 +396,52 @@ enum ProfileSecrets {
         return !(String(cString: number.objCType) == "c" && value is Bool)
     }
 
-    /// A PEM private key, whatever its key (`-----BEGIN PRIVATE KEY-----`, and RSA, EC, ENCRYPTED, OPENSSH or PGP's
-    /// `PRIVATE KEY BLOCK`, in any case), as text or as base64 of the text: under a key no stem names (`Identity`), it
-    /// was shown (Phase 2a review L2). A certificate's `-----BEGIN CERTIFICATE-----` is public, and shown.
+    /// A private key, whatever its key: a PEM one (`-----BEGIN PRIVATE KEY-----`, and RSA, EC, ENCRYPTED, OPENSSH or PGP's
+    /// `PRIVATE KEY BLOCK`, in any case), a PuTTY key file, or a JWK with its private member (`d`, or `k` for a symmetric
+    /// key); as text, as base64 of the text, or in a `data:` URL. Under a key no stem names (`Identity`), a PEM key was
+    /// shown (Phase 2a review L2), and the other forms and a `data:` URL until verifier round 2. A certificate's
+    /// `-----BEGIN CERTIFICATE-----`, and a JWK without a private member, are public, and shown.
     static func holdsPrivateKey(_ text: String) -> Bool {
         let bytes = Array(text.utf8)
-        if pemPrivateKey(in: bytes) { return true }
-        let stripped = bytes.filter { !ProfileText.isSpace($0) }
-        guard stripped.count >= 16, stripped.allSatisfy(ProfileText.isBase64) else { return false }
-        let padded = stripped + Array(repeating: UInt8(ascii: "="), count: (4 - stripped.count % 4) % 4)
-        return Data(base64Encoded: Data(padded)).map { pemPrivateKey(in: Array($0)) } ?? false
+        if privateKey(in: bytes) || base64(bytes).map(privateKey) == true { return true }
+        // `data:[<type>][;base64],<payload>`, its payload percent-encoded unless it says base64.
+        let start = bytes.firstIndex { !ProfileText.isSpace($0) } ?? bytes.endIndex
+        guard bytes[start...].map(ProfileText.lower).starts(with: Array("data:".utf8)),
+              let comma = bytes[start...].firstIndex(of: UInt8(ascii: ",")) else { return false }
+        let header = bytes[start..<comma].map(ProfileText.lower), payload = Array(bytes[(comma + 1)...])
+        if header.firstRange(of: Array(";base64".utf8)) != nil { return base64(payload).map(privateKey) == true }
+        return String(decoding: payload, as: UTF8.self).removingPercentEncoding.map { privateKey(in: Array($0.utf8)) } == true
     }
 
-    private static func pemPrivateKey(in bytes: [UInt8]) -> Bool {
+    /// Base64 (blanks allowed, padding optional) decoded, or nil when it isn't base64 of at least 16 characters.
+    private static func base64(_ bytes: [UInt8]) -> [UInt8]? {
+        let stripped = bytes.filter { !ProfileText.isSpace($0) }
+        guard stripped.count >= 16, stripped.allSatisfy(ProfileText.isBase64) else { return nil }
+        let padded = stripped + Array(repeating: UInt8(ascii: "="), count: (4 - stripped.count % 4) % 4)
+        return Data(base64Encoded: Data(padded)).map(Array.init)
+    }
+
+    private static func privateKey(in bytes: [UInt8]) -> Bool {
         let lower = bytes.map(ProfileText.lower)
         var start = lower.startIndex
         while let begin = lower[start...].firstRange(of: Array("-----begin ".utf8)) {
             let label = lower[begin.upperBound...].prefix { $0 != UInt8(ascii: "-") && $0 != 0x0A && $0 != 0x0D }
             if label.firstRange(of: Array("private key".utf8)) != nil { return true }
             start = begin.upperBound
+        }
+        if lower.firstRange(of: Array("putty-user-key-file-".utf8)) != nil, lower.firstRange(of: Array("private-lines:".utf8)) != nil { return true }
+        return member("kty", in: bytes) && (member("d", in: bytes) || member("k", in: bytes))
+    }
+
+    /// Whether JSON text has a member `name` (`"name"`, blanks, `:`), by its bytes: JSON's names are case-sensitive.
+    private static func member(_ name: String, in bytes: [UInt8]) -> Bool {
+        let quoted = Array("\"\(name)\"".utf8)
+        var start = bytes.startIndex
+        while let found = bytes[start...].firstRange(of: quoted) {
+            var index = found.upperBound
+            while index < bytes.endIndex, ProfileText.isSpace(bytes[index]) { index += 1 }
+            if index < bytes.endIndex, bytes[index] == UInt8(ascii: ":") { return true }
+            start = found.lowerBound + 1
         }
         return false
     }
@@ -385,10 +454,17 @@ enum ProfileSecrets {
         return String(String.UnicodeScalarView(scalars.filter(isLetterOrNumber)))
     }
 
+    /// The fold without its numbers: what the stems and endings are found in.
+    static func letters(_ key: String) -> String {
+        String(String.UnicodeScalarView(fold(key).unicodeScalars.filter { !isNumeral($0) }))
+    }
+
     /// A key's words, lowercased: split at anything not a letter or number but a mark or an invisible format character
     /// (which are dropped, as the fold drops them), before a capital that follows a lowercase letter, before the
-    /// last capital of a run that a lowercase letter follows (`PINCode` is `pin`, `code`), and where letters meet
-    /// numbers (`DevicePIN2` is `device`, `pin`, `2`: verifier round 1, it was `device`, `pin2`, no PIN).
+    /// last capital of a run that a lowercase letter follows (`PINCode` is `pin`, `code`) unless that letter is a plural
+    /// `s` ending the word (`PINs` is `pins`, `UserPWs` is `user`, `pws`: verifier round 2, they were `pi`, `ns` and
+    /// `user`, `p`, `ws`), and where letters meet numbers (`DevicePIN2` is `device`, `pin`, `2`: verifier round 1, it was
+    /// `device`, `pin2`, no PIN).
     static func words(_ key: String) -> [String] {
         let scalars = Array(key.decomposedStringWithCompatibilityMapping.unicodeScalars)
         var words: [String] = [], word = String.UnicodeScalarView()
@@ -405,9 +481,11 @@ enum ProfileSecrets {
             }
             if let previous = word.last {
                 let next = index + 1 < scalars.count ? scalars[index + 1] : nil
+                let afterNext = index + 2 < scalars.count ? scalars[index + 2] : nil
+                let plural = next == "s" && afterNext?.properties.isLowercase != true
                 let upper = scalar.properties.isUppercase
                 if upper && previous.properties.isLowercase { end() }
-                if upper && previous.properties.isUppercase, let next, next.properties.isLowercase { end() }
+                if upper && previous.properties.isUppercase, let next, next.properties.isLowercase, !plural { end() }
                 if isNumeral(scalar) != isNumeral(previous) { end() }
             }
             word.append(scalar)

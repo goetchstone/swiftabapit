@@ -134,7 +134,10 @@ public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugS
 
     /// The resource, its profile withheld.
     public let resource: Resource
-    /// The resource as Apple sent it, profile and all: for `ProfileText`, Phase 3's snapshots and Phase 5's writer.
+    /// The resource as Apple sent it, profile and all: for `ProfileText` and Phase 5's writer. Whether Phase 3's snapshots
+    /// keep it is the operator's open decision, not a use: a snapshot is SQLite on disk, outside the Keychain, and the
+    /// profile holds Wi-Fi and VPN passwords (invariants 3 and 11; verifier round 2), so until it is decided a snapshot
+    /// stores `resource`. `BoundaryTests.onlyTheListedLinesReadTheRawProfile` lists every line in AbapitKit that names it.
     package let received: Resource
 
     public init(resource: Resource) {
@@ -151,6 +154,30 @@ public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugS
     public var updated: ISODate? { attributes.date("updatedDateTime") }
 
     public var unreadNested: [NestedKey] { CustomSettingsValues.unread(customSettings.map { [$0] }, in: "customSettingsValues") }
+
+    /// What was wrong with the shape of a custom setting's profile, in `ProfileProblem`'s order: the acceptance pass says
+    /// each with a count. Read as no custom settings, or no profile text, a string `customSettingsValues` or an object
+    /// `configurationProfile` printed `configurations/{id}: ok, 1 item` with nothing said (verifier round 2; RULE-FEEDBACK
+    /// 2026-10-30: a test asserting nil for an odd shape asserts that it is said).
+    public var profileProblems: [ProfileProblem] {
+        switch received.attributes["customSettingsValues"] {
+        case nil, .null?: []
+        case .object(let values)?:
+            switch values["configurationProfile"] {
+            case nil, .null?, .string?: []
+            case _?: [.profileNotAString]
+            }
+        case _?: [.customSettingsNotAnObject]
+        }
+    }
+
+    /// A custom setting's profile this version can't read, said rather than read as none.
+    public enum ProfileProblem: String, CaseIterable, Sendable {
+        /// `customSettingsValues` is neither an object nor null: no custom settings are read.
+        case customSettingsNotAnObject = "custom settings not an object"
+        /// `configurationProfile` is neither a string nor null: no profile text is shown.
+        case profileNotAString = "profile not a string"
+    }
 
     /// `resource` with `customSettingsValues` withheld: an object as `CustomSettingsValues.withholding` leaves it, any
     /// other value but `null` replaced by `CustomSettingsValues.withheld`. Any resource, whatever its type: a blueprint's
@@ -204,6 +231,11 @@ public struct CustomSettingsValues: ObjectView, CustomStringConvertible, CustomD
         }
         return out
     }
+
+    /// Equal when what anyone outside AbapitKit can see is: the withheld object and the masked profile. The `==` Swift
+    /// writes for an `ObjectView` compared `received` too, so the app could test a guessed profile, secret and all, against
+    /// the one Apple sent (verifier round 2: an equality oracle).
+    public static func == (one: Self, other: Self) -> Bool { one.object == other.object && one.profileText == other.profileText }
 
     public var description: String { "CustomSettingsValues(\(object))" }
     public var debugDescription: String { description }

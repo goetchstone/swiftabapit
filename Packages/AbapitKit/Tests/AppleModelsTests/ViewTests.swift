@@ -175,7 +175,8 @@ struct ViewTests {
 
     /// What a configuration hands out has its custom settings withheld whatever their shape, keys kept and Apple's order
     /// with them; a null and a string file name stay; anything else, a file name that isn't a string included, is the
-    /// marker. AbapitKit still reads the profile as it came (Phase 2a review M2).
+    /// marker. AbapitKit still reads the profile as it came (Phase 2a review M2). A shape that reads as no custom settings,
+    /// or no profile, is a `profileProblems` entry, which the pass says (verifier round 2: the nil was pinned, unsaid).
     @Test func aConfigurationWithholdsItsCustomSettingsWhateverTheirShape() throws {
         let secret: JSONValue = .string("hunter2")
         for shape in [secret, .array([secret]), .number("4321"), .bool(true)] {
@@ -183,6 +184,15 @@ struct ViewTests {
             #expect(configuration.attributes.keys == ["name", "customSettingsValues", "type"])
             #expect(configuration.attributes["customSettingsValues"] == .string(CustomSettingsValues.withheld) && configuration.customSettings == nil, "\(shape)")
             #expect(configuration.received.attributes["customSettingsValues"] == shape)
+            #expect(configuration.profileProblems == [.customSettingsNotAnObject], "\(shape)")
+        }
+        for profile in [JSONValue.object(["Password": secret]), .array([secret]), .number("4321"), .bool(false)] {
+            let configuration = Configuration(resource: Self.resource("configurations", ["customSettingsValues": .object(["configurationProfile": profile])]))
+            #expect(configuration.customSettings?.profileText == nil && configuration.profileProblems == [.profileNotAString], "\(profile)")
+        }
+        for values in [nil, JSONValue.null, .object([:]), .object(["configurationProfile": .null]), .object(["configurationProfile": secret, "filename": .number("1")])] {
+            let configuration = Configuration(resource: Self.resource("configurations", values.map { ["customSettingsValues": $0] } ?? [:]))
+            #expect(configuration.profileProblems.isEmpty, "\(String(describing: values))")
         }
         let settings = try #require(Configuration(resource: Self.resource("configurations", ["customSettingsValues": .object([
             "configurationProfile": secret, "filename": .object(["x": secret]), "extra": .array([secret]), "gone": .null])])).customSettings)
@@ -192,6 +202,31 @@ struct ViewTests {
         // A resource of any type passes through the same: a blueprint's `included` goes through it.
         let other = Resource(type: "apps", id: "a", attributes: ["name": .string("Pages")])
         #expect(Configuration.withholdingProfile(other) == other)
+    }
+
+    /// Two custom settings are equal when what the app can see is: the withheld object and the masked profile. Equal for
+    /// two profiles that differ only in a masked secret, so `==` can't test a guessed secret (verifier round 2: the `==`
+    /// Swift writes compared the raw profile, an oracle); unequal when a shown part or the file name differs.
+    @Test func customSettingsCompareByWhatIsShown() {
+        func values(_ password: String, ssid: String = "Office", filename: String = "x.mobileconfig") -> CustomSettingsValues {
+            CustomSettingsValues(["configurationProfile": .string("<plist version=\"1.0\"><dict><key>SSID_STR</key><string>\(ssid)</string>"
+                                    + "<key>Password</key><string>\(password)</string></dict></plist>"), "filename": .string(filename)])
+        }
+        let seen = values("hunter2")
+        #expect(seen.configurationProfile != values("guess").configurationProfile)
+        #expect(seen == values("guess") && seen == values("hunter2"))
+        #expect(seen != values("hunter2", ssid: "Lobby") && seen != values("hunter2", filename: "y.mobileconfig"))
+        // A profile of another shape is withheld whole and shows nothing, so nothing tells two apart.
+        #expect(CustomSettingsValues(["configurationProfile": .number("1")]) == CustomSettingsValues(["configurationProfile": .number("2")]))
+    }
+
+    /// A configuration stores its withheld resource and the one Apple sent, and nothing else; its custom settings, the
+    /// withheld object and the raw one. A stored property added beside them is a new holder of the profile, which no
+    /// scan of the names `received` and `configurationProfile` sees (`let original = resource` in the initializer): it
+    /// fails here until someone decides what it holds (verifier round 2).
+    @Test func whatAConfigurationStoresIsTheTwoCopies() {
+        #expect(MemoryLayout<Configuration>.size == MemoryLayout<(Resource, Resource)>.size)
+        #expect(MemoryLayout<CustomSettingsValues>.size == MemoryLayout<(JSONObject, JSONObject)>.size)
     }
 
     // MARK: Apple MDM (no example from Apple)

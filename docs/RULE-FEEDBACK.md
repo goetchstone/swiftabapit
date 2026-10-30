@@ -27,6 +27,22 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-30 — Holding a declaration's modifier didn't hold what reads it
+- **What happened:** Phase 2a's verifier round 2 added `public var rawText: String? { configurationProfile }` and
+  `public extension Configuration { var sent: Resource { received } }` to AbapitKit: every test in both packages stayed
+  green, though round 1's `whatHoldsTheRawProfileStaysPackage` pinned the three declarations' `package` level (the entry
+  below). `package` keeps the raw profile from the app, and any AbapitKit module can still hand it out under a new
+  public name (failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #11 (sensitive fields never leave).
+- **Why it didn't hold:** the entry below proposed pinning each held declaration's modifier, and that is half the
+  boundary: the other half is every public declaration that reads the held value, which the compiler doesn't check.
+- **Would a rule have caught it?** only if enforced differently: a value an invariant holds at `package` names its
+  readers in a test (`BoundaryTests.onlyTheListedLinesReadTheRawProfile` lists every AbapitKit line that names the raw
+  profile) and its stored layout (`whatAConfigurationStoresIsTheTwoCopies`: a new stored copy names neither). And a
+  type holding a secret writes its own `==`: Swift's compared the raw profile, an oracle for a guessed secret.
+- **Enforcement home if changed:** tripwire test: the one scan the entry below proposes lists, for each held
+  declaration, its modifier and every line that reads it (`Secret.bytes` and `Columns.init` too).
+
 ## 2026-10-30 — "The compiler holds it" held only while a modifier did, and no test held the modifier
 - **What happened:** Phase 2a's verifier round 1 widened `Configuration.received`, `CustomSettingsValues.received` and
   `.configurationProfile` to `public`, one at a time: `scripts/test.sh` stayed green in both packages. Only the app-side

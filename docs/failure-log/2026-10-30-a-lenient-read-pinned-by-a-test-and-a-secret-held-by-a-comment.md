@@ -64,14 +64,35 @@
     string to be masked; it wasn't: the digit joined `pin` into one word, `pin2`): a key's words now split where
     letters meet numbers, the number rule skips the numbers, the fold's `pin` ending skips trailing ones, and `value`
     after a secret word is a secret, as `code` and `number` are.
+  - Verifier round 2 (`fix(2a): verifier round 2`): both verifiers held the fix; every finding was low, and two
+    mutants survived. A public accessor of another name in any AbapitKit module (`public var rawText: String? {
+    configurationProfile }`, `public extension Configuration { var sent: Resource { received } }`) republished the raw
+    profile with every test green, since the round-1 test held only the three declarations' modifiers:
+    `BoundaryTests.onlyTheListedLinesReadTheRawProfile` now lists every line in AbapitKit's sources that names `received`
+    or `configurationProfile`, and `whatAConfigurationStoresIsTheTwoCopies` holds the two types' stored layout, so a new
+    stored copy (`let original = resource`), which names neither, fails too. `CustomSettingsValues`' synthesized `==`
+    compared the raw profile, an equality oracle for a guessed secret: it compares the withheld object and the masked
+    text. No test put a secret string under a policy-worded key (`RequiredPassword`), so the number rule's exception
+    could spread to strings: it has one. A custom setting whose values aren't an object, or whose profile isn't a
+    string, read `configurations/{id}: ok, 1 item`, and the new shape test pinned the nil (this entry's own RULE-FEEDBACK
+    lesson, again): `Configuration.profileProblems`, said with a count on the list and the single read. `ProfileText`:
+    a key written twice alike is counted from the XML's own keys (Foundation's reader keeps one); `PINs` and `PWs` read
+    as one word, not `pi`, `ns`; a fold ending in a PIN, a PW or a PUK past a plural and trailing words (`pincode`,
+    `rootpw`, `SIMPINs`) is a secret; a number is masked when the fold ends in any stem or secret word (`SharedSecret`,
+    `PassCode`, `PINs`), not only the last word's number words; the stems hold `ExportPolicy.sensitiveStems` (`bypass`,
+    `assertion`, `unlockpin`, held by a test), unlock and access codes and a WEP key, found in the fold without its
+    numbers; and a PuTTY key file, a JWK's private member and a private key in a `data:` URL are masked. The docs gave the
+    raw profile to Phase 3's snapshots; that is an open operator decision now (SQLite is outside the Keychain).
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant; the fix's report lists every
   mutant and what killed it (84: 81 by a test, 2 by the compiler, and `presharedkey`, an equivalent stem, removed), and
   verifier round 1's report the 15 it added (14 by a test, one equivalent). Three lessons, in RULE-FEEDBACK
   2026-10-30: a test that asserts nil or empty for an odd shape must also assert the odd shape is said (counted or
   noted), or it pins the silence; a view whose resource holds a secret hands out a withheld copy and keeps the raw at
   `package`, so the compiler, not a comment, holds invariant 11 there; and (verifier round 1) a boundary the compiler
-  holds lasts only while its modifier does, so a test holds the modifier. The round's count mutant is the history
+  holds lasts only while its modifier does, so a test holds the modifier; and (verifier round 2) the modifier holds
+  only the declaration, not what reads it, so a test lists the readers and the stored layout too. The round's count mutant is the history
   runbook's "a golden needs two of a kind" again: a count one test sees only as 1 isn't held. Still only a stub: what
   Apple sends in `eventDataPropertyKey`, in the fourteen field-less payloads and in a custom setting's values is a Phase
   2 live check; and `ProfileText`'s masking is still a denylist, so a secret under a key no stem or word names, that
-  isn't a PEM key, is shown.
+  isn't a private key in a form it knows, is shown, while a policy value under a secret word is masked (Kerberos'
+  `pwReqText` and `pwChangeURL`). A binary plist's repeated keys aren't counted.

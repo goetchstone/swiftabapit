@@ -1120,7 +1120,10 @@ Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team b
 - **Collectors per provider** (Apple now; Mosyle in Phase 7):
   - devices, mdm_servers, assignments, people, content, mdm_enrolled (+ details);
   - **AppleCare sweep** and **Activation Lock sweep** (§3.6);
-  - per-resource errors recorded rather than aborting.
+  - per-resource errors recorded rather than aborting;
+  - **open (operator):** whether a snapshot keeps a custom setting's profile as Apple sent it. It holds Wi-Fi and VPN
+    passwords, and SQLite is outside the Keychain (invariants 3, 11), so until decided a collector stores
+    `Configuration.resource`, the profile withheld (Phase 2a verifier round 2).
 - **Diff** (golden parity) and the Changes screen.
 - **Reports**:
   - coverage (with the new AppleCare fields);
