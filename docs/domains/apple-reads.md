@@ -167,6 +167,12 @@ org editor's save).
   one identifier each, `isPathSafe`'s shape, so a comma (a second value), `&`, `=`, `#`, `%`, a space, a line break or
   anything non-ASCII is refused, and `URL.make` percent-encodes every value anyway. The stub really filters by range,
   type, actor and subject.
+- **An audit payload is read where it is, and a miss is said** (Phase 2a review M1): under `eventDataPropertyKey` when
+  that holds an object, else under the type's own key, compared by bytes. Apple's object names spell `Icloud` and
+  `Applecare` where its attribute keys spell `ICloud` and `AppleCare`, so a key named from the object name misses; read
+  as "no payload", the event's serial or subscription went unread, its unknown fields uncounted, and the pass said
+  `ok`. `AuditEvent.payloadProblems` holds a named key that is absent, `""` or not a string, and a payload that isn't an
+  object (`null` included); the pass's note says each with a count (`payload key named but absent in 1 event`).
 - **A member list is a list of linkages of its type, on every page**: a group's or an org unit's `users`, each
   blueprint relationship's own type, a service's `orgDevices`. Another type, a lookalike (`Users`, `usersX`) or an
   empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.
@@ -193,8 +199,9 @@ org editor's save).
   - Does `mdmDevices/{id}/details` 404 for a device with no details on record (the stub's choice), is its id the
     `mdmDevices` id (the serial?), and is the details' own `id` the same?
   - Does the configuration list send `customSettingsValues` as null (abapit) or leave it out?
-  - The models unit's: what the 15 audit payloads Apple documents with no fields carry; whether
-    `eventDataPropertyKey` always equals the type's key; whether a domain event's domain is its `subjectName`;
+  - The models unit's: what the 14 audit payloads Apple documents with no fields carry; whether
+    `eventDataPropertyKey` always equals the type's key, and which spelling it uses (the pass says each miss); whether
+    a domain event's domain is its `subjectName`;
     `mdmDevices`' `productFamily` values; whether `storageFreeCapacity`/`storageTotalCapacity` are bytes and what
     `platform` holds; and whether a signed profile comes back as base64 DER.
   - Reports' (`docs/domains/history.md`): the format and offset of an audit event's `eventDateTime` (fractional

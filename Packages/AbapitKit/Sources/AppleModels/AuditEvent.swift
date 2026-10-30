@@ -29,12 +29,54 @@ public struct AuditEvent: ResourceView {
     public var groupID: String? { attributes.string("groupId") }
     public var eventDataPropertyKey: String? { attributes.string("eventDataPropertyKey") }
 
-    /// The payload: the object under `eventDataPropertyKey` when Apple names one, else under the type's own key;
-    /// nil when neither names an object. A type this version doesn't know keeps its payload raw (`fields` nil).
-    public var payload: AuditEventPayload? {
+    /// The payload: the object under `eventDataPropertyKey` when Apple names one that holds an object, else under the
+    /// type's own key; nil when neither holds one. A type this version doesn't know keeps its payload raw (`fields` nil).
+    /// The type's key is read when the named one misses: Apple's object names spell `Icloud` and `Applecare` where its
+    /// attribute keys spell `ICloud` and `AppleCare`, and a named key that missed left the payload unread and uncounted
+    /// while the acceptance pass said `ok` (Phase 2a review M1). What went wrong is `payloadProblems`.
+    public var payload: AuditEventPayload? { lookup.payload }
+
+    /// What was wrong with where Apple put the payload, in `PayloadProblem`'s order: the acceptance pass says each.
+    public var payloadProblems: [PayloadProblem] { PayloadProblem.allCases.filter(lookup.problems.contains) }
+
+    /// What was wrong with where Apple put an event's payload: never "no payload" with nothing said (Phase 2a review M1).
+    public enum PayloadProblem: String, CaseIterable, Sendable {
+        /// `eventDataPropertyKey` names an attribute the event doesn't have.
+        case namedKeyAbsent = "payload key named but absent"
+        /// `eventDataPropertyKey` is `""`.
+        case namedKeyEmpty = "payload key named empty"
+        /// `eventDataPropertyKey` is neither a string nor null.
+        case namedKeyNotAString = "payload key named by a non-string"
+        /// The attribute named, or the type's own, holds something that isn't an object (`null` included).
+        case notAnObject = "payload not an object"
+    }
+
+    private var lookup: (payload: AuditEventPayload?, problems: [PayloadProblem]) {
         let schema = type?.known?.payload
-        guard let key = eventDataPropertyKey ?? schema?.key, let object = attributes[key]?.object else { return nil }
-        return AuditEventPayload(key: key, object: object, fields: schema?.fields)
+        var problems: [PayloadProblem] = []
+        func object(under key: String, named: Bool) -> JSONObject? {
+            switch attributes[key] {
+            case .object(let object)?: return object
+            case nil: if named { problems.append(.namedKeyAbsent) }
+            case _?: problems.append(.notAnObject)
+            }
+            return nil
+        }
+        var named: String?
+        switch attributes["eventDataPropertyKey"] {
+        case nil, .null?: break
+        case .string(let key)? where key.isEmpty: problems.append(.namedKeyEmpty)
+        case .string(let key)?: named = key
+        case _?: problems.append(.namedKeyNotAString)
+        }
+        if let named, let object = object(under: named, named: true) {
+            return (AuditEventPayload(key: named, object: object, fields: schema?.fields), problems)
+        }
+        // The type's key, unless it is the one just tried: compared by bytes, as the typed reads find keys.
+        if let key = schema?.key, !(named?.utf8.elementsEqual(key.utf8) ?? false), let object = object(under: key, named: false) {
+            return (AuditEventPayload(key: key, object: object, fields: schema?.fields), problems)
+        }
+        return (nil, problems)
     }
 
     /// Attributes neither common nor the type's payload key: an unknown type's key is one, and so is a key Apple names
@@ -160,8 +202,8 @@ public enum AuditEventType: String, KnownValues {
     }
 
     /// Each type's payload, from Apple's `AuditEvent<Type>Attributes` (its one key) and `AuditEvent<Type>` (the
-    /// fields), written out here and held to the contract by `AuditEventTests`. Fifteen payloads have no fields in
-    /// Apple's docs: what they hold live is unread, and the acceptance pass names it.
+    /// fields), written out here and held to the contract by `AuditEventTests`. Fourteen payloads have no fields in
+    /// Apple's docs (`fourteenPayloadsHaveNoFields`): what they hold live is unread, and the acceptance pass names it.
     public var payload: PayloadSchema {
         switch self {
         case .deviceAddedToOrg: PayloadSchema(key: "eventDataDeviceAddedToOrg", fields: ["purchaseSourceId", "purchaseSourceType", "serialNumber"])

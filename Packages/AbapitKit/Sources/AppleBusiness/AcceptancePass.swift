@@ -286,7 +286,13 @@ extension AppleClient {
                 found.unknown("protocol", event.payload?.idpProtocol)
                 found.unknown("vendorName", event.payload?.vendorName)
             }
-            found.note = "the last day"
+            // Where a payload wasn't, in this app's words with a count: a named key that missed read `ok` with its payload
+            // unread and nothing said (Phase 2a review M1).
+            let problems = AuditEvent.PayloadProblem.allCases.compactMap { problem -> String? in
+                let count = events.count { $0.payloadProblems.contains(problem) }
+                return count == 0 ? nil : "\(problem.rawValue) in \(count) event\(count == 1 ? "" : "s")"
+            }
+            found.note = (problems + ["the last day"]).joined(separator: " · ")
         })
         return lines
     }

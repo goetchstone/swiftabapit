@@ -48,6 +48,18 @@ struct AuditEventTests {
         #expect(named == union)
     }
 
+    /// Fourteen payloads have no fields: the manifest has no object for them, Apple's pages listing no properties. The
+    /// table's comment and the runbook said fifteen (Phase 2a review L6).
+    @Test func fourteenPayloadsHaveNoFields() throws {
+        let empty = AuditEventType.allCases.filter(\.payload.fields.isEmpty)
+        let undocumented = try AuditEventType.allCases.filter { type in
+            let properties = Self.property("AuditEvent\(Self.camel(type.rawValue))Attributes")
+            let payload = try #require(((properties.first?["type"] as? [String: Any])?["types"] as? [String])?.first, "\(type.rawValue)")
+            return ModelContractTests.objects[payload] == nil
+        }
+        #expect(empty.count == 14 && empty == undocumented)
+    }
+
     /// The second place Apple lists the keys: `fields[auditEvents]` on the list is the common attributes and every
     /// type's key, each once.
     @Test func everyPayloadKeyIsASparseField() throws {
@@ -94,22 +106,89 @@ struct AuditEventTests {
                                                             "eventDataDeviceAssignedToServer": payload])
         #expect(keyed.payload?.key == "eventDataDeviceAssignedToServer")
         #expect(keyed.payload?.serialNumber == "C02TEST0001" && keyed.payload?.targetServerName == "Mosyle")
-        #expect(keyed.unreadAttributes.isEmpty && keyed.payload?.unreadFields == [])
+        #expect(keyed.unreadAttributes.isEmpty && keyed.payload?.unreadFields == [] && keyed.payloadProblems.isEmpty)
 
         let unkeyed = Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataDeviceAssignedToServer": payload])
-        #expect(unkeyed.payload?.serialNumber == "C02TEST0001")
+        #expect(unkeyed.payload?.serialNumber == "C02TEST0001" && unkeyed.payloadProblems.isEmpty)
+        // A null key is no key named.
+        #expect(Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataPropertyKey": .null, "eventDataDeviceAssignedToServer": payload])
+            .payloadProblems.isEmpty)
 
         // Apple names another key: the payload is read there, and that key, not being the type's, is unread: the
         // acceptance pass says so.
         let elsewhere = Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataPropertyKey": .string("eventDataDeviceMoved"),
                                                                 "eventDataDeviceMoved": payload])
         #expect(elsewhere.payload?.key == "eventDataDeviceMoved" && elsewhere.payload?.targetServerName == "Mosyle")
-        #expect(elsewhere.unreadAttributes == ["eventDataDeviceMoved"])
+        #expect(elsewhere.unreadAttributes == ["eventDataDeviceMoved"] && elsewhere.payloadProblems.isEmpty)
+        // Apple names a key it didn't send: the type's own is read, and the miss is said (Phase 2a review M1: this read
+        // nil, counted nothing, and the pass said `ok`).
         let missing = Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataPropertyKey": .string("eventDataDeviceMoved"),
                                                               "eventDataDeviceAssignedToServer": payload])
-        #expect(missing.payload == nil)
-        // A payload that isn't an object is no payload.
-        #expect(Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataDeviceAssignedToServer": .array([])]).payload == nil)
+        #expect(missing.payload?.key == "eventDataDeviceAssignedToServer" && missing.payload?.serialNumber == "C02TEST0001")
+        #expect(missing.payloadProblems == [.namedKeyAbsent])
+        // Nothing under either: no payload, and still said.
+        let nowhere = Self.event("DEVICE_ASSIGNED_TO_SERVER", ["eventDataPropertyKey": .string("eventDataDeviceMoved")])
+        #expect(nowhere.payload == nil && nowhere.payloadProblems == [.namedKeyAbsent])
+    }
+
+    /// The contract's object names spell `Icloud` and `Applecare` (`AuditEventSubjectHasIcloudStoragePurchaseAddedAttributes`)
+    /// where its attribute keys spell `ICloud` and `AppleCare`: whichever Apple names, the payload is read under the key
+    /// that holds it, its fields are counted, and a named key that isn't there is said (Phase 2a review M1).
+    @Test(arguments: [
+        (AuditEventType.subjectHasIcloudStoragePurchaseAdded, "eventDataSubjectHasIcloudStoragePurchaseAdded"),
+        (.subjectHasIcloudStoragePurchaseRemoved, "eventDataSubjectHasIcloudStoragePurchaseRemoved"),
+        (.subjectHasApplecarePurchaseAdded, "eventDataSubjectHasApplecarePurchaseAdded"),
+        (.subjectHasApplecarePurchaseRemoved, "eventDataSubjectHasApplecarePurchaseRemoved"),
+    ])
+    func eitherSpellingOfAPayloadKeyIsReadOrSaid(type: AuditEventType, contractSpelling: String) throws {
+        let payload: JSONValue = .object(["subscriptionId": .string("sub-1"), "brandNewField": .string("x")])
+        #expect(!type.payload.key.utf8.elementsEqual(contractSpelling.utf8), "the two spellings differ")
+        // Apple names the contract's spelling and sends the attribute key's: read there, the miss said.
+        let named = Self.event(type.rawValue, ["eventDataPropertyKey": .string(contractSpelling), type.payload.key: payload])
+        let read = try #require(named.payload)
+        #expect(Array(read.key.utf8) == Array(type.payload.key.utf8) && read.subscriptionID == "sub-1" && read.unreadFields == ["brandNewField"])
+        #expect(named.payloadProblems == [.namedKeyAbsent] && named.unreadAttributes.isEmpty)
+        // Apple names and sends the contract's spelling: read where it names, and the key, not the type's, is unread.
+        let both = Self.event(type.rawValue, ["eventDataPropertyKey": .string(contractSpelling), contractSpelling: payload])
+        #expect(both.payload?.subscriptionID == "sub-1" && both.payload?.unreadFields == ["brandNewField"] && both.payloadProblems.isEmpty)
+        #expect(both.unreadAttributes == [contractSpelling])
+        // Apple names the attribute key's spelling and sends the contract's: no payload where either says, and both said:
+        // the named key's absence, and the attribute it did send as unread.
+        let crossed = Self.event(type.rawValue, ["eventDataPropertyKey": .string(type.payload.key), contractSpelling: payload])
+        #expect(crossed.payload == nil && crossed.payloadProblems == [.namedKeyAbsent] && crossed.unreadAttributes == [contractSpelling])
+    }
+
+    /// An empty key, a key that isn't a string, and a payload that isn't an object are each said, never read as "no
+    /// payload" with nothing counted; the type's own key is read when it holds an object.
+    @Test func aPayloadKeyOrPayloadOfAnotherShapeIsSaid() throws {
+        let payload: JSONValue = .object(["serialNumber": .string("C02"), "brandNewField": .string("x")])
+        let key = AuditEventType.deviceUnassignedFromServer.payload.key
+        let empty = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .string(""), key: payload])
+        #expect(empty.payload?.serialNumber == "C02" && empty.payload?.unreadFields == ["brandNewField"] && empty.payloadProblems == [.namedKeyEmpty])
+        let number = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .number("1"), key: payload])
+        #expect(number.payload?.serialNumber == "C02" && number.payloadProblems == [.namedKeyNotAString])
+        for shape in [JSONValue.array([payload]), .string("C02"), .number("1"), .bool(true), .null] {
+            let unnamed = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", [key: shape])
+            #expect(unnamed.payload == nil && unnamed.payloadProblems == [.notAnObject], "\(shape)")
+            let named = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .string(key), key: shape])
+            #expect(named.payload == nil && named.payloadProblems == [.notAnObject], "\(shape)")
+            // Named elsewhere and not an object there: the type's own key is read.
+            let elsewhere = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .string("eventDataMoved"), "eventDataMoved": shape,
+                                                                         key: payload])
+            #expect(elsewhere.payload?.serialNumber == "C02" && elsewhere.payloadProblems == [.notAnObject], "\(shape)")
+        }
+        // Both wrong: each said once, in order.
+        let twice = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .string("eventDataMoved"), "eventDataMoved": .null, key: .null])
+        #expect(twice.payload == nil && twice.payloadProblems == [.notAnObject])
+        let absentThenList = Self.event("DEVICE_UNASSIGNED_FROM_SERVER", ["eventDataPropertyKey": .string("eventDataMoved"), key: .array([])])
+        #expect(absentThenList.payloadProblems == [.namedKeyAbsent, .notAnObject])
+        // A named key that only looks like the type's (U+212A KELVIN SIGN for its `K`) is another key: compared by bytes,
+        // the type's own is still read.
+        let lookalike = Self.event("API_ACCOUNT_CREATED_WITH_KEY", ["eventDataPropertyKey": .string("eventDataApiAccountCreatedWith\u{212A}ey"),
+                                                                    "eventDataApiAccountCreatedWithKey": .object(["keyId": .string("K1")])])
+        #expect(lookalike.payload?.keyID == "K1" && lookalike.payloadProblems == [.namedKeyAbsent])
+        // A type this version doesn't know has no key of its own: a key it names that holds nothing is said.
+        #expect(Self.event("PASSKEY_ADDED", ["eventDataPropertyKey": .string("eventDataPasskeyAdded")]).payloadProblems == [.namedKeyAbsent])
     }
 
     /// Unread attributes are those neither common nor the type's key; the payload's are those its type doesn't list.

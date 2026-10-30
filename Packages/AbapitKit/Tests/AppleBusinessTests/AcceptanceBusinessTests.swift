@@ -73,6 +73,30 @@ struct AcceptanceBusinessTests {
         #expect(try Self.line(capped, "auditEvents").status == .truncated && Self.line(capped, "auditEvents").count == 1_000)
     }
 
+    /// A payload under the type's own key, where Apple named the contract's spelling (`Icloud` for `ICloud`), is read with
+    /// its unknown fields counted, and the miss is said; so are an empty key and a payload that isn't an object. Never `ok`
+    /// with nothing said (Phase 2a review M1: the pass printed `auditEvents: ok, 1 item · the last day` over an unread
+    /// payload).
+    @Test func aPayloadKeyThatMissedIsReadAndSaid() async throws {
+        let recent = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+        let harness = try await Harness()
+        harness.stub.add([
+            Resource(type: "auditEvents", id: "X1", attributes: [
+                "eventDateTime": .string(recent), "type": .string("SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED"),
+                "eventDataPropertyKey": .string("eventDataSubjectHasIcloudStoragePurchaseAdded"),
+                "eventDataSubjectHasICloudStoragePurchaseAdded": .object(["subscriptionId": .string("sub-1"), "brandNewField": .string("secret-ish")])]),
+            Resource(type: "auditEvents", id: "X2", attributes: [
+                "eventDateTime": .string(recent), "type": .string("SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED"), "eventDataPropertyKey": .string(""),
+                "eventDataSubjectHasAppleCarePurchaseRemoved": .object(["subscriptionId": .string("sub-2"), "otherNewField": .string("secret-ish")])]),
+            Resource(type: "auditEvents", id: "X3", attributes: [
+                "eventDateTime": .string(recent), "type": .string("DEVICE_IS_ERASED"), "eventDataDeviceIsErased": .array([])]),
+        ])
+        let report = await harness.client.acceptancePass()
+        #expect(report.text.contains("\nauditEvents: ok, 3 items · unknown payload keys brandNewField, otherNewField · payload key named but absent in 1 event · "
+                                     + "payload key named empty in 1 event · payload not an object in 1 event · the last day\n"), "\(report.text)")
+        #expect(!report.text.contains("secret-ish") && !report.text.contains("sub-"))
+    }
+
     /// Each Business section's failure is its own: a forbidden or failing list skips its detail and members saying why,
     /// and the other sections still read.
     @Test func eachSectionsFailureIsItsOwn() async throws {
