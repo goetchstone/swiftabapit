@@ -21,7 +21,8 @@ org editor's save).
   `Configuration` and `CustomSettingsValues`, `MDMDevice`, `MDMDeviceDetail`, `AuditEvent` and `AuditEventPayload`
   (`AuditEventType.payload` holds the 50-row table), as `ResourceView`s that keep the resource: the inspector shows
   every attribute, CSV keeps Apple's order, snapshots store what came. `unreadAttributes` (and an audit payload's
-  `unreadFields`) feed the acceptance pass. `ProfileText` shows a custom setting's profile with its secrets masked.
+  `unreadFields`) feed the acceptance pass. `ProfileText` shows a custom setting's profile with its secrets masked;
+  `Configuration` and `CustomSettingsValues` hand out the profile withheld and keep it as it came at `package` access.
   `Sections.swift`: `AppleSection.businessOnly`.
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
   builders take no scope; `AuditQuery`, the audit read's checked range and filters), `AppleClient` (pages as an
@@ -178,6 +179,15 @@ org editor's save).
   empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.
 - **The configuration list sends a custom setting's `customSettingsValues` as null** (abapit); only
   `configuration(_:)` carries it, and the pass reads a custom setting alone when the org has one.
+- **A custom setting's profile is the compiler's to hold** (Phase 2a review M2; invariant 11), as CSV's columns are:
+  every public value a configuration gives (`resource`, `attributes`, `customSettings.object`, a description, a mirror
+  or a dump, a blueprint's `included`) has `customSettingsValues` withheld: its keys kept, `null` and a string
+  `filename` as they came, every other value `CustomSettingsValues.withheld`. The profile as Apple sent it is
+  `Configuration.received` and `CustomSettingsValues.configurationProfile`, both `package`: `ProfileText`, Phase 3's
+  snapshots and Phase 5's writer read it in AbapitKit, and in the app or the screen models naming either is a compile
+  error (checked by mutant). The detail shows `customSettings?.profileText`. So the device inspector's
+  every-attribute pattern is safe for a configuration. `aCustomSettingsProfileReachesNoPublicValue` (a canary through
+  the strict stub), `aConfigurationsCSVHoldsNoProfile`, and `BoundaryTests.theAppSideNeverNamesTheRawProfile`.
 - **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
   the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds
   it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value

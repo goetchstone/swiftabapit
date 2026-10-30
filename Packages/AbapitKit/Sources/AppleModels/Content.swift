@@ -121,32 +121,89 @@ public struct Blueprint: ResourceView {
 
 /// `configurations`: a configuration (Business only). Apple documents its attributes as two objects,
 /// `ConfigurationCommon` and the custom-setting part.
-public struct Configuration: ResourceView {
+///
+/// A custom setting's profile can hold Wi-Fi and VPN passwords and a certificate's key, so the compiler holds it, as it
+/// holds CSV's columns (`ExportPolicy.Columns`): `resource` is the resource with `customSettingsValues` withheld
+/// (`withholdingProfile`), and the profile as Apple sent it is `received`, `package`, which the app and the screen
+/// models can't name. An every-attribute view (the device inspector's `ForEach(attributes.keys)`), a dump, a CSV or
+/// `"\(configuration)"` of a configuration is safe because what it can reach is withheld; the detail shows the profile
+/// through `customSettings?.profileText`, masked (Phase 2a review M2: masking was held by a doc comment).
+public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public static let resourceType = "configurations"
     public static let fields = ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"]
 
+    /// The resource, its profile withheld.
     public let resource: Resource
-    public init(resource: Resource) { self.resource = resource }
+    /// The resource as Apple sent it, profile and all: for `ProfileText`, Phase 3's snapshots and Phase 5's writer.
+    package let received: Resource
+
+    public init(resource: Resource) {
+        received = resource
+        self.resource = Self.withholdingProfile(resource)
+    }
 
     public var type: OpenEnum<ConfigurationType>? { attributes.open("type") }
     public var name: String? { attributes.string("name") }
     public var platforms: [OpenEnum<ConfigurationPlatform>]? { attributes.list("configuredForPlatforms") { $0.open() } }
     /// A custom setting's profile. Only the single read carries it: the list sends `null` (abapit `client.py`).
-    public var customSettings: CustomSettingsValues? { attributes["customSettingsValues"]?.object.map(CustomSettingsValues.init) }
+    public var customSettings: CustomSettingsValues? { received.attributes["customSettingsValues"]?.object.map(CustomSettingsValues.init) }
     public var created: ISODate? { attributes.date("createdDateTime") }
     public var updated: ISODate? { attributes.date("updatedDateTime") }
+
+    /// `resource` with `customSettingsValues` withheld: an object as `CustomSettingsValues.withholding` leaves it, any
+    /// other value but `null` replaced by `CustomSettingsValues.withheld`. Any resource, whatever its type: a blueprint's
+    /// `included` goes through it too, so a profile Apple includes with a configuration is withheld there as well.
+    package static func withholdingProfile(_ resource: Resource) -> Resource {
+        guard let values = resource.attributes["customSettingsValues"], values != .null else { return resource }
+        var attributes = resource.attributes
+        attributes["customSettingsValues"] = values.object.map { .object(CustomSettingsValues.withholding($0)) } ?? .string(CustomSettingsValues.withheld)
+        return Resource(type: resource.type, id: resource.id, attributes: attributes, relationships: resource.relationships)
+    }
+
+    // What prints and reflects is the withheld resource: a struct's default description and mirror show every stored
+    // property, `package` ones included.
+    public var description: String { "Configuration(\(resource))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: ["resource": resource]) }
 }
 
 /// `CustomSettingsValues`: a `CUSTOM_SETTING`'s profile and its file name.
-public struct CustomSettingsValues: ObjectView {
+public struct CustomSettingsValues: ObjectView, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public static let fields = ["configurationProfile", "filename"]
+    /// What stands where a value is withheld.
+    public static let withheld = "(withheld: it may hold secrets)"
+
+    /// The object, every value but the file name withheld (`withholding`).
     public let object: JSONObject
-    public init(_ object: JSONObject) { self.object = object }
+    /// The object as Apple sent it.
+    package let received: JSONObject
+
+    public init(_ object: JSONObject) {
+        received = object
+        self.object = Self.withholding(object)
+    }
 
     /// The profile as Apple sent it. Apple types it `byte` (base64); its examples send the XML itself. It may hold
-    /// passwords and keys: show it through `profileText`, never raw (invariant 11).
-    public var configurationProfile: String? { object.string("configurationProfile") }
-    public var filename: String? { object.string("filename") }
+    /// passwords and keys, so only AbapitKit reads it; everyone else gets `profileText` (invariant 11).
+    package var configurationProfile: String? { received.string("configurationProfile") }
+    /// Read as it came: a string file name is never withheld, and anything else isn't one.
+    public var filename: String? { received.string("filename") }
     /// The profile as the detail view shows it, secrets masked.
     public var profileText: ProfileText? { configurationProfile.map(ProfileText.init) }
+
+    /// `object` with every value but a string `filename` and `null` replaced by `withheld`, its keys kept (the acceptance
+    /// pass counts them). A key Apple adds beside the profile is unread and may be the profile in another form, so its
+    /// value is withheld too.
+    package static func withholding(_ object: JSONObject) -> JSONObject {
+        var out = object
+        for (key, value) in object where value != .null {
+            if key.utf8.elementsEqual("filename".utf8), value.string != nil { continue }
+            out[key] = .string(withheld)
+        }
+        return out
+    }
+
+    public var description: String { "CustomSettingsValues(\(object))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: ["object": object]) }
 }

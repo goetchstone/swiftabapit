@@ -30,5 +30,14 @@
     named key absent, empty or not a string; a payload that isn't an object); the pass adds each to its note with a
     count. Tests for both spellings of the four iCloud and AppleCare types, `""`, a non-string key, five non-object
     shapes, a lookalike named key, and a pass through the strict stub.
+  - M2: `Configuration.resource` and `CustomSettingsValues.object` are copies with `customSettingsValues` withheld
+    (keys kept, `null` and a string `filename` as they came, every other value a marker); the profile as Apple sent it
+    is `received` and `configurationProfile`, `package`; a blueprint's `included` goes through the same withholding;
+    both types print, debug-print and mirror only the withheld copy, since a struct's default description shows
+    `package` stored properties. A canary password through the strict stub reaches none of the view's resource,
+    attributes, object, description or dump, the list, a blueprint's included configuration, or the pass's text;
+    abapit's every-key CSV of the resource holds none; `profileText` still shows the profile masked. In
+    `Packages/AbapitApp`, naming `configurationProfile` or `received` is a compile error (both checked by mutant), and
+    `BoundaryTests` keeps the names out of App/ and the screen models.
 - **Prevention:** each fix has a test that fails on the unfixed code or its mutant (listed in the fix's report). Still
   only a stub: what Apple sends in `eventDataPropertyKey` and in the fourteen field-less payloads is a Phase 2 live check.

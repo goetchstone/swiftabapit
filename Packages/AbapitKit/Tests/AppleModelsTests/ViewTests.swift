@@ -167,6 +167,27 @@ struct ViewTests {
         #expect(ConfigurationType.allCases.filter(\.isWritable) == [.customSetting])
     }
 
+    /// What a configuration hands out has its custom settings withheld whatever their shape, keys kept and Apple's order
+    /// with them; a null and a string file name stay; anything else, a file name that isn't a string included, is the
+    /// marker. AbapitKit still reads the profile as it came (Phase 2a review M2).
+    @Test func aConfigurationWithholdsItsCustomSettingsWhateverTheirShape() throws {
+        let secret: JSONValue = .string("hunter2")
+        for shape in [secret, .array([secret]), .number("4321"), .bool(true)] {
+            let configuration = Configuration(resource: Self.resource("configurations", ["name": .string("n"), "customSettingsValues": shape, "type": .string("X")]))
+            #expect(configuration.attributes.keys == ["name", "customSettingsValues", "type"])
+            #expect(configuration.attributes["customSettingsValues"] == .string(CustomSettingsValues.withheld) && configuration.customSettings == nil, "\(shape)")
+            #expect(configuration.received.attributes["customSettingsValues"] == shape)
+        }
+        let settings = try #require(Configuration(resource: Self.resource("configurations", ["customSettingsValues": .object([
+            "configurationProfile": secret, "filename": .object(["x": secret]), "extra": .array([secret]), "gone": .null])])).customSettings)
+        #expect(settings.object.keys == ["configurationProfile", "filename", "extra", "gone"] && settings.filename == nil && settings.object["gone"] == .null)
+        for key in ["configurationProfile", "filename", "extra"] { #expect(settings.object[key] == .string(CustomSettingsValues.withheld), "\(key)") }
+        #expect(settings.configurationProfile == "hunter2" && settings.received["extra"] == .array([secret]))
+        // A resource of any type passes through the same: a blueprint's `included` goes through it.
+        let other = Resource(type: "apps", id: "a", attributes: ["name": .string("Pages")])
+        #expect(Configuration.withholdingProfile(other) == other)
+    }
+
     // MARK: Apple MDM (no example from Apple)
 
     @Test func anMDMDeviceReadsItsFields() {

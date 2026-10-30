@@ -64,6 +64,63 @@ struct BusinessReadTests {
         #expect(single.customSettings?.filename == "WiFi.mobileconfig" && single.customSettings?.profileText != nil)
     }
 
+    /// Every public text a value can be turned into: its description, its debug description and its dump.
+    static func printed(_ value: Any) -> String {
+        var dumped = ""
+        dump(value, to: &dumped)
+        return [String(describing: value), String(reflecting: value), dumped].joined(separator: "\n")
+    }
+
+    /// A custom setting's profile reaches no public value: not the view's resource or attributes, its custom settings'
+    /// object, a description or dump of either, the list (were Apple to send the profile there), a blueprint's included
+    /// configuration, or the acceptance pass's text. Only `profileText` shows it, masked (Phase 2a review M2: a key=value
+    /// dump of `configuration.attributes` printed the Wi-Fi password).
+    @Test func aCustomSettingsProfileReachesNoPublicValue() async throws {
+        let canary = "canary-\(UUID().uuidString)"
+        let profile = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <plist version="1.0"><dict><key>SSID_STR</key><string>Office</string><key>Password</key><string>\(canary)</string></dict></plist>
+            """
+        let signed = Data(profile.utf8).base64EncodedString()
+        func leaks(_ text: String) -> Bool { text.contains(canary) || text.contains(signed) }
+        let values: JSONValue = .object(["configurationProfile": .string(profile), "filename": .string("Office.mobileconfig"),
+                                         "signedProfile": .string(signed), "note": .null])
+        let custom = Resource(type: "configurations", id: "C1", attributes: ["type": .string("CUSTOM_SETTING"), "name": .string("Office Wi-Fi"),
+                                                                             "customSettingsValues": values])
+        let harness = try await Harness()
+        harness.stub.add([custom, Resource(type: "blueprints", id: "BP1", attributes: ["name": .string("Office")])])
+        harness.stub.relate("blueprints", "BP1", "configurations", to: ["C1"])
+
+        let configuration = try await harness.client.configuration("C1")
+        #expect(!leaks(Self.printed(configuration)) && !leaks(Self.printed(configuration.resource)) && !leaks(configuration.resource.asJSON.jsonText))
+        for (key, value) in configuration.attributes { #expect(!leaks(value.jsonText), "\(key)") }
+        let settings = try #require(configuration.customSettings)
+        #expect(!leaks(Self.printed(settings)) && !leaks(JSONValue.object(settings.object).jsonText))
+        // The keys stay, for an every-attribute view and the pass; the file name and a null are as Apple sent them.
+        #expect(settings.object.keys == ["configurationProfile", "filename", "signedProfile", "note"] && settings.unreadFields == ["signedProfile", "note"])
+        #expect(settings.object["configurationProfile"] == .string(CustomSettingsValues.withheld) && settings.object["note"] == .null)
+        #expect(settings.filename == "Office.mobileconfig" && configuration.unreadAttributes.isEmpty)
+        // The detail's view of it: the profile, masked.
+        let shown = try #require(settings.profileText?.text)
+        #expect(shown.contains("<string>Office</string>") && shown.contains(ProfileText.mask) && !leaks(shown))
+
+        // The list, had Apple sent the profile there too.
+        harness.stub.queue(200, for: "/v1/configurations?", body: "{\"data\":[\(custom.asJSON.jsonText)]}")
+        let listed = try await Harness.all(harness.client.configurations())
+        #expect(listed.count == 1 && !leaks(Self.printed(listed)) && listed.first?.customSettings?.profileText?.text.contains(ProfileText.mask) == true)
+
+        // A blueprint's included configuration.
+        let read = try await harness.client.blueprint("BP1", include: [.configurations])
+        let included = try #require(read.included.first { $0.id == "C1" })
+        #expect(included.attributes["customSettingsValues"]?["configurationProfile"] == .string(CustomSettingsValues.withheld))
+        #expect(!leaks(Self.printed(read)) && !leaks(JSONValue.array(read.included.map(\.asJSON)).jsonText))
+
+        // The acceptance pass reads the custom setting alone, and its text names none of it.
+        let report = await harness.client.acceptancePass()
+        #expect(harness.reads.contains { $0.hasPrefix("GET api-business.apple.com/v1/configurations/C1") })
+        #expect(report.text.contains("\nconfigurations/{id}: ok, 1 item\n") && !leaks(report.text) && !leaks(Self.printed(report)), "\(report.text)")
+    }
+
     /// The Apple-managed devices and each one's posture from the documented `/details`: the stub has no route for
     /// abapit's undocumented `mdmDevices/{id}`, so a read of it would fail the test.
     @Test func anAppleManagedDevicesPostureComesFromDetails() async throws {

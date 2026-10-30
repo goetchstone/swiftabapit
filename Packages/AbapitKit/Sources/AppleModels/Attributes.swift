@@ -46,6 +46,8 @@ public protocol ResourceView: Sendable, Identifiable where ID == String {
     static var resourceType: String { get }
     /// The attributes it reads by name, checked against the contract (`AppleModelsTests`).
     static var fields: [String] { get }
+    /// What every public reader gets. A view whose resource holds a secret hands out a copy with it withheld, and keeps
+    /// the resource as it came at `package` access (`Configuration`: a custom setting's profile, Phase 2a review M2).
     var resource: Resource { get }
     init(resource: Resource)
     /// Attributes Apple sent that this version doesn't read: counted by the acceptance pass, shown raw. A

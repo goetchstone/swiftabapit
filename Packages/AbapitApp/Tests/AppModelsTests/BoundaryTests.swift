@@ -58,4 +58,18 @@ struct BoundaryTests {
         }
         #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// Mirror(reflecting: key)\nlet dumped = 1"), Self.reflection))
     }
+
+    /// A custom setting's profile as Apple sent it, and what holds it, are `package` (Phase 2a review M2), so the compiler
+    /// refuses them here and in the app; the app side shows a profile only through `profileText`, masked. This keeps
+    /// the names out of both should one be made reachable again.
+    static let rawProfile = ["configurationProfile", "received", "withholding", "withholdingProfile"]
+
+    @Test func theAppSideNeverNamesTheRawProfile() throws {
+        #expect(try SourceScan.swiftFiles(in: "App").count >= 5, "the scan sees the app")
+        for directory in [Self.directory, "App"] {
+            #expect(try SourceScan.files(in: directory, naming: Self.rawProfile).isEmpty, "\(directory)")
+        }
+        #expect(SourceScan.names(SourceScan.File(path: "x.swift", text: "let raw = configuration.customSettings?.configurationProfile"), Self.rawProfile))
+        #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// configurationProfile\nlet shown = settings.profileText"), Self.rawProfile))
+    }
 }

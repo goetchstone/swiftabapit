@@ -241,7 +241,9 @@ public actor AppleClient {
                 }
             }
         }
-        return BlueprintRead(blueprint: blueprint, related: related, included: refused == nil ? document.included : [], includeRefused: refused)
+        // A profile Apple includes with a configuration is withheld as `Configuration` withholds it (Phase 2a review M2).
+        return BlueprintRead(blueprint: blueprint, related: related, included: refused == nil ? document.included.map(Configuration.withholdingProfile) : [],
+                             includeRefused: refused)
     }
 
     /// Apple's answer to an include it won't serve: a 400 (what abapit saw) or a 403. Nothing else is retried.
@@ -473,7 +475,7 @@ public struct BlueprintRead: Sendable {
     /// Each included relationship Apple listed, with its linkages and whether the include's limit cut it; one Apple sent
     /// links for only is absent. Empty when the include was refused.
     public let related: [Blueprint.Relationship: Blueprint.Related]
-    /// The resources Apple included, in its order.
+    /// The resources Apple included, in its order, a configuration's profile withheld (`Configuration.withholdingProfile`).
     public let included: [Resource]
     /// Apple refused the include (a 400 or a 403) and the blueprint was read again without it: its members weren't read,
     /// and the screen says so (invariant 8), with "your role can't read this" for a 403.
