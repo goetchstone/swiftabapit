@@ -80,6 +80,48 @@ struct RouteTests {
         for root in Self.appSide { #expect(try SourceScan.files(in: root, naming: Self.sendName).isEmpty, "\(root)") }
     }
 
+    /// Every whole-name `send` is a declaration (`func send`: the protocol's, the URLSession transport's, a stub's), but
+    /// HTTPClient's one call. The name checks excuse Transport.swift and TestSupport, which declare it, so an unapplied
+    /// `self.send` in an extension there, called from AppleClient, reached the network past HTTPClient's allowlist with
+    /// every scan green (integration review M2). Declarations stay in Transport.swift and the stubs.
+    @Test func everySendIsADeclarationButHTTPClientsCall() throws {
+        let client = "\(Self.sources)/HTTPCore/HTTPClient.swift", transport = "\(Self.sources)/HTTPCore/Transport.swift"
+        var declared: [String: Int] = [:]
+        for root in [Self.sources] + Self.appSide {
+            for file in try SourceScan.swiftFiles(in: root) {
+                let uses = Self.sendUses(file)
+                #expect(uses.filter { !$0 }.count == (file.path == client ? 1 : 0), "\(file.path) uses send: \(uses)")
+                if uses.contains(true) { declared[file.path] = uses.filter { $0 }.count }
+            }
+        }
+        #expect(declared[transport] == 2, "the protocol requirement and URLSessionTransport's: \(declared)")
+        #expect(declared.keys.allSatisfy { $0 == transport || Self.isStub($0) }, "\(declared)")
+    }
+
+    /// For each whole-name `send` in `file`'s code (comments and strings blanked): whether `func` declares it there.
+    static func sendUses(_ file: SourceScan.File) -> [Bool] {
+        let code = Array(SourceScan.code(file.text, strings: false).unicodeScalars)
+        func isName(_ offset: Int) -> Bool {
+            code.indices.contains(offset) && code[offset].isASCII && (code[offset].properties.isAlphabetic || ("0"..."9").contains(code[offset]) || code[offset] == "_")
+        }
+        let name = Array("send".unicodeScalars), keyword = Array("func".unicodeScalars)
+        return code.indices.filter { code[$0...].starts(with: name) && !isName($0 - 1) && !isName($0 + name.count) }.map { start in
+            var before = start - 1
+            if code.indices.contains(before), code[before] == "`" { before -= 1 }
+            while code.indices.contains(before), code[before].properties.isWhitespace { before -= 1 }
+            return before >= keyword.count - 1 && Array(code[(before - keyword.count + 1)...before]) == keyword && !isName(before - keyword.count)
+        }
+    }
+
+    @Test func theSendCounterTellsADeclarationFromAUse() {
+        func uses(_ code: String) -> [Bool] { Self.sendUses(SourceScan.File(path: "x.swift", text: code)) }
+        #expect(uses("func send(_ r: URLRequest)") == [true])
+        #expect(uses("public func `send`(_ r: URLRequest)") == [true])
+        #expect(uses("let go = self.send; _ = transport.send(r, limit: 1); t.`send` (r)") == [false, false, false])
+        #expect(uses("// send\nlet s = \"send\"; let sender = 1; let unsend = 2; Sendable") == [])
+        #expect(uses("funcsend(); xfunc send()") == [false])
+    }
+
     /// A stub, which implements `send`: TestSupport, which a Release build compiles out.
     static func isStub(_ path: String) -> Bool { path.hasPrefix("\(sources)/TestSupport/") }
 
@@ -188,13 +230,34 @@ struct RouteTests {
     /// no committed build setting may carry one; `scripts/check_graph.py` refuses `unsafeFlags` in the manifest.
     @Test func noBuildSettingOpensThePackageBoundary() throws {
         let root = Fixtures.repoRoot
-        var settings = [try String(contentsOf: root.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)]
-        for name in try FileManager.default.contentsOfDirectory(atPath: root.appending(path: "Config").path) where name.hasSuffix(".xcconfig") {
-            settings.append(try String(contentsOf: root.appending(path: "Config/\(name)"), encoding: .utf8))
+        let project = try String(contentsOf: root.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)
+        // Every xcconfig under Config/, at any depth, and the project names none elsewhere: `-disable-access-control` in
+        // Config/Base.xcconfig opened `ImportedKey.key` to the app with every scan green (integration review M1).
+        let config = root.appending(path: "Config")
+        let names = (FileManager.default.enumerator(atPath: config.path)?.allObjects as? [String] ?? []).filter { $0.hasSuffix(".xcconfig") }
+        let referenced = Set(project.matches(of: #/path = "?([A-Za-z0-9_.\/ -]+\.xcconfig)"?;/#).map { String($0.output.1) })
+        #expect(referenced == ["Base.xcconfig"], "\(referenced)")
+        #expect(referenced.isSubset(of: Set(names)), "the project names an xcconfig outside Config/: \(referenced.subtracting(names))")
+        var settings = [("project.pbxproj", project)]
+        for name in names { settings.append((name, try String(contentsOf: config.appending(path: name), encoding: .utf8))) }
+        // A flag can't be passed without these settings, so refusing them outright also refuses one spelled in pieces
+        // (`-pack$(X)age-name`). Testability stays a Debug-only build default; the app never imports `@testable`.
+        let refused = ["package-name", "PACKAGE_NAME", "-enable-testing", "OTHER_SWIFT_FLAGS", "Xfrontend", "disable-access-control"]
+        for (name, text) in settings {
+            for word in refused { #expect(!text.contains(word), "\(name) sets \(word)") }
         }
-        for text in settings {
-            #expect(!text.contains("package-name") && !text.contains("PACKAGE_NAME") && !text.contains("-enable-testing"),
-                    "a build setting names the package or enables testing")
+    }
+
+    /// Raw memory on the app's side, outside debug code: `withUnsafePointer(to:)` and `UnsafeRawPointer.load(as:)` read a
+    /// key's and a secret's stored bytes whatever their access level, and passed every scan (integration review H1).
+    static let rawMemory = ["Unsafe", "unsafe", "Unmanaged", "MemoryLayout"]
+
+    @Test func theAppSideTouchesNoRawMemory() throws {
+        for root in Self.appSide {
+            for file in try SourceScan.swiftFiles(in: root) {
+                let spots = SourceScan.outsideDebug(file, Self.rawMemory, strings: false)
+                #expect(spots.isEmpty, "\(spots)")
+            }
         }
     }
 

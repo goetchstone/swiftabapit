@@ -67,7 +67,15 @@ public final class MemoryStore: SecretStore {
     /// The next `storeKey` waits, off the caller's thread as a Keychain call runs, until `releaseKeyHold()`: a test then
     /// acts inside a save's Keychain window rather than racing it. It lives here, not in a wrapper store, because the
     /// screen models' tests sit in another package and see only this public API (Phase 1b review).
-    public func holdNextKey() { state.withLock { $0.keyHold = KeyHold(armed: true) } }
+    /// A write still waiting keeps waiting; a hold left unreleased gives up after `keyHoldLimit`, so a test that throws
+    /// before releasing doesn't leave a thread spinning for the rest of the run.
+    public func holdNextKey() {
+        state.withLock {
+            $0.keyHold.armed = true
+            $0.keyHold.released = false
+        }
+    }
+    public static let keyHoldLimit: Duration = .seconds(10)
     public func releaseKeyHold() { state.withLock { $0.keyHold.released = true } }
     /// Key writes waiting at the hold now.
     public var keysWaiting: Int { state.withLock { $0.keyHold.waiting } }
@@ -117,7 +125,8 @@ public final class MemoryStore: SecretStore {
             return state.keyHold.armed
         }
         if held {
-            while !state.withLock({ $0.keyHold.released }) { usleep(500) }
+            let deadline = ContinuousClock.now.advanced(by: Self.keyHoldLimit)
+            while !state.withLock({ $0.keyHold.released }), ContinuousClock.now < deadline { usleep(500) }
             state.withLock { $0.keyHold.waiting -= 1 }
         }
         try state.withLock { state in
