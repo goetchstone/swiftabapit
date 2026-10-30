@@ -24,22 +24,32 @@ struct BlueprintTests {
         return harness
     }
 
+    /// The members a read holds: only `.read` has any, so a test, like a screen, has to ask for that case.
+    static func members(_ read: BlueprintRead) throws -> (related: [Blueprint.Relationship: Blueprint.Related], included: [Resource]) {
+        guard case .read(let related, let included) = read.members else {
+            Issue.record("the include was refused: \(read.members)")
+            throw CancellationError()
+        }
+        return (related, included)
+    }
+
     /// With everything included, each relationship lists its members and their resources come along; nothing was cut,
     /// nothing refused, and each relationship was asked for at Apple's maximum.
     @Test func aBlueprintWithEverythingIncludedListsItsMembers() async throws {
         let harness = try await Self.harness()
         let read = try await harness.client.blueprint("BP1", include: Self.all)
-        #expect(read.blueprint.name == "Marketing" && read.includeRefused == nil)
-        #expect(read.related[.orgDevices]?.linkages.map(\.id) == ["TESTD0000000", "TESTD0000001"])
-        #expect(read.related[.apps] == Blueprint.Related(linkages: [Linkage(type: "apps", id: "361309726")], isTruncated: false))
-        #expect(Set(read.related.keys) == Self.all && read.related.values.allSatisfy { !$0.isTruncated })
-        #expect(Set(read.included.map(\.type)) == ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"] && read.included.count == 7)
+        let (related, included) = try Self.members(read)
+        #expect(read.blueprint.name == "Marketing")
+        #expect(related[.orgDevices]?.linkages.map(\.id) == ["TESTD0000000", "TESTD0000001"])
+        #expect(related[.apps] == Blueprint.Related(linkages: [Linkage(type: "apps", id: "361309726")], isTruncated: false))
+        #expect(Set(related.keys) == Self.all && related.values.allSatisfy { !$0.isTruncated })
+        #expect(Set(included.map(\.type)) == ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"] && included.count == 7)
         let sent = try #require(harness.reads.last)
         #expect(sent.contains("include=apps%2Cpackages%2Cconfigurations%2CorgDevices%2Cusers%2CuserGroups"), "\(sent)")
         for name in Blueprint.Relationship.allCases { #expect(sent.contains("limit%5B\(name.rawValue)%5D=1000"), "\(name)") }
         // Without an include, links only: nothing is said of the members.
         let bare = try await harness.client.blueprint("BP1")
-        #expect(bare.related.isEmpty && bare.included.isEmpty && bare.includeRefused == nil)
+        #expect(bare.members == .read(related: [:], included: []))
         #expect(try bare.blueprint.related(.apps) == nil)
     }
 
@@ -47,14 +57,15 @@ struct BlueprintTests {
     @Test func aRelationshipTheLimitCutIsTruncated() async throws {
         let harness = try await Self.harness()
         harness.stub.relate("blueprints", "BP1", "orgDevices", to: (0..<1_001).map { String(format: "TESTD%07d", $0) })
-        let read = try await harness.client.blueprint("BP1", include: [.orgDevices, .apps])
-        #expect(read.related[.orgDevices]?.linkages.count == 1_000 && read.related[.orgDevices]?.isTruncated == true)
-        #expect(read.related[.apps]?.isTruncated == false)
-        #expect(Set(read.related.keys) == [.orgDevices, .apps], "only what was asked")
+        let related = try Self.members(try await harness.client.blueprint("BP1", include: [.orgDevices, .apps])).related
+        #expect(related[.orgDevices]?.linkages.count == 1_000 && related[.orgDevices]?.isTruncated == true)
+        #expect(related[.apps]?.isTruncated == false)
+        #expect(Set(related.keys) == [.orgDevices, .apps], "only what was asked")
     }
 
     /// Apple refuses the whole read when the role can't read an included relationship (abapit saw a 400): read once more
-    /// without the include, with the refusal said, and the members never read as none. A 403 the same way.
+    /// without the include, with the refusal said, and the members never read as none: a refusal holds no members to
+    /// count (Phase 2a review L5: it held an empty `related` a count read as 0). A 403 the same way.
     @Test(arguments: [400, 403])
     func aRefusedIncludeIsReadAgainWithoutItAndSaysSo(status: Int) async throws {
         let harness = try await Self.harness()
@@ -62,15 +73,17 @@ struct BlueprintTests {
         harness.stub.refuseIncludes(with: status)
         let read = try await harness.client.blueprint("BP1", include: Self.all)
         #expect(read.blueprint.name == "Marketing")
-        #expect(read.related.isEmpty && read.included.isEmpty)
-        let refused = try #require(read.includeRefused)
+        guard case .refused(let refused) = read.members else {
+            Issue.record("the refusal read as members: \(read.members)")
+            return
+        }
         #expect(status == 400 ? refused == .badRequest(code: "PARAMETER_ERROR.INVALID", parameter: "include", detail: "An included relationship can't be read.")
             : refused == .forbidden(code: "FORBIDDEN_ERROR"))
         let reads = harness.reads
         #expect(reads.count == 2 && reads[0].contains("include=") && !reads[1].contains("?"), "\(reads)")
         // An include the role can read isn't refused.
-        let apps = try await harness.client.blueprint("BP1", include: [.apps])
-        #expect(apps.includeRefused == nil && apps.related[.apps]?.linkages.count == 1)
+        let apps = try Self.members(try await harness.client.blueprint("BP1", include: [.apps]))
+        #expect(apps.related[.apps]?.linkages.count == 1)
     }
 
     /// Only a 400 or a 403 on an include is retried, once: a 404, a 422, a 500 or a 400 when nothing was included is

@@ -46,5 +46,8 @@
     masked when its key's last word ends in a secret word and no policy word is in it; a string holding a PEM private
     key, as text or base64, is masked whatever its key; keys merged by normalization are counted and said
     (`ProfileText.note`). L4: a KELVIN SIGN lookalike key, and a binary chain of a hundred dictionaries.
+  - L3: a pass at the page cap of one with every member list two pages long, each of the nine lines `truncated`; the
+    `.notInScope` arm in the failure table. L5: `BlueprintRead.members` is `.read(related:included:)` or
+    `.refused(error)`, so a count needs the read case; the pass's note gives an unlisted relationship a dash, not 0.
 - **Prevention:** each fix has a test that fails on the unfixed code or its mutant (listed in the fix's report). Still
   only a stub: what Apple sends in `eventDataPropertyKey` and in the fourteen field-less payloads is a Phase 2 live check.

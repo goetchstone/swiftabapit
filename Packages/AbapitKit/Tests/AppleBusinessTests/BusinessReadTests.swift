@@ -111,9 +111,10 @@ struct BusinessReadTests {
 
         // A blueprint's included configuration.
         let read = try await harness.client.blueprint("BP1", include: [.configurations])
-        let included = try #require(read.included.first { $0.id == "C1" })
+        let members = try BlueprintTests.members(read)
+        let included = try #require(members.included.first { $0.id == "C1" })
         #expect(included.attributes["customSettingsValues"]?["configurationProfile"] == .string(CustomSettingsValues.withheld))
-        #expect(!leaks(Self.printed(read)) && !leaks(JSONValue.array(read.included.map(\.asJSON)).jsonText))
+        #expect(!leaks(Self.printed(read)) && !leaks(JSONValue.array(members.included.map(\.asJSON)).jsonText))
 
         // The acceptance pass reads the custom setting alone, and its text names its keys and none of its values.
         let report = await harness.client.acceptancePass()

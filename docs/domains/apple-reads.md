@@ -27,7 +27,7 @@ org editor's save).
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
   builders take no scope; `AuditQuery`, the audit read's checked range and filters), `AppleClient` (pages as an
   `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; member lists as linkage streams; read
-  probes; `BlueprintRead`, a blueprint with its included members and `includeRefused`), `AppleAPIError` (status +
+  probes; `BlueprintRead`, a blueprint with its `members`, read or refused), `AppleAPIError` (status +
   Apple `code`, never prose; `.notInScope(section)` for a Business-only read asked of a School org), `AcceptancePass`
   (the DEBUG pass, plan §7: Phase 1's eight lines, then 25 for the Business-only reads, then the probes).
 - `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
@@ -146,10 +146,13 @@ org editor's save).
   role can't read one of the included relationships (abapit saw a role that gets 403 on users and user groups get a
   400 here). `blueprint(_:include:)` reads once more without the include on a 400 or a 403, and only when something
   was included; any other status, a 400 with nothing included, and a failure of the second read are thrown. The
-  answer's `includeRefused` holds Apple's refusal, `related` and `included` are empty, and the acceptance pass's line is
-  the refusal's status (`error 400`, `forbidden`), never `ok` (invariant 8). An include asks each relationship at
+  answer's `members` is `.refused(error)`, which holds no members, so no count can be taken from it (Phase 2a review
+  L5: an empty `related` beside a separate flag read 0); `.read(related:included:)` holds them. The acceptance pass's
+  line is the refusal's status (`error 400`, `forbidden`), never `ok` (invariant 8). An include asks each relationship at
   `limit[<name>]=1000` (Apple's maximum); a relationship that limit cut is `Related.isTruncated`, one Apple didn't
-  list is absent from `related`, and the pass says both as `truncated`. An included relationship whose `data` isn't a
+  list is absent from `related`, and the pass says both as `truncated`, the unlisted one's count a dash, never 0. A
+  member list the page cap cut is `truncated` on its own line, each of the nine (`everyMemberListCutAtThePageCapIsTruncated`).
+  An included relationship whose `data` isn't a
   list of linkages of its own type is `.malformed("the blueprint's <name>")`. The stub's default without
   `limit[<name>]` is 10 (an assumption, small on purpose).
 - **Apple MDM posture is `mdmDevices/{id}/details`**, the documented read; abapit called the undocumented

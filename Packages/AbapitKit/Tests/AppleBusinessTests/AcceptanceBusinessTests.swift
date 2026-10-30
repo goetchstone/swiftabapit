@@ -38,7 +38,8 @@ struct AcceptanceBusinessTests {
         #expect(try Self.line(report, "blueprints/{id}/relationships/apps").ok && Self.line(report, "blueprints/{id}/relationships/users").ok)
     }
 
-    /// A relationship the include's limit cut is `truncated`, and so is one Apple asked for and didn't list.
+    /// A relationship the include's limit cut is `truncated`, and so is one Apple asked for and didn't list, whose count
+    /// is a dash: none was read, so none is said (it read 0).
     @Test func aRelationshipCutOrNotListedIsTruncated() async throws {
         let (_, cut) = try await Self.pass { $0.stub.relate("blueprints", "BP1", "orgDevices", to: (0..<1_001).map { String(format: "TESTD%07d", $0) }) }
         #expect(cut.text.contains("\nblueprints/{id}: truncated, 1 item · unknown values status=PAUSED · orgDevices cut at the include's limit · "
@@ -52,7 +53,7 @@ struct AcceptanceBusinessTests {
                 """#)
         }
         #expect(unlisted.text.contains("\nblueprints/{id}: truncated, 1 item · packages, configurations, orgDevices, users, userGroups not listed · "
-                                       + "apps 0, packages 0, configurations 0, orgDevices 0, users 0, userGroups 0\n"), "\(unlisted.text)")
+                                       + "apps 0, packages -, configurations -, orgDevices -, users -, userGroups -\n"), "\(unlisted.text)")
     }
 
     /// The audit log is read cursor by cursor whole, with each page's filters; a repeated cursor is malformed with what
@@ -181,6 +182,26 @@ struct AcceptanceBusinessTests {
         }, pageCap: 1)
         #expect(report.text.contains("\nusers: truncated, 1000 items · unknown keys pronouns · unknown values phoneNumbers.type=PAGER, status=SUSPENDED · "
                                      + "stopped at the page cap with more to come\nusers/{id}: ok, 1 item\n"), "\(report.text)")
+    }
+
+    /// Every member list the page cap cut says so, with what was read: the group's and the org unit's users and each of
+    /// the blueprint's six relationships, each two pages long at the page cap of one (Phase 2a review L3: deleting the
+    /// cut from the member check left all nine lines `ok`). The stub pages members at the client's `limit`, 1000.
+    @Test func everyMemberListCutAtThePageCapIsTruncated() async throws {
+        let members = (0..<1_001).map { String(format: "TESTM%07d", $0) }
+        let (_, report) = try await Self.pass({ harness in
+            harness.stub.relate("userGroups", "UG123456", "users", to: members)
+            harness.stub.relate("organizationalUnits", "OU789012", "users", to: members)
+            for relationship in Blueprint.Relationship.allCases { harness.stub.relate("blueprints", "BP1", relationship.rawValue, to: members) }
+        }, pageCap: 1)
+        let lines = ["userGroups/{id}/relationships/users", "organizationalUnits/{id}/relationships/users"]
+            + Blueprint.Relationship.allCases.map { "blueprints/{id}/relationships/\($0.rawValue)" }
+        for resource in lines {
+            #expect(report.text.contains("\n\(resource): truncated, 1000 items · stopped at the page cap with more to come\n"), "\(resource): \(report.text)")
+        }
+        // A member list one page long reads whole at the same cap.
+        let (_, whole) = try await Self.pass({ _ in }, pageCap: 1)
+        for resource in lines { #expect(try Self.line(whole, resource).ok, "\(resource)") }
     }
 
     /// An id that can't go in a path is never sent and says what it is, for every detail and member read.

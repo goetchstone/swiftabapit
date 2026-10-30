@@ -357,17 +357,19 @@ extension AppleClient {
             found.count = 1
             found.keys = Set(blueprint.unreadAttributes)
             found.unknown("status", blueprint.status)
-            if let refused = read.includeRefused {
+            switch read.members {
+            case .refused(let refused):
                 let failed = Self.acceptanceFailure(refused)
                 found.status = failed.status
                 found.note = ["the include was refused, so the blueprint was read without its members", failed.note].compactMap { $0 }.joined(separator: " · ")
-                return
+            case .read(let related, _):
+                let all = Blueprint.Relationship.allCases
+                let cut = all.filter { related[$0]?.isTruncated == true }.map(\.rawValue), unlisted = all.filter { related[$0] == nil }.map(\.rawValue)
+                found.truncation = [cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the include's limit",
+                                    unlisted.isEmpty ? nil : "\(unlisted.joined(separator: ", ")) not listed"].compactMap { $0 }.joined(separator: " · ").nonEmpty
+                // A relationship Apple didn't list has no count to say: a dash, never 0 (Phase 2a review L5's class).
+                found.note = all.map { "\($0.rawValue) \(related[$0].map { String($0.linkages.count) } ?? "-")" }.joined(separator: ", ")
             }
-            let all = Blueprint.Relationship.allCases
-            let cut = all.filter { read.related[$0]?.isTruncated == true }.map(\.rawValue), unlisted = all.filter { read.related[$0] == nil }.map(\.rawValue)
-            found.truncation = [cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the include's limit",
-                                unlisted.isEmpty ? nil : "\(unlisted.joined(separator: ", ")) not listed"].compactMap { $0 }.joined(separator: " · ").nonEmpty
-            found.note = all.map { "\($0.rawValue) \(read.related[$0]?.linkages.count ?? 0)" }.joined(separator: ", ")
         }
     }
 

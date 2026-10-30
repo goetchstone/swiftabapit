@@ -129,6 +129,10 @@ struct AcceptanceFailureTests {
             (AppleAPIError.token(.unauthorizedClient), .error("error token"), "unauthorized_client"),
             (AppleAPIError.vault("Touch ID was cancelled."), .error("error keychain"), "Touch ID was cancelled."),
             (AppleAPIError.wrongHost("api-school.apple.com"), .error("error wrong host"), nil),
+            // Phase 2a review L3: the pass skips School before reaching this arm, so it could return anything with every
+            // test green.
+            (AppleAPIError.notInScope(.users), .skipped("not in Apple School Manager's API"), nil),
+            (AppleAPIError.notInScope(.auditEvents), .skipped("not in Apple School Manager's API"), nil),
             (CancellationError(), .error("error cancelled"), nil),
             (AppleStub.StubFailure.unhandled("GET /v1/x"), .error("error StubFailure"), nil),
         ]
