@@ -16,7 +16,7 @@ struct PackageGraphTests {
     static let allowed: [String: Set<String>] = [
         "JSONAPI": [],
         "AppleModels": ["JSONAPI"],
-        "MosyleModels": [],
+        "MosyleModels": ["JSONAPI"],
         "Wire": [],
         "Planners": ["AppleModels", "MosyleModels", "JSONAPI", "Wire"],
         "Reports": ["AppleModels", "MosyleModels", "JSONAPI"],
@@ -25,7 +25,7 @@ struct PackageGraphTests {
         "Vault": [],
         "HTTPCore": ["Wire"],
         "AppleBusiness": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"],
-        "Mosyle": ["HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels"],
+        "Mosyle": ["HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels", "JSONAPI"],
         "History": ["Orgs", "AppleModels", "MosyleModels", "Reports"],
         "ChangeCore": ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"],
         "Assist": ["Planners", "Reports"],

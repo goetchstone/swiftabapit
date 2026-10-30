@@ -28,6 +28,16 @@ public struct HTTPResponse: Sendable {
     public var isSuccess: Bool { (200..<300).contains(status) }
 }
 
+/// A login's answer holds the JWT in a header (and sometimes its body), and a list's body is tenant data: printing,
+/// `dump` and a `Mirror` show the status, the header names and the body's size only (Phase 7a review L6).
+extension HTTPResponse: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    public var description: String { "HTTPResponse(\(status), headers: \(headers.keys.sorted()), body: \(body.count) bytes, redacted)" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror {
+        Mirror(self, children: ["status": status, "headers": headers.keys.sorted(), "body": "\(body.count) bytes"], displayStyle: .struct)
+    }
+}
+
 /// The reads and credential exchanges of one org (plan §3.3). Writes arrive in Phase 4, through
 /// `send(_:ticket:)`, which only ChangeCore's executor can call.
 ///

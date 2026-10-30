@@ -49,7 +49,11 @@ public struct ReadRequest: Sendable, Equatable {
 
 /// A credential exchange: Apple's token request, Mosyle's `/login`. Not a read and not a write: it changes
 /// nothing on the tenant, but it carries a secret, so only `TokenBroker` and `MosyleSession` make one.
-public struct AuthRequest: Sendable {
+///
+/// The access token rides in `headers` and the email and password in `body`: printing, `dump` and a `Mirror` show
+/// the header names only, as `Secret` shows nothing (Phase 7a review L6). The conformances sit in the declaration:
+/// no file extends a request type (`RouteTests.noRequestTypeIsAliasedOrExtended`).
+public struct AuthRequest: Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public let host: APIHost
     public let path: String
     public let contentType: String
@@ -62,6 +66,16 @@ public struct AuthRequest: Sendable {
         self.contentType = contentType
         self.headers = headers
         self.body = body
+    }
+
+    public var description: String {
+        "credential exchange: POST \(host.rawValue)\(path), headers \(headers.keys.sorted()), body \(body.count) bytes, redacted"
+    }
+
+    public var debugDescription: String { description }
+    public var customMirror: Mirror {
+        Mirror(self, children: ["host": host.rawValue, "path": path, "contentType": contentType, "headers": headers.keys.sorted(),
+                                "body": "\(body.count) bytes"], displayStyle: .struct)
     }
 }
 

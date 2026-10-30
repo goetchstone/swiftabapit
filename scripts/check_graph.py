@@ -37,7 +37,7 @@ APP_TESTS = {"AppModelsTests": {"AppModels", "product:JSONAPI", "product:HTTPCor
 EDGES = {
     "JSONAPI": set(),
     "AppleModels": {"JSONAPI"},
-    "MosyleModels": set(),
+    "MosyleModels": {"JSONAPI"},
     "Wire": set(),
     "Planners": {"AppleModels", "MosyleModels", "JSONAPI", "Wire"},
     "Reports": {"AppleModels", "MosyleModels", "JSONAPI"},
@@ -46,7 +46,7 @@ EDGES = {
     "Vault": set(),
     "HTTPCore": {"Wire"},
     "AppleBusiness": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"},
-    "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels"},
+    "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels", "JSONAPI"},
     "History": {"Orgs", "AppleModels", "MosyleModels", "Reports"},
     "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault", "Orgs"},
     "Assist": {"Planners", "Reports"},
