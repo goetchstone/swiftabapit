@@ -105,7 +105,7 @@ extension AppleClient {
             for service in services {
                 found.unknown("serverType", service.type)
                 found.unknown("status", service.status)
-                for family in service.defaultProductFamilies { found.unknown("defaultProductFamilies", family) }
+                for family in service.defaultProductFamilies ?? [] { found.unknown("defaultProductFamilies", family) }
             }
         }
         lines.append(serviceList)

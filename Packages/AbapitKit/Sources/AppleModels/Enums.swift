@@ -88,7 +88,8 @@ public enum BlueprintStatus: String, KnownValues {
 }
 
 /// `ConfigurationType`: 22 built-in types the app shows read-only, and `CUSTOM_SETTING`, the one Apple lets a client
-/// write (plan §2.1; Phase 5).
+/// write (plan §2.1). Which types a write may touch is Phase 5's to say, with the writer (Phase 2a review L6: an
+/// `isWritable` here had no caller but a test).
 public enum ConfigurationType: String, KnownValues {
     case airDrop = "AIR_DROP", airPrint = "AIR_PRINT", appAccess = "APP_ACCESS", appleIntelligenceSiri = "APPLE_INTELLIGENCE_SIRI",
          applicationLayerFirewall = "APPLICATION_LAYER_FIREWALL", authenticationScreenLock = "AUTHENTICATION_SCREEN_LOCK",
@@ -97,9 +98,6 @@ public enum ConfigurationType: String, KnownValues {
          energySaver = "ENERGY_SAVER", fileVault = "FILE_VAULT", gateKeeper = "GATE_KEEPER", iCloud = "ICLOUD",
          loginWindow = "LOGIN_WINDOW", mediaManagement = "MEDIA_MANAGEMENT", softwareUpdate = "SOFTWARE_UPDATE", vpn = "VPN",
          webClip = "WEB_CLIP", webFilter = "WEB_FILTER", wifi = "WIFI"
-
-    /// Only a custom setting can be created, changed or deleted through the API.
-    public var isWritable: Bool { self == .customSetting }
 }
 
 /// `ConfigurationPlatform`. `PLATFORM_IOS` covers iPadOS too.

@@ -155,14 +155,14 @@ struct ViewTests {
     @Test func aConfigurationsCustomSettingsComeOnlyWithTheSingleRead() {
         let listed = Configuration(resource: Self.resource("configurations", ["type": .string("WIFI"), "customSettingsValues": .null]))
         #expect(listed.customSettings == nil)
-        #expect(listed.type == .known(.wifi) && listed.type?.known?.isWritable == false)
+        #expect(listed.type == .known(.wifi))
         #expect(listed.unreadAttributes.isEmpty)
         let single = Configuration(resource: Self.resource("configurations", [
             "type": .string("CUSTOM_SETTING"),
             "customSettingsValues": .object(["configurationProfile": .string("<plist/>"), "filename": .string("x.mobileconfig"),
                                              "signed": .bool(true)]),
         ]))
-        #expect(single.type?.known?.isWritable == true)
+        #expect(single.type == .known(.customSetting))
         #expect(single.customSettings?.configurationProfile == "<plist/>" && single.customSettings?.filename == "x.mobileconfig")
         #expect(single.customSettings?.unreadFields == ["signed"])
         #expect(single.unreadNested == [NestedKey(attribute: "customSettingsValues", key: "signed")] && listed.unreadNested.isEmpty)
@@ -171,7 +171,6 @@ struct ViewTests {
             #expect(configuration.name == nil && configuration.type == nil && configuration.platforms == nil)
             #expect(configuration.customSettings?.configurationProfile == nil && configuration.created == nil && configuration.updated == nil)
         }
-        #expect(ConfigurationType.allCases.filter(\.isWritable) == [.customSetting])
     }
 
     /// What a configuration hands out has its custom settings withheld whatever their shape, keys kept and Apple's order

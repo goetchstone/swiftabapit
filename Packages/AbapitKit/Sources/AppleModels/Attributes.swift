@@ -8,13 +8,14 @@ extension JSONObject {
     public func bool(_ key: String) -> Bool? { self[key]?.bool }
     public func int(_ key: String) -> Int? { self[key]?.int }
     public func date(_ key: String) -> ISODate? { ISODate.parse(self[key]?.string) }
-    public func strings(_ key: String) -> [String] { self[key]?.array?.compactMap(\.string) ?? [] }
     public func open<Known: KnownValues>(_ key: String, as _: Known.Type = Known.self) -> OpenEnum<Known>? {
         self[key]?.string.map(OpenEnum.init)
     }
 
     /// A list whose every item reads as `item`; nil when the attribute is missing, isn't a list, or holds anything
     /// that doesn't read (a list holding something else isn't a list of these: never the items that happened to fit).
+    /// The one list reader: Phase 1's `strings(_:)` kept the items that fit and read `[]` for a non-list, so two views
+    /// read one shape two ways (Phase 2a review L6).
     public func list<Item>(_ key: String, _ item: (JSONValue) -> Item?) -> [Item]? {
         self[key]?.list(item)
     }

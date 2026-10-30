@@ -182,6 +182,10 @@ org editor's save).
   (`phoneNumbers.isPrimary`, `accountRoleLocationList.scope`), the attribute this version's name and Apple's key each
   shown as `acceptanceWord` shows it. `ResourceView.unreadNested` (none by default) and `AuditEventPayload.unreadNested`;
   a view that reads a new `ObjectView` adds it there.
+- **One list reader** (Phase 2a review L6): every view reads a list with `JSONObject.list(_:_:)`, nil when missing, not a
+  list or holding an item that doesn't read, never the items that fit. Phase 1's `strings(_:)` read `[]` and kept what
+  fit, so `OrgDevice.imei` and `MDMDeviceDetail.imei` read one shape two ways; it is gone, and Find takes no identifier
+  from a list that isn't one (`everyViewReadsAListTheSameWay`).
 - **A member list is a list of linkages of its type, on every page**: a group's or an org unit's `users`, each
   blueprint relationship's own type, a service's `orgDevices`. Another type, a lookalike (`Users`, `usersX`) or an
   empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.

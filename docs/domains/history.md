@@ -46,10 +46,12 @@ are below.
 - **`device_stats`** counts a breakdown by the name shown: Python's `Counter` keys by value (a listed
   deviation, one fleet in `reports.json`). **`AssignmentSummary`** keeps serials as sets of UTF-8 bytes, as
   Python's sets compare code points; the denylist finds a stem in the folded key's bytes.
-- **The audit views** (`AuditView`) are fixed sets of Apple's `AuditEventType` strings: abapit's Subscriptions and
-  Device Lifecycle sets (held to the golden's `audit_types`, byte for byte and in order) and the new Access &
-  Security. `otherTypes` holds the types no view shows, and `everyContractTypeIsPlacedOnce` holds each of the
-  contract's 50 types to exactly one place, so a type Apple adds fails a test until it is placed.
+- **The audit views** (`AuditView`) are fixed sets of `AuditEventType` cases (`eventTypes`; `types` are their
+  strings), so the compiler holds each to a type Apple documents and the 50 strings are written once, in AppleModels
+  (Phase 2a review L6): abapit's Subscriptions and Device Lifecycle sets (held to the golden's `audit_types`, byte for
+  byte and in order) and the new Access & Security. `otherTypes` holds the types no view shows, and
+  `everyContractTypeIsPlacedOnce` holds each of the contract's 50 types to exactly one place, so a type Apple adds
+  fails a test until it is placed.
 - **`AuditDigest`** is abapit's `audit_digest` over Apple's `auditEvents` resources: the set's events newest first
   by instant (a listed deviation: abapit sorted the strings), equal instants in input order, undated events last;
   a count per type over the sorted rows; types matched by bytes. `recent` is the newest `recentLimit` (10) by

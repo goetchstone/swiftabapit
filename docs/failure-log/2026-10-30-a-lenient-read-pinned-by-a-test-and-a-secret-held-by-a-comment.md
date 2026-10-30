@@ -49,5 +49,15 @@
   - L3: a pass at the page cap of one with every member list two pages long, each of the nine lines `truncated`; the
     `.notInScope` arm in the failure table. L5: `BlueprintRead.members` is `.read(related:included:)` or
     `.refused(error)`, so a count needs the read case; the pass's note gives an unlisted relationship a dash, not 0.
-- **Prevention:** each fix has a test that fails on the unfixed code or its mutant (listed in the fix's report). Still
-  only a stub: what Apple sends in `eventDataPropertyKey` and in the fourteen field-less payloads is a Phase 2 live check.
+  - L6: one list reader (`strings(_:)` retired for `list(_:_:)`, so `OrgDevice`'s lists and a service's default
+    families read nil, not the items that fit); `AuditView` built from `AuditEventType` cases, its strings unchanged;
+    `ConfigurationType.isWritable` dropped until Phase 5; "fifteen" field-less payloads corrected to fourteen. The two
+    quiet-service rules stay until 2b, as recorded.
+- **Prevention:** each fix has a test that fails on the unfixed code or on its mutant; the fix's report lists every
+  mutant and what killed it (84: 81 by a test, 2 by the compiler, and `presharedkey`, an equivalent stem, removed).
+  Two lessons, in RULE-FEEDBACK 2026-10-30: a test that asserts nil or empty for an odd shape must also assert the odd
+  shape is said (counted or noted), or it pins the silence; and a view whose resource holds a secret hands out a
+  withheld copy and keeps the raw at `package`, so the compiler, not a comment, holds invariant 11 there. Still only a
+  stub: what Apple sends in `eventDataPropertyKey`, in the fourteen field-less payloads and in a custom setting's
+  values is a Phase 2 live check; and `ProfileText`'s masking is still a denylist, so a secret under a key no stem or
+  word names, that isn't a PEM key, is shown.

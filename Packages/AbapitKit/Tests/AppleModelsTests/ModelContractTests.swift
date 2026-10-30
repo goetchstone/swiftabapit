@@ -169,7 +169,7 @@ struct ModelContractTests {
         #expect(device.serialNumber == "XABC123X0ABC123X0")
         #expect(device.productFamily == .known(.mac))
         #expect(device.status == .known(.unassigned))
-        #expect(device.imei.count == 2)
+        #expect(device.imei?.count == 2)
         #expect(device.attributes["purchaseSourceUid"] != nil)
 
         let coverage = try Self.example("get-all-applecare-coverage-for-an-orgdevice").resources.map(AppleCareCoverage.init)
@@ -269,5 +269,23 @@ struct ModelContractTests {
             "eid": .string("444"), "orderNumber": .string("O-1"), "wifiMacAddress": .string("aa:bb"), "bluetoothMacAddress": .string("cc:dd"),
             "ethernetMacAddress": .array([.string("ee:ff")])]))
         #expect(Set(device.identifiers) == ["C02X", "111", "222", "333", "444", "O-1", "aa:bb", "cc:dd", "ee:ff"])
+    }
+
+    /// Every view reads a list one way (Phase 2a review L6: Phase 1's reader kept the items that fit, so `OrgDevice.imei`
+    /// read `[]` where `MDMDeviceDetail.imei` read nil): nil when missing, not a list or holding anything else, `[]` when
+    /// empty, the items when every one reads. A list that isn't one gives Find no identifiers.
+    @Test func everyViewReadsAListTheSameWay() {
+        let mixed: JSONValue = .array([.string("351234"), .number("5")]), strings: JSONValue = .array([.string("351234")])
+        for (value, read) in [(mixed, nil), (.string("351234"), nil), (.array([]), []), (strings, ["351234"])] as [(JSONValue, [String]?)] {
+            let device = OrgDevice(resource: Resource(type: "orgDevices", id: "C02X", attributes: ["imei": value, "meid": value, "ethernetMacAddress": value]))
+            let detail = MDMDeviceDetail(resource: Resource(type: "mdmDeviceDetails", id: "d", attributes: ["imei": value, "meid": value]))
+            #expect(device.imei == read && device.meid == read && device.ethernetMACs == read && detail.imei == read && detail.meid == read, "\(value)")
+            #expect(device.identifiers == ["C02X"] + (read ?? []) + (read ?? []) + (read ?? []), "\(value)")
+            let service = MDMService(resource: Resource(type: "mdmServers", id: "s", attributes: ["defaultProductFamilies": value]))
+            #expect(service.defaultProductFamilies?.map(\.rawValue) == read, "\(value)")
+        }
+        let missing = OrgDevice(resource: Resource(type: "orgDevices", id: "C02X"))
+        #expect(missing.imei == nil && missing.meid == nil && missing.ethernetMACs == nil && missing.identifiers == ["C02X"])
+        #expect(MDMService(resource: Resource(type: "mdmServers", id: "s")).defaultProductFamilies == nil)
     }
 }

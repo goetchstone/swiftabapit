@@ -1,10 +1,13 @@
+import AppleModels
 import Foundation
 import JSONAPI
 
 /// The Activity views over Apple's audit log (plan Phase 2, "Audit"; Appendix B), each a fixed set of
 /// `AuditEventType` values. Apple documents 50 at Business 2.6 (`Contracts/apple/business-2.6.json`), and
 /// `ReportsTests` holds each of them to exactly one view or to `otherTypes`, so a type Apple adds fails a test until
-/// it is placed rather than vanishing from every view. The values are Apple's strings, matched byte for byte.
+/// it is placed rather than vanishing from every view. The sets name `AuditEventType`'s cases, so the compiler holds each
+/// to a type Apple documents and the 50 strings are written once (Phase 2a review L6: they were written here again);
+/// `types` are their strings, matched byte for byte.
 public enum AuditView: String, CaseIterable, Sendable {
     /// abapit's `SUBSCRIPTION_EVENTS`: Apple has no subscription endpoint, so these events are the only place it
     /// reports subscription and purchase activity.
@@ -20,35 +23,40 @@ public enum AuditView: String, CaseIterable, Sendable {
     /// to.
     case accessAndSecurity
 
-    public var types: [String] {
+    /// The view's types, in abapit's order for its two sets (held to the golden).
+    public var eventTypes: [AuditEventType] {
         switch self {
         case .subscriptions:
-            ["SUBSCRIPTION_CREATED", "SUBSCRIPTION_UPDATED", "SUBSCRIPTION_DELETED", "SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED",
-             "SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_REMOVED", "SUBJECT_HAS_APPLECARE_PURCHASE_ADDED", "SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED"]
+            [.subscriptionCreated, .subscriptionUpdated, .subscriptionDeleted, .subjectHasIcloudStoragePurchaseAdded,
+             .subjectHasIcloudStoragePurchaseRemoved, .subjectHasApplecarePurchaseAdded, .subjectHasApplecarePurchaseRemoved]
         case .deviceLifecycle:
-            ["DEVICE_ADDED_TO_ORG", "DEVICE_REMOVED_FROM_ORG", "DEVICE_ASSIGNED_TO_SERVER", "DEVICE_UNASSIGNED_FROM_SERVER", "DEVICE_IS_ERASED"]
+            [.deviceAddedToOrg, .deviceRemovedFromOrg, .deviceAssignedToServer, .deviceUnassignedFromServer, .deviceIsErased]
         case .accessAndSecurity:
-            ["ACCOUNT_ADDED", "ACCOUNT_DELETED", "ACCOUNT_ROLE_LOCATION_CHANGED",
-             "API_ACCOUNT_CREATED_WITH_KEY", "API_ACCOUNT_CREATED_WITHOUT_KEY", "API_ACCOUNT_DELETED", "API_ACCOUNT_KEY_GENERATED",
-             "API_ACCOUNT_KEY_REVOKED", "API_ACCOUNT_ROLE_LOCATION_CHANGED", "API_ACCOUNT_NAME_CHANGED",
-             "ROLE_CREATED", "ROLE_UPDATED",
-             "DOMAIN_ADDED", "DOMAIN_REMOVED", "DOMAIN_VERIFIED", "DOMAIN_FEDERATION_ENABLED", "DOMAIN_FEDERATION_DISABLED",
-             "IDP_CREATED", "IDP_UPDATED", "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED",
-             "ACCOUNT_PASSWORD_CHANGED", "BATCH_PASSWORD_RESET_INITIATED",
-             "EXTERNAL_ACCOUNT_ASSOCIATED", "EXTERNAL_ACCOUNT_DISASSOCIATED", "EXTERNAL_ACCOUNT_INVITED",
-             "TERMS_ACCEPTED", "APPLE_SERVICES_SETTINGS_UPDATED"]
+            [.accountAdded, .accountDeleted, .accountRoleLocationChanged,
+             .apiAccountCreatedWithKey, .apiAccountCreatedWithoutKey, .apiAccountDeleted, .apiAccountKeyGenerated,
+             .apiAccountKeyRevoked, .apiAccountRoleLocationChanged, .apiAccountNameChanged,
+             .roleCreated, .roleUpdated,
+             .domainAdded, .domainRemoved, .domainVerified, .domainFederationEnabled, .domainFederationDisabled,
+             .idpCreated, .idpUpdated, .idpDeleted, .idpAccountSyncEnabled, .idpAccountSyncDisabled,
+             .accountPasswordChanged, .batchPasswordResetInitiated,
+             .externalAccountAssociated, .externalAccountDisassociated, .externalAccountInvited,
+             .termsAccepted, .appleServicesSettingsUpdated]
         }
     }
+
+    /// The view's types as Apple's strings, which `AuditDigest` matches.
+    public var types: [String] { eventTypes.map(\.rawValue) }
 
     /// Apple's types no view shows; the full Audit list still does. `CONFIG_SETTINGS_*` record a configuration's
     /// content (`configId`, `configType`, `configVersion`) and `COLLECTION_*` a collection's name and description:
     /// device management, not access. `ACCOUNT_IMAGE_*` is an account's picture, which in Access & Security would bury
     /// the role and key changes the view is for.
-    public static let otherTypes = [
-        "CONFIG_SETTINGS_CREATED", "CONFIG_SETTINGS_UPDATED", "CONFIG_SETTINGS_DELETED",
-        "COLLECTION_CREATED", "COLLECTION_UPDATED", "COLLECTION_DELETED",
-        "ACCOUNT_IMAGE_SET", "ACCOUNT_IMAGE_REPLACED", "ACCOUNT_IMAGE_REMOVED",
+    public static let otherEventTypes: [AuditEventType] = [
+        .configSettingsCreated, .configSettingsUpdated, .configSettingsDeleted,
+        .collectionCreated, .collectionUpdated, .collectionDeleted,
+        .accountImageSet, .accountImageReplaced, .accountImageRemoved,
     ]
+    public static let otherTypes = otherEventTypes.map(\.rawValue)
 }
 
 /// abapit's `reports.audit_digest` (held to the `audit_digest` cases in `Tests/Fixtures/parity/reports.json`): the

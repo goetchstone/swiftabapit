@@ -27,6 +27,35 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-30 — A secret held by a doc comment, again: invariant 11 for a model, not only for CSV
+- **What happened:** Phase 2a's review found a custom setting's plaintext profile public on `Configuration`'s resource,
+  its custom settings' object and a blueprint's `included`; only "show it through `profileText`, never raw" kept it off a
+  screen (M2; failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment"). The same
+  shape as CSV's every-key export (RULE-FEEDBACK 2026-10-16, below), one layer down.
+- **Invariant in force:** #11 (sensitive fields never leave; CSV export is an allowlist).
+- **Why it didn't hold:** wrong layer again. The fix for CSV moved the column list to the compiler, but the rule that
+  made the leak possible, "a view keeps its resource and the inspector shows every attribute", applied to every view,
+  and nothing asked which resources hold a secret.
+- **Would a rule have caught it?** only if enforced differently: a view whose resource holds a secret hands out a
+  copy with it withheld (as its `resource`, its description and its mirror) and keeps the raw at `package`, so the app
+  can't name it. Fixed that way (`Configuration.received`), with a canary test through the stub.
+- **Enforcement home if changed:** CLAUDE.md #11's home could name the compiler for models too (`Configuration.received`,
+  `CustomSettingsValues.configurationProfile` are `package`) and `aCustomSettingsProfileReachesNoPublicValue`; and the
+  `pre-commit` skill's item 10 could ask, for each new model, "does its resource hold a secret? then a canary test".
+
+## 2026-10-30 — A test pinned a lenient read, so the silence had a test holding it in place
+- **What happened:** an audit event whose named payload key missed read `payload == nil`, its fields uncounted, and the
+  acceptance pass printed `ok`. `AuditEventTests` asserted `missing.payload == nil` (M1; the same failure-log entry).
+  failure-log 2026-10-16 ("the mosyle stub agreed with the client") already said a lenient reading needs a source.
+- **Invariant in force:** #10 (unknown keys are counted, shown raw) and #8 (never silent).
+- **Why it didn't hold:** the lesson lived in a failure-log entry, not in a step anyone runs. A test that asserts what
+  the code does for an odd shape, nil or empty, passes whether the odd shape is said or not, and then guards the silence
+  against the fix.
+- **Would a rule have caught it?** yes, if stated as a check: a test asserting nil, empty or "none" for a shape Apple
+  doesn't document also asserts that the shape is said (counted as unknown, noted, or a status that isn't `ok`).
+- **Enforcement home if changed:** skill (`pre-commit` item 12, "never silent": "a test of an odd shape's nil asserts
+  its note too"), and the review brief.
+
 ## 2026-10-17 — A fix for invariant 8 made other data silent
 - **What happened:** the first fix for Phase 1b's M3 loaded devices and services side by side, each with its own
   state, but only the Services screen showed the services' state. While they were read, or after a 403, Devices
