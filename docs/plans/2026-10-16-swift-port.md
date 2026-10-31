@@ -1121,9 +1121,11 @@ Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team b
   - devices, mdm_servers, assignments, people, content, mdm_enrolled (+ details);
   - **AppleCare sweep** and **Activation Lock sweep** (§3.6);
   - per-resource errors recorded rather than aborting;
-  - **open (operator):** whether a snapshot keeps a custom setting's profile as Apple sent it. It holds Wi-Fi and VPN
-    passwords, and SQLite is outside the Keychain (invariants 3, 11), so until decided a collector stores
-    `Configuration.resource`, the profile withheld (Phase 2a verifier round 2).
+  - **decided (operator, 2026-10-31): a snapshot keeps no custom setting's profile.** What can be read again from
+    Apple isn't kept, and the profile holds Wi-Fi and VPN passwords while SQLite is outside the Keychain (invariants 3,
+    11). A collector stores `Configuration.resource`, the profile withheld, and no hash of it either (a short Wi-Fi
+    password's hash is guessed offline); the detail reads the profile live. So a diff sees a profile change only
+    through the configuration's other attributes, such as `updatedDateTime`.
 - **Diff** (golden parity) and the Changes screen.
 - **Reports**:
   - coverage (with the new AppleCare fields);

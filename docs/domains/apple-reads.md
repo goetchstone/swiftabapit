@@ -203,8 +203,9 @@ org editor's save).
   `filename` as they came, every other value `CustomSettingsValues.withheld`. The profile as Apple sent it is
   `Configuration.received` and `CustomSettingsValues.configurationProfile`, both `package`: `ProfileText` and Phase 5's
   writer read it in AbapitKit, and in the app or the screen models naming either is a compile error (checked by mutant).
-  Whether Phase 3's snapshots keep it is an open operator decision, not a use: SQLite on disk is outside the Keychain
-  (invariants 3, 11), so until it is decided a snapshot stores the withheld `resource`. The detail shows
+  Phase 3's snapshots don't keep it (operator, 2026-10-31: what can be read again from Apple isn't kept; SQLite on disk
+  is outside the Keychain, invariants 3 and 11): a snapshot stores the withheld `resource`, and the detail reads the
+  profile live. The detail shows
   `customSettings?.profileText`. So the device inspector's every-attribute pattern is safe for a configuration.
   `aCustomSettingsProfileReachesNoPublicValue` (a canary through the strict stub), `aConfigurationsCSVHoldsNoProfile`,
   `BoundaryTests.theAppSideNeverNamesTheRawProfile`, `BoundaryTests.whatHoldsTheRawProfileStaysPackage`, which holds the
