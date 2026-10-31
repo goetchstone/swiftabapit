@@ -1085,7 +1085,10 @@ masked by a real address parse; the Dashboard's recent events in Activity's word
 Apple MDM's inspector says why a selection is missing and the details read pauses when the screen is left; the filter's id
 rules in their own words; the shared sentences, export rule and day formatter in `ScreenWords`; Refresh routed by
 `ScreenModels`, tested; test gaps for a cut timeline and a list refused part-way. The copied list code waits for Phase 3
-(apple-reads runbook). Live checks wait for S1's team build.
+(apple-reads runbook). The fix's two verifiers (round 1: both held; every finding low, 14 surviving mutants that were real test gaps) are answered in
+`fix(2b): verifier round 1`: a lock tested with each read refused alone, a locked Overview's own sentence, Device 360's
+unsendable serial, the location masking's outer schemes, single slashes, a url of another shape and the Description
+field, and a test for each surviving pause, export, Refresh and masking mutant. Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.

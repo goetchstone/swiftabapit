@@ -519,7 +519,9 @@ struct ContentTests {
 
     /// A plain address and a string that isn't one show as they came, in the Location and among the attributes.
     @Test func aPlainAddressAndAPlainStringShowUnchanged() {
-        for plain in ["https://packages.example.com/a.pkg", "packages.example.com/a.pkg", "file:/pkgs/a.pkg", "//packages.example.com/a.pkg"] {
+        // With no scheme, one leading `/` starts a path, not an authority: `img@2x` is a folder's name.
+        for plain in ["https://packages.example.com/a.pkg", "packages.example.com/a.pkg", "file:/pkgs/a.pkg", "//packages.example.com/a.pkg",
+                      "/img@2x/icon.png"] {
             let result = ContentWords.location(plain)
             #expect(Array(result.text.utf8) == Array(plain.utf8) && !result.masked, "\(plain) -> \(result)")
             #expect(Array(ContentWords.addresses(in: plain).utf8) == Array(plain.utf8))
@@ -558,6 +560,92 @@ struct ContentTests {
         #expect(attribute("mirrors") == #"{"url": "https://********@m2.example.com/a.pkg"}, //********@m3.example.com/a.pkg"#)
         #expect(attribute("deep") == #"{"list": [["********@m4.example.com/a.pkg"]]}"#)
         #expect(attribute("notes") == #"{"text": "Built by the release team.", "count": 3, "flag": true}"#)
+    }
+
+    /// Phase 2b verifier round 1: an outer scheme or a label glued before an address (`jar:https://…`, `Mirror:https://…`,
+    /// `x:y:https://…`, a no-break space after `token:`) was read as the address's scheme, and the address after it copied
+    /// as a path with its user and password in clear; a scheme's single slash (`https:/host`) was no authority. Each is
+    /// masked, in the Location and in other text alike, and the text before it kept.
+    @Test func anOuterSchemeOrALabelBeforeAnAddressIsMasked() {
+        let cases: [(String, String)] = [
+            ("jar:https://deploy:TOPSECRET1@host.example.com/a.jar!/", "jar:https://********@host.example.com/a.jar!/"),
+            ("mirror:https://deploy:TOPSECRET2@host.example.com/a.pkg", "mirror:https://********@host.example.com/a.pkg"),
+            ("Location:https://deploy:TOPSECRET3@host.example.com/a.pkg?sig=TOPSECRET4", "Location:https://********@host.example.com/a.pkg?sig=********"),
+            ("view-source:https://deploy:TOPSECRET5@host.example.com/a", "view-source:https://********@host.example.com/a"),
+            ("x:y:https://deploy:TOPSECRET6@host.example.com/a", "x:y:https://********@host.example.com/a"),
+            ("token:\u{A0}https://deploy:TOPSECRET7@host.example.com/a.pkg", "token:\u{A0}https://********@host.example.com/a.pkg"),
+            ("https:/deploy:TOPSECRET8@host.example.com/a.pkg", "https:/********@host.example.com/a.pkg"),
+            ("https:///deploy:TOPSECRET9@host.example.com/a.pkg", "https:///********@host.example.com/a.pkg"),
+            ("deploy:TOPSECRET10@https://host.example.com/a", "********@https://host.example.com/a"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+        // A `://` after the path, in the query, is still the query's (review L2).
+        #expect(ContentWords.location("file:/pkgs/a.pkg?token=TOPSECRET11&next=https://example.com/x").text == "file:/pkgs/a.pkg?token=********&next=********")
+    }
+
+    /// Phase 2b verifier round 1, mutants N-gluedNoLetterSkip, N-isAddressNoSchemeSlashes, N-isAddressNoUserArm and a blank
+    /// dropped: each way `addresses(in:)` finds an address in other text, held through it, not only through `location`.
+    /// Without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed on the same text until the
+    /// stack overflowed.
+    @Test func everyArmOfAnAddressInOtherTextIsMasked() {
+        let cases: [(String, String)] = [
+            ("see 2https://deploy:TOPSECRET1@h.example.com/a.pkg", "see 2https://********@h.example.com/a.pkg"),
+            ("-https://deploy:TOPSECRET2@h.example.com/a.pkg", "-https://********@h.example.com/a.pkg"),
+            ("(+https://deploy:TOPSECRET3@h.example.com/a.pkg)", "(+https://********@h.example.com/a.pkg)"),
+            ("url=https://deploy:TOPSECRET4@h.example.com/a.pkg", "url=https://********@h.example.com/a.pkg"),
+            ("deploy@h.example.com/a.pkg", "********@h.example.com/a.pkg"),
+            ("ask deploy@h.example.com?sig=TOPSECRET5", "ask ********@h.example.com?sig=********"),
+            ("https://a.example.com/x\nhttps://deploy:TOPSECRET6@b.example.com/y", "https://a.example.com/x\nhttps://********@b.example.com/y"),
+            ("https://a.example.com/x\thttps://deploy:TOPSECRET7@b.example.com/y", "https://a.example.com/x\thttps://********@b.example.com/y"),
+        ]
+        for (text, shown) in cases {
+            let other = ContentWords.addresses(in: text)
+            #expect(Array(other.utf8) == Array(shown.utf8), "\(text) -> \(other)")
+        }
+        #expect(ContentWords.location("1https://deploy:TOPSECRET8@h.example.com/x").text == "1https://********@h.example.com/x")
+    }
+
+    /// An email address is no address with a credential: in a description or another attribute it shows as it came, a path
+    /// after the host or a password's `:` still marking a user to mask (Phase 2b verifier round 1: "Contact
+    /// ********@example.com").
+    @Test func anEmailAddressInOtherTextShowsUnchanged() {
+        for text in ["Contact it@example.com for help", "Ask it@example.com?", "Team@HQ", "ops@example.com.", "it@example.com/"] {
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+        #expect(ContentWords.addresses(in: "it:TOPSECRET@example.com") == "********@example.com")
+    }
+
+    /// Phase 2b verifier round 1, probe v3: a package's Description field showed in clear the address its description
+    /// attribute masked; and a url that isn't a string read as no location (a dash) while its strings were read only as other
+    /// text, so a scheme-less address's signature showed. The Description is masked as its attribute is, the Location says
+    /// it can't be read, and every string of the url is masked as a Location.
+    @Test func aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Odd"), "description": .string("Mirror https://deploy:TOPSECRET1@mirror.example.com/a.pkg, or ask it@example.com"),
+            "url": .object(["href": .string("https://deploy:TOPSECRET2@h.example.com/a.pkg"), "sig": .string("host.example.com/a.pkg?sig=TOPSECRET3")]),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        let shown = (detail.fields + detail.attributes).map(\.value) + detail.notes + [detail.title]
+        #expect(!shown.contains { $0.contains("TOPSECRET") || $0.contains("deploy") }, "\(shown)")
+        func field(_ label: String) -> String? { detail.fields.first { $0.label == label }?.value }
+        #expect(field("Description") == "Mirror https://********@mirror.example.com/a.pkg, or ask it@example.com")
+        #expect(detail.attributes.first { $0.label == "description" }?.value == field("Description"))
+        #expect(field("Location") == "Not readable")
+        #expect(detail.notes == ["Apple sent the location in a shape this version can't read: its url attribute below is shown with every "
+                                 + "address in it masked."])
+        #expect(detail.attributes.first { $0.label == "url" }?.value
+                == #"{"href": "https://********@h.example.com/a.pkg", "sig": "host.example.com/a.pkg?sig=********"}"#)
     }
 
     /// Phase 2b review L1: a row whose id can't go in a path is never read, and its detail says so, never "Apple has no such

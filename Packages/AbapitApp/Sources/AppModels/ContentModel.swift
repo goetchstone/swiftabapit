@@ -473,15 +473,23 @@ public struct ContentDetail: Sendable {
         ], attributes: ContentWords.attributes(of: app))
     }
 
+    /// A package's location is masked as `ContentWords.location` says, and every other place an address could be shown with
+    /// a credential in it, the description and every string of every attribute, through `ContentWords.addresses(in:)`
+    /// (Phase 2b verifier round 1: the Description field showed in clear what its attribute masked). A url Apple sent in a
+    /// shape this version can't read is said, never a dash that reads as no location.
     init(package: ContentPackage) {
         let location = package.url.map(ContentWords.location)
+        let misread = location == nil && package.attributes["url"].map { $0.jsonText != "null" } == true
+        var notes: [String] = []
+        if location?.masked == true { notes.append(ContentWords.maskedLocation) }
+        if misread { notes.append(ContentWords.misreadLocation) }
         self.init(title: package.name ?? package.id, fields: [
             ContentField("Name", package.name ?? "—"), ContentField("Version", package.version ?? "—"),
-            ContentField("Bundle IDs", PackageRow(package).bundleIDs), ContentField("Location", location?.text ?? "—"),
-            ContentField("Hash", package.hash ?? "—"), ContentField("Description", package.summary ?? "—"),
+            ContentField("Bundle IDs", PackageRow(package).bundleIDs),
+            ContentField("Location", location?.text ?? (misread ? "Not readable" : "—")),
+            ContentField("Hash", package.hash ?? "—"), ContentField("Description", package.summary.map(ContentWords.addresses(in:)) ?? "—"),
             ContentField("Created", ScreenWords.day(package.created?.date)), ContentField("Updated", ScreenWords.day(package.updated?.date)),
-        ], notes: location?.masked == true ? [ContentWords.maskedLocation] : [],
-                  attributes: ContentWords.packageAttributes(package, location: location?.text))
+        ], notes: notes, attributes: ContentWords.packageAttributes(package))
     }
 
     init(blueprint read: BlueprintRead) {
@@ -552,6 +560,9 @@ package enum ContentWords {
     static let maskedLocation = "The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
         + "It is shown here, never opened."
 
+    static let misreadLocation = "Apple sent the location in a shape this version can't read: its url attribute below is shown with every "
+        + "address in it masked."
+
     /// A list's items, joined: "Not readable" when Apple sent it in a shape this version can't read (never shown as
     /// none), a dash when it sent none, "None" for an empty list.
     static func list(_ items: [String]?, misread: Bool) -> String {
@@ -566,29 +577,37 @@ package enum ContentWords {
     /// `[A-Za-z][A-Za-z0-9+.-]*:`, an authority follows `//` (`//user:pw@host` too), and with no `//` an `@` ahead of the path
     /// still ends a user and password (`user:pw@host`, whose `user:` reads as a scheme): Phase 2b review L2, where the first
     /// `://` anywhere was taken for the scheme's, so one only in the query copied the query before it raw. Each run of text
-    /// between blanks is read as one address (an unencoded space splits one in two, each masked). Read as UTF-8 bytes, so a
-    /// combining mark can't join a delimiter into another character. Never opened or fetched (invariant 4). Not caught: an
-    /// unencoded `/`, `?` or `#` inside a password, which isn't a valid address (the rest after it is masked as a path
-    /// parameter, a query or a fragment).
+    /// between blanks is read as one address (an unencoded space splits one in two, each masked); after a scheme, any run of
+    /// slashes starts an authority (`https:/host`, which a browser reads as `https://host`); and text or an outer scheme glued
+    /// before an address's `://` (`url=https://…`, `jar:https://…`, `Mirror:https://…`) is kept as it came and the address
+    /// masked from its own scheme on (Phase 2b verifier round 1: a leading `jar:` was read as the scheme, and the address after
+    /// it copied as a path, its user and password in clear). Read as UTF-8 bytes, so a combining mark can't join a delimiter
+    /// into another character. Never opened or fetched (invariant 4). Not caught: an unencoded `/`, `?` or `#` inside a
+    /// password, which isn't a valid address: what comes before it shows as the host, and after it as the path, or masked as
+    /// the query or the fragment.
     package static func location(_ url: String) -> (text: String, masked: Bool) {
         masking(url) { _ in true }
     }
 
-    /// `text` with every address in it masked as `location` masks one, the rest as it came: the strings of a package's other
-    /// attributes, where Apple could add an address. A run of text between blanks is an address when it starts with a
-    /// scheme and goes on, starts with `//`, holds a `://`, or has a user before an `@` ahead of its path; a word, a version,
-    /// a bundle id or a hash is none of these and shows unchanged. Not caught: an address with no scheme, no `//` and no
-    /// user (`host/a.pkg?sig=…`) inside other text; the package's own `url` is always read as one (`packageAttributes`).
+    /// `text` with every address in it masked as `location` masks one, the rest as it came: a package's description and the
+    /// strings of its other attributes, where Apple could add an address. A run of text between blanks is an address when it
+    /// starts with a scheme and goes on, starts with `//`, holds a `://`, or has a user before an `@` ahead of a path; a word,
+    /// a version, a bundle id, a hash or an email address (`it@example.com`, no path) is none of these and shows unchanged.
+    /// Masking errs toward hiding: `Requires:macOS;iOS` reads as a scheme and a path parameter and loses its tail. Not
+    /// caught: an address with no scheme, no `//` and no user (`host/a.pkg?sig=…`) inside other text, the second half of one
+    /// an unencoded space split, and a user with no password and no path (`token@host`), which is an email address's shape;
+    /// the package's own `url` is always read as one (`packageAttributes`).
     package static func addresses(in text: String) -> String {
         masking(text, isAddress).text
     }
 
-    /// Every attribute of a package, each string at any depth through `addresses(in:)`, and its `url` as the Location field
-    /// shows it (`location`): what the doc of `ContentDetail(package:)` promises, an attribute Apple adds included.
-    static func packageAttributes(_ package: ContentPackage, location: String?) -> [ContentField] {
-        attributes(of: package, addresses(in:)).map { field in
-            guard let location, !location.isEmpty, field.label.utf8.elementsEqual("url".utf8) else { return field }
-            return ContentField(field.label, location)
+    /// Every attribute of a package, an attribute Apple adds included: each string at any depth through `addresses(in:)`,
+    /// and every string of its `url` as the Location (`location`), whatever its shape (Phase 2b verifier round 1: a url that
+    /// wasn't a string, an object holding `host/a.pkg?sig=…`, had its strings read only as other text, and its query shown).
+    static func packageAttributes(_ package: ContentPackage) -> [ContentField] {
+        let asLocation = attributes(of: package) { location($0).text }
+        return zip(attributes(of: package, addresses(in:)), asLocation).map { other, location in
+            other.label.utf8.elementsEqual("url".utf8) ? location : other
         }
     }
 
@@ -618,8 +637,12 @@ package enum ContentWords {
     private static func isAddress(_ run: ArraySlice<UInt8>) -> Bool {
         if let end = schemeEnd(run), end < run.endIndex { return true }
         if run.starts(with: slashes) || run.firstRange(of: schemeSlashes) != nil { return true }
-        let user = run[..<pathStart(run, from: run.startIndex)]
-        return user.firstIndex(of: at).map { $0 > run.startIndex } ?? false
+        // A user before an `@` ahead of a path (`deploy@host/a.pkg`; a password's `:` is a scheme above). With nothing after
+        // the host it is an email address (`it@example.com`, `ask it@example.com?`), shown as it came (Phase 2b verifier
+        // round 1: an email in a description lost its name).
+        let path = pathStart(run, from: run.startIndex)
+        guard let user = run[..<path].firstIndex(of: at), user > run.startIndex else { return false }
+        return path + 1 < run.endIndex
     }
 
     /// `text` with each run between blanks that `isAddress` passes masked as an address (`address`); blanks as they came.
@@ -649,22 +672,27 @@ package enum ContentWords {
     /// One address, its credentials masked (`location` says which parts).
     private static func address(_ run: ArraySlice<UInt8>) -> (bytes: [UInt8], masked: Bool) {
         let mask = Array(Self.mask.utf8)
-        // An address glued to the text before it (`url=https://…`): that text as it came, from the scheme on an address.
-        if schemeEnd(run) == nil, !run.starts(with: slashes), let found = run.firstRange(of: schemeSlashes) {
+        // An address glued to the text before it (`url=https://…`), or to a label or an outer scheme (`Mirror:https://…`,
+        // `jar:https://…`): that text as it came, from the address's own scheme on an address. After a leading scheme only
+        // when the `://` comes before any `/`, `?`, `#` or `@`, so one in a query stays the query's (review L2) and a user
+        // before an `@` is still masked. The address starts after the text (`start > run.startIndex`), so this ends.
+        if !run.starts(with: slashes), let found = run.firstRange(of: schemeSlashes),
+           schemeEnd(run) == nil || !run[..<found.lowerBound].contains(where: { $0 == slash || $0 == question || $0 == hash || $0 == at }) {
             var start = found.lowerBound
             while start > run.startIndex, isSchemeByte(run[start - 1]) { start -= 1 }
             while start < found.lowerBound, !isLetter(run[start]) { start += 1 }
-            if start < found.lowerBound {
+            if start > run.startIndex, start < found.lowerBound {
                 let rest = address(run[start...])
                 return (Array(run[..<start]) + rest.bytes, rest.masked)
             }
         }
         var out: [UInt8] = [], masked = false
         let afterScheme = schemeEnd(run) ?? run.startIndex
+        let leadingSlashes = run[afterScheme...].prefix { $0 == slash }.count
         var index: Int
-        if run[afterScheme...].starts(with: slashes) {
-            // An authority: everything before its last `@` is a user and password.
-            let authority = afterScheme + slashes.count
+        if leadingSlashes >= 2 || (leadingSlashes == 1 && afterScheme > run.startIndex) {
+            // An authority, after `//` or a scheme's slashes: everything before its last `@` is a user and password.
+            let authority = afterScheme + leadingSlashes
             out += run[..<authority]
             if let last = run[authority..<pathStart(run, from: authority)].lastIndex(of: at) {
                 out += mask
@@ -674,7 +702,7 @@ package enum ContentWords {
                 index = authority
             }
         } else if let last = run[..<pathStart(run, from: run.startIndex)].lastIndex(of: at) {
-            // No `//`, and an `@` ahead of the path: what comes before it is a user and password, a `user:` read as a
+            // No authority, and an `@` ahead of the path: what comes before it is a user and password, a `user:` read as a
             // scheme included.
             out += mask
             masked = true

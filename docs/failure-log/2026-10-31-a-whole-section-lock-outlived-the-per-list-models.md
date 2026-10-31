@@ -27,7 +27,8 @@
   above them: the per-list behaviour the models were built and tested for sat under a lock that never let it reach the
   screen. The lows: decisions made in views, which have no test target (the recent events' words, the Services column, the
   inspector's placeholder, the Refresh switch); a credential mask keyed on a substring (`://` anywhere) instead of an
-  address's shape; a guard (`isPathSafe`) checked in one model of three; and list code copied six times, whose words and
+  address's shape; a guard (`isPathSafe`) checked in one model of four (Device 360's, the fourth, was found only in
+  verifier round 1); and list code copied six times, whose words and
   tests drifted apart (DevicesModel had a refused-part-way test, People's copy didn't).
 - **Why not caught:** each half was tested alone. `NavigationTests.eachSectionLocksOnItsProbe` pinned the lock's table as a
   constant (`.people: "users"`), so a test held the old shape in place; the model tests held the per-list states; and
@@ -50,11 +51,36 @@
   `Panel(after:)` over `LoadState(after:)`, `ScreenModels` (the models and Refresh's routing, which `World` and
   `AppServices` both build), `timelineQuery` at `package`; merging the copied list code waits for Phase 3 (apple-reads
   runbook).
+  - Verifier round 1 (`fix(2b): verifier round 1`): both verifiers held the fix; every finding was low, and 14 mutants of
+    the fix survived as real test gaps (one more, the order of the audit filter's two id sentences, isn't a defect: either
+    sentence is true when both ids are refused). The lock's partly refused cases all had their last read readable, so a
+    lock on the last read alone passed: each read of each section is now refused alone and left readable alone. M1's rule
+    let the Overview lock, and the view's sentence read "can't read overview.": `SidebarItem.lockedNote`. Four of
+    `pause()`'s and `resume`'s branches had no test (a selection's own read stopped by a pause stayed "Reading…" under its
+    mutant, a refusal was asked again on return, a past-limit selection wasn't re-read, an org switch after a return read
+    nothing): each has one. The views had stopped checking `shown.isEmpty`, and only Devices' search was held, so
+    Content's and People's units' Export counting the rows read passed; Refresh's force was held for People only; the
+    Dashboard's recent rows' ids were never checked: each has a test. `addresses(in:)`'s arms were held only through
+    `location`, and without the skip past a digit or `-` before a glued scheme the split recursed until the stack
+    overflowed: each arm is held through `addresses(in:)`, and the split now needs the address to start after the text, so
+    it ends whatever the skip does. Leaks the review's shapes didn't name: an outer scheme or a label glued before an
+    address (`jar:https://deploy:pw@…`, `Mirror:https://…`, `token:` and a no-break space) was read as its scheme and the
+    address copied as a path; one slash after a scheme (`https:/user:pw@host`) was no authority; a url that isn't a string
+    had its strings read only as other text, and the Location read a dash; and the Description field showed in clear what
+    its attribute masked. Each is masked, with a test; an email address in other text now shows as it came, since the
+    Description is masked too. Device 360 said "Apple has no such item." in four panels for a serial that can't go in a
+    path, review L1's class in a fourth model: it says `ScreenWords.unsendableID` and sends nothing. Not changed, and why,
+    in the apple-reads runbook: an address split by an unencoded space inside other text, a user with no password and no
+    path (`token@host`, an email's shape), a JSON key, and masking that errs toward hiding (`Requires:macOS;iOS`).
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
   refused and with probes missing (`aPartlyDeniedSectionIsUnlocked`, `aReadNoProbeRecordedDoesntLock`), not as a table. The
   Refresh switch and every view's words that branch now live in AppModels, so `swift test` reaches them; App/ still has no
   test target, so a branch left in a view is still untested (CI's snapshots render the states, they don't assert them).
-  RULE-FEEDBACK 2026-10-31, "a whole-section gate outlived the per-list models below it". Still only a stub: whether a
+  RULE-FEEDBACK 2026-10-31, "a whole-section gate outlived the per-list models below it". Verifier round 1's 14 gaps are
+  RULE-FEEDBACK 2026-10-16's lesson again (the author mutates within the shape they already check: the fixer's 46 mutants
+  held each fix's named shape, not its other ends) and 2026-10-31's "a fix that made a read stricter made a new silence"
+  (a fix that deletes a view's check makes the model the only guard, and every screen's model then needs the test): no
+  new rule; the repairer's report lists each mutant and the test that kills it. Still only a stub: whether a
   role refused users is refused user groups too, and what Apple's probes return for each list, is the Phase 2 live check.

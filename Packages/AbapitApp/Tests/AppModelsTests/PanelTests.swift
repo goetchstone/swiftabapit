@@ -351,6 +351,22 @@ struct PanelTests {
         if case .loaded = world.detail.device {} else { Issue.record("device: \(world.detail.device)") }
     }
 
+    /// A serial that can't go in a path is never sent, and the four panels say so, never "Apple has no such item." of a
+    /// device Apple listed (Phase 2b verifier round 1: review L1's class in Device 360); the timeline says its own words.
+    @Test func aSerialThatCantBeSentIsNeverAskedFor() async throws {
+        let world = try await World.make()
+        let before = world.stubs["a"]!.requests.count
+        world.detail.show("A B")
+        func failed<Value>(_ panel: Panel<Value>) -> String? { if case .failed(let why) = panel { why } else { nil } }
+        let panels = [failed(world.detail.device), failed(world.detail.coverage), failed(world.detail.lock), failed(world.detail.service)]
+        #expect(panels == Array(repeating: ScreenWords.unsendableID, count: 4), "\(panels)")
+        await eventually("the timeline said why") { world.detail.timelineReadsFinished >= 1 }
+        #expect(failed(world.detail.timeline) == "This serial can't be asked of the audit log.")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(world.stubs["a"]!.requests.count == before, "\(world.stubs["a"]!.requests.dropFirst(before))")
+        #expect(world.detail.readsFinished == 0, "no read was started")
+    }
+
     /// A device with no family or status offers no empty choice to the filters (X19).
     @Test func theFiltersOfferNoEmptyChoice() async throws {
         let world = try await World.make(devices: ["a": 1, "b": 0])

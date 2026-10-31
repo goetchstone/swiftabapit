@@ -153,7 +153,11 @@ org editor's save).
   its screen, each refused panel saying so in its own `.forbidden`. A read with no probe result on record (an older check,
   or a School org's Business-only reads, which aren't probed) isn't refused, and neither is an `error …` status. The
   Overview locks only when its devices, services and audit log were all refused (`aPartlyDeniedSectionIsUnlocked`,
-  `aReadNoProbeRecordedDoesntLock`).
+  `aReadNoProbeRecordedDoesntLock`). Each read of a section is refused alone, and left readable alone, in
+  `aSectionOfSeveralReadsLocksOnNoOneOfThem` (verifier round 1, mutant N-lockLastOnly: every partly refused case had its
+  last read readable, so a lock on the last read passed). The locked screen's sentence is `SidebarItem.lockedNote`, a
+  locked Overview's naming its three reads (it read "can't read overview.", written in the view before the Overview could
+  lock).
 - **School has no people, content, Apple MDM or audit endpoints** (plan §2.4): `AppleSection.businessOnly`. Their
   builders take no scope and build for the Business host only; `AppleClient` throws `.notInScope(section)` before
   anything is built, so a School org sends nothing, not even a token request (and its broker would refuse the
@@ -323,11 +327,18 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   (`noOrganization`, Apple School Manager named: Apple MDM's copy had dropped it) or one that can't be used (`unusable`), in
   every list and every inspector panel (`everyScreenSaysWhyNothingCanBeReadAlike`); an id `AppleRead.isPathSafe` refuses is
   never sent and says so (`unsendableID`: the client's `.notFound` read "Apple has no such item." of an item Apple had just
-  listed, review L1), in Content's detail, a group's or an org unit's members and an Apple MDM device's details; Export's
+  listed, review L1), in Content's detail, a group's or an org unit's members, an Apple MDM device's details and Device
+  360's four device panels (verifier round 1: the timeline beside them said its own words, the four "no such item";
+  `aSerialThatCantBeSentIsNeverAskedFor`); Export's
   rule (`exportBlocked`: still loading, partial, or nothing shown to export, the views only disable on it:
-  `everyScreenSaysAnEmptyListHasNothingToExport`); and one day formatter (`day`, `distantPast` read as none).
+  `everyScreenSaysAnEmptyListHasNothingToExport`, and a search that hides every row on every list of every screen,
+  `aSearchThatHidesEveryRowHasNothingToExport`: the views stopped checking `shown.isEmpty`, so Content's and People's
+  units' count of the rows read passed every suite, verifier round 1); and one day formatter (`day`, `distantPast` read as
+  none).
 - **Refresh's routing is `ScreenModels.refresh(_:)`**, which `ContentView` only calls: in the app it had no test, and routing
-  People's Refresh to the devices (review mutant X1) left every suite green (`refreshReadsTheSectionsOwnModel`).
+  People's Refresh to the devices (review mutant X1) left every suite green (`refreshReadsTheSectionsOwnModel`). Refresh on
+  a section already read reads it again, in every section (`refreshOnASectionAlreadyReadReadsAgain`; verifier round 1:
+  Content's and Apple MDM's routing to an unforced `load()` survived, since only People's force was held).
 - **People** (`PeopleModel`): users, user groups and org units side by side, one tab on screen; a group's or an org
   unit's members read when it is chosen (`PeopleModel.Members`, its own token) and matched to the users read by their
   bytes. A member the users read lacks shows by its id, with a note counting them and saying why (still reading, the
@@ -344,12 +355,26 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
   A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
   of the path still ends a user and password (review L2: the first `://` anywhere was the scheme's, so one in the query
-  copied the query before it raw; `//user:pw@host`, `user:pw@host` and `;jsessionid=` showed raw). Every string of a
-  package's other attributes, at any depth (`JSONValue.mappingStrings`), goes through `ContentWords.addresses(in:)`, which
-  masks each run between blanks that is an address (a scheme and more, `//`, a `://`, or a user before an `@` ahead of a
-  path) and leaves a word, a version, a bundle id or a hash as it came; the package's own `url` attribute is always shown as
-  the Location is. Not caught: an address with no scheme, no `//` and no user (`host/a.pkg?sig=…`) inside another
-  attribute's text, and a `://` after something that isn't a scheme (`1://user:pw@host`), which no address has.
+  copied the query before it raw; `//user:pw@host`, `user:pw@host` and `;jsessionid=` showed raw). Text or an outer scheme
+  glued before an address's `://` is kept and the address masked from its own scheme, when the `://` comes before any `/`,
+  `?`, `#` or `@` (`jar:https://…`, `Mirror:https://…`, `x:y:https://…`, `token:` and a no-break space), and after a scheme
+  one slash starts an authority as two do (`https:/user:pw@host`, which a browser reads as `https://`); verifier round 1:
+  each showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`). Every string of a
+  package's other attributes, at any depth (`JSONValue.mappingStrings`), and its Description field go through
+  `ContentWords.addresses(in:)`, which masks each run between blanks that is an address (a scheme and more, `//`, a `://`,
+  or a user before an `@` ahead of a path) and leaves a word, a version, a bundle id, a hash or an email address
+  (`it@example.com`, no path) as it came; the Description showed in clear what its attribute masked (verifier round 1).
+  Every string of the package's own `url` attribute is masked as the Location is, whatever its shape: a url that isn't a
+  string reads "Not readable" in the Location, with a note, never a dash (`aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked`).
+  Each arm of `addresses(in:)` is held through it, not only through `location` (`everyArmOfAnAddressInOtherTextIsMasked`:
+  without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed until the stack overflowed; it
+  now splits only where the address starts after the text, so it ends whatever the skip does).
+  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail. Not caught:
+  an address with no scheme, no `//` and no user (`host/a.pkg?sig=…`) inside other text, so the second half of one an
+  unencoded space split shows its query (the Location masks both halves); a user with no password and no path in other
+  text (`token@host`), which is an email address's shape; an address used as a JSON object's key (keys are Apple's
+  attribute names, kept by `mappingStrings`); and a `://` after something that isn't a scheme (`1://user:pw@host`), which
+  no address has.
   `theDemosCustomSettingReachesNothingTheModelExposesUnmasked` follows the demo's canary password through the model.
 - **Apple MDM** (`AppleMDMModel`): `mdmDevices`, then each device's `/details` one at a time in list order, at most
   `detailLimit` (50), cancelled on a switch or Refresh; a row past it says "Not read" and reads its own when chosen. A 403
@@ -362,7 +387,11 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   left, and coming back (an unforced `load()`) asks for those only; Refresh still reads everything. A pause during a list
   read (a Refresh's, an org switch's) drops the part read and leaves the screen idle, and an org switch while the screen is
   away reads nothing until it shows (`leavingStopsTheDetailsAndComingBackAsksOnlyTheUnread`, `aPauseDuringARefreshLeaves…`,
-  `aPauseDuringAnOrgSwitchLeaves…`, `aSwitchWhileAwayReadsNothingUntilShown`). A selection the list doesn't hold says why,
+  `aPauseDuringAnOrgSwitchLeaves…`, `aSwitchWhileAwayReadsNothingUntilShown`). A selection's own read stopped by a pause
+  says "Not read" and is read on return; a refusal holds across a return (nothing more is asked); and once shown again the
+  screen is showing, so an org switch reads the new org (verifier round 1, four surviving mutants:
+  `aPauseDuringASelectionsOwnReadReadsItOnReturn`, `comingBackAfterARefusalAsksNothing`, `aSwitchAfterComingBackReadsTheNewOrg`).
+  A selection the list doesn't hold says why,
   as People's does (`selectionNote`: "Reading the devices…", "This device isn't in the list Apple sent."; review L7), in
   place of the inspector's "Select a device".
 - **Activity** (`ActivityModel`): one audit read over an `AuditFilter` (the last 1, 7, 30, 90 or 365 days or a range, and
@@ -378,7 +407,8 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   through Reports' `QuietServices`; the newest ten of the last seven days' audit events from its own read and
   `auditState`, so a refusal or a School org is said in that card alone. The recent events are `recentRows`, Activity's
   `ActivityRow`s: type and outcome in words, an actor or a subject Apple named only by id shown by its id (review L3: the
-  card showed a dash and the raw type, decided in the view).
+  card showed a dash and the raw type, decided in the view), each with its own id for the card's `ForEach` (verifier round 1,
+  mutant N-recentRowsSameID).
 - **Services' Last connected is the quiet card's rule** (`DevicesModel.connection(of:now:)` over `QuietServices`; review
   L4): a date this app can't read says so, never "Never", a deleted service isn't flagged, and quiet is more than 30 days
   by the instant, not by whole days, so the column flags exactly what the card lists at its default

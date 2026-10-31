@@ -99,6 +99,37 @@ struct NavigationTests {
         #expect(!SidebarItem.people.isLocked(for: two))
     }
 
+    /// Whichever read is the one refused, or the one readable, a section of several stays unlocked (Phase 2b verifier round
+    /// 1, mutant N-lockLastOnly: every partly refused case above had its last read readable, so a lock on the last read alone
+    /// passed, and a role refused only org units, configurations or the audit log lost all of People, Content or the Overview).
+    @Test func aSectionOfSeveralReadsLocksOnNoOneOfThem() {
+        for section in SidebarItem.allCases where section.reads.count > 1 {
+            for read in section.reads {
+                let others = section.reads.filter { $0 != read }.map(\.rawValue)
+                let onlyThis = Dictionary(uniqueKeysWithValues: others.map { ($0, "ok") } + [(read.rawValue, "forbidden")])
+                #expect(!section.isLocked(for: Self.org("business", capabilities: onlyThis)), "\(section): only \(read) refused")
+                let allButThis = Dictionary(uniqueKeysWithValues: others.map { ($0, "forbidden") } + [(read.rawValue, "ok")])
+                #expect(!section.isLocked(for: Self.org("business", capabilities: allButThis)), "\(section): only \(read) readable")
+            }
+        }
+        let lasts = Self.org("business", capabilities: ["users": "ok", "user_groups": "ok", "org_units": "forbidden", "apps": "ok",
+                                                        "configurations": "forbidden", "devices": "ok", "mdm_servers": "ok",
+                                                        "audit_events": "forbidden"])
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: lasts) } == [.activity])
+    }
+
+    /// A locked section's sentence names what the role can't read; the Overview's names its three reads, never "can't read
+    /// overview." (Phase 2b verifier round 1: M1's rule let the Overview lock, and the view's sentence wasn't written for it).
+    @Test func aLockedSectionSaysWhatItCantRead() {
+        #expect(SidebarItem.overview.lockedNote
+                == "The last permissions check found this API account's role can't read anything the Overview shows: its devices, services and audit log.")
+        #expect(SidebarItem.people.lockedNote == "The last permissions check found this API account's role can't read people.")
+        #expect(SidebarItem.appleMDM.lockedNote == "The last permissions check found this API account's role can't read Apple MDM.")
+        for section in SidebarItem.allCases where section != .overview {
+            #expect(section.lockedNote == "The last permissions check found this API account's role can't read \(section.phrase).")
+        }
+    }
+
     /// A read with no probe result on record isn't denied: an older check that didn't probe it, or a School org, whose
     /// Business-only reads aren't probed. A School org's Overview with its devices and services refused still shows, its
     /// audit card saying not in scope; its scope rule hides the Business-only sections as before.
@@ -218,6 +249,33 @@ struct ScaffoldTests {
         #expect(world.people.users.state.isLoading)
     }
 
+    /// Refresh on a section already read reads it again, in every section (Phase 2b verifier round 1, mutants
+    /// N-refreshContentUnforced and N-refreshAppleMDMUnforced: an unforced `load()` from Refresh read nothing after the first
+    /// read, and only People's force was held).
+    @Test func refreshOnASectionAlreadyReadReadsAgain() async throws {
+        for section in SidebarItem.allCases {
+            let world = try await World.make()
+            switch section {
+            case .overview: world.dashboard.load()
+            case .people: world.people.load()
+            case .content: world.content.load()
+            case .appleMDM: world.appleMDM.load()
+            case .activity: world.activity.load()
+            case .devices, .services, .reports, .settings: world.devices.load()
+            }
+            await eventually("\(section) read once") {
+                world.devices.readsFinished + world.dashboard.readsFinished + world.people.readsFinished + world.content.readsFinished
+                    + world.appleMDM.readsFinished + world.activity.readsFinished > 0
+                    && ![world.devices.state, world.dashboard.auditState, world.people.users.state, world.content.apps.state,
+                         world.appleMDM.state, world.activity.state].contains { $0.isLoading }
+            }
+            world.screens.refresh(section)
+            let loading = [world.devices.state, world.dashboard.auditState, world.people.users.state, world.content.apps.state,
+                           world.appleMDM.state, world.activity.state].filter(\.isLoading).count
+            #expect(loading == (section == .overview ? 2 : 1), "\(section)")
+        }
+    }
+
     static func failed<Value>(_ panel: Panel<Value>) -> String? { if case .failed(let why) = panel { why } else { nil } }
 
     /// With no organization every screen model says one sentence, Apple School Manager named too, and with one this
@@ -269,6 +327,34 @@ struct ScaffoldTests {
         #expect(stocked.devices.exportBlocked == nil)
         stocked.devices.search = "nothing like this"
         #expect(stocked.devices.shown.isEmpty && stocked.devices.exportBlocked == said)
+    }
+
+    /// A search that hides every row has nothing to export, on every list of every screen: the views only disable Export on
+    /// `exportBlocked`, so the model is the only guard (Phase 2b verifier round 1, mutants N-exportContentIgnoresSearch and
+    /// N-exportUnitsIgnoresSearch: Content's lists and People's org units counted the rows read, not the rows shown).
+    @Test func aSearchThatHidesEveryRowHasNothingToExport() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        DemoOrg.load(into: world.stubs["a"]!)
+        for section: SidebarItem in [.devices, .people, .content, .appleMDM, .activity] { world.screens.refresh(section) }
+        await eventually("every list read") {
+            world.people.readsFinished >= 3 && world.content.readsFinished >= 4 && world.appleMDM.readsFinished >= 1
+                && world.activity.readsFinished >= 1 && !world.devices.state.isLoading
+        }
+        await eventually("the Apple MDM details read") { world.appleMDM.exportBlocked == nil }
+        for tab in PeopleModel.Tab.allCases { #expect(world.people.exportBlocked(tab) == nil, "\(tab) exports before the search") }
+        for kind in ContentKind.allCases { #expect(world.content.exportBlocked(for: kind) == nil, "\(kind) exports before the search") }
+        #expect(world.devices.exportBlocked == nil && world.activity.exportBlocked == nil)
+        let nothing = "nothing like this at all"
+        world.people.search = nothing
+        world.content.search = nothing
+        world.appleMDM.search = nothing
+        world.activity.search = nothing
+        world.devices.search = nothing
+        for tab in PeopleModel.Tab.allCases { #expect(world.people.exportBlocked(tab) == ScreenWords.nothingToExport, "\(tab)") }
+        for kind in ContentKind.allCases { #expect(world.content.exportBlocked(for: kind) == ScreenWords.nothingToExport, "\(kind)") }
+        #expect(world.appleMDM.shown.isEmpty && world.appleMDM.exportBlocked == ScreenWords.nothingToExport)
+        #expect(world.activity.shown.isEmpty && world.activity.exportBlocked == ScreenWords.nothingToExport)
+        #expect(world.devices.shown.isEmpty && world.devices.exportBlocked == ScreenWords.nothingToExport)
     }
 
     /// The content detail's errors are said as every list's are (`LoadState(after:)`): a 403 is the role's, a failure and a

@@ -292,6 +292,8 @@ struct DashboardTests {
         await world.auditSettled(1)
         let rows = world.dashboard.recentRows
         #expect(rows.map(\.event.id) == world.dashboard.recentEvents.map(\.id) && rows.map(\.event.id) == ["E1", "E2"])
+        // Each row its own id, as the card's `ForEach` needs (Phase 2b verifier round 1, mutant N-recentRowsSameID).
+        #expect(rows.map(\.id) == [0, 1])
         let first = try #require(rows.first)
         #expect(first.actor == "APIACTOR1" && first.subject == "SUBJ1")
         #expect(first.type == "API account key revoked" && first.outcome == "Failure" && first.failed)

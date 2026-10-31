@@ -821,4 +821,65 @@ struct AppleMDMTests {
         await Self.settled(world, 2)
         #expect(world.appleMDM.rows.map(\.id) == ["B0000"] && Self.asked(world, "b") == ["B0000/details"])
     }
+
+    /// Leaving while a selected device past the limit is being read on its own: it says "Not read", never "Reading…" for
+    /// good, Export isn't held for it, and coming back reads it (Phase 2b verifier round 1, mutants
+    /// N-pauseSkipsInFlightSelected and N-resumeNoSelected).
+    @Test func aPauseDuringASelectionsOwnReadReadsItOnReturn() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: AppleMDMModel.detailLimit + 2)
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        let target = String(format: "M%04d", AppleMDMModel.detailLimit + 1)
+        let gate = world.gates["a"]!
+        gate.hold("own", { $0.path() == "/v1/mdmDevices/\(target)/details" })
+        world.appleMDM.selection = target
+        await eventually("the selection's own read held") { gate.held == 1 }
+        #expect(Self.row(world, target)?.details.word == "Reading…")
+        world.appleMDM.pause()
+        #expect(Self.row(world, target)?.details.word == "Not read")
+        #expect(world.appleMDM.exportBlocked == nil, "nothing is still being read")
+        await Self.settled(world, 2)
+        gate.release("own")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(Self.row(world, target)?.details.word == "Not read", "the stopped read landed")
+        world.appleMDM.load()
+        await eventually("the selection read again on return") { Self.row(world, target)?.details.word == "Read" }
+        // The stopped read never reached Apple: the one asked is the return's.
+        #expect(Self.asked(world).filter { $0.hasPrefix(target) } == ["\(target)/details"] && Self.lists(world) == 1, "\(Self.asked(world).suffix(3))")
+    }
+
+    /// A role refused details isn't asked again when the screen is shown again: the refusal holds until a Refresh (Phase 2b
+    /// verifier round 1, mutant N-resumeAfterRefusal).
+    @Test func comingBackAfterARefusalAsksNothing() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 3)
+        world.stubs["a"]!.forbid("/v1/mdmDevices/")
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        #expect(Self.asked(world) == ["M0000/details"])
+        world.appleMDM.pause()
+        world.appleMDM.load()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(Self.asked(world) == ["M0000/details"], "a refused read was asked again")
+        #expect(world.appleMDM.rows.map(\.details.word) == ["Role can't read", "Not read", "Not read"])
+        #expect(world.appleMDM.detailsNote?.hasPrefix("Your role can't read Apple MDM device details") == true, "\(world.appleMDM.detailsNote ?? "nil")")
+    }
+
+    /// Shown again after a pause, the screen is showing: an org switch then reads the new org at once (Phase 2b verifier
+    /// round 1, mutant N-pausedNeverCleared: the pause outlived the return, and the switch read nothing).
+    @Test func aSwitchAfterComingBackReadsTheNewOrg() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, "a", count: 1, prefix: "A")
+        Self.fleet(world, "b", count: 1, prefix: "B")
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        world.appleMDM.pause()
+        world.appleMDM.load()
+        await Self.settled(world, 2)
+        world.orgs.select("b")
+        await eventually("b read while showing") { world.appleMDM.rows.map(\.id) == ["B0000"] }
+        await Self.settled(world, 3)
+        #expect(Self.isLoaded(world.appleMDM.state) && Self.asked(world, "b") == ["B0000/details"])
+    }
 }

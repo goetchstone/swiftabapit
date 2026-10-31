@@ -108,10 +108,17 @@ public final class DeviceDetailModel {
                 assign(result)
             })
         }
-        run({ try await client.device(serial) }) { [weak self] in self?.device = $0 }
-        run({ try await client.appleCare(serial) }) { [weak self] in self?.coverage = $0 }
-        run({ try await client.activationLock(serial) }) { [weak self] in self?.lock = $0 }
-        run({ try await client.assignedService(serial) }) { [weak self] in self?.service = $0 }
+        if AppleRead.isPathSafe(serial) {
+            run({ try await client.device(serial) }) { [weak self] in self?.device = $0 }
+            run({ try await client.appleCare(serial) }) { [weak self] in self?.coverage = $0 }
+            run({ try await client.activationLock(serial) }) { [weak self] in self?.lock = $0 }
+            run({ try await client.assignedService(serial) }) { [weak self] in self?.service = $0 }
+        } else {
+            // A serial that can't go in a path is never sent, and never "no such item", the client's word for a read it
+            // refused to build, of a device Apple has just listed (Phase 2b verifier round 1: review L1's class, here).
+            let why = ScreenWords.unsendableID
+            (device, coverage, lock, service) = (.failed(why), .failed(why), .failed(why), .failed(why))
+        }
         readTimeline(client, serial, token: token)
     }
 

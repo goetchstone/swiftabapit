@@ -156,7 +156,7 @@ struct ContentView: View {
             ContentUnavailableView {
                 Label("Your role can't read this", systemImage: "lock")
             } description: {
-                Text("The last permissions check found this API account's role can't read \(section.phrase).")
+                Text(section.lockedNote)
             } actions: {
                 Button("Re-check in Settings") { self.section = .settings }
             }

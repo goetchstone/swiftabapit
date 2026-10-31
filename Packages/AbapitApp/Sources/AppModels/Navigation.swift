@@ -61,6 +61,13 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         return reads.allSatisfy { denied.contains($0.rawValue) }
     }
 
+    /// What a locked section says in its screen's place. Here so a test reads it: in the app's `ContentView` a locked
+    /// Overview, which M1's rule made possible, read "can't read overview." (Phase 2b verifier round 1).
+    public var lockedNote: String {
+        let what = self == .overview ? "anything the Overview shows: its devices, services and audit log" : phrase
+        return "The last permissions check found this API account's role can't read \(what)."
+    }
+
     /// The sections the sidebar lists for `org`: a known School org's hides the Business-only ones rather than showing
     /// them empty (plan §4). No org, an unknown scope or another provider hides nothing: each screen then says why it
     /// can't read, which a hidden section couldn't.
