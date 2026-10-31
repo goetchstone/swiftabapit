@@ -5,9 +5,11 @@ import SwiftUI
 
 /// The Apple MDM inspector: the selected device as the list has it, its posture in words, and every attribute of its
 /// details as Apple sent it (a details record holds no secret, so the every-attribute list is safe here). A device whose
-/// details weren't read says why; selecting it asks for them (`AppleMDMModel.selection`).
+/// details weren't read says why; selecting it asks for them (`AppleMDMModel.selection`). A selection the list doesn't
+/// hold says why in the model's words (`selectionNote`: still reading, or not in Apple's list).
 struct AppleMDMInspectorView: View {
     let row: AppleMDMRow?
+    let note: String?
 
     var body: some View {
         Form {
@@ -26,8 +28,9 @@ struct AppleMDMInspectorView: View {
                         .accessibilityIdentifier("apple-mdm.inspector.details")
                 }
             } else {
-                Text("Select a device to see its details.")
+                Text(note ?? "Select a device to see its details.")
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("apple-mdm.inspector.note")
             }
         }
         .formStyle(.grouped)

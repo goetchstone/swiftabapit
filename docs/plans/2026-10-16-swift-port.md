@@ -1076,8 +1076,16 @@ timeline by `filter[subjectId]`; the Dashboard in Swift Charts, counting only li
 own seven-day read; CSV columns in Reports for every list (no profile, no package url, no audit payload); the sidebar's
 scope rule in `AppModels/Navigation.swift`; the demo org's people, content, Apple MDM devices and audit events, which
 name one another (`DemoTests`). Apple MDM reads up to 50 devices' `/details` as the page loads, one at a time and
-cancelled on a switch or Refresh, the rest on selection: a bounded deviation from §3.6's "never on page load". The
-screens' snapshots are CI's to render, and a `first` run that selects nothing fails. Live checks wait for S1's team build.
+cancelled on a switch, a Refresh or leaving the screen (resumed on return), the rest on selection: a bounded deviation
+from §3.6's "never on page load". The screens' snapshots are CI's to render, and a `first` run that selects nothing fails.
+2b's adversarial review (9dca2ae: one medium, ten lows) is fixed on the branch (`fix(2b): …` commits; failure-log
+2026-10-31, "a whole-section lock outlived the per-list models"): a section locks only when every read it shows was
+refused; an id that can't go in a path is never sent and says so; a package's location and its nested attributes are
+masked by a real address parse; the Dashboard's recent events in Activity's words; one quiet-service rule on both screens;
+Apple MDM's inspector says why a selection is missing and the details read pauses when the screen is left; the filter's id
+rules in their own words; the shared sentences, export rule and day formatter in `ScreenWords`; Refresh routed by
+`ScreenModels`, tested; test gaps for a cut timeline and a list refused part-way. The copied list code waits for Phase 3
+(apple-reads runbook). Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.
@@ -1137,6 +1145,9 @@ screens' snapshots are CI's to render, and a `first` run that selects nothing fa
     password's hash is guessed offline); the detail reads the profile live. So a diff sees a profile change only
     through the configuration's other attributes, such as `updatedDateTime`.
 - **Diff** (golden parity) and the Changes screen.
+  - Activity's `SidebarItem.reads` must change when Changes joins it: Changes is local history, readable in a School org
+    and with the audit log refused, but with `[.auditEvents]` alone a School org keeps the section hidden
+    (`SidebarItem.shown(for:)`) and a role refused the audit log has it locked (`isLocked(for:)`, Phase 2b review M1).
 - **Reports**:
   - coverage (with the new AppleCare fields);
   - fleet age;

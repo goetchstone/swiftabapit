@@ -13,6 +13,19 @@ public enum Panel<Value> {
     case failed(String)
 }
 
+extension Panel {
+    /// The panel a read's error leaves, through `LoadState(after:)`, so a panel says each error as a screen's list does:
+    /// a 403 is "your role can't read this", anything else (not in scope included) in its words.
+    @MainActor
+    init(after error: any Error) {
+        switch LoadState(after: error) {
+        case .forbidden: self = .forbidden
+        case .failed(let why), .notInScope(let why), .unusable(let why): self = .failed(why)
+        case .idle, .loading, .loaded: self = .failed(OrgsModel.message(error))
+        }
+    }
+}
+
 /// Device 360's ABM timeline (plan Phase 2: "Device 360's ABM timeline uses `filter[subjectId]`"): the device's audit
 /// events over the last `DeviceDetailModel.timelineDays` days, newest first, as Apple filtered them by subject; or why
 /// there are none to read. Apple School Manager has no audit log: said, never an empty timeline (invariant 8).
@@ -45,8 +58,8 @@ public final class DeviceDetailModel {
     public private(set) var service: Panel<MDMService?> = .loading
     /// Its own panel: a role that can't read the audit log is told so here, and only here.
     public private(set) var timeline: Panel<DeviceTimeline> = .loading
-    /// The query the timeline was asked with; nil until it is.
-    public private(set) var timelineQuery: AuditQuery?
+    /// The query the timeline was asked with; nil until it is. `package`: only the tests read it (Phase 2b review L10).
+    package private(set) var timelineQuery: AuditQuery?
 
     private let orgs: OrgsModel
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -73,7 +86,7 @@ public final class DeviceDetailModel {
         guard let serial else { return }
         guard let client = orgs.appleClient else {
             // Never a spinner that can't end: why, in words (invariant 8).
-            let why = "This organization can't be used: \(orgs.unusableReason ?? "there is none.")"
+            let why = ScreenWords.unusable(orgs)
             (device, coverage, lock, service, timeline) = (.failed(why), .failed(why), .failed(why), .failed(why), .failed(why))
             return
         }

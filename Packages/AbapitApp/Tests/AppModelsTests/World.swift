@@ -17,6 +17,8 @@ import Vault
 @MainActor
 struct World {
     let orgs: OrgsModel
+    /// The screen models as the app builds them (`ScreenModels`); the fields below are its.
+    let screens: ScreenModels
     let devices: DevicesModel
     let detail: DeviceDetailModel
     let people: PeopleModel
@@ -72,12 +74,11 @@ struct World {
                                                     sleep: { clock.advance($0) }),
                                pageCap: pageCap, sleep: { _ in })
         }
-        // In AppServices' order, so the switch handlers run in the app's order too.
-        let devices = DevicesModel(orgs: orgs)
-        return World(orgs: orgs, devices: devices, detail: DeviceDetailModel(orgs: orgs), people: PeopleModel(orgs: orgs),
-                     content: ContentModel(orgs: orgs), appleMDM: AppleMDMModel(orgs: orgs), activity: ActivityModel(orgs: orgs),
-                     dashboard: DashboardModel(orgs: orgs, devices: devices), stubs: stubs, gates: gates,
-                     store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
+        // As AppServices builds them, so the switch handlers run in the app's order too.
+        let screens = ScreenModels(orgs: orgs)
+        return World(orgs: orgs, screens: screens, devices: screens.devices, detail: screens.detail, people: screens.people,
+                     content: screens.content, appleMDM: screens.appleMDM, activity: screens.activity, dashboard: screens.dashboard,
+                     stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
 
     /// Org `org`'s profile as the world makes it: Apple Business unless `scope` says School, its own client and key IDs.

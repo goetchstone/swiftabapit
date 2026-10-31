@@ -113,6 +113,16 @@ struct ActivityTests {
              "The range must fall between 1970 and 9999."),
             ({ var f = AuditFilter(); f.actorID = "A1,A2"; return f }(), "The actor ID can hold only letters, digits, -, _ and ., as Apple's IDs do."),
             ({ var f = AuditFilter(); f.subjectID = "S 1"; return f }(), "The subject ID can hold only letters, digits, -, _ and ., as Apple's IDs do."),
+            // Phase 2b review L8: the length and the leading dot in their own words, not the characters'.
+            ({ var f = AuditFilter(); f.actorID = String(repeating: "A", count: 129); return f }(),
+             "The actor ID is longer than Apple's IDs: at most 128 characters."),
+            ({ var f = AuditFilter(); f.actorID = ".hidden"; return f }(), "The actor ID can't start with a dot, as Apple's IDs don't."),
+            ({ var f = AuditFilter(); f.subjectID = "." + String(repeating: "S", count: 200); return f }(),
+             "The subject ID can't start with a dot, as Apple's IDs don't."),
+            ({ var f = AuditFilter(); f.subjectID = ".hid den"; return f }(), "The subject ID can hold only letters, digits, -, _ and ., as Apple's IDs do."),
+            ({ var f = AuditFilter(); f.actorID = "A1"; f.subjectID = String(repeating: "s", count: 129); return f }(),
+             "The subject ID is longer than Apple's IDs: at most 128 characters."),
+            ({ var f = AuditFilter(); f.actorID = "A\u{301}1"; return f }(), "The actor ID can hold only letters, digits, -, _ and ., as Apple's IDs do."),
         ]
         for (filter, words) in refused {
             #expect(filter.problem(now: now) == words, "\(filter)")
@@ -239,7 +249,7 @@ struct ActivityTests {
         await Self.settled(world, 1)
         #expect(world.activity.state == .forbidden)
         #expect(world.activity.emptyText == "Your role can't read the audit log.")
-        #expect(world.activity.exportBlocked == nil && world.activity.shown.isEmpty)
+        #expect(world.activity.exportBlocked == ScreenWords.nothingToExport && world.activity.shown.isEmpty)
     }
 
     /// Apple School Manager has no audit log: said in words, and nothing is sent.
@@ -523,6 +533,23 @@ struct DeviceTimelineTests {
         #expect(sent.contains("filter%5BsubjectId%5D=ADEV0000001"), "\(sent)")
         let query = try #require(world.detail.timelineQuery)
         #expect(query.end.timeIntervalSince(query.start) == Double(DeviceDetailModel.timelineDays) * 86_400 && DeviceDetailModel.timelineDays == 30)
+    }
+
+    /// Phase 2b review L5 (mutant T2): a timeline the page cap cut says so, "showing N events: the list stopped at the page
+    /// limit", never as if every event naming the device were there.
+    @Test func aTimelineCutAtThePageCapSaysSo() async throws {
+        let world = try await World.make(pageCap: 1)
+        world.stubs["a"]!.add((0..<1_001).map { ActivityTests.event("t\($0)", hoursAgo: 1 + Double($0) / 100, subject: "ADEV0000001") })
+        world.stubs["a"]!.add([ActivityTests.event("other", hoursAgo: 1, subject: "ADEV0000002")])
+        world.detail.show("ADEV0000001")
+        await Self.settled(world, 1)
+        guard case .loaded(let timeline) = world.detail.timeline, case .read(let rows, let truncated) = timeline else {
+            Issue.record("\(world.detail.timeline)")
+            return
+        }
+        #expect(truncated && rows.count == 1_000, "\(rows.count) rows, truncated \(truncated)")
+        #expect(timeline.note == "Showing \(1_000.formatted()) events: the list stopped at the page limit.")
+        #expect(ActivityTests.audit(world).count == 1, "the cap is one page: \(ActivityTests.audit(world))")
     }
 
     @Test func aTimelineSaysWhatItLacks() {

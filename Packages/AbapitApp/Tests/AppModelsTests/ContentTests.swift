@@ -458,7 +458,8 @@ struct ContentTests {
             let detail = try Self.detail(world)
             #expect(detail.fields.first { $0.label == "Location" }?.value == shown)
             #expect(detail.attributes.first { $0.label == "url" }?.value == shown)
-            #expect(detail.notes == ["The location's user, password, query and fragment are masked: they can carry credentials. It is shown here, never opened."])
+            #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                     + "It is shown here, never opened."])
             let everything = (detail.fields + detail.attributes).map(\.value) + detail.notes + [detail.title, String(describing: detail.fields)]
             #expect(!everything.contains { $0.contains(secret) || $0.contains("deploy") }, "\(everything)")
         }
@@ -488,6 +489,93 @@ struct ContentTests {
             let result = ContentWords.location(url)
             #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked == masked, "\(url) -> \(result)")
         }
+    }
+
+    /// Phase 2b review L2, probe p3: a scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, so a `://` in the query is the
+    /// query's (the first `://` anywhere was taken for the scheme's, and everything before it, query values included, was
+    /// copied raw); a leading `//` starts an authority, and an `@` ahead of the path ends a user and password with no `//`;
+    /// a path parameter's value (`;jsessionid=`) is masked.
+    @Test func everyShapeOfALocationsCredentialIsMasked() {
+        let cases: [(String, String)] = [
+            ("file:/pkgs/a.pkg?token=TOPSECRET4&next=https://example.com/x", "file:/pkgs/a.pkg?token=********&next=********"),
+            ("//deploy:TOPSECRET5@packages.example.com/a.pkg", "//********@packages.example.com/a.pkg"),
+            ("deploy:TOPSECRET6@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
+            ("deploy@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
+            ("https://packages.example.com/a.pkg;jsessionid=TOPSECRET7", "https://packages.example.com/a.pkg;jsessionid=********"),
+            ("https://packages.example.com/dl;sid=TOPSECRET9/a.pkg;v=2?k=v", "https://packages.example.com/dl;sid=********/a.pkg;v=********?k=********"),
+            ("https://packages.example.com/a.pkg;TOPSECRET10;empty=", "https://packages.example.com/a.pkg;********;empty="),
+            ("HTTPS://deploy:TOPSECRET8@packages.example.com/a.pkg", "HTTPS://********@packages.example.com/a.pkg"),
+            ("svn+ssh://deploy:TOPSECRET11@packages.example.com/repo", "svn+ssh://********@packages.example.com/repo"),
+            ("  https://deploy:TOPSECRET12@packages.example.com/a.pkg", "  https://********@packages.example.com/a.pkg"),
+            ("https://packages.example.com/my pkg.pkg?sig=TOPSECRET13", "https://packages.example.com/my pkg.pkg?sig=********"),
+            ("url=https://deploy:TOPSECRET14@packages.example.com/a.pkg", "url=https://********@packages.example.com/a.pkg"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            #expect(!result.text.contains("TOPSECRET") && !result.text.contains("deploy"), "\(result.text)")
+        }
+    }
+
+    /// A plain address and a string that isn't one show as they came, in the Location and among the attributes.
+    @Test func aPlainAddressAndAPlainStringShowUnchanged() {
+        for plain in ["https://packages.example.com/a.pkg", "packages.example.com/a.pkg", "file:/pkgs/a.pkg", "//packages.example.com/a.pkg"] {
+            let result = ContentWords.location(plain)
+            #expect(Array(result.text.utf8) == Array(plain.utf8) && !result.masked, "\(plain) -> \(result)")
+            #expect(Array(ContentWords.addresses(in: plain).utf8) == Array(plain.utf8))
+        }
+        for text in ["Acme VPN client, version 6.1 (signed)", "com.example.vpnclient", "3.2.7", "e3b0c44298fc1c149afbf4c8996fb924",
+                     "Is this the one? Yes #2; see notes", "C# runtime & tools", "@everyone", "Note: for Macs", "  spaced  out  ", ""] {
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+        #expect(ContentWords.addresses(in: "Mirror at https://deploy:TOPSECRET15@mirror.example.com/a.pkg, or ask")
+                == "Mirror at https://********@mirror.example.com/a.pkg, or ask")
+    }
+
+    /// Phase 2b review L2, probe p2: an address inside an object or a list of objects among a package's attributes is
+    /// masked as the Location is; a nested value with no address shows as it came.
+    @Test func anAddressNestedInAPackagesAttributesIsMasked() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Nested"), "url": .string("packages.example.com/a.pkg?sig=TOPSECRET1"),
+            "mirror": .object(["url": .string("https://deploy:TOPSECRET2@mirror.example.com/a.pkg"), "weight": .number("2")]),
+            "mirrors": .array([.object(["url": .string("https://deploy:TOPSECRET3@m2.example.com/a.pkg")]), .string("//deploy:TOPSECRET4@m3.example.com/a.pkg")]),
+            "deep": .object(["list": .array([.array([.string("deploy:TOPSECRET5@m4.example.com/a.pkg")])])]),
+            "notes": .object(["text": .string("Built by the release team."), "count": .number("3"), "flag": .bool(true)]),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        let shown = detail.fields + detail.attributes
+        #expect(!shown.contains { $0.value.contains("TOPSECRET") || $0.value.contains("deploy") }, "\(shown)")
+        func attribute(_ key: String) -> String? { detail.attributes.first { $0.label == key }?.value }
+        #expect(attribute("url") == "packages.example.com/a.pkg?sig=********", "the url is the Location, whatever its shape")
+        #expect(detail.fields.first { $0.label == "Location" }?.value == "packages.example.com/a.pkg?sig=********")
+        #expect(attribute("mirror") == #"{"url": "https://********@mirror.example.com/a.pkg", "weight": 2}"#)
+        #expect(attribute("mirrors") == #"{"url": "https://********@m2.example.com/a.pkg"}, //********@m3.example.com/a.pkg"#)
+        #expect(attribute("deep") == #"{"list": [["********@m4.example.com/a.pkg"]]}"#)
+        #expect(attribute("notes") == #"{"text": "Built by the release team.", "count": 3, "flag": true}"#)
+    }
+
+    /// Phase 2b review L1: a row whose id can't go in a path is never read, and its detail says so, never "Apple has no such
+    /// item." (the client's word for a read it refused to build) of an item Apple has just listed.
+    @Test func aDetailWhoseIDCantBeSentIsNeverAskedFor() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "apps", id: "A B", attributes: ["name": .string("Spaced")])])
+        world.content.load()
+        await Self.settled(world, 4)
+        #expect(world.content.apps.rows.map(\.id) == ["A B"])
+        let before = world.stubs["a"]!.requests.count
+        world.content.selection = "A B"
+        guard case .failed(let why) = world.content.detail.item else { Issue.record("\(world.content.detail.item)"); return }
+        #expect(why == "This id can't be sent to Apple, so nothing was asked for.")
+        #expect(why == ScreenWords.unsendableID)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(world.stubs["a"]!.requests.count == before, "\(world.stubs["a"]!.requests.dropFirst(before))")
+        #expect(world.content.detail.readsFinished == 0, "no read was started")
     }
 
     // MARK: blueprints

@@ -14,7 +14,7 @@ are below.
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
   (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
-  in N days).
+  in N days; `lastConnected` public, so the Services screen reads a service's last connection the same way).
 - `Packages/AbapitKit/Tests/ReportsTests/`: parity against `Tests/Fixtures/parity/{csv,reports}.json`,
   `ExportPolicyTests`, `FindTests`, `AuditDigestTests`, `QuietServicesTests`.
 - `scripts/gen_fixtures.py`: `gen_csv` (`csv_edges`, `corrected_safe`, the `csv.reader` round trip) and
@@ -128,10 +128,12 @@ are below.
   golden (the generator writes canonical JSON) and from Apple (the three fields are strings in the contract).
 - **An audit list is ordered by instant, never by its string**, and ties compare `ISODate.date`: `ISODate`'s `==`
   compares the offset too, so two spellings of one instant would not tie.
-- **Two quiet-service rules remain**: since 2b the Overview counts with Reports' `QuietServices`, the exact rule. The
-  Services screen still flags a service by whole days (`daysSinceConnected`, more than 30) and keeps `DELETED` ones, so
-  the two can disagree at the day's boundary and on a deleted service until Services moves onto `QuietServices`;
-  `DevicesModel.quietServices(after:)` has no screen left, only `PanelTests`.
+- **One quiet-service rule, on both screens**: the Overview's card counts with Reports' `QuietServices`, and since the
+  Phase 2b review (L4) the Services screen's Last connected column does too (`DevicesModel.connection(of:now:)` over
+  `QuietServices.lastConnected` and the same rows), so the two screens share one rule: more than 30 days by the instant
+  (not whole days), a date this app can't read said as one (never "Never"), a `DELETED` service never flagged.
+  `DevicesModel.quietServices(after:)`, the whole-days rule, is gone. `PanelTests.theServicesColumnIsTheOverviewsQuietRule`
+  holds the column to the card's rows.
 - **Spreadsheet behaviour is unverified**: whether Excel or Numbers runs `" =1"`, `"\u{200B}=1"`, a
   full-width U+FF1D or `"\u{2212}1"` as a formula wasn't tested; the wider guard costs a `'` on such a cell
   either way. A leading combining mark isn't skipped: it shows on its own, and no trimmer drops it.

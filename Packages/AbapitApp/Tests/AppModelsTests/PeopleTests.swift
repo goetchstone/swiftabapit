@@ -218,6 +218,54 @@ struct PeopleTests {
         #expect(world.people.groups.partialCount == nil && world.people.exportBlocked(.groups) == nil)
     }
 
+    /// Phase 2b review L6, probe p8: a list refused part-way (a 403 on its second page) keeps the rows read before the
+    /// refusal, says it's partial and doesn't export them as if whole; the other lists are untouched.
+    @Test func aListRefusedPartWayIsPartial() async throws {
+        let world = try await Self.world(users: Self.users(1_500))
+        world.stubs["a"]!.queue(403, for: "/v1/users?cursor=")
+        world.people.load()
+        await settled(world, 3)
+        #expect(world.people.users.state == .forbidden)
+        #expect(world.people.users.rows.count == 1_000 && world.people.users.partialCount == 1_000)
+        #expect(world.people.exportBlocked(.users) == "The list is partial: \(1_000.formatted()) users were read before the error. Refresh, then export.")
+        #expect(world.people.users.unavailable == nil, "a partial list is shown, said to be partial")
+        #expect(Self.isLoaded(world.people.groups.state) && world.people.groups.partialCount == nil && world.people.exportBlocked(.groups) == nil)
+    }
+
+    /// The same for the groups, refused on their second page.
+    @Test func groupsRefusedPartWayArePartial() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.add((0..<1_500).map { Self.group(String(format: "G%05d", $0), "Group \($0)") })
+        world.stubs["a"]!.queue(403, for: "/v1/userGroups?cursor=")
+        world.people.load()
+        await settled(world, 3)
+        #expect(world.people.groups.state == .forbidden)
+        #expect(world.people.groups.rows.count == 1_000 && world.people.groups.partialCount == 1_000)
+        #expect(world.people.exportBlocked(.groups) == "The list is partial: \(1_000.formatted()) user groups were read before the error. Refresh, then export.")
+        #expect(Self.isLoaded(world.people.users.state) && world.people.exportBlocked(.users) == nil)
+    }
+
+    /// Phase 2b review L1: a group or an org unit whose id can't go in a path is never asked for its members, and its line
+    /// says so, never "Apple has no such item." of a group Apple has just listed.
+    @Test func membersOfAnIDThatCantBeSentAreNeverAskedFor() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.add([Self.group("G 1", "Spaced", count: 3)])
+        world.stubs["a"]!.add([Self.unit("OU/2", "Slashed")])
+        world.people.load()
+        await settled(world, 3)
+        let before = world.stubs["a"]!.requests.count
+        world.people.tab = .groups
+        world.people.selectedGroup = "G 1"
+        #expect(world.people.groupMembers.state == .failed("This id can't be sent to Apple, so nothing was asked for."))
+        #expect(world.people.groupMembers.line(appleCount: 3) == "The members couldn't be read: This id can't be sent to Apple, so nothing was asked for.")
+        world.people.tab = .units
+        world.people.selectedUnit = "OU/2"
+        #expect(world.people.unitMembers.state == .failed(ScreenWords.unsendableID))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(world.stubs["a"]!.requests.count == before, "\(world.stubs["a"]!.requests.dropFirst(before))")
+        #expect(world.people.groupMembers.readsFinished == 0 && world.people.unitMembers.readsFinished == 0, "no read was started")
+    }
+
     @Test func exportWaitsForTheListAndForRows() async throws {
         let world = try await Self.world()
         world.gates["a"]!.hold("users", Self.userPages)
@@ -553,12 +601,17 @@ struct PeopleTests {
         #expect(world.people.user?.name == "Ada Fernhill")
         // A unit's id the same way: U+00C5 is A and U+030A composed.
         #expect(world.people.unitName("\u{C5}U") == "Nordic" && world.people.unitName("A\u{30A}U") == "A\u{30A}U")
-        // And choosing the other spelling of a selected group is choosing another group: its members are read.
+        // And choosing the other spelling of a selected group is choosing another group: its member list is asked for again.
+        // Neither id can go in a path, so each says so and nothing is sent (Phase 2b review L1); before, each was a read
+        // the client refused as "no such item".
+        let sent = world.stubs["a"]!.requests.count
         world.people.selectedGroup = "\u{C5}G"
-        await members(world.people.groupMembers, 2)
+        #expect(world.people.groupMembers.owner.map { Array($0.utf8) } == Array("\u{C5}G".utf8))
+        #expect(world.people.groupMembers.state == .failed(ScreenWords.unsendableID))
         world.people.selectedGroup = "A\u{30A}G"
-        await members(world.people.groupMembers, 3)
         #expect(world.people.groupMembers.owner.map { Array($0.utf8) } == Array("A\u{30A}G".utf8))
+        #expect(world.people.groupMembers.state == .failed(ScreenWords.unsendableID))
+        #expect(world.stubs["a"]!.requests.count == sent)
     }
 
     /// An org switch while a group's members are on their way: they never land, and the panel is idle.
@@ -615,7 +668,7 @@ struct PeopleTests {
         let row = try #require(world.people.user)
         #expect(row.name == "Ada J Fernhill")
         let day = try #require(ISO8601DateFormatter().date(from: "2024-02-01T09:00:00Z")).formatted(date: .abbreviated, time: .omitted)
-        #expect(Model.day(row.started) == day)
+        #expect(ScreenWords.day(row.started) == day && ScreenWords.day(nil) == "—" && ScreenWords.day(.distantPast) == "—")
         let fields = Model.fields(of: row)
         #expect(fields.map(\.label) == ["Name", "Status", "Managed Apple Account", "Email", "External", "Employee number", "Department",
                                         "Job title", "Division", "Cost center", "Start date", "Created", "Updated"])

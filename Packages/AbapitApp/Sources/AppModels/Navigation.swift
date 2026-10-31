@@ -2,8 +2,8 @@ import AppleModels
 import Foundation
 import Orgs
 
-/// The sidebar, mirroring abapit's navigation (plan §4; Appendix B): each section, what it reads, the probe that locks
-/// it and whether the org's scope shows it. Here rather than in the app so `swift test` holds the rules; the app adds
+/// The sidebar, mirroring abapit's navigation (plan §4; Appendix B): each section, what it reads, when the recorded probes
+/// lock it and whether the org's scope shows it. Here rather than in the app so `swift test` holds the rules; the app adds
 /// only symbols and the launch's section (`App/AbapitApp.swift`). The raw value names a section to `ABAPIT_SCREEN`,
 /// `scripts/screenshots.sh` and the accessibility identifiers (`sidebar.<raw>`).
 public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
@@ -46,27 +46,19 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The probe whose "forbidden" locks the whole section: a lock and "your role can't read this" (invariant 8). A
-    /// screen whose other reads the role can't do says so in its own panels.
-    public var probed: AppleSection? {
-        switch self {
-        case .devices: .devices
-        case .services: .mdmServers
-        case .appleMDM: .mdmEnrolled
-        case .people: .users
-        case .content: .apps
-        case .activity: .auditEvents
-        case .overview, .reports, .settings: nil
-        }
-    }
-
     /// Whether Apple School Manager's API has nothing this section reads.
     public var isBusinessOnly: Bool { !reads.isEmpty && reads.allSatisfy(\.businessOnly) }
 
-    /// Whether the last permissions check found the org's role can't read the section's probe.
+    /// Whether the last permissions check found the org's role can't read anything the section shows: every one of its
+    /// `reads` probed "forbidden". The lock then takes the screen's place with "your role can't read this" (invariant 8).
+    /// A section the role can read part of shows its screen, and each refused panel says so in its own `.forbidden`
+    /// (Phase 2b review M1: one probe, users or apps, locked all of People or Content, though their models show the groups
+    /// beside refused users and the blueprints beside refused apps). A read with no probe result recorded (not probed, as
+    /// a School org's Business-only reads aren't, or probed before this version) isn't denied, and neither is an error.
     public func isLocked(for org: OrgProfile?) -> Bool {
-        guard let probed, let org else { return false }
-        return org.deniedSections.contains(probed.rawValue)
+        guard let org, !reads.isEmpty else { return false }
+        let denied = org.deniedSections
+        return reads.allSatisfy { denied.contains($0.rawValue) }
     }
 
     /// The sections the sidebar lists for `org`: a known School org's hides the Business-only ones rather than showing

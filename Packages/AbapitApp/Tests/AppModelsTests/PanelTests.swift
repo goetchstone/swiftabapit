@@ -1,8 +1,10 @@
 import AppleBusiness
+import AppleModels
 import AppModels
 import Foundation
 import JSONAPI
 import Orgs
+import Reports
 import Testing
 import TestSupport
 
@@ -67,8 +69,43 @@ struct PanelTests {
         #expect(world.devices.serviceCount == 1)
         #expect(world.devices.unassignedCount == 2)
         let lastConnected = try #require(ISO8601DateFormatter().date(from: "2026-10-01T00:00:00Z"))
-        #expect(world.devices.quietServices(after: 30, now: lastConnected.addingTimeInterval(10 * 86_400))?.isEmpty == true)
-        #expect(world.devices.quietServices(after: 30, now: lastConnected.addingTimeInterval(31 * 86_400))?.map(\.name) == ["Main MDM"])
+        // Services not connected lately, by the one rule the Overview and the Services screen share (`QuietServices`).
+        #expect(world.dashboard.quiet(now: lastConnected.addingTimeInterval(10 * 86_400))?.isEmpty == true)
+        #expect(world.dashboard.quiet(now: lastConnected.addingTimeInterval(31 * 86_400))?.map(\.service.name) == ["Main MDM"])
+    }
+
+    /// Phase 2b review L4, probe p7: the Services screen's Last connected column is Reports' rule, the Overview's: a date
+    /// this app can't read says so, never "Never"; a deleted service isn't flagged; exactly 30 days isn't quiet and a second
+    /// more is, by the instant, not by whole days; and the column flags exactly the services the quiet card lists.
+    @Test func theServicesColumnIsTheOverviewsQuietRule() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-31T12:00:00Z"))
+        func service(_ id: String, status: String = "ACTIVE", _ last: JSONValue?) -> MDMService {
+            var attributes: JSONObject = ["serverName": .string("MDM \(id)"), "status": .string(status)]
+            if let last { attributes["lastConnectedDateTime"] = last }
+            return MDMService(resource: Resource(type: "mdmServers", id: id, attributes: attributes))
+        }
+        func stamp(_ secondsAgo: Double) -> JSONValue { .string(ISO8601DateFormatter().string(from: now.addingTimeInterval(-secondsAgo))) }
+        let services = [
+            service("unreadable", .string("yesterday")), service("deleted", status: "DELETED", .string("2025-01-01T00:00:00Z")),
+            service("absent", nil), service("null", .null), service("thirty", stamp(30 * 86_400)), service("past", stamp(30 * 86_400 + 1)),
+            service("today", stamp(2 * 3_600)), service("one", stamp(86_400 + 60)), service("inactive", status: "INACTIVE", stamp(40 * 86_400)),
+        ]
+        let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now)) })
+        #expect(cells["unreadable"] == ServiceConnection(text: #"Unreadable date: "yesterday""#, isQuiet: true, spoken: #"Unreadable date: "yesterday""#))
+        #expect(cells["deleted"] == ServiceConnection(text: "668 days ago", isQuiet: false, spoken: "668 days ago"))
+        #expect(cells["absent"] == ServiceConnection(text: "Never connected", isQuiet: true, spoken: "Never connected"))
+        #expect(cells["null"]?.text == "Never connected" && cells["null"]?.isQuiet == true)
+        #expect(cells["thirty"] == ServiceConnection(text: "30 days ago", isQuiet: false, spoken: "30 days ago"))
+        #expect(cells["past"] == ServiceConnection(text: "30 days ago", isQuiet: true, spoken: "Not connected for 30 days"))
+        #expect(cells["today"] == ServiceConnection(text: "Today", isQuiet: false, spoken: "Today"))
+        #expect(cells["one"]?.text == "1 day ago" && cells["one"]?.isQuiet == false)
+        #expect(cells["inactive"] == ServiceConnection(text: "40 days ago", isQuiet: true, spoken: "Not connected for 40 days"))
+        let flagged = Set(services.filter { cells[$0.id]?.isQuiet == true }.map(\.id))
+        #expect(flagged == Set(QuietServices(services, now: now, days: QuietServices.defaultDays).rows.map(\.service.id)))
+        // The quiet card says each the same way.
+        for row in QuietServices(services, now: now).rows {
+            #expect(DashboardModel.lastConnected(row, now: now) == cells[row.service.id]?.text)
+        }
     }
 
     /// Devices and services load side by side, so the devices can be loaded while the services are still read. That
@@ -90,7 +127,7 @@ struct PanelTests {
         #expect(world.devices.servicesUnread != nil)
         #expect(world.devices.serviceCount == nil, "a Services tile of \(world.devices.serviceCount ?? 0) while they're read")
         #expect(world.devices.unassignedCount == nil, "a \"not assigned\" tile of \(world.devices.unassignedCount ?? 0) while they're read")
-        #expect(world.devices.quietServices(after: 30) == nil, "a health verdict on a list still being read")
+        #expect(world.dashboard.quiet() == nil, "a health verdict on a list still being read")
         world.gates["a"]!.release("list")
         await world.settled(2)
         #expect(world.devices.serviceNote == nil)
@@ -106,7 +143,7 @@ struct PanelTests {
         #expect(world.devices.servicesUnread?.contains("can't read device management services") == true, "\(world.devices.servicesUnread ?? "nil")")
         #expect(world.devices.serviceCount == nil)
         #expect(world.devices.unassignedCount == nil)
-        #expect(world.devices.quietServices(after: 30) == nil)
+        #expect(world.dashboard.quiet() == nil)
         #expect(world.devices.servicesPartialCount == nil, "nothing was read, so nothing is partial")
     }
 
@@ -128,7 +165,7 @@ struct PanelTests {
         #expect(world.devices.servicesPartialCount == 1000)
         #expect(world.devices.servicesUnread?.hasPrefix("The services couldn't be read") == true, "\(world.devices.servicesUnread ?? "nil")")
         #expect(world.devices.serviceCount == nil, "the Services tile counted a partial list")
-        #expect(world.devices.quietServices(after: 30) == nil)
+        #expect(world.dashboard.quiet() == nil)
         #expect(world.devices.rows.allSatisfy { $0.assignment == .unknown })
     }
 

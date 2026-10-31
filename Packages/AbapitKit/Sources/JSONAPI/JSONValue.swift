@@ -99,6 +99,25 @@ public enum JSONValue: Equatable, Sendable {
     /// The value as JSON text (`json.dumps`), for showing a nested attribute.
     public var jsonText: String { Self.dumps(self) }
 
+    /// This value with every string in it, at any depth, through `transform`; keys, their order and every other value as
+    /// they came. For a screen that masks what a string may hold wherever Apple put it (Phase 2b review L2: a package's
+    /// address inside an object showed raw), and that can't name this type (the screen models' package depends on
+    /// AppleModels, not JSONAPI).
+    public func mappingStrings(_ transform: (String) -> String) -> JSONValue {
+        switch self {
+        case .string(let text):
+            return .string(transform(text))
+        case .array(let items):
+            return .array(items.map { $0.mappingStrings(transform) })
+        case .object(let object):
+            var mapped = JSONObject()
+            for (key, value) in object { mapped[key] = value.mappingStrings(transform) }
+            return .object(mapped)
+        case .null, .bool, .number:
+            return self
+        }
+    }
+
     static func quoted(_ text: String) -> String {
         var out = "\""
         for scalar in text.unicodeScalars {

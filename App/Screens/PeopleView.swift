@@ -83,7 +83,7 @@ struct PeopleView: View {
                 .width(min: 80, ideal: 120)
             TableColumn("Job title", value: \.jobTitle)
                 .width(min: 80, ideal: 140)
-            TableColumn("Start date", value: \.startedSort) { Text(PeopleModel.day($0.started)) }
+            TableColumn("Start date", value: \.startedSort) { Text(ScreenWords.day($0.started)) }
                 .width(min: 80, ideal: 100)
         }
         .accessibilityLabel("Users")
@@ -116,7 +116,7 @@ struct PeopleView: View {
                 .width(min: 120, ideal: 200)
             TableColumn("Description", value: \.summary)
                 .width(min: 140, ideal: 280)
-            TableColumn("Updated", value: \.updatedSort) { Text(PeopleModel.day($0.updated)) }
+            TableColumn("Updated", value: \.updatedSort) { Text(ScreenWords.day($0.updated)) }
                 .width(min: 80, ideal: 100)
         }
         .accessibilityLabel("Org units")

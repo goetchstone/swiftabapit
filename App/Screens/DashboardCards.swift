@@ -210,8 +210,8 @@ struct QuietServicesCard: View {
     }
 }
 
-/// The newest ten audit events of the last seven days, newest first (Reports' `AuditDigest.recent`). Refused, failed or
-/// not in the org's scope is said here only.
+/// The newest ten audit events of the last seven days, newest first (Reports' `AuditDigest.recent`), each in Activity's
+/// words (`DashboardModel.recentRows`). Refused, failed or not in the org's scope is said here only.
 struct RecentEventsCard: View {
     let dashboard: DashboardModel
 
@@ -224,9 +224,8 @@ struct RecentEventsCard: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                     Divider()
-                    ForEach(dashboard.recentEvents) { event in
-                        EventRow(when: Self.when(event), type: event.type?.rawValue ?? "—", actor: event.actorName ?? "—",
-                                 subject: event.subjectName ?? "—", outcome: event.outcome?.rawValue ?? "—")
+                    ForEach(dashboard.recentRows) { row in
+                        EventRow(when: Self.when(row.event), type: row.type, actor: row.actor, subject: row.subject, outcome: row.outcome)
                     }
                 }
                 .accessibilityIdentifier("overview.audit.list")
@@ -253,7 +252,7 @@ private struct EventRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             when.frame(width: 120, alignment: .leading)
-            Text(type).font(.callout.monospaced()).frame(maxWidth: .infinity, alignment: .leading)
+            Text(type).frame(maxWidth: .infinity, alignment: .leading)
             Text(actor).frame(maxWidth: .infinity, alignment: .leading)
             Text(subject).frame(maxWidth: .infinity, alignment: .leading)
             Text(outcome).frame(width: 80, alignment: .leading)

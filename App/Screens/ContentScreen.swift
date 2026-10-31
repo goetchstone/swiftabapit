@@ -33,7 +33,7 @@ struct ContentScreen: View {
                         .width(min: 50, ideal: 70)
                     TableColumn("Bundle IDs", value: \.bundleIDs)
                         .width(min: 120, ideal: 240)
-                    TableColumn("Updated", value: \.updated) { Text(Self.day($0.updated)) }
+                    TableColumn("Updated", value: \.updated) { Text(ScreenWords.day($0.updated)) }
                         .width(min: 80, ideal: 100)
                 }
             case .blueprints:
@@ -44,7 +44,7 @@ struct ContentScreen: View {
                         .width(min: 70, ideal: 100)
                     TableColumn("Licences", value: \.licences)
                         .width(min: 60, ideal: 80)
-                    TableColumn("Updated", value: \.updated) { Text(Self.day($0.updated)) }
+                    TableColumn("Updated", value: \.updated) { Text(ScreenWords.day($0.updated)) }
                         .width(min: 80, ideal: 100)
                 }
             case .configurations:
@@ -55,7 +55,7 @@ struct ContentScreen: View {
                         .width(min: 90, ideal: 160)
                     TableColumn("Platforms", value: \.platforms)
                         .width(min: 80, ideal: 160)
-                    TableColumn("Updated", value: \.updated) { Text(Self.day($0.updated)) }
+                    TableColumn("Updated", value: \.updated) { Text(ScreenWords.day($0.updated)) }
                         .width(min: 80, ideal: 100)
                 }
             }
@@ -77,11 +77,6 @@ struct ContentScreen: View {
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)
         }
         .task { model.load() }
-    }
-
-    /// A row's date; `distantPast` stands for none, so it sorts first.
-    static func day(_ date: Date) -> String {
-        date == .distantPast ? "—" : date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
@@ -132,7 +127,7 @@ where Columns.TableRowValue == Row, Columns.TableColumnSortComparator == KeyPath
         .toolbar {
             ToolbarItem {
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(shown.isEmpty || model.exportBlocked(for: Row.kind) != nil)
+                    .disabled(model.exportBlocked(for: Row.kind) != nil)
                     .help(model.exportBlocked(for: Row.kind) ?? "Exports the \(Row.kind.noun) shown, with the \(Row.kind.title) columns only")
                     .accessibilityLabel("Export \(Row.kind.noun) as CSV")
                     .accessibilityIdentifier("content.\(name).export")

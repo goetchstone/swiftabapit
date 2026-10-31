@@ -147,18 +147,9 @@ struct ContentView: View {
         #endif
     }
 
-    /// Refresh (⌘R, the toolbar): the section on screen reads again from Apple. Services are part of the Devices read;
-    /// Reports and Settings have no read of their own yet and refresh the devices, as every section did in Phase 1.
-    private func refresh() {
-        switch shown {
-        case .overview: services.dashboard.load(force: true)
-        case .appleMDM: services.appleMDM.load(force: true)
-        case .people: services.people.load(force: true)
-        case .content: services.content.load(force: true)
-        case .activity: services.activity.load(force: true)
-        case .devices, .services, .reports, .settings: services.devices.load(force: true)
-        }
-    }
+    /// Refresh (⌘R, the toolbar): the section on screen reads again from Apple, by `ScreenModels.refresh`'s routing, which
+    /// the package's tests hold.
+    private func refresh() { services.screens.refresh(shown) }
 
     @ViewBuilder private func detail(_ section: SidebarItem) -> some View {
         if section.isLocked(for: orgs.active) {

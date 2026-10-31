@@ -27,6 +27,21 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-31 — A whole-section gate outlived the per-list models below it
+- **What happened:** Phase 2b's review (M1) found one refused probe (users, apps) locked all of People or Content, though
+  2b had built and tested those models to show the readable lists beside the refused one; the screen never showed it
+  (failure-log 2026-10-31, "a whole-section lock outlived the per-list models"). A test pinned the lock's one-probe table
+  as a constant, so it held the old shape in place.
+- **Invariant in force:** #8 ("a section a probe found forbidden says 'your role can't read this'").
+- **Why it didn't hold:** weak wording and the wrong layer. #8 names a section and a probe, one each, which was true when a
+  section was one list; once a section is several panels, "the section's probe" reads as one of them, and the gate sat in
+  the view's composition while the per-list behaviour sat in the models, each half tested alone.
+- **Would a rule have caught it?** only if worded differently: "a screen is locked only when every read it shows was
+  refused; otherwise each refused panel says so itself", and a gate is tested over the reads it gates, not as a table.
+- **Enforcement home if changed:** tripwire test (`NavigationTests` over `SidebarItem.reads`, as now); the `improve-rules`
+  pass could reword #8's clause; and the `pre-commit` skill's screen item could ask of a split model: "what gates sit above
+  it, and are they re-derived from the same reads?"
+
 ## 2026-10-31 — A fix that made a read stricter made a new silence
 - **What happened:** Phase 2a review L6 gave every view one strict list reader: a list holding an item of another type
   reads nil. Its test asserted the nil. In the acceptance pass the nil read as no items, so a service's families list

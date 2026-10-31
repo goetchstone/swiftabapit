@@ -71,7 +71,7 @@ struct ActivityView: View {
                         ActivityFilterForm(model: model) { filtering = false }
                     }
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(model.shown.isEmpty || model.exportBlocked != nil)
+                    .disabled(model.exportBlocked != nil)
                     .help(model.exportBlocked ?? "Exports the events shown, with their common attributes only (no payloads)")
                     .accessibilityIdentifier("activity.export")
             }

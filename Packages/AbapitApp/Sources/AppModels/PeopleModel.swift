@@ -327,7 +327,8 @@ public final class PeopleModel {
             Field("Name", row.name), Field("Status", row.status), Field("Managed Apple Account", row.account), Field("Email", row.email),
             Field("External", row.external), Field("Employee number", text(user.employeeNumber)), Field("Department", row.department),
             Field("Job title", row.jobTitle), Field("Division", text(user.division)), Field("Cost center", text(user.costCenter)),
-            Field("Start date", day(row.started)), Field("Created", day(user.created?.date)), Field("Updated", day(user.updated?.date)),
+            Field("Start date", ScreenWords.day(row.started)), Field("Created", ScreenWords.day(user.created?.date)),
+            Field("Updated", ScreenWords.day(user.updated?.date)),
         ]
     }
 
@@ -335,12 +336,13 @@ public final class PeopleModel {
         [
             Field("Name", row.name), Field("Type", row.type), Field("Status", row.status),
             Field("Members, Apple's count", row.membersText), Field("Org unit", row.unit),
-            Field("Created", day(row.group.created?.date)), Field("Updated", day(row.group.updated?.date)),
+            Field("Created", ScreenWords.day(row.group.created?.date)), Field("Updated", ScreenWords.day(row.group.updated?.date)),
         ]
     }
 
     public nonisolated static func fields(of row: UnitRow) -> [Field] {
-        [Field("Name", row.name), Field("Description", row.summary), Field("Created", day(row.unit.created?.date)), Field("Updated", day(row.updated))]
+        [Field("Name", row.name), Field("Description", row.summary), Field("Created", ScreenWords.day(row.unit.created?.date)),
+         Field("Updated", ScreenWords.day(row.updated))]
     }
 
     /// A user's phone numbers, each with its type in words (one Apple adds later as sent; "Phone" when it sent none).
@@ -379,17 +381,16 @@ public final class PeopleModel {
         }
     }
 
-    /// Why the tab's Export is off, in words; nil when it exports. A list still loading or left partial by an error isn't
-    /// exported as if whole: the file couldn't say so. One the page cap stopped exports, as the banner says it was cut.
+    /// Why the tab's Export is off, in words; nil when it exports: every screen's rule (`ScreenWords.exportBlocked`). A list
+    /// still loading or left partial by an error isn't exported as if whole, and one the page cap stopped exports, as the
+    /// banner says it was cut.
     public func exportBlocked(_ tab: Tab) -> String? {
-        let (state, partial, shown): (LoadState, Int?, Int) = switch tab {
-        case .users: (users.state, users.partialCount, shownUsers.count)
-        case .groups: (groups.state, groups.partialCount, shownGroups.count)
-        case .units: (units.state, units.partialCount, shownUnits.count)
+        let (state, read, shown): (LoadState, Int, Int) = switch tab {
+        case .users: (users.state, users.partialCount ?? 0, shownUsers.count)
+        case .groups: (groups.state, groups.partialCount ?? 0, shownGroups.count)
+        case .units: (units.state, units.partialCount ?? 0, shownUnits.count)
         }
-        if state.isLoading { return "The list is still loading." }
-        if let partial { return "The list is partial: \(partial.formatted()) \(tab.noun.many) were read before the error. Refresh, then export." }
-        return shown == 0 ? "There's nothing to export." : nil
+        return ScreenWords.exportBlocked(state, read: read, shown: shown, noun: tab.noun.many)
     }
 
     // MARK: loading
@@ -406,7 +407,7 @@ public final class PeopleModel {
             unitMembers.show(selectedUnit)
         }
         guard let client = orgs.appleClient else {
-            let why = Self.unusable(orgs)
+            let why = ScreenWords.unusable(orgs)
             (users.state, groups.state, units.state) = (.unusable(why), .unusable(why), .unusable(why))
             return
         }
@@ -472,11 +473,6 @@ public final class PeopleModel {
         return value
     }
 
-    /// A day as the tables and the inspector show it; a dash for none.
-    public nonisolated static func day(_ date: Date?) -> String {
-        date.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "—"
-    }
-
     public nonisolated static func words(_ status: UserStatus?, raw: String?) -> String {
         switch status {
         case .new?: "New"
@@ -527,12 +523,6 @@ public final class PeopleModel {
         case .unusable(let why), .notInScope(let why): return why
         }
         return "\(count.formatted()) \(count == 1 ? noun.one : noun.many) shown by id: \(reason)."
-    }
-
-    /// Why nothing can be read, as a sentence: no org yet, or one this version can't use.
-    static func unusable(_ orgs: OrgsModel) -> String {
-        orgs.active == nil ? "No organization yet: add an Apple Business or Apple School Manager API account in Settings."
-            : "This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")"
     }
 
     private func unitNames() -> [[UInt8]: String] {
@@ -619,7 +609,13 @@ extension PeopleModel {
             guard let id else { return }
             guard let client = orgs.appleClient else {
                 // Never a spinner that can't end: why, in words (invariant 8).
-                state = .unusable(PeopleModel.unusable(orgs))
+                state = .unusable(ScreenWords.unusable(orgs))
+                return
+            }
+            // An id that can't go in a path is never sent: the client would call it "no such item", which isn't so of a
+            // group or an org unit Apple has just listed (Phase 2b review L1).
+            guard AppleRead.isPathSafe(id) else {
+                state = .failed(ScreenWords.unsendableID)
                 return
             }
             let token = token, kind = kind

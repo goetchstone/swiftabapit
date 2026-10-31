@@ -134,6 +134,7 @@ public struct AppleMDMRow: Identifiable, Sendable {
 /// Each load has a token checked after every await and every page, as `DevicesModel`'s: a load or a detail read that
 /// was refreshed, superseded or cancelled writes nothing, and an org switch clears the screen and reads the new org
 /// (failure-log 2026-10-16, "the screen models had no tests"). The selection lives here, so the switch clears it too.
+/// Leaving the screen pauses the details read (`pause()`, invariant 7: a sweep is cancellable).
 @MainActor
 @Observable
 public final class AppleMDMModel {
@@ -162,6 +163,9 @@ public final class AppleMDMModel {
     private var details: [String: AppleMDMRow.Details] = [:]
     /// The reads stopped at a 403: the role can't read details, so no more were asked.
     private var refused = false
+    /// The screen was left (`pause()`) and not shown since: an unforced `load()` resumes the details a pause left unread,
+    /// and an org switch meanwhile reads nothing until the screen is shown.
+    private var paused = false
 
     private let orgs: OrgsModel
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -192,6 +196,18 @@ public final class AppleMDMModel {
     public var selected: AppleMDMRow? {
         guard let selection, let index = devices.firstIndex(where: { $0.id == selection }) else { return nil }
         return AppleMDMRow(devices[index], details: details(at: index))
+    }
+
+    /// Why the inspector has nothing to show for the selection, worded as People's: the list is still being read (a Refresh
+    /// keeps the selection), or Apple's list doesn't hold it; nil when it shows the selection or nothing is selected (Phase
+    /// 2b review L7: the inspector said "Select a device" beside a selected one).
+    public var selectionNote: String? {
+        guard selection != nil, selected == nil else { return nil }
+        switch state {
+        case .idle, .loading: return "Reading the devices…"
+        case .loaded: return "This device isn't in the list Apple sent."
+        default: return "This device couldn't be read."
+        }
     }
 
     /// The rows a list read before it failed: shown, and said to be partial.
@@ -229,31 +245,34 @@ public final class AppleMDMModel {
         let reading = count(all.prefix(asked)) { if case .reading = $0 { true } else { false } }
         let failed = count(all) { if case .failed = $0 { true } else { false } }
         let none = count(all) { if case .none = $0 { true } else { false } }
-        let notRead = count(all) { if case .notRead = $0 { true } else { false } }
+        // Within the limit only a pause leaves a device not read (a refusal is said apart); past it, the limit does.
+        let stopped = count(all.prefix(asked)) { if case .notRead = $0 { true } else { false } }
+        let notRead = count(all.dropFirst(asked)) { if case .notRead = $0 { true } else { false } }
         var parts: [String] = []
         if reading > 0 { parts.append("Reading each device's details: \(asked - reading) of \(asked) so far.") }
         if refused {
             parts.append("Your role can't read Apple MDM device details: the first read was refused, so no more were asked.")
-        } else if notRead > 0 {
-            parts.append("Details are read for the first \(Self.detailLimit) devices only: "
-                         + (notRead == 1 ? "1 more says \"Not read\" until it is selected." : "\(notRead) more say \"Not read\" until one is selected."))
+        } else {
+            if stopped > 0 {
+                parts.append("Reading the details stopped when the screen was left: \(Self.devices(stopped)) "
+                             + "\(stopped == 1 ? "says" : "say") \"Not read\" until it is shown again.")
+            }
+            if notRead > 0 {
+                parts.append("Details are read for the first \(Self.detailLimit) devices only: "
+                             + (notRead == 1 ? "1 more says \"Not read\" until it is selected." : "\(notRead) more say \"Not read\" until one is selected."))
+            }
         }
         if failed > 0 { parts.append("Details couldn't be read for \(Self.devices(failed)): select \(failed == 1 ? "it" : "one") to try again.") }
         if none > 0 { parts.append("Apple has no details on record for \(Self.devices(none)).") }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
-    /// Why Export is off, in words; nil when the rows can be exported. A partial list is never exported as if whole, nor
-    /// a list whose details are still being read; a row whose details weren't read says so in its `detailsStatus`.
+    /// Why Export is off, in words; nil when the rows can be exported: every screen's rule (`ScreenWords.exportBlocked`),
+    /// then a list whose details are still being read isn't exported either; a row whose details weren't read says so in
+    /// its `detailsStatus`.
     public var exportBlocked: String? {
-        switch state {
-        case .loading: return "The list is still loading."
-        case .failed, .forbidden:
-            return devices.isEmpty ? nil : "The list is partial: \(devices.count.formatted()) devices were read before the error. Refresh, then export."
-        case .loaded:
-            return rows.contains { if case .reading = $0.details { true } else { false } } ? "The devices' details are still being read." : nil
-        default: return nil
-        }
+        if let blocked = ScreenWords.exportBlocked(state, read: partialCount ?? 0, shown: shown.count, noun: "devices") { return blocked }
+        return rows.contains { if case .reading = $0.details { true } else { false } } ? "The devices' details are still being read." : nil
     }
 
     /// The CSV of what the table shows: the Apple MDM columns (`ExportPolicy.appleMDM`), never an attribute off that list
@@ -263,18 +282,21 @@ public final class AppleMDMModel {
     }
 
     /// Loads unless the active org's data is already here; `force` reads again (Refresh, ⌘R) and cancels a load still
-    /// running, its detail reads included.
+    /// running, its detail reads included. Unforced after a `pause()`, it asks only for the details the pause left unread:
+    /// the list and the details read before stay.
     public func load(force: Bool = false) {
+        let resuming = paused && !force
+        paused = false
         let generation = orgs.generation
+        if resuming, loadedGeneration == generation, case .loaded = state, let client = orgs.appleClient {
+            resume(client)
+            return
+        }
         guard force || loadedGeneration != generation || state == .idle else { return }
         reset()
         loadedGeneration = generation
-        guard orgs.active != nil else {
-            state = .unusable("No organization yet: add an Apple Business API account in Settings.")
-            return
-        }
         guard let client = orgs.appleClient else {
-            state = .unusable("This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")")
+            state = .unusable(ScreenWords.unusable(orgs))
             return
         }
         let token = token
@@ -282,12 +304,40 @@ public final class AppleMDMModel {
         tasks = [Task { [weak self] in await self?.read(client, token: token) }]
     }
 
+    /// The operator left the screen (`AppleMDMView`'s `onDisappear`): the details read stops, so it holds the org's shared
+    /// rate limiter no longer, and every screen they go to reads at once (invariant 7: a sweep is cancellable; Phase 2b
+    /// review L9: up to 50 reads, two and a half minutes of a new account's rate, ran on after the screen was gone). The
+    /// details not read yet say "Not read", never "Reading…", and coming back (an unforced `load()`) asks for those only.
+    /// A list still being read is dropped, and read again on the way back: a part kept would look whole.
+    public func pause() {
+        paused = true
+        switch state {
+        case .loading:
+            reset()
+            state = .idle
+        case .loaded:
+            tasks.forEach { $0.cancel() }
+            tasks = []
+            // The reads in flight land nowhere: what they were asked for is not read.
+            token += 1
+            for (index, device) in devices.enumerated() {
+                switch details[device.id] {
+                case nil where index < Self.detailLimit, .reading?: details[device.id] = .notRead
+                default: break
+                }
+            }
+        case .idle, .forbidden, .failed, .unusable, .notInScope:
+            break
+        }
+    }
+
     // MARK: loading
 
     /// The org changed: nothing of the old one stays on screen, selected or in a CSV, and if anything was showing, the
     /// new org is read at once.
     private func orgChanged() {
-        let wasShowing = state != .idle
+        // A screen left (`paused`) isn't showing: the new org is read when it is shown again.
+        let wasShowing = state != .idle && !paused
         reset()
         selection = nil
         state = .idle
@@ -339,17 +389,41 @@ public final class AppleMDMModel {
         state = .loaded(at: Date())
         // A Refresh keeps the selection: if it is past the limit, it reads its own again.
         readSelected()
+        await readDetails(client, token: token)
+    }
+
+    /// Back on the screen after a pause: the selection's own read, then the details the pause left unread, in turn.
+    private func resume(_ client: AppleClient) {
+        guard !refused else { return }
+        readSelected()
+        let token = token
+        tasks.append(Task { [weak self] in
+            await self?.readDetails(client, token: token)
+            self?.readsFinished += 1
+        })
+    }
+
+    /// The first `detailLimit` devices' details not read yet (none, or left by a pause), one at a time.
+    private func readDetails(_ client: AppleClient, token: Int) async {
         let asked = Array(devices.prefix(Self.detailLimit))
-        for device in asked where details[device.id] == nil {
+        for device in asked where Self.isUnread(details[device.id]) {
             let result = await Self.details(of: device, from: client)
             guard current(token) else { return }
             details[device.id] = result
             if case .forbidden = result {
                 // A role that can't read one device's details can't read any: asking the rest would only be refused.
                 refused = true
-                for rest in asked where details[rest.id] == nil { details[rest.id] = .notRead }
+                for rest in asked where Self.isUnread(details[rest.id]) { details[rest.id] = .notRead }
                 return
             }
+        }
+    }
+
+    /// Details still to ask for: none read yet, or a pause's "Not read".
+    private static func isUnread(_ details: AppleMDMRow.Details?) -> Bool {
+        switch details {
+        case nil, .notRead?: true
+        default: false
         }
     }
 
@@ -375,7 +449,7 @@ public final class AppleMDMModel {
     /// "no such item", which isn't so), and details naming another serial aren't shown as this device's (Phase 1b verifier
     /// round 2: a read is checked to be the one asked for).
     private static func details(of device: MDMDevice, from client: AppleClient) async -> AppleMDMRow.Details {
-        guard AppleRead.isPathSafe(device.id) else { return .failed("This device's id can't be sent to Apple, so its details weren't asked for.") }
+        guard AppleRead.isPathSafe(device.id) else { return .failed(ScreenWords.unsendableID) }
         do {
             let detail = try await client.mdmDeviceDetails(device.id)
             if let theirs = detail.serialNumber, let ours = device.serialNumber, !theirs.utf8.elementsEqual(ours.utf8) {

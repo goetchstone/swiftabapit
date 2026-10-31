@@ -7,7 +7,7 @@ import Orgs
 import Testing
 import TestSupport
 
-/// The sidebar's rules (plan §4): which sections an org's scope shows, which probe locks each, what Refresh and the
+/// The sidebar's rules (plan §4): which sections an org's scope shows, when the recorded probes lock one, what Refresh and the
 /// snapshot harness can name. The app's `ContentView` only draws `SidebarItem.shown(for:)` and routes `showing(_:for:)`,
 /// so the rules are held here, where `swift test` reaches them.
 @Suite("Navigation")
@@ -64,15 +64,54 @@ struct NavigationTests {
         #expect(SidebarItem.showing(nil, for: business) == .overview)
     }
 
-    /// The probe whose "forbidden" locks each section: Phase 1's five as they were, and Apple MDM's own.
-    @Test func eachSectionLocksOnItsProbe() {
-        let probes = Dictionary(uniqueKeysWithValues: SidebarItem.allCases.map { ($0, $0.probed?.rawValue) })
-        #expect(probes == [.overview: nil, .devices: "devices", .services: "mdm_servers", .appleMDM: "mdm_enrolled", .people: "users",
-                           .content: "apps", .activity: "audit_events", .reports: nil, .settings: nil])
+    /// A section locks when the recorded probes refused every read it shows; an error isn't a refusal, and no probe on
+    /// record locks nothing.
+    @Test func aSectionLocksWhenEveryReadIsDenied() {
         let locked = Self.org("business", capabilities: ["mdm_enrolled": "forbidden", "users": "ok", "audit_events": "error 500"])
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: locked) } == [.appleMDM])
         #expect(!SidebarItem.appleMDM.isLocked(for: nil))
         #expect(!SidebarItem.appleMDM.isLocked(for: Self.org("business")))
+        let every = Dictionary(uniqueKeysWithValues: AppleSection.allCases.map { ($0.rawValue, "forbidden") })
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: Self.org("business", capabilities: every)) }
+                == [.overview, .devices, .services, .appleMDM, .people, .content, .activity], "Reports and Settings read nothing of Apple's")
+        let people = Self.org("business", capabilities: ["users": "forbidden", "user_groups": "forbidden", "org_units": "forbidden"])
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: people) } == [.people])
+        let content = Self.org("business", capabilities: ["apps": "forbidden", "packages": "forbidden", "blueprints": "forbidden",
+                                                          "configurations": "forbidden"])
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: content) } == [.content])
+        #expect(SidebarItem.activity.isLocked(for: Self.org("business", capabilities: ["audit_events": "forbidden"])))
+    }
+
+    /// Phase 2b review M1: one refused probe locked all of People (users) or Content (apps), though their models show the
+    /// groups and org units beside refused users, the blueprints and configurations beside refused apps. A section the
+    /// role can read part of shows its screen, and the refused panel says so itself.
+    @Test func aPartlyDeniedSectionIsUnlocked() {
+        let partly = Self.org("business", capabilities: [
+            "apps": "forbidden", "packages": "ok", "blueprints": "ok", "configurations": "ok",
+            "users": "forbidden", "user_groups": "ok", "org_units": "ok",
+            "devices": "forbidden", "mdm_servers": "forbidden", "audit_events": "ok",
+        ])
+        #expect(!SidebarItem.people.isLocked(for: partly) && !SidebarItem.content.isLocked(for: partly))
+        #expect(!SidebarItem.overview.isLocked(for: partly), "the Overview's audit card can still be read")
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: partly) } == [.devices, .services])
+        // Two of three refused is still part.
+        let two = Self.org("business", capabilities: ["users": "forbidden", "user_groups": "forbidden", "org_units": "ok"])
+        #expect(!SidebarItem.people.isLocked(for: two))
+    }
+
+    /// A read with no probe result on record isn't denied: an older check that didn't probe it, or a School org, whose
+    /// Business-only reads aren't probed. A School org's Overview with its devices and services refused still shows, its
+    /// audit card saying not in scope; its scope rule hides the Business-only sections as before.
+    @Test func aReadNoProbeRecordedDoesntLock() {
+        let older = Self.org("business", capabilities: ["users": "forbidden", "user_groups": "forbidden"])
+        #expect(!SidebarItem.people.isLocked(for: older), "org units were never probed")
+        let errors = Self.org("business", capabilities: ["users": "forbidden", "user_groups": "error 500", "org_units": "error"])
+        #expect(!SidebarItem.people.isLocked(for: errors), "an error isn't a refusal")
+        let school = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden"])
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: school) } == [.devices, .services])
+        #expect(SidebarItem.shown(for: school) == [.overview, .devices, .services, .reports, .settings])
+        let schoolAll = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden", "audit_events": "forbidden"])
+        #expect(SidebarItem.overview.isLocked(for: schoolAll), "every read recorded refused")
     }
 
     /// Titles are distinct (each sidebar row's label), and the raw values are the names `ABAPIT_SCREEN` and the
@@ -148,6 +187,112 @@ struct ScaffoldTests {
         let requests = world.stubs["a"]!.requests
         #expect(requests.contains { $0.hasPrefix("GET api-school.apple.com/v1/orgDevices") }, "\(requests)")
         #expect(!requests.contains { $0.contains("/v1/users") })
+    }
+
+    /// Refresh on each section reads that section's own model again, and no other (Phase 2b review L10, mutant X1: People's
+    /// Refresh sent to the devices left every suite green while the routing sat in the app's `ContentView`).
+    @Test func refreshReadsTheSectionsOwnModel() async throws {
+        for section in SidebarItem.allCases {
+            let world = try await World.make()
+            world.screens.refresh(section)
+            let loading: [String: Bool] = [
+                "devices": world.devices.state.isLoading, "audit": world.dashboard.auditState.isLoading,
+                "people": world.people.users.state.isLoading, "content": world.content.apps.state.isLoading,
+                "appleMDM": world.appleMDM.state.isLoading, "activity": world.activity.state.isLoading,
+            ]
+            let expected: Set<String> = switch section {
+            case .overview: ["devices", "audit"]
+            case .people: ["people"]
+            case .content: ["content"]
+            case .appleMDM: ["appleMDM"]
+            case .activity: ["activity"]
+            case .devices, .services, .reports, .settings: ["devices"]
+            }
+            #expect(Set(loading.filter(\.value).keys) == expected, "\(section)")
+        }
+        // A Refresh reads again what an unforced load wouldn't.
+        let world = try await World.make()
+        world.people.load()
+        await eventually("people read") { !world.people.users.state.isLoading && world.people.users.state != .idle }
+        world.screens.refresh(.people)
+        #expect(world.people.users.state.isLoading)
+    }
+
+    static func failed<Value>(_ panel: Panel<Value>) -> String? { if case .failed(let why) = panel { why } else { nil } }
+
+    /// With no organization every screen model says one sentence, Apple School Manager named too, and with one this
+    /// version can't use, one other (Phase 2b review L10: six copies, Apple MDM's without "or Apple School Manager", and the
+    /// inspectors' "This organization can't be used: there is none.").
+    @Test func everyScreenSaysWhyNothingCanBeReadAlike() async throws {
+        #expect(ScreenWords.noOrganization == "No organization yet: add an Apple Business or Apple School Manager API account in Settings.")
+        for (world, said) in [(try await World.make(profiles: []), ScreenWords.noOrganization),
+                              (try await World.make(profiles: [World.unusable]), nil)] {
+            for section in SidebarItem.allCases { world.screens.refresh(section) }
+            world.detail.show("ADEV0000001")
+            world.content.selection = "1000000001"
+            world.people.selectedGroup = "G1"
+            world.people.selectedUnit = "OU1"
+            let expected = said ?? ScreenWords.unusable(world.orgs)
+            #expect(expected.hasPrefix(said == nil ? "This organization can't be used: " : "No organization yet: "), "\(expected)")
+            let states: [LoadState] = [
+                world.devices.state, world.devices.servicesState, world.dashboard.auditState, world.people.users.state, world.people.groups.state,
+                world.people.units.state, world.people.groupMembers.state, world.people.unitMembers.state, world.content.apps.state,
+                world.content.packages.state, world.content.blueprints.state, world.content.configurations.state, world.appleMDM.state,
+                world.activity.state,
+            ]
+            #expect(states.allSatisfy { $0 == .unusable(expected) }, "\(states)")
+            let panels = [Self.failed(world.detail.device), Self.failed(world.detail.coverage), Self.failed(world.detail.lock),
+                          Self.failed(world.detail.service), Self.failed(world.detail.timeline), Self.failed(world.content.detail.item)]
+            #expect(panels.allSatisfy { $0 == expected }, "\(panels)")
+        }
+    }
+
+    /// One rule for Export on every screen, in the model: an empty list, or a search that hides every row, has nothing to
+    /// export (Phase 2b review L10: People said so and the other screens left it to their views).
+    @Test func everyScreenSaysAnEmptyListHasNothingToExport() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        for section: SidebarItem in [.overview, .people, .content, .appleMDM, .activity] { world.screens.refresh(section) }
+        await world.settled(2)
+        await eventually("every list read") {
+            world.dashboard.readsFinished >= 1 && world.people.readsFinished >= 3 && world.content.readsFinished >= 4
+                && world.appleMDM.readsFinished >= 1 && world.activity.readsFinished >= 1
+        }
+        let said = "There's nothing to export."
+        #expect(ScreenWords.nothingToExport == said)
+        #expect(world.devices.exportBlocked == said && world.appleMDM.exportBlocked == said && world.activity.exportBlocked == said)
+        for tab in PeopleModel.Tab.allCases { #expect(world.people.exportBlocked(tab) == said, "\(tab)") }
+        for kind in ContentKind.allCases { #expect(world.content.exportBlocked(for: kind) == said, "\(kind)") }
+
+        let stocked = try await World.make()
+        stocked.devices.load()
+        await stocked.settled(2)
+        #expect(stocked.devices.exportBlocked == nil)
+        stocked.devices.search = "nothing like this"
+        #expect(stocked.devices.shown.isEmpty && stocked.devices.exportBlocked == said)
+    }
+
+    /// The content detail's errors are said as every list's are (`LoadState(after:)`): a 403 is the role's, a failure and a
+    /// School org's scope in their words.
+    @Test func aContentDetailsErrorIsSaidAsAListsIs() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "apps", id: "1000000001", attributes: ["name": .string("One")])])
+        world.content.load()
+        await eventually("the lists") { world.content.readsFinished >= 4 }
+        world.stubs["a"]!.queue(403, for: "/v1/apps/1000000001")
+        world.content.selection = "1000000001"
+        await eventually("the refused detail") { world.content.detail.readsFinished >= 1 }
+        if case .forbidden = world.content.detail.item {} else { Issue.record("\(world.content.detail.item)") }
+        world.stubs["a"]!.queue(503, for: "/v1/apps/1000000001")
+        world.content.load(force: true)
+        await eventually("the failed detail") { world.content.detail.readsFinished >= 2 }
+        #expect(Self.failed(world.content.detail.item) == "Apple's service failed (HTTP 503). Try again later.")
+        if case .failed(let why) = LoadState(after: AppleAPIError.server(status: 503)) { #expect(Self.failed(world.content.detail.item) == why) }
+
+        let school = try await World.make(profiles: [World.profile("a", scope: .school)])
+        school.content.selection = "1000000001"
+        await eventually("the School detail") { school.content.detail.readsFinished >= 1 }
+        #expect(Self.failed(school.content.detail.item) == "Apple School Manager's API has no apps to read.")
+        #expect(!school.stubs["a"]!.requests.contains { $0.contains("/v1/apps") })
     }
 
     /// The five Phase 2b models are built over the world's orgs, as AppServices builds them, and a load before the units

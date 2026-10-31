@@ -83,6 +83,25 @@ public struct DeviceRow: Identifiable, Sendable {
     }
 }
 
+/// The Services screen's Last connected cell, by Reports' rule (`QuietServices`), the one the Overview's quiet card counts
+/// with, so the two screens can't disagree (Phase 2b review L4: the screen showed a date this app can't read as "Never",
+/// flagged a deleted service, and counted whole days where the card counts seconds).
+public struct ServiceConnection: Equatable, Sendable {
+    /// "Today", "N days ago", "Never connected", or "Unreadable date: …" with what Apple sent.
+    public let text: String
+    /// Flagged: not connected in more than `QuietServices.defaultDays` days, never connected, or a date this app can't
+    /// read; never a deleted service, which can't connect again.
+    public let isQuiet: Bool
+    /// What a screen reader says of it: a flag is said in words, not only in colour.
+    public let spoken: String
+
+    package init(text: String, isQuiet: Bool, spoken: String) {
+        self.text = text
+        self.isQuiet = isQuiet
+        self.spoken = spoken
+    }
+}
+
 /// The active org's devices and services, read page by page (tables fill as pages arrive), with which
 /// service each device is assigned to. Devices and services load side by side, each with its own state: a role
 /// that can't read services still sees its devices (SwiftGamGui failure-log 2026-10-13, "load each panel as its
@@ -197,11 +216,31 @@ public final class DevicesModel {
         return rows.filter { $0.assignment == .unassigned }.count
     }
 
-    /// The services that haven't connected for more than `days`; nil while the list isn't read whole, so "every
-    /// service has connected" is never said of a list nobody read.
-    public func quietServices(after days: Int, now: Date = Date()) -> [MDMService]? {
-        guard servicesUnread == nil else { return nil }
-        return services.filter { ($0.daysSinceConnected(now: now) ?? .max) > days }
+    /// `service`'s Last connected cell at `now`: `QuietServices`' rule over `QuietServices.defaultDays`, so the Services
+    /// screen flags exactly what the Overview's quiet card lists at its default.
+    public static func connection(of service: MDMService, now: Date = Date()) -> ServiceConnection {
+        let last = QuietServices.lastConnected(service)
+        let quiet = !QuietServices([service], now: now).rows.isEmpty
+        let text = lastConnected(last, of: service, now: now)
+        let spoken: String
+        if quiet, case .at(let date) = last {
+            spoken = "Not connected for \(Int(now.timeIntervalSince(date.date) / 86_400).formatted()) days"
+        } else {
+            spoken = text
+        }
+        return ServiceConnection(text: text, isQuiet: quiet, spoken: spoken)
+    }
+
+    /// When a service last connected, in words, for the Services screen and the Overview alike: never, a date this app
+    /// can't read (shown raw), today, or whole days ago.
+    public static func lastConnected(_ last: QuietServices.LastConnected, of service: MDMService, now: Date) -> String {
+        switch last {
+        case .never: return "Never connected"
+        case .unreadable: return "Unreadable date: \(service.attributes["lastConnectedDateTime"]?.jsonText ?? "")"
+        case .at(let date):
+            let days = Int(now.timeIntervalSince(date.date) / 86_400)
+            return days <= 0 ? "Today" : "\(days.formatted()) day\(days == 1 ? "" : "s") ago"
+        }
     }
 
     /// The services a failed or refused read left on screen: said to be partial, as the devices are.
@@ -212,15 +251,11 @@ public final class DevicesModel {
         }
     }
 
-    /// Why Export is off, in words; nil when the rows are a whole read. A partial list is never exported as if it
-    /// were whole: the file couldn't say so. A list the page cap stopped exports, as the banner says "showing N of ≥M".
+    /// Why Export is off, in words; nil when the rows are a whole read: every screen's rule (`ScreenWords.exportBlocked`).
+    /// A partial list is never exported as if it were whole: the file couldn't say so. A list the page cap stopped
+    /// exports, as the banner says "showing N of ≥M".
     public var exportBlocked: String? {
-        switch state {
-        case .loading: "The list is still loading."
-        case .failed, .forbidden:
-            rows.isEmpty ? nil : "The list is partial: \(rows.count.formatted()) devices were read before the error. Refresh, then export."
-        default: nil
-        }
+        ScreenWords.exportBlocked(state, read: partialCount ?? 0, shown: shown.count, noun: "devices")
     }
 
     /// Loads unless the active org's data is already here; `force` reads again (Refresh, ⌘R) and cancels a load
@@ -230,13 +265,8 @@ public final class DevicesModel {
         guard force || loadedGeneration != generation || state == .idle else { return }
         reset()
         loadedGeneration = generation
-        guard let profile = orgs.active else {
-            state = .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings.")
-            servicesState = state
-            return
-        }
-        guard let client = orgs.appleClient else {
-            state = .unusable("This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")")
+        guard let profile = orgs.active, let client = orgs.appleClient else {
+            state = .unusable(ScreenWords.unusable(orgs))
             servicesState = state
             return
         }

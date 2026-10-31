@@ -235,7 +235,7 @@ struct AppleMDMTests {
         await Self.settled(world, 1)
         let row = try #require(Self.row(world, "M 1"))
         guard case .failed(let why) = row.details else { Issue.record("\(row.details)"); return }
-        #expect(why == "This device's id can't be sent to Apple, so its details weren't asked for.")
+        #expect(why == "This id can't be sent to Apple, so nothing was asked for." && why == ScreenWords.unsendableID)
         #expect(Self.detailRequests(world).isEmpty, "\(Self.detailRequests(world))")
     }
 
@@ -320,7 +320,8 @@ struct AppleMDMTests {
     @Test func nothingToReadIsSaid() async throws {
         let none = try await World.make(profiles: [])
         none.appleMDM.load()
-        #expect(none.appleMDM.state == .unusable("No organization yet: add an Apple Business API account in Settings."))
+        // Every screen's sentence, Apple School Manager named too (Phase 2b review L10: this copy had dropped it).
+        #expect(none.appleMDM.state == .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings."))
         #expect(none.appleMDM.emptyTitle == "Nothing to read")
         let unusable = try await World.make(profiles: [World.unusable])
         unusable.appleMDM.load()
@@ -659,5 +660,165 @@ struct AppleMDMTests {
         gate.release("later")
         await Self.settled(world, 3)
         await eventually("the selection read again after the refresh") { Self.row(world, target)?.details.word == "Read" }
+    }
+
+    // MARK: the inspector's selection (Phase 2b review L7)
+
+    /// A selection the list doesn't hold says why, as People's does: the list is being read again (a Refresh keeps the
+    /// selection), or Apple's list no longer has it; never "Select a device" beside a selected one.
+    @Test func aSelectionTheListLacksSaysWhy() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 2)
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        #expect(world.appleMDM.selectionNote == nil, "nothing selected")
+        world.appleMDM.selection = "M0001"
+        #expect(world.appleMDM.selected?.id == "M0001" && world.appleMDM.selectionNote == nil)
+        let gate = world.gates["a"]!
+        gate.hold("list", Self.listPages)
+        world.appleMDM.load(force: true)
+        await eventually("the refresh's list held") { gate.held == 1 }
+        #expect(world.appleMDM.selection == "M0001" && world.appleMDM.selected == nil)
+        #expect(world.appleMDM.selectionNote == "Reading the devices…")
+        world.stubs["a"]!.queue(200, for: "/v1/mdmDevices", body: #"{"data":[],"links":{"self":"x"},"meta":{"paging":{"limit":1000}}}"#)
+        gate.release("list")
+        await Self.settled(world, 2)
+        #expect(Self.isLoaded(world.appleMDM.state) && world.appleMDM.devices.isEmpty, "\(world.appleMDM.state)")
+        #expect(world.appleMDM.selectionNote == "This device isn't in the list Apple sent.")
+        world.stubs["a"]!.queue(503, for: "/v1/mdmDevices")
+        world.appleMDM.load(force: true)
+        await Self.settled(world, 3)
+        #expect(world.appleMDM.selectionNote == "This device couldn't be read.", "\(world.appleMDM.state)")
+    }
+
+    // MARK: leaving the screen (Phase 2b review L9; invariant 7: a sweep is cancellable)
+
+    static func asked(_ world: World, _ org: String = "a") -> [String] {
+        detailRequests(world, org).compactMap { $0.components(separatedBy: "/v1/mdmDevices/").last }
+    }
+
+    static func lists(_ world: World, _ org: String = "a") -> Int { world.stubs[org]!.requests.filter { $0.contains("/v1/mdmDevices?") }.count }
+
+    /// Leaving the screen stops the details read: the one in flight is never answered into the rows, none after it is
+    /// sent, and none still to read says "Reading…". Coming back asks for those not read, and only those.
+    @Test func leavingStopsTheDetailsAndComingBackAsksOnlyTheUnread() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 5)
+        let gate = world.gates["a"]!
+        gate.hold("third", { $0.path() == "/v1/mdmDevices/M0002/details" })
+        world.appleMDM.load()
+        await eventually("the third device's details held") { gate.held == 1 }
+        #expect(Self.asked(world) == ["M0000/details", "M0001/details"])
+        world.appleMDM.pause()
+        #expect(world.appleMDM.rows.map(\.details.word) == ["Read", "Read", "Not read", "Not read", "Not read"])
+        #expect(world.appleMDM.exportBlocked == nil, "nothing is still being read")
+        #expect(world.appleMDM.detailsNote == "Reading the details stopped when the screen was left: 3 devices say \"Not read\" until it is shown again.",
+                "\(world.appleMDM.detailsNote ?? "nil")")
+        await Self.settled(world, 1)
+        await eventually("the held read let go") { gate.held == 0 }
+        gate.release("third")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(Self.asked(world) == ["M0000/details", "M0001/details"], "a details read went on after the screen was left")
+        #expect(world.appleMDM.rows.map(\.details.word) == ["Read", "Read", "Not read", "Not read", "Not read"])
+        world.appleMDM.load()
+        await Self.settled(world, 2)
+        #expect(Self.asked(world) == ["M0000/details", "M0001/details", "M0002/details", "M0003/details", "M0004/details"])
+        #expect(Self.lists(world) == 1, "the list was read again")
+        #expect(world.appleMDM.rows.allSatisfy { $0.details.word == "Read" } && world.appleMDM.detailsNote == nil)
+        // Shown again and nothing left: an unforced load reads nothing.
+        world.appleMDM.pause()
+        world.appleMDM.load()
+        await Self.settled(world, 3)
+        #expect(Self.asked(world).count == 5 && Self.lists(world) == 1)
+    }
+
+    /// Refresh after a pause reads the list and every device's details again, as it always does.
+    @Test func aRefreshAfterAPauseReadsEverythingAgain() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 3)
+        let gate = world.gates["a"]!
+        gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+        world.appleMDM.load()
+        await eventually("the second device's details held") { gate.held == 1 }
+        world.appleMDM.pause()
+        await Self.settled(world, 1)
+        gate.release("second")
+        world.appleMDM.load(force: true)
+        await Self.settled(world, 2)
+        #expect(Self.asked(world) == ["M0000/details", "M0000/details", "M0001/details", "M0002/details"])
+        #expect(Self.lists(world) == 2 && world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+    }
+
+    /// Leaving during a Refresh's list: the part read is dropped, nothing is left "Reading…", nothing more is sent, and the
+    /// way back reads the list again, the selection kept.
+    @Test func aPauseDuringARefreshLeavesNothingStale() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 3)
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        world.appleMDM.selection = "M0001"
+        let gate = world.gates["a"]!
+        gate.hold("list", Self.listPages)
+        world.appleMDM.load(force: true)
+        await eventually("the refresh's list held") { gate.held == 1 }
+        world.appleMDM.pause()
+        #expect(world.appleMDM.state == .idle && world.appleMDM.devices.isEmpty && world.appleMDM.rows.isEmpty)
+        #expect(world.appleMDM.detailsNote == nil && world.appleMDM.emptyTitle == nil && !world.appleMDM.state.isLoading)
+        await Self.settled(world, 2)
+        gate.release("list")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(Self.lists(world) == 1 && Self.asked(world).count == 3, "\(world.stubs["a"]!.requests)")
+        world.appleMDM.load()
+        await Self.settled(world, 3)
+        #expect(Self.isLoaded(world.appleMDM.state) && world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+        #expect(world.appleMDM.selected?.id == "M0001" && world.appleMDM.selectionNote == nil)
+        #expect(Self.lists(world) == 2 && Self.asked(world).count == 6)
+    }
+
+    /// Leaving during an org switch's read: nothing of either org stays or is sent; and a switch while the screen is away
+    /// reads nothing until it is shown.
+    @Test func aPauseDuringAnOrgSwitchLeavesNothingStale() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, "a", count: 3, prefix: "A")
+        Self.fleet(world, "b", count: 2, prefix: "B")
+        let a = world.gates["a"]!, b = world.gates["b"]!
+        a.hold("details", Self.detailPaths)
+        world.appleMDM.load()
+        await eventually("a's first details held") { a.held == 1 }
+        world.appleMDM.selection = "A0002"
+        b.hold("list", Self.listPages)
+        world.orgs.select("b")
+        await eventually("b's list held") { b.held == 1 }
+        world.appleMDM.pause()
+        #expect(world.appleMDM.state == .idle && world.appleMDM.devices.isEmpty && world.appleMDM.selection == nil)
+        await Self.settled(world, 2)
+        a.release("details")
+        b.release("list")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(Self.asked(world, "a").isEmpty && Self.asked(world, "b").isEmpty && Self.lists(world, "b") == 0)
+        #expect(world.appleMDM.state == .idle && world.appleMDM.devices.isEmpty)
+        // Back to a while away: nothing is read until the screen shows.
+        world.orgs.select("a")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(world.appleMDM.state == .idle && Self.lists(world, "a") == 1)
+        world.appleMDM.load()
+        await Self.settled(world, 3)
+        #expect(world.appleMDM.rows.map(\.id) == ["A0000", "A0001", "A0002"] && world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+    }
+
+    /// A switch after the screen was left with every detail read: the new org isn't read until the screen shows again.
+    @Test func aSwitchWhileAwayReadsNothingUntilShown() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, "a", count: 2, prefix: "A")
+        Self.fleet(world, "b", count: 1, prefix: "B")
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        world.appleMDM.pause()
+        world.orgs.select("b")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(world.appleMDM.state == .idle && world.appleMDM.devices.isEmpty && Self.lists(world, "b") == 0)
+        world.appleMDM.load()
+        await Self.settled(world, 2)
+        #expect(world.appleMDM.rows.map(\.id) == ["B0000"] && Self.asked(world, "b") == ["B0000/details"])
     }
 }

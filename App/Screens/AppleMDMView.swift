@@ -42,7 +42,7 @@ struct AppleMDMView: View {
         .toolbar {
             ToolbarItem {
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(model.shown.isEmpty || model.exportBlocked != nil)
+                    .disabled(model.exportBlocked != nil)
                     .help(model.exportBlocked ?? "Exports the devices shown with their posture, the Apple MDM columns only")
                     .accessibilityLabel("Export the Apple MDM devices as CSV")
                     .accessibilityIdentifier("apple-mdm.export")
@@ -51,10 +51,12 @@ struct AppleMDMView: View {
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
                       defaultFilename: "apple-mdm.csv") { _ in }
         .inspector(isPresented: Binding(get: { model.selection != nil }, set: { if !$0 { model.selection = nil } })) {
-            AppleMDMInspectorView(row: model.selected)
+            AppleMDMInspectorView(row: model.selected, note: model.selectionNote)
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)
         }
         .task { model.load() }
+        // Leaving stops the details read, freeing the org's rate for the next screen; coming back resumes it (`pause()`).
+        .onDisappear { model.pause() }
     }
 
     /// Eleven columns, in two groups: a column builder takes ten.

@@ -166,15 +166,11 @@ public final class ContentList<Row: ContentRow> {
         }
     }
 
-    /// Why Export is off, in words; nil when the rows are a whole read. A partial list is never exported as if whole: the
-    /// file couldn't say so. A list the page cap stopped exports, as the banner says "showing N of ≥M".
-    public var exportBlocked: String? {
-        switch state {
-        case .loading: "The list is still loading."
-        case .failed, .forbidden:
-            rows.isEmpty ? nil : "The list is partial: \(rows.count.formatted()) \(Row.kind.noun) were read before the error. Refresh, then export."
-        default: nil
-        }
+    /// Why Export is off for the rows `search` shows, in words; nil when they are a whole read: every screen's rule
+    /// (`ScreenWords.exportBlocked`). A partial list is never exported as if whole: the file couldn't say so. A list the
+    /// page cap stopped exports, as the banner says "showing N of ≥M".
+    public func exportBlocked(matching search: String) -> String? {
+        ScreenWords.exportBlocked(state, read: partialCount ?? 0, shown: shown(matching: search).count, noun: Row.kind.noun)
     }
 
     /// The CSV of what the table shows, with the list's columns only (invariant 11).
@@ -272,12 +268,8 @@ public final class ContentModel {
         let generation = orgs.generation
         guard force || loadedGeneration != generation || apps.state == .idle else { return }
         loadedGeneration = generation
-        guard orgs.active != nil else {
-            resetAll(to: .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings."))
-            return
-        }
         guard let client = orgs.appleClient else {
-            resetAll(to: .unusable("This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")"))
+            resetAll(to: .unusable(ScreenWords.unusable(orgs)))
             return
         }
         apps.read(client.apps())
@@ -300,10 +292,10 @@ public final class ContentModel {
     /// Why `kind`'s Export is off, in words; nil when it may export.
     public func exportBlocked(for kind: ContentKind) -> String? {
         switch kind {
-        case .apps: apps.exportBlocked
-        case .packages: packages.exportBlocked
-        case .blueprints: blueprints.exportBlocked
-        case .configurations: configurations.exportBlocked
+        case .apps: apps.exportBlocked(matching: search)
+        case .packages: packages.exportBlocked(matching: search)
+        case .blueprints: blueprints.exportBlocked(matching: search)
+        case .configurations: configurations.exportBlocked(matching: search)
         }
     }
 
@@ -366,7 +358,13 @@ public final class ContentDetailModel {
         guard let selection else { return }
         guard let client = orgs.appleClient else {
             // Never a spinner that can't end: why, in words (invariant 8).
-            item = .failed("This organization can't be used: \(orgs.unusableReason ?? "there is none.")")
+            item = .failed(ScreenWords.unusable(orgs))
+            return
+        }
+        // An id that can't go in a path is never sent: the client would call it "no such item", which isn't so of an item
+        // Apple has just listed (Phase 2b review L1).
+        guard AppleRead.isPathSafe(selection.id) else {
+            item = .failed(ScreenWords.unsendableID)
             return
         }
         let token = token
@@ -377,10 +375,9 @@ public final class ContentDetailModel {
                 result = .loaded(try await Self.read(selection, from: client))
             } catch is CancellationError {
                 return
-            } catch AppleAPIError.forbidden {
-                result = .forbidden
             } catch {
-                result = .failed(OrgsModel.message(error))
+                // Through the shared mapping, as every screen model's errors are (Phase 2b review L10).
+                result = Panel(after: error)
             }
             guard let self, self.token == token, !Task.isCancelled else { return }
             self.item = result
@@ -482,10 +479,9 @@ public struct ContentDetail: Sendable {
             ContentField("Name", package.name ?? "—"), ContentField("Version", package.version ?? "—"),
             ContentField("Bundle IDs", PackageRow(package).bundleIDs), ContentField("Location", location?.text ?? "—"),
             ContentField("Hash", package.hash ?? "—"), ContentField("Description", package.summary ?? "—"),
-            ContentField("Created", ContentWords.day(package.created?.date)), ContentField("Updated", ContentWords.day(package.updated?.date)),
+            ContentField("Created", ScreenWords.day(package.created?.date)), ContentField("Updated", ScreenWords.day(package.updated?.date)),
         ], notes: location?.masked == true ? [ContentWords.maskedLocation] : [],
-                  // Every string that holds an address is shown as the Location is: an attribute Apple adds could carry one too.
-                  attributes: ContentWords.attributes(of: package) { $0.utf8.firstRange(of: Array("://".utf8)) != nil ? ContentWords.location($0).text : $0 })
+                  attributes: ContentWords.packageAttributes(package, location: location?.text))
     }
 
     init(blueprint read: BlueprintRead) {
@@ -524,7 +520,7 @@ public struct ContentDetail: Sendable {
             ContentField("Name", blueprint.name ?? "—"), ContentField("Description", blueprint.summary ?? "—"),
             ContentField("Status", BlueprintRow(blueprint).status),
             ContentField("Licences", blueprint.appLicenseDeficient.map { $0 ? "Too few for its apps" : "Enough for its apps" } ?? "—"),
-            ContentField("Created", ContentWords.day(blueprint.created?.date)), ContentField("Updated", ContentWords.day(blueprint.updated?.date)),
+            ContentField("Created", ScreenWords.day(blueprint.created?.date)), ContentField("Updated", ScreenWords.day(blueprint.updated?.date)),
         ], members: groups, membersNote: refusal, attributes: ContentWords.attributes(of: blueprint))
     }
 
@@ -532,8 +528,8 @@ public struct ContentDetail: Sendable {
         let row = ConfigurationRow(configuration)
         let settings = configuration.customSettings
         var fields = [ContentField("Name", configuration.name ?? "—"), ContentField("Type", row.type), ContentField("Platforms", row.platforms),
-                      ContentField("Created", ContentWords.day(configuration.created?.date)),
-                      ContentField("Updated", ContentWords.day(configuration.updated?.date))]
+                      ContentField("Created", ScreenWords.day(configuration.created?.date)),
+                      ContentField("Updated", ScreenWords.day(configuration.updated?.date))]
         if let filename = settings?.filename { fields.append(ContentField("Profile file", filename)) }
         var notes: [String] = []
         switch configuration.type {
@@ -553,7 +549,8 @@ package enum ContentWords {
     /// What stands where a value is masked: `ProfileText`'s mask, so the screen masks one way.
     static let mask = ProfileText.mask
 
-    static let maskedLocation = "The location's user, password, query and fragment are masked: they can carry credentials. It is shown here, never opened."
+    static let maskedLocation = "The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+        + "It is shown here, never opened."
 
     /// A list's items, joined: "Not readable" when Apple sent it in a shape this version can't read (never shown as
     /// none), a dash when it sent none, "None" for an empty list.
@@ -563,59 +560,179 @@ package enum ContentWords {
         return items.isEmpty ? "None" : items.joined(separator: ", ")
     }
 
-    static func day(_ date: Date?) -> String { date?.formatted(date: .abbreviated, time: .omitted) ?? "—" }
-
-    /// A package's location as the detail shows it: the user and password (everything before the authority's last
-    /// `@`), every query value and the fragment masked, since a signed address or a basic-auth one carries its
-    /// credential there; the scheme, host and path kept. Read as UTF-8 bytes, so a combining mark can't join a
-    /// delimiter into another character. Never opened or fetched (invariant 4). Not caught: an unencoded `/`, `?` or
-    /// `#` inside a password, which isn't a valid address (the rest after it is masked as a query or fragment).
+    /// A package's location as the detail shows it: the user and password (everything before the authority's last `@`),
+    /// every query value, every path parameter's value (`;jsessionid=`) and the fragment masked, since a signed address or a
+    /// basic-auth one carries its credential there; the scheme, host and path kept. A scheme is only a leading
+    /// `[A-Za-z][A-Za-z0-9+.-]*:`, an authority follows `//` (`//user:pw@host` too), and with no `//` an `@` ahead of the path
+    /// still ends a user and password (`user:pw@host`, whose `user:` reads as a scheme): Phase 2b review L2, where the first
+    /// `://` anywhere was taken for the scheme's, so one only in the query copied the query before it raw. Each run of text
+    /// between blanks is read as one address (an unencoded space splits one in two, each masked). Read as UTF-8 bytes, so a
+    /// combining mark can't join a delimiter into another character. Never opened or fetched (invariant 4). Not caught: an
+    /// unencoded `/`, `?` or `#` inside a password, which isn't a valid address (the rest after it is masked as a path
+    /// parameter, a query or a fragment).
     package static func location(_ url: String) -> (text: String, masked: Bool) {
-        let bytes = Array(url.utf8)
-        let slash = UInt8(ascii: "/"), question = UInt8(ascii: "?"), hash = UInt8(ascii: "#"), at = UInt8(ascii: "@")
-        let maskBytes = Array(mask.utf8)
+        masking(url) { _ in true }
+    }
+
+    /// `text` with every address in it masked as `location` masks one, the rest as it came: the strings of a package's other
+    /// attributes, where Apple could add an address. A run of text between blanks is an address when it starts with a
+    /// scheme and goes on, starts with `//`, holds a `://`, or has a user before an `@` ahead of its path; a word, a version,
+    /// a bundle id or a hash is none of these and shows unchanged. Not caught: an address with no scheme, no `//` and no
+    /// user (`host/a.pkg?sig=…`) inside other text; the package's own `url` is always read as one (`packageAttributes`).
+    package static func addresses(in text: String) -> String {
+        masking(text, isAddress).text
+    }
+
+    /// Every attribute of a package, each string at any depth through `addresses(in:)`, and its `url` as the Location field
+    /// shows it (`location`): what the doc of `ContentDetail(package:)` promises, an attribute Apple adds included.
+    static func packageAttributes(_ package: ContentPackage, location: String?) -> [ContentField] {
+        attributes(of: package, addresses(in:)).map { field in
+            guard let location, !location.isEmpty, field.label.utf8.elementsEqual("url".utf8) else { return field }
+            return ContentField(field.label, location)
+        }
+    }
+
+    private static let slash = UInt8(ascii: "/"), question = UInt8(ascii: "?"), hash = UInt8(ascii: "#"), at = UInt8(ascii: "@")
+    private static let semicolon = UInt8(ascii: ";"), equals = UInt8(ascii: "="), ampersand = UInt8(ascii: "&")
+    private static let slashes = Array("//".utf8), schemeSlashes = Array("://".utf8)
+    /// ASCII blanks: an address holds none, so they split `text` into runs, and are kept as they came.
+    private static let blanks: Set<UInt8> = [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20]
+
+    private static func isLetter(_ byte: UInt8) -> Bool { (0x41...0x5A).contains(byte) || (0x61...0x7A).contains(byte) }
+    private static func isSchemeByte(_ byte: UInt8) -> Bool {
+        isLetter(byte) || (0x30...0x39).contains(byte) || byte == UInt8(ascii: "+") || byte == UInt8(ascii: "-") || byte == UInt8(ascii: ".")
+    }
+
+    /// Where a leading scheme's `:` ends (RFC 3986: a letter, then letters, digits, `+`, `-` or `.`); nil when `run` has none.
+    private static func schemeEnd(_ run: ArraySlice<UInt8>) -> Int? {
+        guard let first = run.first, isLetter(first) else { return nil }
+        guard let colon = run.dropFirst().firstIndex(where: { !isSchemeByte($0) }), run[colon] == UInt8(ascii: ":") else { return nil }
+        return colon + 1
+    }
+
+    /// The end of the authority or of the user part: the first `/`, `?` or `#` from `start`, else the run's end.
+    private static func pathStart(_ run: ArraySlice<UInt8>, from start: Int) -> Int {
+        run[start...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? run.endIndex
+    }
+
+    private static func isAddress(_ run: ArraySlice<UInt8>) -> Bool {
+        if let end = schemeEnd(run), end < run.endIndex { return true }
+        if run.starts(with: slashes) || run.firstRange(of: schemeSlashes) != nil { return true }
+        let user = run[..<pathStart(run, from: run.startIndex)]
+        return user.firstIndex(of: at).map { $0 > run.startIndex } ?? false
+    }
+
+    /// `text` with each run between blanks that `isAddress` passes masked as an address (`address`); blanks as they came.
+    private static func masking(_ text: String, _ isAddress: (ArraySlice<UInt8>) -> Bool) -> (text: String, masked: Bool) {
+        let bytes = Array(text.utf8)
+        var out: [UInt8] = [], masked = false, start = 0
+        while start < bytes.endIndex {
+            guard !blanks.contains(bytes[start]) else {
+                out.append(bytes[start])
+                start += 1
+                continue
+            }
+            let end = bytes[start...].firstIndex(where: blanks.contains) ?? bytes.endIndex
+            let run = bytes[start..<end]
+            if isAddress(run) {
+                let shown = address(run)
+                out += shown.bytes
+                masked = masked || shown.masked
+            } else {
+                out += run
+            }
+            start = end
+        }
+        return (String(decoding: out, as: UTF8.self), masked)
+    }
+
+    /// One address, its credentials masked (`location` says which parts).
+    private static func address(_ run: ArraySlice<UInt8>) -> (bytes: [UInt8], masked: Bool) {
+        let mask = Array(Self.mask.utf8)
+        // An address glued to the text before it (`url=https://…`): that text as it came, from the scheme on an address.
+        if schemeEnd(run) == nil, !run.starts(with: slashes), let found = run.firstRange(of: schemeSlashes) {
+            var start = found.lowerBound
+            while start > run.startIndex, isSchemeByte(run[start - 1]) { start -= 1 }
+            while start < found.lowerBound, !isLetter(run[start]) { start += 1 }
+            if start < found.lowerBound {
+                let rest = address(run[start...])
+                return (Array(run[..<start]) + rest.bytes, rest.masked)
+            }
+        }
         var out: [UInt8] = [], masked = false
-        var index = 0
-        if let scheme = bytes.firstRange(of: Array("://".utf8)) {
-            out += bytes[..<scheme.upperBound]
-            let end = bytes[scheme.upperBound...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? bytes.endIndex
-            if let last = bytes[scheme.upperBound..<end].lastIndex(of: at) {
-                out += maskBytes
+        let afterScheme = schemeEnd(run) ?? run.startIndex
+        var index: Int
+        if run[afterScheme...].starts(with: slashes) {
+            // An authority: everything before its last `@` is a user and password.
+            let authority = afterScheme + slashes.count
+            out += run[..<authority]
+            if let last = run[authority..<pathStart(run, from: authority)].lastIndex(of: at) {
+                out += mask
                 masked = true
                 index = last
             } else {
-                index = scheme.upperBound
+                index = authority
             }
+        } else if let last = run[..<pathStart(run, from: run.startIndex)].lastIndex(of: at) {
+            // No `//`, and an `@` ahead of the path: what comes before it is a user and password, a `user:` read as a
+            // scheme included.
+            out += mask
+            masked = true
+            index = last
+        } else {
+            out += run[..<afterScheme]
+            index = afterScheme
         }
-        let queryStart = bytes[index...].firstIndex(of: question) ?? bytes.endIndex
-        let fragmentStart = bytes[index...].firstIndex(of: hash) ?? bytes.endIndex
+        let queryStart = run[index...].firstIndex(of: question) ?? run.endIndex
+        let fragmentStart = run[index...].firstIndex(of: hash) ?? run.endIndex
         let pathEnd = min(queryStart, fragmentStart)
-        out += bytes[index..<pathEnd]
+        // The path, each `;name=value` parameter's value masked.
+        var position = index
+        while position < pathEnd {
+            guard let parameter = run[position..<pathEnd].firstIndex(of: semicolon) else {
+                out += run[position..<pathEnd]
+                break
+            }
+            out += run[position...parameter]
+            let end = run[(parameter + 1)..<pathEnd].firstIndex { $0 == slash || $0 == semicolon } ?? pathEnd
+            let part = run[(parameter + 1)..<end]
+            if let sign = part.firstIndex(of: equals) {
+                out += part[...sign]
+                if sign + 1 < end {
+                    out += mask
+                    masked = true
+                }
+            } else if !part.isEmpty {
+                out += mask
+                masked = true
+            }
+            position = end
+        }
         if queryStart < fragmentStart {
             out.append(question)
-            let query = bytes[(queryStart + 1)..<fragmentStart].split(separator: UInt8(ascii: "&"), omittingEmptySubsequences: false)
+            let query = run[(queryStart + 1)..<fragmentStart].split(separator: ampersand, omittingEmptySubsequences: false)
             for (number, part) in query.enumerated() {
-                if number > 0 { out.append(UInt8(ascii: "&")) }
-                if let equals = part.firstIndex(of: UInt8(ascii: "=")) {
-                    out += part[...equals]
-                    if equals + 1 < part.endIndex {
-                        out += maskBytes
+                if number > 0 { out.append(ampersand) }
+                if let sign = part.firstIndex(of: equals) {
+                    out += part[...sign]
+                    if sign + 1 < part.endIndex {
+                        out += mask
                         masked = true
                     }
                 } else if !part.isEmpty {
-                    out += maskBytes
+                    out += mask
                     masked = true
                 }
             }
         }
-        if fragmentStart < bytes.endIndex {
+        if fragmentStart < run.endIndex {
             out.append(hash)
-            if fragmentStart + 1 < bytes.endIndex {
-                out += maskBytes
+            if fragmentStart + 1 < run.endIndex {
+                out += mask
                 masked = true
             }
         }
-        return (String(decoding: out, as: UTF8.self), masked)
+        return (out, masked)
     }
 
     /// A relationship's count in words: "5 apps", "1 user group", "None", or "showing N of more than N" when the
@@ -657,7 +774,9 @@ package enum ContentWords {
     /// `text` with its first letter capitalized: the profile's reasons are written to follow a colon.
     static func sentence(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
 
-    /// Every attribute of `view` as text, in Apple's order, each string first through `shown` (a package's addresses).
+    /// Every attribute of `view` as text, in Apple's order, each string first through `shown` (a package's addresses)
+    /// wherever it sits: in a list, an object, a list of objects (Phase 2b review L2: only a top-level string and a list's
+    /// strings went through it, so an address in an object showed raw).
     static func attributes<View: ResourceView>(of view: View, _ shown: (String) -> String = { $0 }) -> [ContentField] {
         view.attributes.keys.map { key in
             let value = view.attributes[key]
@@ -667,9 +786,9 @@ package enum ContentWords {
             } else if let flag = value?.bool {
                 text = flag ? "Yes" : "No"
             } else if let items = value?.array {
-                text = items.map { $0.string.map(shown) ?? $0.jsonText }.joined(separator: ", ")
+                text = items.map { $0.string.map(shown) ?? $0.mappingStrings(shown).jsonText }.joined(separator: ", ")
             } else if let value, value.jsonText != "null" {
-                text = value.jsonText
+                text = value.mappingStrings(shown).jsonText
             } else {
                 text = "—"
             }

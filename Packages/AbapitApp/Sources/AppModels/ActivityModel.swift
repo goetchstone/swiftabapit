@@ -42,11 +42,23 @@ public struct AuditFilter: Equatable, Sendable {
             _ = try query(now: now)
             return nil
         } catch .notAnID {
-            let which = Self.id(actorID).map(AppleRead.isPathSafe) == false ? "actor" : "subject"
-            return "The \(which) ID can hold only letters, digits, -, _ and ., as Apple's IDs do."
+            return Self.idProblem(Self.id(actorID), "actor") ?? Self.idProblem(Self.id(subjectID), "subject") ?? Self.words(.notAnID)
         } catch {
             return Self.words(error)
         }
+    }
+
+    /// Why `id` can't be sent as one of Apple's filters, each of `AppleRead.isPathSafe`'s rules in its own words (Phase 2b
+    /// review L8: a 129-character id, and `.hidden`, whose characters are all allowed, were told to fix their characters);
+    /// nil when it can be sent.
+    static func idProblem(_ id: String?, _ which: String) -> String? {
+        guard let id, !AppleRead.isPathSafe(id) else { return nil }
+        // The character rule alone: each scalar after a letter, so neither the length nor the dot rule decides.
+        if !id.unicodeScalars.allSatisfy({ AppleRead.isPathSafe("a" + String($0)) }) {
+            return "The \(which) ID can hold only letters, digits, -, _ and ., as Apple's IDs do."
+        }
+        if id.utf8.first == UInt8(ascii: ".") { return "The \(which) ID can't start with a dot, as Apple's IDs don't." }
+        return "The \(which) ID is longer than Apple's IDs: at most 128 characters."
     }
 
     /// A refused range in words.
@@ -56,7 +68,7 @@ public struct AuditFilter: Equatable, Sendable {
         case .tooLong: "The audit log is read at most \(Int(AuditQuery.longestSpan / 86_400)) days at a time."
         case .outOfRange: "The range must fall between 1970 and 9999."
         case .unknownType(let raw): "\(raw) isn't a type this version knows, so it isn't sent to Apple."
-        case .notAnID: "An actor or subject ID can hold only letters, digits, -, _ and ., as Apple's IDs do."
+        case .notAnID: "An actor or subject ID is 1 to 128 letters, digits, -, _ and ., not starting with a dot, as Apple's IDs are."
         }
     }
 
@@ -457,14 +469,10 @@ public final class ActivityModel {
     }
 
     /// Why Export is off, in words; nil when the rows are a whole read, or one the page cap stopped (which the banner
-    /// says). A partial list is never exported as if it were whole: the file couldn't say so.
+    /// says): every screen's rule (`ScreenWords.exportBlocked`). A partial list is never exported as if it were whole: the
+    /// file couldn't say so.
     public var exportBlocked: String? {
-        switch state {
-        case .loading: "The list is still loading."
-        case .failed, .forbidden:
-            rows.isEmpty ? nil : "The list is partial: \(rows.count.formatted()) events were read before the error. Refresh, then export."
-        default: nil
-        }
+        ScreenWords.exportBlocked(state, read: partialCount ?? 0, shown: shown.count, noun: "events")
     }
 
     /// The CSV of what the table shows: the common attributes (`ExportPolicy.auditEvents`), no payload (invariant 11).
@@ -489,12 +497,8 @@ public final class ActivityModel {
         guard force || loadedGeneration != generation || state == .idle else { return }
         reset()
         loadedGeneration = generation
-        guard orgs.active != nil else {
-            state = .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings.")
-            return
-        }
         guard let client = orgs.appleClient else {
-            state = .unusable("This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")")
+            state = .unusable(ScreenWords.unusable(orgs))
             return
         }
         let query: AuditQuery

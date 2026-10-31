@@ -25,6 +25,15 @@ struct DocumentTests {
         #expect(linkage.data.flatMap(Linkage.init) == Linkage(type: "mdmServers", id: "1F97349736CF4614A94F624E705841AD"))
     }
 
+    /// Every string at any depth goes through the transform, keys don't, and keys, order and other values stay as they came.
+    @Test func mappingStringsReachesEveryStringAndNothingElse() throws {
+        let value = try #require(JSONValue.parse(#"{"url": "a", "list": ["b", 1, {"c": "d", "e": null}], "deep": {"f": [["g"]]}, "n": true}"#))
+        let mapped = value.mappingStrings { $0.uppercased() }
+        #expect(mapped.jsonText == #"{"url": "A", "list": ["B", 1, {"c": "D", "e": null}], "deep": {"f": [["G"]]}, "n": true}"#)
+        #expect(value.mappingStrings { $0 } == value)
+        #expect(JSONValue.number("1.50").mappingStrings { _ in "x" }.jsonText == "1.50")
+    }
+
     @Test func notJSONSaysOnlyTheByteCount() {
         #expect(throws: Document.Failure.notJSON(bytes: 5)) { try Document.parse(Data("hello".utf8)) }
         #expect(throws: Document.Failure.notJSON(bytes: 2)) { try Document.parse(Data("[]".utf8)) }

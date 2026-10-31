@@ -11,27 +11,23 @@ import TestSupport
 /// @ bfdb494): the Keychain and `orgs.json` for real use; memory and the strict stub for the demo.
 final class AppServices {
     let orgs: OrgsModel
-    let devices: DevicesModel
-    let detail: DeviceDetailModel
-    let people: PeopleModel
-    let content: ContentModel
-    let appleMDM: AppleMDMModel
-    let activity: ActivityModel
-    /// Counts `devices`: one device read for the Devices screen and the Dashboard.
-    let dashboard: DashboardModel
+    /// Every screen model over the one `orgs`, so an org switch reaches each (`OrgsModel.onSwitch`), and each section's
+    /// Refresh (`ScreenModels.refresh`). The tests' `World` builds the same `ScreenModels`.
+    let screens: ScreenModels
     let isDemo: Bool
 
-    /// Every screen model over the one `orgs`, so an org switch reaches each (`OrgsModel.onSwitch`). The tests' `World`
-    /// builds them the same way, in this order.
+    var devices: DevicesModel { screens.devices }
+    var detail: DeviceDetailModel { screens.detail }
+    var people: PeopleModel { screens.people }
+    var content: ContentModel { screens.content }
+    var appleMDM: AppleMDMModel { screens.appleMDM }
+    var activity: ActivityModel { screens.activity }
+    /// Counts `devices`: one device read for the Devices screen and the Dashboard.
+    var dashboard: DashboardModel { screens.dashboard }
+
     private init(orgs: OrgsModel, isDemo: Bool) {
         self.orgs = orgs
-        devices = DevicesModel(orgs: orgs)
-        detail = DeviceDetailModel(orgs: orgs)
-        people = PeopleModel(orgs: orgs)
-        content = ContentModel(orgs: orgs)
-        appleMDM = AppleMDMModel(orgs: orgs)
-        activity = ActivityModel(orgs: orgs)
-        dashboard = DashboardModel(orgs: orgs, devices: devices)
+        screens = ScreenModels(orgs: orgs)
         self.isDemo = isDemo
     }
 

@@ -3,11 +3,10 @@ import AppModels
 import SwiftUI
 
 /// Device management services with their health (plan §2.1): how many devices each holds and when it last
-/// connected, flagged when that was more than `staleAfter` days ago. The services have their own state, apart from
-/// the devices' (Phase 1b review M3).
+/// connected, flagged by the Overview's rule (`DevicesModel.connection(of:now:)`, Reports' `QuietServices`). The services
+/// have their own state, apart from the devices' (Phase 1b review M3).
 struct ServicesView: View {
     let model: DevicesModel
-    static let staleAfter = 30
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,20 +35,18 @@ struct ServicesView: View {
     }
 }
 
+/// A service's last connection in the model's words (Phase 2b review L4): a flag is said in words beside its colour.
 struct LastConnected: View {
     let service: MDMService
 
     var body: some View {
-        if let days = service.daysSinceConnected(now: Date()) {
-            if days > ServicesView.staleAfter {
-                Label("\(days) days ago", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .accessibilityLabel("Not connected for \(days) days")
-            } else {
-                Text(days == 0 ? "Today" : "\(days) day\(days == 1 ? "" : "s") ago")
-            }
+        let connection = DevicesModel.connection(of: service, now: Date())
+        if connection.isQuiet {
+            Label(connection.text, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+                .accessibilityLabel(connection.spoken)
         } else {
-            Text("Never").foregroundStyle(.secondary)
+            Text(connection.text)
         }
     }
 }

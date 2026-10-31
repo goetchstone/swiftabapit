@@ -22,6 +22,10 @@ public final class DashboardModel {
     /// The newest `AuditDigest.recentLimit` events of the last `auditDays` days, newest first by instant; empty unless the
     /// read ended (whole, or cut at the page cap and said): the newest of a failed read's part aren't the newest.
     public private(set) var recentEvents: [AuditEvent] = []
+    /// The recent events as the card lists them: type, actor, subject and outcome in Activity's words (`ActivityRow`), an
+    /// actor or a subject Apple named only by id shown by its id, never a dash (Phase 2b review L3: the card showed
+    /// `actorName ?? "—"` and the type raw, decided in the view).
+    public var recentRows: [ActivityRow] { recentEvents.enumerated().map { ActivityRow($0.element, id: $0.offset) } }
     /// How many events the read returned.
     public private(set) var auditRead = 0
     /// The page cap stopped the audit read.
@@ -140,15 +144,10 @@ public final class DashboardModel {
         return quiet(now: now)?.isEmpty == true ? "Every service has connected in the last \(quietDays.formatted()) days, deleted ones aside." : nil
     }
 
-    /// When a quiet service last connected, in words: never, a date this app can't read (shown raw), or whole days ago.
+    /// When a quiet service last connected, in words: never, a date this app can't read (shown raw), or whole days ago, as
+    /// the Services screen says it (`DevicesModel.lastConnected`).
     public static func lastConnected(_ row: QuietServices.Row, now: Date) -> String {
-        switch row.lastConnected {
-        case .never: return "Never connected"
-        case .unreadable: return "Unreadable date: \(row.service.attributes["lastConnectedDateTime"]?.jsonText ?? "")"
-        case .at(let date):
-            let days = Int(now.timeIntervalSince(date.date) / 86_400)
-            return "\(days.formatted()) day\(days == 1 ? "" : "s") ago"
-        }
+        DevicesModel.lastConnected(row.lastConnected, of: row.service, now: now)
     }
 
     // MARK: recent audit events
@@ -193,12 +192,8 @@ public final class DashboardModel {
         guard force || loadedGeneration != generation || auditState == .idle else { return }
         reset()
         loadedGeneration = generation
-        guard orgs.active != nil else {
-            auditState = .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings.")
-            return
-        }
         guard let client = orgs.appleClient else {
-            auditState = .unusable("This organization can't be used: \(orgs.unusableReason ?? "it has no Apple API account.")")
+            auditState = .unusable(ScreenWords.unusable(orgs))
             return
         }
         let query: AuditQuery

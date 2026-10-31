@@ -280,6 +280,27 @@ struct DashboardTests {
         #expect(abs(end.timeIntervalSince(now)) < 60)
     }
 
+    /// Phase 2b review L3, probe p4: a recent event Apple named its actor and subject only by id shows the ids, as Activity's
+    /// table does, never a dash that reads as no actor; its type and outcome are in Activity's words.
+    @Test func aRecentEventNamedOnlyByIdShowsTheId() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        world.stubs["a"]!.add([Resource(type: "auditEvents", id: "E1", attributes: [
+            "eventDateTime": .string(Self.iso(Date().addingTimeInterval(-3_600))), "type": .string("API_ACCOUNT_KEY_REVOKED"),
+            "actorType": .string("API_ACCOUNT"), "actorId": .string("APIACTOR1"), "subjectId": .string("SUBJ1"), "outcome": .string("FAILURE"),
+        ]), Self.event("E2", at: Date().addingTimeInterval(-7_200))])
+        world.dashboard.load()
+        await world.auditSettled(1)
+        let rows = world.dashboard.recentRows
+        #expect(rows.map(\.event.id) == world.dashboard.recentEvents.map(\.id) && rows.map(\.event.id) == ["E1", "E2"])
+        let first = try #require(rows.first)
+        #expect(first.actor == "APIACTOR1" && first.subject == "SUBJ1")
+        #expect(first.type == "API account key revoked" && first.outcome == "Failure" && first.failed)
+        let second = try #require(rows.dropFirst().first)
+        #expect(second.actor == "Admin One" && second.type == "Device added to org" && second.outcome == "Success")
+        let activity = ActivityRow(try #require(world.dashboard.recentEvents.first), id: 0)
+        #expect([first.type, first.actor, first.subject, first.outcome] == [activity.type, activity.actor, activity.subject, activity.outcome])
+    }
+
     /// Few events or none: each said in words.
     @Test func fewOrNoEventsAreSaid() async throws {
         let world = try await World.make(devices: ["a": 1, "b": 0])
