@@ -35,7 +35,7 @@
   test builds. Pre-commit item 14 (a test per cap, per guard) was walked for the guards each unit's author named, not for
   the timeline's cap or the `.forbidden` arm of People's `partialCount`; a twin's test (DevicesModel's) made the copy look
   covered.
-- **Fix:** branch `phase-2b-screens`, the `fix(2b): …` commits after 08c7635. M1: `isLocked(for:)` locks a section only when
+- **Fix:** branch `phase-2b-screens`, commit 8f45fa6 ("fix(2b): lock a section only when every read it shows is refused, …"). M1: `isLocked(for:)` locks a section only when
   every read in its `reads` probed "forbidden"; a read with no probe on record isn't refused (an older check, a School
   org's unprobed Business-only reads), nor is an error; the Overview and Activity follow the same rule, and a School org's
   scope rule is unchanged. L1: Content's detail and People's members check `AppleRead.isPathSafe` and say
@@ -50,8 +50,9 @@
   `Panel(after:)` over `LoadState(after:)`, `ScreenModels` (the models and Refresh's routing, which `World` and
   `AppServices` both build), `timelineQuery` at `package`; merging the copied list code waits for Phase 3 (apple-reads
   runbook).
-- **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 45 mutants and
-  what killed each; the review's T2, P4 and X1 among them). The lock is tested over the reads it gates, partly and wholly
+- **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
+  what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
+  cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
   refused and with probes missing (`aPartlyDeniedSectionIsUnlocked`, `aReadNoProbeRecordedDoesntLock`), not as a table. The
   Refresh switch and every view's words that branch now live in AppModels, so `swift test` reaches them; App/ still has no
   test target, so a branch left in a view is still untested (CI's snapshots render the states, they don't assert them).
