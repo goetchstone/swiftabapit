@@ -517,8 +517,8 @@ struct ContentTests {
         let apps = try #require(detail.members.first)
         #expect(apps.members.first == ContentMember(id: "1000000001", name: "Example Field Notes"))
         #expect(detail.members[3].members.first == ContentMember(id: "ADEV0000000", name: "MacBook Air"))
-        // DemoPeople's group, by its id; named when the people unit's demo holds it.
-        #expect(detail.members[5].members.map(\.id) == ["demo-group-01"])
+        // DemoPeople's group, by its id; named once DemoPeople is loaded too, as the demo org does (DemoTests).
+        #expect(detail.members[5].members.map(\.id) == ["DEMOUG01"])
         #expect(detail.fields.contains(ContentField("Licences", "Enough for its apps")) && detail.fields.contains(ContentField("Status", "Active")))
     }
 

@@ -9,7 +9,8 @@ import SwiftUI
 ///         .selectsFirstRow($selection, first: model.shown.first?.id, ready: !model.state.isLoading)
 ///
 /// `first` is the first row as the table shows it (sorted and filtered), `ready` that its read has ended. In Release,
-/// and whenever the harness didn't ask, it does nothing: no switch is read here.
+/// and whenever the harness didn't ask, it does nothing: no switch is read here. The harness fails a `first` run whose
+/// screen selected nothing (`FirstRowSelected`), since its picture would show no inspector and look like a pass.
 extension EnvironmentValues {
     /// Whether the snapshot harness asked for the first row (`ABAPIT_SELECT=first`); always false in Release.
     @Entry var selectsFirstRow = false
@@ -35,6 +36,19 @@ private struct FirstRowSelection<ID: Hashable>: ViewModifier {
             guard now, !done, let first else { return }
             done = true
             selection = first
+            #if DEBUG
+            FirstRowSelected.yet = true
+            #endif
         }
     }
 }
+
+#if DEBUG
+/// Whether a screen's hook has selected its first row: `Snapshots` fails a run that asked (`ABAPIT_SELECT=first`) and got
+/// none, a screen that never adopted the hook or never became ready, rather than writing a `-detail` picture without its
+/// inspector (the scaffold's open question at the Phase 2b merge).
+@MainActor
+enum FirstRowSelected {
+    static var yet = false
+}
+#endif

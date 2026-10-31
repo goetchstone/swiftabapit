@@ -1062,16 +1062,22 @@ the JWS code.
 
 ### Phase 2: Apple read parity and new reads
 
-**Status:** split in two for review size (2026-10-30). **2a** (package: AppleModels for people, content, Apple
-MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every
-Phase 2 read in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's
-checked range, filters and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports'
-audit digests with the new Access & Security view, services not connected in N days and recent events): on branch
-`phase-2a-apple-reads`. **2b** (the People, Content, Apple MDM, Audit and Dashboard screens, their screen models in
-Packages/AbapitApp, the demo org's data): on branch `phase-2b-screens`; its scaffold (2026-10-31) holds the files the
-screens share (the sidebar's sections and scope rule in `AppModels/Navigation.swift`, routing and Refresh, every model
-built in AppServices and the tests' World, `LoadState.notInScope`, the snapshot runs and the `selectsFirstRow` hook) and
-a placeholder for each screen's own files, which five units fill in parallel. Live checks wait for S1's team build.
+**Status:** split in two for review size (2026-10-30). **2a** merged (package: AppleModels for people, content, Apple
+MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every Phase 2 read
+in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's checked range, filters
+and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports' audit digests with the new
+Access & Security view, services not connected in N days and recent events). **2b** on branch `phase-2b-screens`
+(2026-10-31: a scaffold, then five screen units built in parallel and merged): the People, Content, Apple MDM, Activity
+and Dashboard screens over their screen models in Packages/AbapitApp, each list its own panel and load token, every state
+said in words (loading, refused, cut at the page cap, failed and partial, a School org's not in scope, never an empty
+table); a group's and an org unit's members, a blueprint's through `BlueprintRead.members`, a configuration's profile only
+as `profileText`, a package's location masked; Activity's panes as views over one audit read, and Device 360's audit
+timeline by `filter[subjectId]`; the Dashboard in Swift Charts, counting only lists read whole, its recent events from its
+own seven-day read; CSV columns in Reports for every list (no profile, no package url, no audit payload); the sidebar's
+scope rule in `AppModels/Navigation.swift`; the demo org's people, content, Apple MDM devices and audit events, which
+name one another (`DemoTests`). Apple MDM reads up to 50 devices' `/details` as the page loads, one at a time and
+cancelled on a switch or Refresh, the rest on selection: a bounded deviation from §3.6's "never on page load". The
+screens' snapshots are CI's to render, and a `first` run that selects nothing fails. Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.

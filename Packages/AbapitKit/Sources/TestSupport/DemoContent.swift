@@ -8,10 +8,11 @@ import JSONAPI
 /// of several types, for the Content screen and its snapshots. Invented: every name starts "Example", every address is
 /// `example.com`, and dates are fixed against `DemoFleet.reference`, so screenshots don't move.
 ///
-/// A blueprint's members are the demo fleet's devices (`DemoFleet.make()`, by serial) and the demo people by id: users
-/// `demo-user-01`…, user groups `demo-group-01`… (`DemoPeople` is to use the same ids, so the detail can name them). The
-/// Wi-Fi custom setting's profile holds `canary` as its password: no real secret, and what the tests look for to prove a
-/// profile reaches no screen, CSV or description unmasked (invariant 11).
+/// A blueprint's members are the demo fleet's devices (`DemoFleet.make()`, by serial) and `DemoPeople`'s users and user
+/// groups by their ids (`DEMOUSER…`, `DEMOUG…`), so the detail names each from what the stub includes, as it would a
+/// tenant's (`DemoTests` holds that every member names something). The Wi-Fi custom setting's profile holds `canary` as
+/// its password: no real secret, and what the tests look for to prove a profile reaches no screen, CSV or description
+/// unmasked (invariant 11).
 public enum DemoContent {
     /// The custom setting's Wi-Fi password: invented, and never shown unmasked.
     public static let canary = "demo-canary-office-wifi-7Kq2"
@@ -169,23 +170,26 @@ public enum DemoContent {
         func devices(_ family: String, _ count: Int) -> [String] {
             Array(fleet.filter { $0.attributes["productFamily"]?.string == family }.prefix(count).map(\.id))
         }
-        func numbered(_ prefix: String, _ numbers: ClosedRange<Int>) -> [String] { numbers.map { prefix + String(format: "%02d", $0) } }
+        /// `DemoPeople`'s users: the field teams carry the field iPads, operations the front desk's shared iPhones.
+        func people(_ matching: (DemoPeople.Person) -> Bool, _ count: Int) -> [String] {
+            Array(DemoPeople.people.filter(matching).prefix(count).map(\.id))
+        }
         return [
             ("demo-blueprint-01", "apps", [1, 3, 8, 9, 10].map(appID)),
             ("demo-blueprint-01", "packages", ["demo-package-01", "demo-package-03", "demo-package-04"]),
             ("demo-blueprint-01", "configurations", ["demo-config-01", "demo-config-03", "demo-config-04", "demo-config-05"]),
             ("demo-blueprint-01", "orgDevices", devices("Mac", 12)),
-            ("demo-blueprint-01", "userGroups", ["demo-group-01"]),
+            ("demo-blueprint-01", "userGroups", ["DEMOUG01"]),
             ("demo-blueprint-02", "apps", [1, 4, 7, 12].map(appID)),
             ("demo-blueprint-02", "configurations", ["demo-config-02", "demo-config-07"]),
             ("demo-blueprint-02", "orgDevices", devices("iPad", 8)),
-            ("demo-blueprint-02", "users", numbered("demo-user-", 1...6)),
-            ("demo-blueprint-02", "userGroups", ["demo-group-02"]),
+            ("demo-blueprint-02", "users", people({ $0.department == "Field" }, 6)),
+            ("demo-blueprint-02", "userGroups", ["DEMOUG02"]),
             ("demo-blueprint-03", "apps", [2, 4, 5, 9].map(appID)),
             ("demo-blueprint-03", "packages", ["demo-package-02"]),
             ("demo-blueprint-03", "configurations", ["demo-config-05", "demo-config-06"]),
             ("demo-blueprint-03", "orgDevices", devices("iPhone", 10)),
-            ("demo-blueprint-03", "users", numbered("demo-user-", 7...9)),
+            ("demo-blueprint-03", "users", people({ $0.department == "Operations" }, 3)),
             ("demo-blueprint-04", "apps", [11].map(appID)),
             ("demo-blueprint-04", "configurations", ["demo-config-08"]),
             ("demo-blueprint-04", "orgDevices", devices("AppleTV", 4)),

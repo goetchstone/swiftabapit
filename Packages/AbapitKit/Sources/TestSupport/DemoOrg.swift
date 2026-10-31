@@ -20,12 +20,19 @@ public enum DemoOrg {
         if let item = VaultItem(org: orgID, kind: .appleKey) { try? store.storeKey(key, as: item) }
         let stub = AppleStub()
         stub.register(AppleStub.Account(clientID: clientID, keyID: keyID, publicKey: key.publicKey))
+        load(into: stub)
+        return (store, stub)
+    }
+
+    /// Fills `stub` with the demo org's data: the fleet, then its people, content, Apple MDM devices and audit events,
+    /// which name one another (a blueprint's users, an audit event's subject). `make()` uses it, and so do the tests that
+    /// hold the demo's screens to each other's ids.
+    public static func load(into stub: AppleStub) {
         stub.load(DemoFleet.make())
         DemoPeople.load(into: stub)
         DemoContent.load(into: stub)
         DemoAppleMDM.load(into: stub)
         DemoAudit.load(into: stub)
-        return (store, stub)
     }
 }
 #endif

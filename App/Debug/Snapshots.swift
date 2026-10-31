@@ -75,6 +75,10 @@ enum Snapshots {
             print("snapshot: a control reaches past the window's edge: \(outside.joined(separator: "; "))")
             exit(EXIT_FAILURE)
         }
+        if selecting, !FirstRowSelected.yet {
+            print("snapshot: ABAPIT_SELECT asked for the first row and the screen selected none, so no inspector shows")
+            exit(EXIT_FAILURE)
+        }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(10))
             print("snapshot: the app didn't quit within 10 s of its picture")

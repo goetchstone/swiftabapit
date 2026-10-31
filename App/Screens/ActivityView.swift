@@ -76,7 +76,7 @@ struct ActivityView: View {
                     .accessibilityIdentifier("activity.export")
             }
         }
-        .fileExporter(isPresented: $exporting, document: CSVDocument(text: model.csv()), contentType: .commaSeparatedText,
+        .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
                       defaultFilename: model.exportName) { _ in }
         .inspector(isPresented: Binding(get: { model.selection != nil }, set: { if !$0 { model.selection = nil } })) {
             ActivityInspectorView(row: model.selected)

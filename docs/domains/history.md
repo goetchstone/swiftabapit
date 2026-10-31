@@ -126,9 +126,10 @@ are below.
   golden (the generator writes canonical JSON) and from Apple (the three fields are strings in the contract).
 - **An audit list is ordered by instant, never by its string**, and ties compare `ISODate.date`: `ISODate`'s `==`
   compares the offset too, so two spellings of one instant would not tie.
-- **Two quiet-service rules exist until 2b**: the Phase 1b screen model's `DevicesModel.quietServices(after:)` counts
-  whole days and keeps `DELETED` services; Reports' `QuietServices` is the exact rule. The 2b dashboard moves the
-  Overview onto `QuietServices`, so the two screens can't disagree.
+- **Two quiet-service rules remain**: since 2b the Overview counts with Reports' `QuietServices`, the exact rule. The
+  Services screen still flags a service by whole days (`daysSinceConnected`, more than 30) and keeps `DELETED` ones, so
+  the two can disagree at the day's boundary and on a deleted service until Services moves onto `QuietServices`;
+  `DevicesModel.quietServices(after:)` has no screen left, only `PanelTests`.
 - **Spreadsheet behaviour is unverified**: whether Excel or Numbers runs `" =1"`, `"\u{200B}=1"`, a
   full-width U+FF1D or `"\u{2212}1"` as a formula wasn't tested; the wider guard costs a `'` on such a cell
   either way. A leading combining mark isn't skipped: it shows on its own, and no trimmer drops it.

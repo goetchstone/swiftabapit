@@ -39,7 +39,8 @@ org editor's save).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3): `parameters` (every GET's query parameters and
   allowed values, written out from the contract) and `paged`; `add(_:)`, `relate(_:_:_:to:)`, `setDetails(_:_:)` for the
   Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`. `DemoOrg.make()` loads the demo fleet,
-  then `DemoPeople`, `DemoContent`, `DemoAppleMDM` and `DemoAudit` into the stub (DEBUG only, invented data).
+  then `DemoPeople`, `DemoContent`, `DemoAppleMDM` and `DemoAudit` into the stub (`DemoOrg.load(into:)`; DEBUG only,
+  invented data).
 
 ## Gotchas / stub-lies traps
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing**, and can still be handed a
@@ -294,6 +295,66 @@ org editor's save).
     service's `lastConnectedDateTime` is (absent and null read as never, any other non-date as unreadable); whether
     `APPLE_CONFIGURATOR` and `APPLE_MDM` services ever set it (if not, they read as never connected for good and may
     need leaving out by `serverType`); and whether an `INACTIVE` service still connects (only `DELETED` is skipped).
+
+## Screens (Phase 2b)
+Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `App/Screens/`, its CSV columns in
+`Reports/Export<Name>.swift` (`ExportPolicy.Columns`, never a profile, a package url or an audit payload) and its demo in
+`TestSupport/Demo<Name>.swift`.
+- **What every screen does the same way.** A list is a panel with its own state and load token, checked after every page
+  and every await; an error becomes `LoadState(after:)` (403 "your role can't read this", a School org's Business-only read
+  not in scope in words, else failed); a School org sends nothing and shows the sentence, never an empty table; a list
+  cut at the page cap says "showing N of ≥M"; a list a failure cut short says "Partial: N" and doesn't export. An org switch
+  clears the screen, its selection included, and reads again only if it was showing; `load()` reads once per org,
+  `load(force: true)` (Refresh, ⌘R) cancels and reads again, an open detail too. Each model counts its reads in a
+  `package readsFinished` the tests wait on. Each inspector is `ColumnWidths.inspector`, each table adopts
+  `selectsFirstRow`, and the snapshot harness fails a `first` run whose screen selected nothing.
+- **People** (`PeopleModel`): users, user groups and org units side by side, one tab on screen; a group's or an org
+  unit's members read when it is chosen (`PeopleModel.Members`, its own token) and matched to the users read by their
+  bytes. A member the users read lacks shows by its id, with a note counting them and saying why (still reading, the
+  role can't read users, the users list was cut, Apple's list lacks it); a member list cut at the page cap shows Apple's
+  `totalMemberCount` beside the count read; a phone or role list of another shape is said (`listNote`), never "None". The
+  users list carries every attribute, so there is no single user read.
+- **Content** (`ContentModel`, `ContentDetailModel`): apps, packages, blueprints and configurations side by side
+  (`ContentList` each); the chosen row is read alone. A blueprint is read with its six relationships at `limit=1000` and
+  counted only through `BlueprintRead.members`: "N apps", "Showing N of more than N", "Apple didn't list …" with no count,
+  and a refused include one note and no counts. A configuration's profile is only `profileText`, and one that can't be
+  shown says why. A package's location is shown with its user, password, query values and fragment masked
+  (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
+  `theDemosCustomSettingReachesNothingTheModelExposesUnmasked` follows the demo's canary password through the model.
+- **Apple MDM** (`AppleMDMModel`): `mdmDevices`, then each device's `/details` one at a time in list order, at most
+  `detailLimit` (50), cancelled on a switch or Refresh; a row past it says "Not read" and reads its own when chosen. A 403
+  stops the reads and is said, a 404 is "No details", an id that can't go in a path is never sent, details naming another
+  serial are refused. A posture cell without details says why (Reading…, Not read, No details, Role can't read, Failed),
+  so an unread FileVault never reads Off; the CSV adds its own `detailsStatus`. A School org gets the model's own words,
+  since `AppleAPIError.message` lower-cases `displayName` ("no apple mdm enrolled").
+- **Activity** (`ActivityModel`): one audit read over an `AuditFilter` (the last 1, 7, 30, 90 or 365 days or a range, and
+  Apple's type, actor and subject filters), checked through `AuditQuery` when set, so a refused range is said and nothing
+  is sent. The panes are views over that one read: a type this version doesn't know is in Other types and an untyped
+  event only in Audit, both said (`unplacedNote`), never dropped; counts by type only over a list read whole. Device 360's
+  timeline (`DeviceDetailModel.timeline`) reads `filter[subjectId]=<serial>` over 30 days in its own panel, counted apart
+  (`timelineReadsFinished`).
+- **Dashboard** (`DashboardModel`): counts the Devices screen's read (one device read for both) and only a list read
+  whole, else each card says why (`fleetWords`, `servicesWords`, `unassignedWords`, `quietWords`); services not connected
+  through Reports' `QuietServices`; the newest ten of the last seven days' audit events from its own read and
+  `auditState`, so a refusal or a School org is said in that card alone.
+- **A test that holds the main actor holds a read too** (People): `World.buffer` blocks the main actor, so a read started
+  from it hasn't sent its request yet; wait until the request is held at the gate, then buffer, or the buffer waits out its
+  20 s and the test passes for the wrong reason.
+- **The demo's files name one another**: blueprint members are `DemoPeople`'s users and groups (`DEMOUSER…`, `DEMOUG…`) and
+  the fleet's serials; audit subjects and actors are `DemoPeople`'s users and org unit, `DemoContent`'s Wi-Fi setting and
+  the fleet's serials (two released devices `TEST…`); Apple MDM's devices are the fleet's. `DemoTests` holds it.
+- **Check live (Phase 2):** whether the users list carries `phoneNumbers` and `roleOuList` or only `users/{id}` does;
+  whether a group's `totalMemberCount` is its linkage count (smart groups too), and whether member lists hold users
+  `/v1/users` doesn't return; whether a group's and a role's `ouId`, and an audit role's `locationUniqueIdentifier`, are org
+  unit ids; whether a USER audit subject's or actor's id is the `/v1/users` id, and a device event's `subjectId` its serial
+  (the timeline filters on it; else it says no event names the device); whether `apps/{id}` and `packages/{id}` carry the
+  lists' attributes, a package's url ever carries credentials or a signed query, and a custom app has an `appStoreUrl`;
+  whether a blueprint read includes the user and group resources the role can read (for names); whether a
+  `CUSTOM_PROFILE` carries `customSettingsValues`; whether a role that can't read details gets 403 on every device's, a
+  details record's serial always matches, and what iPhones and iPads send for FileVault and the firewall; whether 50
+  details per load suits real fleets and rates; and how long the Dashboard's seven-day audit read takes on a busy org,
+  since the endpoint has no `sort` and every page is read to find the newest ten. Manual: whether VoiceOver reads a
+  Chart's `accessibilityValue` (each chart's summary).
 
 ## Testing / live-verification status
 - Offline: green. Live (operator, Phase 1): device count and a 20-serial sample against abapit; Activation

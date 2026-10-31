@@ -63,7 +63,8 @@ struct DevicesView: View {
                     .accessibilityIdentifier("devices.export")
             }
         }
-        .fileExporter(isPresented: $exporting, document: CSVDocument(text: model.csv()), contentType: .commaSeparatedText,
+        // Built only while exporting: a large list's CSV isn't rebuilt on every redraw as its pages arrive.
+        .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
                       defaultFilename: "devices.csv") { _ in }
         .inspector(isPresented: Binding(get: { selection != nil }, set: { if !$0 { selection = nil } })) {
             DeviceInspectorView(model: detail)

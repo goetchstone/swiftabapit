@@ -7,9 +7,11 @@ import JSONAPI
 /// The demo org's audit events (plan §4, demo mode), for the Activity screen, Device 360's timeline, the Dashboard's
 /// recent events and their snapshots. Invented: `example.com`, `DEMO…` and `TEST…` ids, no real person's or organization's
 /// name. Sixty events over the last 30 days across forty types: device lifecycle on the demo fleet's own serials (two
-/// devices released from the organization are `TEST…`, no longer in the fleet), every subscription and purchase type,
-/// access and security, the types no view shows, two payloads named by their object's spelling (`Icloud`, `Applecare`)
-/// where Apple's attribute keys spell `ICloud` and `AppleCare`, so `payloadProblems` shows, and one type no version knows.
+/// devices released from the organization are `TEST…`, no longer in the fleet), people, org units and the Wi-Fi setting
+/// as `DemoPeople` and `DemoContent` hold them (the departed user only as the id a group keeps), every subscription and
+/// purchase type, access and security, the types no view shows, two payloads named by their object's spelling (`Icloud`,
+/// `Applecare`) where Apple's attribute keys spell `ICloud` and `AppleCare`, so `payloadProblems` shows, and one type no
+/// version knows.
 ///
 /// The stub filters by range against its own clock, which is now, so the dates are counted back from the moment the demo
 /// is made: a fixed day would drift out of "the last 7 days". Written as Apple would send them, never from the models'
@@ -18,15 +20,21 @@ public enum DemoAudit {
     /// Adds the demo's data to `stub`; `DemoOrg.make()` calls it.
     public static func load(into stub: AppleStub) { stub.add(events(now: Date())) }
 
-    /// Who did it: the demo's own API key, two administrators, and Apple.
+    /// Who did it: the demo's own API key, the two IT people of `DemoPeople` (its systems administrator and its support
+    /// specialist), and Apple.
     struct Actor {
         let type: String
         let id: String?
         let name: String
         static let key = Actor(type: "API_USER", id: "00000000-0000-4000-8000-00000000d3e0", name: "abapit demo key")
-        static let admin = Actor(type: "USER", id: "00000000-0000-4000-8000-00000000a001", name: "IT Admin (demo)")
-        static let helpDesk = Actor(type: "USER", id: "00000000-0000-4000-8000-00000000a002", name: "Help Desk (demo)")
+        static let admin = person(9)
+        static let helpDesk = person(19)
         static let apple = Actor(type: "SYSTEM", id: nil, name: "Apple Business")
+
+        static func person(_ number: Int) -> Actor {
+            let user = Subject.user(number)
+            return Actor(type: "USER", id: user.id, name: user.name)
+        }
     }
 
     /// What it was done to.
@@ -35,20 +43,28 @@ public enum DemoAudit {
         let id: String
         let name: String
         static func device(_ serial: String) -> Subject { Subject(type: "DEVICE", id: serial, name: serial) }
-        static func user(_ n: Int, _ address: String) -> Subject { Subject(type: "USER", id: String(format: "00000000-0000-4000-8000-00000000b%03d", n), name: address) }
+        /// A `DemoPeople` user by number, named by their Managed Apple Account, as the People screen shows it.
+        static func user(_ number: Int) -> Subject {
+            guard let person = DemoPeople.people.first(where: { $0.number == number }) else { preconditionFailure("no demo user \(number)") }
+            return Subject(type: "USER", id: person.id, name: "\(DemoPeople.local(person.first, person.last))@appleid.example.com")
+        }
         static let org = Subject(type: "ORGANIZATION", id: "DEMO-ORG-0001", name: "Example Business (demo)")
         static let domain = Subject(type: "DOMAIN", id: "example.com", name: "example.com")
         static let demoKey = Subject(type: "API_USER", id: Actor.key.id!, name: Actor.key.name)
         static let syncKey = Subject(type: "API_USER", id: "00000000-0000-4000-8000-00000000d3e2", name: "Inventory sync key")
         static let plan = Subject(type: "SUBSCRIPTION", id: "DEMOSUB0001", name: "AppleCare+ for Business (demo)")
-        static let wifi = Subject(type: "DEVICE_MANAGEMENT_SETTING", id: "DEMOCFG0001", name: "Front office Wi-Fi (demo)")
+        /// `DemoContent`'s Wi-Fi custom setting.
+        static let wifi = Subject(type: "DEVICE_MANAGEMENT_SETTING", id: DemoContent.configurationList[0].id,
+                                  name: DemoContent.configurationList[0].name)
         static let collection = Subject(type: "COLLECTION", id: "DEMOCOL0001", name: "Front desk iPads")
-        static let location = Subject(type: "LOCATION", id: "DEMO-LOC-0001", name: "Main office (demo)")
+        /// Where a role holds: `DemoPeople`'s first org unit (assumed: an audit location is an org unit).
+        static let location = Subject(type: "LOCATION", id: DemoPeople.unitID(0), name: DemoPeople.units[0].1)
     }
 
-    static let sam = Subject.user(1, "sam.sample@example.com"), lee = Subject.user(2, "lee.example@example.com"),
-               kim = Subject.user(3, "kim.test@example.com"), ari = Subject.user(4, "ari.demo@example.com"),
-               rae = Subject.user(5, "rae.former@example.com"), guest = Subject.user(6, "guest.partner@example.org")
+    /// `DemoPeople`'s users: `ari` is new, `guest` an external user, and `rae` someone who left, whose id only the Finance
+    /// Approvers group still keeps (so People shows them by id).
+    static let sam = Subject.user(1), lee = Subject.user(2), kim = Subject.user(3), ari = Subject.user(4), guest = Subject.user(22),
+               rae = Subject(type: "USER", id: DemoPeople.userID(26), name: "rae.former@appleid.example.com")
 
     /// Apple's attribute key for a type's payload: `eventData` and the type in camel case, with `ICloud` and `AppleCare`
     /// as Apple's attribute keys spell them (its object names say `Icloud` and `Applecare`).
@@ -174,7 +190,7 @@ public enum DemoAudit {
             "accountRoleLocationList": .array([.object(["roleName": .string("Administrator"), "locationUniqueIdentifier": .string(Subject.location.id)])]),
         ])
         add(26 * day, "EXTERNAL_ACCOUNT_ASSOCIATED", "ACCOUNT_ACTIVITY", by: .apple, on: guest)
-        add(27 * day, "API_ACCOUNT_DELETED", "ACCOUNT_ACTIVITY", by: .admin, on: Subject(type: "API_USER", id: "00000000-0000-4000-8000-00000000d3e1", name: "Old export key"))
+        add(27 * day, "API_ACCOUNT_DELETED", "ACCOUNT_ACTIVITY", by: .admin, on: Subject(type: "API_USER", id: "00000000-0000-4000-8000-00000000d3e3", name: "Old export key"))
 
         // The types no view shows.
         add(7, "CONFIG_SETTINGS_UPDATED", "DEVICE_MANAGEMENT", by: .admin, on: .wifi, payload: [

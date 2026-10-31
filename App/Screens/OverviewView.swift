@@ -36,7 +36,7 @@ struct OverviewView: View {
                 Text(why)
             } actions: {
                 Button("Open Settings", action: addOrg)
-                    .accessibilityIdentifier("overview.open-settings")
+                    .accessibilityIdentifier("overview.unusable.open-settings")
             }
         } else {
             ScrollView {
