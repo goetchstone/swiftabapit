@@ -40,6 +40,7 @@ public struct User: ResourceView {
     public var unreadNested: [NestedKey] {
         UserPhoneNumber.unread(phoneNumbers, in: "phoneNumbers") + UserRoleOuMapping.unread(roleOuList, in: "roleOuList")
     }
+    public var misreadLists: [String] { misread(["roleOuList": roleOuList == nil, "phoneNumbers": phoneNumbers == nil]) }
 }
 
 /// `UserPhoneNumber`: one of a user's numbers.

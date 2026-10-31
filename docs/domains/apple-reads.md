@@ -17,7 +17,7 @@ org editor's save).
 - `Sources/JSONAPI/` — `JSONValue`/`JSONObject` (Python-faithful, ordered, exact text; from SwiftGamGui),
   `Document`/`Resource`/`Linkage`, `ErrorBody`, `OpenEnum`, `ISODate` (abapit's `parse_iso`, golden-held).
 - `Sources/AppleModels/` — `OrgDevice`, `AppleCareCoverage`, `ActivationLockStatus`, `MDMService`, and for Phase 2
-  `User`, `UserGroup`, `OrganizationalUnit`, `ContentApp`, `ContentPackage`, `Blueprint` (`related`, `included`),
+  `User`, `UserGroup`, `OrganizationalUnit`, `ContentApp`, `ContentPackage`, `Blueprint` (`included`; `related` at `package`),
   `Configuration` and `CustomSettingsValues`, `MDMDevice`, `MDMDeviceDetail`, `AuditEvent` and `AuditEventPayload`
   (`AuditEventType.payload` holds the 50-row table), as `ResourceView`s that keep the resource: the inspector shows
   every attribute, CSV keeps Apple's order, snapshots store what came. `unreadAttributes` (and an audit payload's
@@ -150,7 +150,10 @@ org editor's save).
   L5: an empty `related` beside a separate flag read 0); `.read(related:included:)` holds them. The acceptance pass's
   line is the refusal's status (`error 400`, `forbidden`), never `ok` (invariant 8). An include asks each relationship at
   `limit[<name>]=1000` (Apple's maximum); a relationship that limit cut is `Related.isTruncated`, one Apple didn't
-  list is absent from `related`, and the pass says both as `truncated`, the unlisted one's count a dash, never 0. A
+  list is absent from `related`, and the pass says both as `truncated`, the unlisted one's count a dash, never 0.
+  `Blueprint.related(_:)` is `package`: after a refusal it reads nil, as for a relationship Apple didn't list, so the app
+  counts members only through `members` (verifier round 3 of the fixes: `related(.users)?.linkages.count ?? 0` read a
+  refusal as no members). A
   member list the page cap cut is `truncated` on its own line, each of the nine (`everyMemberListCutAtThePageCapIsTruncated`).
   An included relationship whose `data` isn't a
   list of linkages of its own type is `.malformed("the blueprint's <name>")`. The stub's default without
@@ -185,7 +188,10 @@ org editor's save).
 - **One list reader** (Phase 2a review L6): every view reads a list with `JSONObject.list(_:_:)`, nil when missing, not a
   list or holding an item that doesn't read, never the items that fit. Phase 1's `strings(_:)` read `[]` and kept what
   fit, so `OrgDevice.imei` and `MDMDeviceDetail.imei` read one shape two ways; it is gone, and Find takes no identifier
-  from a list that isn't one (`everyViewReadsAListTheSameWay`).
+  from a list that isn't one (`everyViewReadsAListTheSameWay`). A list Apple sent, not as `null`, that read nil is in
+  the view's `misreadLists`, and the acceptance pass says it with a count (`defaultProductFamilies not read as a list in
+  1 item`), never `ok` with nothing said (verifier round 3 of the fixes: a families list holding a number read nil, so
+  `GLASSES` went unsaid where Phase 1's reader had named it; `everyListThatDidNotReadIsNamed`, `aListThatDidNotReadIsSaid`).
 - **A member list is a list of linkages of its type, on every page**: a group's or an org unit's `users`, each
   blueprint relationship's own type, a service's `orgDevices`. Another type, a lookalike (`Users`, `usersX`) or an
   empty id is `.malformed("linkages of type <type>")`, as an assigned server that isn't one is.
@@ -206,8 +212,13 @@ org editor's save).
   behind the name scan alone), `BoundaryTests.onlyTheListedLinesReadTheRawProfile`, which lists every line in AbapitKit
   that names either, and `whatAConfigurationStoresIsTheTwoCopies`, which holds the two types' stored layout (verifier
   round 2: a public accessor of another name, in any AbapitKit module, left every test green; a new stored copy would
-  name neither). `CustomSettingsValues`' `==` compares the withheld object and the masked text: Swift's compared the raw
-  profile, so the app could test a guessed secret. A custom setting of another shape is said, never read as none:
+  name neither). These hold names, modifiers and layout, not raw memory: `theAppSideTouchesNoRawMemory` keeps the app
+  side off it, but AbapitKit code that reads a configuration's bytes (`withUnsafePointer` then `load(fromByteOffset:)`)
+  names neither property, and only review catches it there, as for `Secret`'s bytes (verifier round 3 of the fixes).
+  `CustomSettingsValues`' `==` compares the withheld object and the masked text: Swift's compared the raw profile, so
+  the app could test a guessed secret. `Configuration`'s compares its withheld resource and its custom settings, so it
+  is `Equatable` for Phase 2b's diffing without the same oracle (verifier round 3: Swift's would compare `received`;
+  `aConfigurationComparesByWhatIsShown`). A custom setting of another shape is said, never read as none:
   `Configuration.profileProblems` (`custom settings not an object`, `profile not a string`), with a count on the list's
   and the single read's lines (`aCustomSettingOfAnotherShapeIsSaid`). Not withheld: an
   attribute Apple adds beside `customSettingsValues` at the top level of a configuration is shown raw (invariant 10). If
@@ -227,14 +238,20 @@ org editor's save).
   words split where letters meet numbers, and a plural `s` stays with its acronym (`PINs`, not `pi`, `ns`: verifier
   round 2), so `DevicePIN2`, `VPNPIN2`, `Passcode1` and `PIN1Code` read as their letters (verifier round 1: a string
   under `DevicePIN2` and a number under each were shown). A policy word wins, so a number under `AgePIN` or `Max2PIN`
-  is shown. A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. A key written twice alike
+  is shown, and so is one under `DeviceMaxPIN`: the policy word needn't come first. A list or a dictionary under a
+  secret key is masked whole, a policy word in the key or not (`PasswordHistory`: walked, its items have no key of their
+  own; verifier round 3 of the fixes, `aContainerUnderASecretKeyIsMaskedWhole`). A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. A key written twice alike
   (Foundation's reader keeps one, the last) and two keys equal once normalized (merged when Foundation's dictionary
   becomes Swift's) are counted in `.plist`'s `merged`, the first from the XML's own keys, and `note` says it. Not
   caught: a secret under a key no stem or word names that isn't a private key in a form above (a homoglyph spelling,
-  an unusual name, a number under `AuthCode`), a key wrapped twice (base64 of base64), and a binary plist's repeated
+  an unusual name, a number under `AuthCode`, `AuthKey` or `SetupKey`), a secret inside a string's text (a WireGuard
+  `PrivateKey =` line, an `Authorization: Basic` header, a URL's `user:password@`, an OpenVPN static key, an SSH2-format
+  or unarmoured DER private key: verifier round 3 of the fixes), a key wrapped twice (base64 of base64), and a binary plist's repeated
   keys (its dictionaries can be shared, so its table isn't the tree). Over-masked, the safe way: a policy value under
-  a secret word, such as Kerberos' `pwReqText` and `pwChangeURL` or `passwordContentRegex`; the key shows, and the
-  note counts it.
+  a secret word, such as Kerberos' `pwReqText` and `pwChangeURL` or `passwordContentRegex`, a flag written as an
+  integer (`askForPassword` = 1, `forcePIN` = 1), and `credentialBundleIdACL` and `credentialUseMode`; the key shows,
+  and the note counts it. Masking is a denylist for the detail's display: the raw profile never leaves AbapitKit, so a
+  miss shows a secret on the detail's screen, never in the CSV or the pass (each held by a canary test).
 - **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
   the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds
   it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value

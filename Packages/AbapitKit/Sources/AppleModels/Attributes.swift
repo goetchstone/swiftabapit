@@ -58,6 +58,10 @@ public protocol ResourceView: Sendable, Identifiable where ID == String {
     /// Keys Apple sent inside the objects this view reads (`ObjectView`s: a user's phone numbers) that this version
     /// doesn't: counted by the acceptance pass too (Phase 2a review L1: only an audit payload's were). None by default.
     var unreadNested: [NestedKey] { get }
+    /// The lists this view reads that Apple sent in a shape it can't read (an item of another type): said by the
+    /// acceptance pass, never read as no items (invariant 8; verifier round 3 of the Phase 2a fixes: a service's
+    /// families list holding a number read `mdmServers: ok, 1 item`). None by default.
+    var misreadLists: [String] { get }
 }
 
 extension ResourceView {
@@ -65,6 +69,12 @@ extension ResourceView {
     public var attributes: JSONObject { resource.attributes }
     public var unreadAttributes: [String] { attributes.keys(notIn: Self.fields) }
     public var unreadNested: [NestedKey] { [] }
+    public var misreadLists: [String] { [] }
+
+    /// Of `lists` (an attribute, and whether its reader read nil), those Apple sent, and not as `null`.
+    func misread(_ lists: KeyValuePairs<String, Bool>) -> [String] {
+        lists.compactMap { key, unread in unread && attributes[key].map { $0 != .null } == true ? key : nil }
+    }
 }
 
 /// A key inside an object a view reads that this version doesn't: the attribute holding the object (this version's

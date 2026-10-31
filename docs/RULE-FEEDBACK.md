@@ -27,6 +27,21 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-31 — A fix that made a read stricter made a new silence
+- **What happened:** Phase 2a review L6 gave every view one strict list reader: a list holding an item of another type
+  reads nil. Its test asserted the nil. In the acceptance pass the nil read as no items, so a service's families list
+  holding a number printed `mdmServers: ok, 1 item`, where Phase 1's lenient reader had named `GLASSES` (verifier round 3
+  of the fixes; failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #8 (never silent).
+- **Why it didn't hold:** the entry below says a test asserting nil for an odd shape asserts the shape is said, and it
+  was read as a rule for the read being fixed, not for the new nils a fix makes. A stricter read moves the silence: what
+  the old read showed, the new one drops.
+- **Would a rule have caught it?** yes, the existing one, applied to the fix's own diff: every new nil is said
+  (`misreadLists` now, said with a count by the pass). The same held for `==`: round 2 wrote one for
+  `CustomSettingsValues`, and `Configuration` would have got Swift's the day it was made `Equatable`.
+- **Enforcement home if changed:** the `pre-commit` skill's review step could ask of a fix: "which values now read nil,
+  and where is each said?"
+
 ## 2026-10-30 — Holding a declaration's modifier didn't hold what reads it
 - **What happened:** Phase 2a's verifier round 2 added `public var rawText: String? { configurationProfile }` and
   `public extension Configuration { var sent: Resource { received } }` to AbapitKit: every test in both packages stayed

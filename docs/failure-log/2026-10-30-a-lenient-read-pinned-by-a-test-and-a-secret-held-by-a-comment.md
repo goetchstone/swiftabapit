@@ -83,6 +83,16 @@
     `assertion`, `unlockpin`, held by a test), unlock and access codes and a WEP key, found in the fold without its
     numbers; and a PuTTY key file, a JWK's private member and a private key in a `data:` URL are masked. The docs gave the
     raw profile to Phase 3's snapshots; that is an open operator decision now (SQLite is outside the Keychain).
+  - Verifier round 3 (`fix(2a): verifier round 3`): both verifiers held; every finding was low. Review L6's one list
+    reader made a families list holding a number read nil, which the pass iterated as none, so `mdmServers: ok, 1 item`
+    said nothing where Phase 1's reader had named `GLASSES` (this entry's lesson a third time, from a fix): every view
+    names such lists in `misreadLists`, and the pass says each with a count. `Configuration` wasn't `Equatable`, but
+    adding it would have had Swift compare `received`, the oracle round 2 closed on `CustomSettingsValues`: it has its
+    own `==` over what is shown. `Blueprint.related(_:)` was public and read nil after a refused include, so `?? 0`
+    still gave the zero L5 removed: it is `package`, and the app counts through `members`. Two masking arms had no test
+    (a container under a policy-worded secret key; a policy word after the key's first word): each has one. A raw-memory
+    reader inside AbapitKit (`withUnsafePointer`, `load(fromByteOffset:)`) passes the line scan, which holds names; the
+    runbook now says review holds that, as for `Secret`'s bytes.
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant; the fix's report lists every
   mutant and what killed it (84: 81 by a test, 2 by the compiler, and `presharedkey`, an equivalent stem, removed), and
   verifier round 1's report the 15 it added (14 by a test, one equivalent). Three lessons, in RULE-FEEDBACK
@@ -90,7 +100,9 @@
   noted), or it pins the silence; a view whose resource holds a secret hands out a withheld copy and keeps the raw at
   `package`, so the compiler, not a comment, holds invariant 11 there; and (verifier round 1) a boundary the compiler
   holds lasts only while its modifier does, so a test holds the modifier; and (verifier round 2) the modifier holds
-  only the declaration, not what reads it, so a test lists the readers and the stored layout too. The round's count mutant is the history
+  only the declaration, not what reads it, so a test lists the readers and the stored layout too; and (verifier round 3)
+  a fix that makes a read stricter makes a new nil, and the nil-is-said lesson applies to it before it merges. The
+  round's count mutant is the history
   runbook's "a golden needs two of a kind" again: a count one test sees only as 1 isn't held. Still only a stub: what
   Apple sends in `eventDataPropertyKey`, in the fourteen field-less payloads and in a custom setting's values is a Phase
   2 live check; and `ProfileText`'s masking is still a denylist, so a secret under a key no stem or word names, that

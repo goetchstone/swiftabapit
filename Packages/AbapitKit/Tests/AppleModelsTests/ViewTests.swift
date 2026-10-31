@@ -220,6 +220,23 @@ struct ViewTests {
         #expect(CustomSettingsValues(["configurationProfile": .number("1")]) == CustomSettingsValues(["configurationProfile": .number("2")]))
     }
 
+    /// A configuration compares by what is shown too: the `==` Swift writes would compare `received`, profile and all
+    /// (verifier round 3 of the Phase 2a fixes: nothing held that off once `Equatable` was added).
+    @Test func aConfigurationComparesByWhatIsShown() {
+        func configuration(_ password: String, name: String = "Office Wi-Fi", ssid: String = "Office") -> Configuration {
+            Configuration(resource: Resource(type: "configurations", id: "c", attributes: [
+                "name": .string(name), "customSettingsValues": .object(["configurationProfile": .string(
+                    "<plist version=\"1.0\"><dict><key>SSID_STR</key><string>\(ssid)</string><key>Password</key>"
+                    + "<string>\(password)</string></dict></plist>")])]))
+        }
+        #expect(configuration("hunter2").received != configuration("guess").received)
+        #expect(configuration("hunter2") == configuration("guess"))
+        #expect(configuration("hunter2") != configuration("hunter2", name: "Lobby Wi-Fi"))
+        // What the profile shows counts, as on the detail: the withheld resource alone can't tell these apart.
+        #expect(configuration("hunter2").resource == configuration("hunter2", ssid: "Lobby").resource)
+        #expect(configuration("hunter2") != configuration("hunter2", ssid: "Lobby"))
+    }
+
     /// A configuration stores its withheld resource and the one Apple sent, and nothing else; its custom settings, the
     /// withheld object and the raw one. A stored property added beside them is a new holder of the profile, which no
     /// scan of the names `received` and `configurationProfile` sees (`let original = resource` in the initializer): it

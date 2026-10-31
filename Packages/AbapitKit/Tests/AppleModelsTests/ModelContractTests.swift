@@ -288,4 +288,28 @@ struct ModelContractTests {
         #expect(missing.imei == nil && missing.meid == nil && missing.ethernetMACs == nil && missing.identifiers == ["C02X"])
         #expect(MDMService(resource: Resource(type: "mdmServers", id: "s")).defaultProductFamilies == nil)
     }
+
+    /// Every view names each list it read as nil although Apple sent one, `null` aside, and the acceptance pass says it
+    /// (verifier round 3 of the Phase 2a fixes: a families list holding a number read `mdmServers: ok` with nothing said).
+    @Test func everyListThatDidNotReadIsNamed() {
+        let lists: [(key: String, make: (JSONObject) -> any ResourceView)] = [
+            ("imei", { OrgDevice(resource: Resource(type: "orgDevices", id: "C02X", attributes: $0)) }),
+            ("meid", { OrgDevice(resource: Resource(type: "orgDevices", id: "C02X", attributes: $0)) }),
+            ("ethernetMacAddress", { OrgDevice(resource: Resource(type: "orgDevices", id: "C02X", attributes: $0)) }),
+            ("imei", { MDMDeviceDetail(resource: Resource(type: "mdmDeviceDetails", id: "d", attributes: $0)) }),
+            ("meid", { MDMDeviceDetail(resource: Resource(type: "mdmDeviceDetails", id: "d", attributes: $0)) }),
+            ("defaultProductFamilies", { MDMService(resource: Resource(type: "mdmServers", id: "s", attributes: $0)) }),
+            ("supportedOS", { ContentApp(resource: Resource(type: "apps", id: "a", attributes: $0)) }),
+            ("bundleIds", { ContentPackage(resource: Resource(type: "packages", id: "p", attributes: $0)) }),
+            ("configuredForPlatforms", { Configuration(resource: Resource(type: "configurations", id: "c", attributes: $0)) }),
+            ("roleOuList", { User(resource: Resource(type: "users", id: "u", attributes: $0)) }),
+            ("phoneNumbers", { User(resource: Resource(type: "users", id: "u", attributes: $0)) }),
+        ]
+        for (key, make) in lists {
+            for (value, said) in [(JSONValue.array([.number("5")]), true), (.string("x"), true), (.object([:]), true), (.null, false), (.array([]), false)] {
+                #expect(make([key: value]).misreadLists == (said ? [key] : []), "\(key) \(value)")
+            }
+            #expect(make([:]).misreadLists.isEmpty, "\(key) missing")
+        }
+    }
 }

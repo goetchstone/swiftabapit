@@ -48,6 +48,7 @@ public struct OrgDevice: ResourceView {
     public var identifiers: [String] {
         [serialNumber, eid, orderNumber, wifiMAC, bluetoothMAC].compactMap { $0 } + (imei ?? []) + (meid ?? []) + (ethernetMACs ?? [])
     }
+    public var misreadLists: [String] { misread(["imei": imei == nil, "meid": meid == nil, "ethernetMacAddress": ethernetMACs == nil]) }
 }
 
 /// `appleCareCoverage`: one coverage of a device.
@@ -102,6 +103,7 @@ public struct MDMService: ResourceView {
     public var lastConnectedIP: String? { attributes.string("lastConnectedIp") }
     /// Nil when missing or when an item isn't a string, as every list reads (Phase 2a review L6).
     public var defaultProductFamilies: [OpenEnum<ServiceProductFamily>]? { attributes.list("defaultProductFamilies") { $0.open() } }
+    public var misreadLists: [String] { misread(["defaultProductFamilies": defaultProductFamilies == nil]) }
     public var disownFlag: Bool? { attributes.bool("enableMdmDisownFlag") }
     public var created: ISODate? { attributes.date("createdDateTime") }
 

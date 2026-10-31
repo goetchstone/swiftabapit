@@ -86,6 +86,7 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(devices.flatMap(\.unreadAttributes))
+            found.misread(devices)
             for device in devices {
                 found.unknown("productFamily", device.productFamily)
                 found.unknown("status", device.status)
@@ -102,6 +103,7 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(services.flatMap(\.unreadAttributes))
+            found.misread(services)
             for service in services {
                 found.unknown("serverType", service.type)
                 found.unknown("status", service.status)
@@ -137,7 +139,9 @@ extension AppleClient {
             for (index, device) in sampled.enumerated() {
                 try found.at("device", index, of: sampled.count)
                 let single = try await self.device(Self.sendable(device.id))
-                found.keys.formUnion(try Self.typed([single], asked: device.id)[0].unreadAttributes)
+                let read = try Self.typed([single], asked: device.id)[0]
+                found.keys.formUnion(read.unreadAttributes)
+                found.misread([read])
                 found.count += 1
             }
         })
@@ -316,6 +320,7 @@ extension AppleClient {
             }
             found.keys = Set(items.flatMap(\.unreadAttributes))
             found.unread(items.flatMap(\.unreadNested))
+            found.misread(items)
             for item in items { values(item, &found) }
         }
         return (line, items)
@@ -333,6 +338,7 @@ extension AppleClient {
             found.count = 1
             found.keys = Set(item.unreadAttributes)
             found.unread(item.unreadNested)
+            found.misread([item])
             values(item, &found)
         }
     }
@@ -394,6 +400,17 @@ extension AppleClient {
         /// Each configuration's `profileProblems`: said with a count (`profile not a string in 1 item`), never `ok` with
         /// nothing said (verifier round 2: a string `customSettingsValues` read `configurations/{id}: ok, 1 item`).
         var profileProblems: [Configuration.ProfileProblem] = []
+        /// Each item's `misreadLists`: said with a count (`defaultProductFamilies not read as a list in 1 item`), never `ok`
+        /// with nothing said (verifier round 3 of the Phase 2a fixes: review L6's one list reader made a families list
+        /// holding a number read nil, which the check iterated as none).
+        private(set) var misreadLists: [String] = []
+        mutating func misread<View: ResourceView>(_ items: [View]) { misreadLists += items.flatMap(\.misreadLists) }
+        var misreadNote: String? {
+            Set(misreadLists).sorted().map { field in
+                let count = misreadLists.count { $0 == field }
+                return "\(field) not read as a list in \(count) item\(count == 1 ? "" : "s")"
+            }.joined(separator: " · ").nonEmpty
+        }
         var profileNote: String? {
             Configuration.ProfileProblem.allCases.compactMap { problem in
                 let count = profileProblems.count { $0 == problem }
@@ -451,7 +468,7 @@ extension AppleClient {
             // the cancellation cut short read `ok` with what it had (verifier round 1).
             try Task.checkCancellation()
             status = found.status ?? (found.truncation == nil ? .ok : .truncated)
-            notes = [found.truncation, found.profileNote, found.note]
+            notes = [found.truncation, found.profileNote, found.misreadNote, found.note]
         } catch {
             let failed = acceptanceFailure(error)
             status = failed.status

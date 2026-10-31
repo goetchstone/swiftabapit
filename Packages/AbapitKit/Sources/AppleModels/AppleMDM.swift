@@ -39,6 +39,7 @@ public struct MDMDeviceDetail: ResourceView {
     public var platform: String? { attributes.string("platform") }
     public var imei: [String]? { attributes.list("imei", \.string) }
     public var meid: [String]? { attributes.list("meid", \.string) }
+    public var misreadLists: [String] { misread(["imei": imei == nil, "meid": meid == nil]) }
     public var wifiMAC: String? { attributes.string("wifiMacAddress") }
     public var bluetoothMAC: String? { attributes.string("bluetoothMacAddress") }
     /// One address here, where `OrgDevice` lists several.

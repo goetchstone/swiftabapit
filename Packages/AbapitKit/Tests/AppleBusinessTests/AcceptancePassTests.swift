@@ -191,6 +191,31 @@ struct AcceptancePassTests {
         #expect(report.text.components(separatedBy: "probe users: ok").count == 2, "the real probe line only")
     }
 
+    /// A list Apple sent in a shape this version can't read is said on its line with a count, never read as none, and
+    /// its items aren't shown (verifier round 3 of the Phase 2a fixes: review L6's one list reader made a families list
+    /// holding a number read nil, and the line said `mdmServers: ok, 1 item` and nothing more).
+    @Test func aListThatDidNotReadIsSaid() async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: "TESTU0000001", attributes: [
+            "serialNumber": .string("TESTU0000001"), "imei": .array([.string("351234"), .number("5")]), "meid": .null,
+            "ethernetMacAddress": .string("C0:FF:EE")])])
+        harness.stub.add(services: [
+            Resource(type: "mdmServers", id: "SVC1", attributes: [
+                "serverName": .string("Mosyle"), "serverType": .string("MDM"),
+                "defaultProductFamilies": .array([.string("MAC"), .string("GLASSES"), .number("5")])]),
+            // Two of a kind, so the count is held (history runbook: a count one test sees only as 1 isn't).
+            Resource(type: "mdmServers", id: "SVC2", attributes: [
+                "serverName": .string("Jamf"), "serverType": .string("MDM"), "defaultProductFamilies": .string("IPAD")]),
+        ])
+        harness.stub.setLock("TESTU0000001", isLocked: false, lockType: "NONE")
+        let report = await harness.client.acceptancePass()
+        let lines = report.text.split(separator: "\n").map(String.init)
+        let device = "ok, 1 item · ethernetMacAddress not read as a list in 1 item · imei not read as a list in 1 item"
+        #expect(lines.contains("orgDevices: \(device)") && lines.contains("orgDevices/{id}: \(device)"), "\(report.text)")
+        #expect(lines.contains("mdmServers: ok, 2 items · defaultProductFamilies not read as a list in 2 items"), "\(report.text)")
+        for data in ["351234", "C0:FF", "GLASSES", "IPAD"] { #expect(!report.text.contains(data), "\(data)") }
+    }
+
     /// An enum value led by a combining mark is `(not shown)` like any other that isn't a word, on each of the ten fields
     /// whose values the pass reports, and forges no line (verifier round 3: the mark joined the `=` the field was found
     /// by into one `Character`, so a service's, a coverage's or the lock's value went into the text raw, forging two

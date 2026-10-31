@@ -179,6 +179,17 @@ struct ProfileTextTests {
         #expect(text.contains("<true/>") && text.contains("<integer>5</integer>") && text.contains("<date>2026-01-01T00:00:00Z</date>"))
     }
 
+    /// A list or a dictionary under a secret key is masked whole, a policy word in the key or not: walked, a list's items
+    /// have no key of their own, so `old-secret` under `PasswordHistory` would show (verifier round 3 of the Phase 2a
+    /// fixes: no test put a container under such a key).
+    @Test(arguments: ["PasswordHistory", "RequiredPassword", "MaxPINList", "Passwords"])
+    func aContainerUnderASecretKeyIsMaskedWhole(key: String) throws {
+        for value in ["<array><string>old-secret</string></array>", "<dict><key>x</key><string>old-secret</string></dict>"] {
+            let (text, masked) = try Self.shown("<plist version=\"1.0\"><dict><key>\(key)</key>\(value)</dict></plist>")
+            #expect(!text.contains("old-secret") && masked == 1, "\(key) \(value)")
+        }
+    }
+
     /// A number is masked when its key's last word is a secret word (a numeric passcode, PIN or unlock code), unless a
     /// policy word is in the key too: `MaxPINAgeInDays` and `PasscodeMinLength` are rules about a secret, not one (Phase
     /// 2a review L2: `UnlockCode` and `Passcode` integers were shown). A flag under any of these keys is never masked.
@@ -192,6 +203,8 @@ struct ProfileTextTests {
         // Each policy word on its own before a secret last word.
         ("MaximumPIN", false), ("MinPIN", false), ("AgeOfPasscode", false), ("LengthOfPIN", false), ("HistoryOfPasscode", false),
         ("AttemptBeforePIN", false), ("AttemptsBeforePIN", false), ("ComplexityOfPIN", false),
+        // Verifier round 3 of the Phase 2a fixes: a policy word that isn't the key's first word was untested.
+        ("DeviceMaxPIN", false), ("UserMinimumPasscode", false), ("FailedAttemptsBeforePIN", false),
         // A last word ending in `pin` is a secret one, as for strings: over-masked, never shown.
         ("Spin", true),
         // Verifier round 1: a policy word only whole (`Agent` isn't `age`); each secret word; a number in the key, which is

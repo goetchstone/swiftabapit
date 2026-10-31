@@ -19,6 +19,7 @@ public struct ContentApp: ResourceView {
     /// Shown, never fetched: not a host on the app's allowlist (plan §3.3).
     public var appStoreURL: String? { attributes.string("appStoreUrl") }
     public var websiteURL: String? { attributes.string("websiteUrl") }
+    public var misreadLists: [String] { misread(["supportedOS": supportedOS == nil]) }
 }
 
 /// `packages`: a custom package (Business only).
@@ -38,6 +39,7 @@ public struct ContentPackage: ResourceView {
     public var version: String? { attributes.string("version") }
     public var created: ISODate? { attributes.date("createdDateTime") }
     public var updated: ISODate? { attributes.date("updatedDateTime") }
+    public var misreadLists: [String] { misread(["bundleIds": bundleIDs == nil]) }
 }
 
 /// `blueprints`: a set of apps, packages and configurations for a set of devices, users and groups (Business only).
@@ -97,8 +99,10 @@ public struct Blueprint: ResourceView {
     }
 
     /// The members Apple listed for `relationship`, when the read included it; nil when Apple sent links only (a read
-    /// without `include`, and every write's answer), which says nothing about the members.
-    public func related(_ relationship: Relationship) throws(Malformed) -> Related? {
+    /// without `include`, and every write's answer), which says nothing about the members. `package`: nil reads the same
+    /// after a refused include, so the app counts members through `BlueprintRead.members`, which says the refusal
+    /// (verifier round 3 of the Phase 2a fixes: `related(.users)?.linkages.count ?? 0` read a refusal as no members).
+    package func related(_ relationship: Relationship) throws(Malformed) -> Related? {
         guard let value = resource.relationships[relationship.rawValue] else { return nil }
         guard let object = value.object else { throw Malformed(relationship: relationship) }
         guard let data = object["data"] else { return nil }
@@ -128,7 +132,7 @@ public struct Blueprint: ResourceView {
 /// models can't name. An every-attribute view (the device inspector's `ForEach(attributes.keys)`), a dump, a CSV or
 /// `"\(configuration)"` of a configuration is safe because what it can reach is withheld; the detail shows the profile
 /// through `customSettings?.profileText`, masked (Phase 2a review M2: masking was held by a doc comment).
-public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+public struct Configuration: ResourceView, Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public static let resourceType = "configurations"
     public static let fields = ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"]
 
@@ -154,6 +158,7 @@ public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugS
     public var updated: ISODate? { attributes.date("updatedDateTime") }
 
     public var unreadNested: [NestedKey] { CustomSettingsValues.unread(customSettings.map { [$0] }, in: "customSettingsValues") }
+    public var misreadLists: [String] { misread(["configuredForPlatforms": platforms == nil]) }
 
     /// What was wrong with the shape of a custom setting's profile, in `ProfileProblem`'s order: the acceptance pass says
     /// each with a count. Read as no custom settings, or no profile text, a string `customSettingsValues` or an object
@@ -188,6 +193,11 @@ public struct Configuration: ResourceView, CustomStringConvertible, CustomDebugS
         attributes["customSettingsValues"] = values.object.map { .object(CustomSettingsValues.withholding($0)) } ?? .string(CustomSettingsValues.withheld)
         return Resource(type: resource.type, id: resource.id, attributes: attributes, relationships: resource.relationships)
     }
+
+    /// Equal when what anyone outside AbapitKit can see is, as for `CustomSettingsValues`: the `==` Swift writes would
+    /// compare `received`, so the app could test a guessed profile against the one Apple sent (verifier round 3 of the
+    /// Phase 2a fixes; Phase 2b's SwiftUI diffing is the likely reason to want `Equatable`).
+    public static func == (one: Self, other: Self) -> Bool { one.resource == other.resource && one.customSettings == other.customSettings }
 
     // What prints and reflects is the withheld resource: a struct's default description and mirror show every stored
     // property, `package` ones included.
