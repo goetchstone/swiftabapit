@@ -24,6 +24,8 @@ struct DeviceInspectorView: View {
                         LabeledContent("MDM migration", value: device.migrationStatus?.rawValue.capitalized ?? "Capable")
                         if let deadline = device.migrationDeadline { LabeledContent("Migration deadline", value: Self.date(deadline)) }
                     }
+                    // Every attribute a view's public resource holds. Safe to copy for any view: one whose resource holds a
+                    // secret hands out a copy with it withheld (`Configuration`'s custom-setting profile; Phase 2a review M2).
                     DisclosureGroup("Every attribute Apple sent") {
                         ForEach(device.attributes.keys, id: \.self) { key in
                             LabeledContent(key, value: Self.text(device.attributes[key]))

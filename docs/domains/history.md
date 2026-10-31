@@ -6,16 +6,19 @@
 
 **Status:** stub — filled in by phase 3. Until then, read the plan section named above and the nearest
 SwiftGamGui runbook. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in
-phase 1b; its notes are below.
+phase 1b, and the audit digests and the dashboard's quiet services and recent events in phase 2a; their notes
+are below.
 
 ## Files
 
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
-  `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary).
+  `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
+  (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
+  in N days).
 - `Packages/AbapitKit/Tests/ReportsTests/`: parity against `Tests/Fixtures/parity/{csv,reports}.json`,
-  `ExportPolicyTests`, `FindTests`.
+  `ExportPolicyTests`, `FindTests`, `AuditDigestTests`, `QuietServicesTests`.
 - `scripts/gen_fixtures.py`: `gen_csv` (`csv_edges`, `corrected_safe`, the `csv.reader` round trip) and
-  `gen_reports` (`stats_edges`).
+  `gen_reports` (`stats_edges`, `audit_edges`, `corrected_audit_digest`, and `audit_types`, abapit's two sets).
 
 ## How it works
 
@@ -43,6 +46,20 @@ phase 1b; its notes are below.
 - **`device_stats`** counts a breakdown by the name shown: Python's `Counter` keys by value (a listed
   deviation, one fleet in `reports.json`). **`AssignmentSummary`** keeps serials as sets of UTF-8 bytes, as
   Python's sets compare code points; the denylist finds a stem in the folded key's bytes.
+- **The audit views** (`AuditView`) are fixed sets of `AuditEventType` cases (`eventTypes`; `types` are their
+  strings), so the compiler holds each to a type Apple documents and the 50 strings are written once, in AppleModels
+  (Phase 2a review L6): abapit's Subscriptions and Device Lifecycle sets (held to the golden's `audit_types`, byte for
+  byte and in order) and the new Access & Security. `otherTypes` holds the types no view shows, and
+  `everyContractTypeIsPlacedOnce` holds each of the contract's 50 types to exactly one place, so a type Apple adds
+  fails a test until it is placed.
+- **`AuditDigest`** is abapit's `audit_digest` over Apple's `auditEvents` resources: the set's events newest first
+  by instant (a listed deviation: abapit sorted the strings), equal instants in input order, undated events last;
+  a count per type over the sorted rows; types matched by bytes. `recent` is the newest `recentLimit` (10) by
+  instant, where abapit's dashboard showed the API's first ten. It takes `Resource`s: the client's `AuditEvent`
+  pages hand theirs over as `.resource`, and a typed overload waits for a caller it would save code for.
+- **`QuietServices`** lists the services more than `days` days of 86,400 s past their last connection (exactly
+  `days` isn't), and those that never connected or sent a stamp that isn't a date (said apart: `never`, `unreadable`),
+  most stale first; a `DELETED` service is skipped.
 
 ## Invariants & failure history
 
@@ -51,6 +68,14 @@ phase 1b; its notes are below.
   denylist that let `escrowKey`, `recoveryKey` and a full-width `TOKEN` out.
 
 ## Gotchas / stub-lies traps
+
+- **A snapshot keeps no custom-setting profile** (operator, 2026-10-31: what can be read again from Apple isn't kept).
+  `Configuration.resource` withholds it; the profile as Apple sent it (`Configuration.received`, `package`) holds Wi-Fi
+  and VPN passwords and a certificate's key, and a snapshot is SQLite on disk, outside the Keychain (invariants 3, 11).
+  A collector stores the withheld resource, and no hash of the profile (a short password's hash is guessed offline).
+  A collector that read `received` would fail `BoundaryTests.onlyTheListedLinesReadTheRawProfile`. A diff sees a
+  profile change only through the configuration's other attributes (`updatedDateTime`). Phase 2a verifier round 2: the
+  docs had named the snapshots as a use of the raw profile.
 
 - **`String` APIs match `Character`s; Python matches code points.** `replacingOccurrences(of:with:)`,
   `contains(_:)`, `first` and `==` on a `String` see `"` + U+0301 as one `Character` that isn't `"`, and a
@@ -101,6 +126,11 @@ phase 1b; its notes are below.
 - **`Tally`'s `==` compares `String`s**, so a test comparing breakdowns compares bytes and counts instead.
 - **A number name is its JSON text**: `1.50` stays `1.50` where Python shows `1.5`. Unreachable from the
   golden (the generator writes canonical JSON) and from Apple (the three fields are strings in the contract).
+- **An audit list is ordered by instant, never by its string**, and ties compare `ISODate.date`: `ISODate`'s `==`
+  compares the offset too, so two spellings of one instant would not tie.
+- **Two quiet-service rules exist until 2b**: the Phase 1b screen model's `DevicesModel.quietServices(after:)` counts
+  whole days and keeps `DELETED` services; Reports' `QuietServices` is the exact rule. The 2b dashboard moves the
+  Overview onto `QuietServices`, so the two screens can't disagree.
 - **Spreadsheet behaviour is unverified**: whether Excel or Numbers runs `" =1"`, `"\u{200B}=1"`, a
   full-width U+FF1D or `"\u{2212}1"` as a formula wasn't tested; the wider guard costs a `'` on such a cell
   either way. A leading combining mark isn't skipped: it shows on its own, and no trimmer drops it.
@@ -109,7 +139,9 @@ phase 1b; its notes are below.
 
 - Goldens: `csv.json` (88 cases, 43 listed deviations: containers as JSON, and 6 for the wider guard; and
   the guard's `blank` and `triggers` sets) and `reports.json` (`device_stats` 33 cases, 1 deviation, the
-  Counter fleet; `assignment_summary` 22 cases). The generator reads every expected CSV back with Python's
+  Counter fleet; `assignment_summary` 22 cases; `audit_digest` 26 cases, 15 drawn and 11 hand-written
+  (`audit_edges`), 8 listed deviations: 5 rows in another order, 3 where abapit raised; and `audit_types`). The
+  generator reads every expected CSV back with Python's
   `csv.reader` and fails if a cell splits, joins or starts (after blanks) with a trigger.
 - Mutants for the Phase 1b fixes and verifier rounds 1 and 2 are listed in the branch's commit messages.
 - Find has no parity golden (abapit's `/find` is in `web/app.py`, not a pure module): `FindTests` holds it,

@@ -13,6 +13,8 @@ public enum DeviceStatus: String, KnownValues {
     case assigned = "ASSIGNED", unassigned = "UNASSIGNED"
 }
 
+/// Where a device came from: `OrgDevice`'s `purchaseSourceType` (a plain string in Apple's docs, these values in its
+/// examples and Appendix A) and the device-added audit payload's (`AuditEventPurchaseSourceType`, the same three).
 public enum PurchaseSourceType: String, KnownValues {
     case apple = "APPLE", reseller = "RESELLER", manuallyAdded = "MANUALLY_ADDED"
 }
@@ -51,4 +53,106 @@ public enum ServiceType: String, KnownValues {
 /// `MdmServerProductFamily`: a service's default for new devices.
 public enum ServiceProductFamily: String, KnownValues {
     case appleTV = "APPLE_TV", iPad = "IPAD", iPhone = "IPHONE", iPod = "IPOD", mac = "MAC", vision = "VISION", watch = "WATCH"
+}
+
+/// `UserStatus`.
+public enum UserStatus: String, KnownValues {
+    case new = "NEW", released = "RELEASED", active = "ACTIVE", deactivated = "DEACTIVATED", locked = "LOCKED",
+         lockedForSharedIPad = "LOCKED_FOR_SHARED_IPAD"
+}
+
+/// `UserPhoneNumberType`.
+public enum UserPhoneNumberType: String, KnownValues {
+    case work = "WORK", home = "HOME", mobile = "MOBILE"
+}
+
+/// `UserGroupType`.
+public enum UserGroupType: String, KnownValues {
+    case standard = "STANDARD", smart = "SMART"
+}
+
+/// `UserGroupStatus`: Apple documents one value so far.
+public enum UserGroupStatus: String, KnownValues {
+    case active = "ACTIVE"
+}
+
+/// `SupportedOS`: the platforms an app runs on.
+public enum SupportedOS: String, KnownValues {
+    case unspecified = "SUPPORTED_OS_UNSPECIFIED", iPadOS = "SUPPORTED_OS_IPADOS", iOS = "SUPPORTED_OS_IOS", macOS = "SUPPORTED_OS_MACOS",
+         tvOS = "SUPPORTED_OS_TVOS", watchOS = "SUPPORTED_OS_WATCHOS", visionOS = "SUPPORTED_OS_VISIONOS"
+}
+
+/// `BlueprintStatus`.
+public enum BlueprintStatus: String, KnownValues {
+    case active = "ACTIVE", toBeDeleted = "TO_BE_DELETED"
+}
+
+/// `ConfigurationType`: 22 built-in types the app shows read-only, and `CUSTOM_SETTING`, the one Apple lets a client
+/// write (plan §2.1). Which types a write may touch is Phase 5's to say, with the writer (Phase 2a review L6: an
+/// `isWritable` here had no caller but a test).
+public enum ConfigurationType: String, KnownValues {
+    case airDrop = "AIR_DROP", airPrint = "AIR_PRINT", appAccess = "APP_ACCESS", appleIntelligenceSiri = "APPLE_INTELLIGENCE_SIRI",
+         applicationLayerFirewall = "APPLICATION_LAYER_FIREWALL", authenticationScreenLock = "AUTHENTICATION_SCREEN_LOCK",
+         certificate = "CERTIFICATE", conferenceRoomDisplay = "CONFERENCE_ROOM_DISPLAY", contentCaching = "CONTENT_CACHING",
+         customProfile = "CUSTOM_PROFILE", customSetting = "CUSTOM_SETTING", dataManagement = "DATA_MANAGEMENT",
+         energySaver = "ENERGY_SAVER", fileVault = "FILE_VAULT", gateKeeper = "GATE_KEEPER", iCloud = "ICLOUD",
+         loginWindow = "LOGIN_WINDOW", mediaManagement = "MEDIA_MANAGEMENT", softwareUpdate = "SOFTWARE_UPDATE", vpn = "VPN",
+         webClip = "WEB_CLIP", webFilter = "WEB_FILTER", wifi = "WIFI"
+}
+
+/// `ConfigurationPlatform`. `PLATFORM_IOS` covers iPadOS too.
+public enum ConfigurationPlatform: String, KnownValues {
+    case macOS = "PLATFORM_MACOS", iOS = "PLATFORM_IOS", tvOS = "PLATFORM_TVOS", visionOS = "PLATFORM_VISIONOS"
+}
+
+/// `DeviceEraseStatus`.
+public enum DeviceEraseStatus: String, KnownValues {
+    case notErased = "NOT_ERASED", erased = "ERASED"
+}
+
+/// `DeviceLockStatus`.
+public enum DeviceLockStatus: String, KnownValues {
+    case locked = "LOCKED", unlocked = "UNLOCKED"
+}
+
+/// `LostModeStatus`.
+public enum LostModeStatus: String, KnownValues {
+    case enabled = "ENABLED", disabled = "DISABLED"
+}
+
+/// `AuditEventActorType`: who did it.
+public enum AuditEventActorType: String, KnownValues {
+    case user = "USER", apiUser = "API_USER", system = "SYSTEM"
+}
+
+/// `AuditEventCategory`. Apple says its list is incomplete (plan §3.3): a new value survives raw.
+public enum AuditEventCategory: String, KnownValues {
+    case organization = "ORGANIZATION", accountActivity = "ACCOUNT_ACTIVITY", deviceInventory = "DEVICE_INVENTORY",
+         purchasing = "PURCHASING", deviceManagement = "DEVICE_MANAGEMENT"
+}
+
+/// `AuditEventOutcome`.
+public enum AuditEventOutcome: String, KnownValues {
+    case success = "SUCCESS", failure = "FAILURE"
+}
+
+/// `AuditEventSubjectType`: what it was done to. Apple says its list is incomplete (plan §3.3).
+public enum AuditEventSubjectType: String, KnownValues {
+    case organization = "ORGANIZATION", user = "USER", location = "LOCATION", device = "DEVICE", collection = "COLLECTION",
+         deviceManagementSetting = "DEVICE_MANAGEMENT_SETTING", subscription = "SUBSCRIPTION", domain = "DOMAIN", apiUser = "API_USER"
+}
+
+/// `AuditEventReleaseEntityType`: who released a device from the organization.
+public enum AuditEventReleaseEntityType: String, KnownValues {
+    case user = "USER", mdm = "MDM", reseller = "RESELLER", api = "API", replacement = "REPLACEMENT"
+}
+
+/// `AuditEventIdpProtocol`.
+public enum AuditEventIdpProtocol: String, KnownValues {
+    case oidc = "OIDC", saml = "SAML"
+}
+
+/// `AuditEventIdpVendorName`.
+public enum AuditEventIdpVendorName: String, KnownValues {
+    case google = "GOOGLE", microsoft = "MICROSOFT", microsoftOIDC = "MICROSOFT_OIDC", genericIdP = "GENERIC_IDP"
 }

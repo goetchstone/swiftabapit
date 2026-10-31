@@ -129,6 +129,10 @@ struct AcceptanceFailureTests {
             (AppleAPIError.token(.unauthorizedClient), .error("error token"), "unauthorized_client"),
             (AppleAPIError.vault("Touch ID was cancelled."), .error("error keychain"), "Touch ID was cancelled."),
             (AppleAPIError.wrongHost("api-school.apple.com"), .error("error wrong host"), nil),
+            // Phase 2a review L3: the pass skips School before reaching this arm, so it could return anything with every
+            // test green.
+            (AppleAPIError.notInScope(.users), .skipped("not in Apple School Manager's API"), nil),
+            (AppleAPIError.notInScope(.auditEvents), .skipped("not in Apple School Manager's API"), nil),
             (CancellationError(), .error("error cancelled"), nil),
             (AppleStub.StubFailure.unhandled("GET /v1/x"), .error("error StubFailure"), nil),
         ]
@@ -192,8 +196,12 @@ struct AcceptanceFailureTests {
         harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/activationLockStatus", body: #"{"data":null}"#)
         harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/assignedServer", body: #"{"data":{"type":"orgDevices","id":"TESTD0000000"}}"#)
         harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000000/relationships/assignedServer", body: "{}")
+        // The users list reads `/v1/users` first, then the probe: each gets `{}`.
+        harness.stub.queue(200, for: "/v1/users", body: "{}")
         harness.stub.queue(200, for: "/v1/users", body: "{}")
         let report = await harness.client.acceptancePass()
+        let list = try #require(report.lines.first { $0.resource == "users" })
+        #expect(list.status == .error("error malformed") && list.count == 0 && list.note == "a page of /v1/users")
         let expected = [
             "orgDevices/{id}": "a single /v1/orgDevices/{id}",
             "orgDevices/{id}/appleCareCoverage": "a page of /v1/orgDevices/{id}/appleCareCoverage",

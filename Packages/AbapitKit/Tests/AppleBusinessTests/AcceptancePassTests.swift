@@ -40,6 +40,7 @@ struct AcceptancePassTests {
         harness.stub.queue(200, for: "/v1/orgDevices/TESTD0000001/activationLockStatus", body: #"""
             {"data":{"type":"activationLockStatus","id":"TESTD0000001","attributes":{"isLocked":true,"lockType":"MDM","newLockField":"secret-ish"}}}
             """#)
+        try Self.business(harness)
         let report = await harness.client.acceptancePass(sample: 5)
         #expect(report.text == """
             orgDevices: ok, 5 items · unknown keys brandNewField · unknown values productFamily=Glasses
@@ -50,6 +51,31 @@ struct AcceptancePassTests {
             orgDevices/{id}/activationLockStatus: ok, 5 items · unknown keys newLockField
             orgDevices/{id}/assignedServer: ok, 5 items · 2 of 5 unassigned
             orgDevices/{id}/relationships/assignedServer: ok, 5 items · 2 of 5 unassigned
+            users: ok, 2 items · unknown keys pronouns · unknown values phoneNumbers.type=PAGER, status=SUSPENDED
+            users/{id}: ok, 1 item
+            userGroups: ok, 1 item · unknown values type=DYNAMIC
+            userGroups/{id}: ok, 1 item
+            userGroups/{id}/relationships/users: ok, 2 items
+            organizationalUnits: ok, 1 item
+            organizationalUnits/{id}: ok, 1 item
+            organizationalUnits/{id}/relationships/users: ok, 1 item
+            apps: ok, 2 items · unknown values supportedOS=SUPPORTED_OS_CAROS
+            apps/{id}: ok, 1 item
+            packages: ok, 1 item
+            packages/{id}: ok, 1 item
+            blueprints: ok, 1 item · unknown values status=PAUSED
+            blueprints/{id}: ok, 1 item · unknown values status=PAUSED · apps 1, packages 1, configurations 1, orgDevices 2, users 1, userGroups 1
+            blueprints/{id}/relationships/apps: ok, 1 item
+            blueprints/{id}/relationships/packages: ok, 1 item
+            blueprints/{id}/relationships/configurations: ok, 1 item
+            blueprints/{id}/relationships/orgDevices: ok, 2 items
+            blueprints/{id}/relationships/users: ok, 1 item
+            blueprints/{id}/relationships/userGroups: ok, 1 item
+            configurations: ok, 2 items · unknown values configuredForPlatforms=PLATFORM_WATCHOS, type=SOLAR_PANEL
+            configurations/{id}: ok, 1 item
+            mdmDevices: ok, 1 item · unknown values productFamily=Glasses
+            mdmDevices/{id}/details: ok, 1 item · unknown keys batteryHealth · unknown values lostModeStatus=PENDING
+            auditEvents: ok, 2 items · unknown keys eventDataFutureType · unknown values type=FUTURE_TYPE · unknown payload keys newField · the last day
             probe devices: ok
             probe mdm_servers: ok
             probe mdm_enrolled: ok
@@ -61,9 +87,61 @@ struct AcceptancePassTests {
             probe blueprints: ok
             probe configurations: ok
             probe audit_events: ok
-            """)
+            """, "\(report.text)")
         #expect(report.lines.allSatisfy { $0.status == .ok }, "\(report.text)")
-        for data in ["secret-ish", "TESTD", "TESTNEW", "SVC", "Mosyle", "Jamf"] { #expect(!report.text.contains(data), "\(data)") }
+        for data in ["secret-ish", "TESTD", "TESTNEW", "SVC", "Mosyle", "Jamf", "John", "UG123456", "OU789012", "361309726", "pkg-12345", "BP1",
+                     "Marketing", "config-12345", "MD1", "TESTMD", "E1", "A1"] {
+            #expect(!report.text.contains(data), "\(data)")
+        }
+        // The configuration read alone is the custom setting, though a built-in one comes first.
+        #expect(harness.reads.contains { $0.hasPrefix("GET api-business.apple.com/v1/configurations/config-12345") })
+        #expect(harness.reads.contains { $0.contains("/v1/blueprints/BP1?include=apps%2Cpackages%2Cconfigurations%2CorgDevices%2Cusers%2CuserGroups") })
+    }
+
+    /// The Phase 2 reads' lines in a pass, between Phase 1's eight and the probes.
+    static let businessLines = 25
+
+    /// One of everything Business-only, mostly Apple's own examples, each list with something this version doesn't know:
+    /// a user's status, key and phone type, a group's type, an app's platform, a blueprint's status, a configuration's
+    /// type and platform, a device's family, its details' key and lost-mode status, an audit type and a payload field.
+    static func business(_ harness: Harness) throws {
+        let stub = harness.stub
+        stub.add(try Harness.example("get-users") + [Resource(type: "users", id: "U2", attributes: [
+            "firstName": .string("Jane"), "status": .string("SUSPENDED"), "pronouns": .string("secret-ish"),
+            "phoneNumbers": .array([.object(["phoneNumber": .string("+1 555 0100"), "type": .string("PAGER")])])])])
+        stub.add(try Harness.example("get-user-groups").map { group in
+            var attributes = group.attributes
+            attributes["type"] = .string("DYNAMIC")
+            return Resource(type: group.type, id: group.id, attributes: attributes)
+        })
+        stub.relate("userGroups", "UG123456", "users", to: ["1234567890", "U2"])
+        stub.add(try Harness.example("get-organizational-units"))
+        stub.relate("organizationalUnits", "OU789012", "users", to: ["U2"])
+        stub.add(try Harness.example("get-apps") + [Resource(type: "apps", id: "1", attributes: ["name": .string("Car"), "supportedOS": .array([
+            .string("SUPPORTED_OS_IOS"), .string("SUPPORTED_OS_CAROS")])])])
+        stub.add(try Harness.example("get-packages"))
+        stub.add([Resource(type: "blueprints", id: "BP1", attributes: ["name": .string("Marketing"), "status": .string("PAUSED")])])
+        for (relationship, ids) in ["apps": ["361309726"], "packages": ["pkg-12345"], "configurations": ["config-12345"],
+                                    "orgDevices": ["TESTD0000000", "TESTD0000001"], "users": ["1234567890"], "userGroups": ["UG123456"]] {
+            stub.relate("blueprints", "BP1", relationship, to: ids)
+        }
+        stub.add(try [Resource(type: "configurations", id: "WIFI1", attributes: ["type": .string("SOLAR_PANEL"), "name": .string("Wi-Fi"),
+                                                                            "configuredForPlatforms": .array([.string("PLATFORM_WATCHOS")])])]
+                 + Harness.example("get-configuration-information"))
+        stub.add([Resource(type: "mdmDevices", id: "MD1", attributes: ["serialNumber": .string("TESTMD000001"), "productFamily": .string("Glasses")])])
+        stub.setDetails("MD1", Resource(type: "mdmDeviceDetails", id: "MD1-details", attributes: [
+            "serialNumber": .string("TESTMD000001"), "lostModeStatus": .string("PENDING"), "batteryHealth": .string("secret-ish")]))
+        let format = ISO8601DateFormatter()
+        let recent = format.string(from: Date().addingTimeInterval(-3_600))
+        stub.add([
+            Resource(type: "auditEvents", id: "E1", attributes: [
+                "eventDateTime": .string(recent), "type": .string("DEVICE_ASSIGNED_TO_SERVER"), "actorType": .string("API_USER"), "actorId": .string("A1"),
+                "outcome": .string("SUCCESS"), "eventDataPropertyKey": .string("eventDataDeviceAssignedToServer"),
+                "eventDataDeviceAssignedToServer": .object(["serialNumber": .string("TESTD0000000"), "newField": .string("secret-ish")])]),
+            Resource(type: "auditEvents", id: "E2", attributes: [
+                "eventDateTime": .string(recent), "type": .string("FUTURE_TYPE"), "eventDataPropertyKey": .string("eventDataFutureType"),
+                "eventDataFutureType": .object(["anything": .string("secret-ish")])]),
+        ])
     }
 
     /// Every unknown attribute name and enum value the pass looks for is reported (plan §7's purpose), the single
@@ -97,7 +175,7 @@ struct AcceptancePassTests {
         for serial in ["TESTU0000001", "TESTU0000002"] { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
         let report = await harness.client.acceptancePass()
         let lines = report.text.split(separator: "\n", omittingEmptySubsequences: false)
-        #expect(lines.count == 8 + AppleSection.allCases.count, "no forged line")
+        #expect(lines.count == 8 + Self.businessLines + AppleSection.allCases.count, "no forged line")
         #expect(lines.prefix(8).joined(separator: "\n") == """
             orgDevices: ok, 2 items · unknown keys (not shown), brandNewField, otherNewField · unknown values mdmMigrationStatus=PAUSED, \
             productFamily=(not shown), productFamily=Glasses, purchaseSourceType=FUTURE_SOURCE, status=(not shown), status=HELD
@@ -111,6 +189,31 @@ struct AcceptancePassTests {
             """, "\(report.text)")
         for data in ["C02SECRET", "jane@", "ZZZZ", "secret-ish", "TESTU"] { #expect(!report.text.contains(data), "\(data)") }
         #expect(report.text.components(separatedBy: "probe users: ok").count == 2, "the real probe line only")
+    }
+
+    /// A list Apple sent in a shape this version can't read is said on its line with a count, never read as none, and
+    /// its items aren't shown (verifier round 3 of the Phase 2a fixes: review L6's one list reader made a families list
+    /// holding a number read nil, and the line said `mdmServers: ok, 1 item` and nothing more).
+    @Test func aListThatDidNotReadIsSaid() async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: [Resource(type: "orgDevices", id: "TESTU0000001", attributes: [
+            "serialNumber": .string("TESTU0000001"), "imei": .array([.string("351234"), .number("5")]), "meid": .null,
+            "ethernetMacAddress": .string("C0:FF:EE")])])
+        harness.stub.add(services: [
+            Resource(type: "mdmServers", id: "SVC1", attributes: [
+                "serverName": .string("Mosyle"), "serverType": .string("MDM"),
+                "defaultProductFamilies": .array([.string("MAC"), .string("GLASSES"), .number("5")])]),
+            // Two of a kind, so the count is held (history runbook: a count one test sees only as 1 isn't).
+            Resource(type: "mdmServers", id: "SVC2", attributes: [
+                "serverName": .string("Jamf"), "serverType": .string("MDM"), "defaultProductFamilies": .string("IPAD")]),
+        ])
+        harness.stub.setLock("TESTU0000001", isLocked: false, lockType: "NONE")
+        let report = await harness.client.acceptancePass()
+        let lines = report.text.split(separator: "\n").map(String.init)
+        let device = "ok, 1 item · ethernetMacAddress not read as a list in 1 item · imei not read as a list in 1 item"
+        #expect(lines.contains("orgDevices: \(device)") && lines.contains("orgDevices/{id}: \(device)"), "\(report.text)")
+        #expect(lines.contains("mdmServers: ok, 2 items · defaultProductFamilies not read as a list in 2 items"), "\(report.text)")
+        for data in ["351234", "C0:FF", "GLASSES", "IPAD"] { #expect(!report.text.contains(data), "\(data)") }
     }
 
     /// An enum value led by a combining mark is `(not shown)` like any other that isn't a word, on each of the ten fields
@@ -132,7 +235,7 @@ struct AcceptancePassTests {
         harness.stub.setLock("TESTU0000001", isLocked: false, lockType: mark + "X\norgDevices/{id}/assignedServer: ok, 9 items")
         let report = await harness.client.acceptancePass()
         let lines = report.text.split(separator: "\n", omittingEmptySubsequences: false)
-        #expect(lines.count == 8 + AppleSection.allCases.count, "no forged line: \(report.text)")
+        #expect(lines.count == 8 + Self.businessLines + AppleSection.allCases.count, "no forged line: \(report.text)")
         #expect(lines.prefix(8).joined(separator: "\n") == """
             orgDevices: ok, 1 item · unknown keys (not shown) · unknown values mdmMigrationStatus=(not shown), productFamily=(not shown), \
             purchaseSourceType=(not shown), status=(not shown)
@@ -453,8 +556,12 @@ struct AcceptancePassTests {
         let harness = try await Harness(devices: 1)
         harness.stub.setLock("TESTD0000000", isLocked: false, lockType: "NONE")
         harness.stub.forbid("/v1/users")
+        // The apps list reads `/v1/apps` first, then the probe: each gets a 500.
+        harness.stub.queue(500, for: "/v1/apps")
         harness.stub.queue(500, for: "/v1/apps")
         let report = await harness.client.acceptancePass()
+        #expect(report.text.contains("\nusers: forbidden, 0 items · FORBIDDEN_ERROR\nusers/{id}: skipped: no user to read (users forbidden)\n"))
+        #expect(report.text.contains("\napps: error 500, 0 items\napps/{id}: skipped: no app to read (apps error 500)\n"))
         let probes = report.lines.filter { $0.resource.hasPrefix("probe ") }
         #expect(probes.count == AppleSection.allCases.count)
         #expect(probes.first { $0.resource == "probe users" }?.status == .forbidden)
@@ -471,7 +578,13 @@ struct AcceptancePassTests {
         harness.stub.setCoverage("TESTD0000000", [Resource(type: "appleCareCoverage", id: "C1", attributes: ["status": .string("ACTIVE")])])
         for serial in Self.firstSerials(2) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
         let report = await harness.client.acceptancePass()
-        #expect(report.lines.allSatisfy { $0.status == .ok }, "\(report.text)")
+        // Phase 1's reads all run; the Business-only ones are each said to be out of School's API, and none is sent.
+        #expect(report.lines.prefix(8).allSatisfy { $0.status == .ok }, "\(report.text)")
+        let business = report.lines.dropFirst(8).prefix(Self.businessLines)
+        #expect(business.count == Self.businessLines && business.allSatisfy { $0.status == .skipped("not in Apple School Manager's API") && $0.count == nil },
+                "\(report.text)")
+        #expect(report.lines.dropFirst(8 + Self.businessLines).allSatisfy { $0.status == .ok }, "\(report.text)")
+        #expect(report.text.contains("\nusers: skipped: not in Apple School Manager's API\n"))
         #expect(report.lines.first { $0.resource == "orgDevices/{id}/appleCareCoverage" }?.count == 1)
         #expect(report.lines.filter { $0.resource.hasPrefix("probe ") }.map(\.resource)
             == AppleSection.allCases.filter { !$0.businessOnly }.map { "probe \($0.rawValue)" })

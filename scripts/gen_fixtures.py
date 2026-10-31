@@ -18,6 +18,10 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
     review, LOW; verifier round 1);
   - device_stats: a breakdown counts names as shown (`str` of the value): Python's Counter merges `True`
     with `1` and keeps `"5"` apart from `5`, two rows the dashboard can't tell apart (verifier round 1);
+  - audit_digest: newest first by the instant `parse_iso` reads, not by the `eventDateTime` string (wrong with
+    mixed offsets and fractional seconds); equal instants keep their input order, and an event with no date it
+    can read goes last, in input order; an event whose attributes aren't an object, or whose type isn't a
+    string, is no row (abapit raised on both and lost the list);
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
   - mosyle adapt_device: an allowlist (defect 1, invariant 11): what abapit makes of the raw cut to the columns
     the list asks for, so no raw key is passed through (`activation_bypass*`, or a raw `serialNumber`); a serial
@@ -61,6 +65,7 @@ import sys
 import tarfile
 import tempfile
 import unicodedata
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -408,6 +413,113 @@ def named(result: dict) -> dict:
     return out
 
 
+AUDIT_FLOOR = datetime.min.replace(tzinfo=timezone.utc)
+MISSING = object()
+
+
+def corrected_audit_digest(reports, events: list[dict], types: tuple) -> dict:
+    """abapit's audit_digest with its listed deviations. abapit sorts by the `eventDateTime` string, which puts
+    `T09:00:00-08:00` (17:00 UTC) after `T16:00:00Z`, `T08:00:00Z` before `T08:00:00.5Z` and `not a date` first;
+    this sorts by the instant `parse_iso` reads, newest first. Equal instants, however they are spelled, keep their
+    input order (Python's sort is stable, `reverse` too), and an event with no date it can read (missing, null,
+    empty, not a date, not a string) goes after every dated one, in input order. An event whose attributes aren't
+    an object, or whose type isn't a string, is no row: abapit raised on both and lost the whole list. The counts
+    are `Counter.most_common` over the rows in that order, as abapit's are over its own."""
+    wanted = set(types)
+
+    def attributes(event: dict) -> dict:
+        value = event.get("attributes")
+        return value if isinstance(value, dict) else {}
+
+    def kind(event: dict):
+        value = attributes(event).get("type")
+        return value if isinstance(value, str) else None
+
+    def instant(event: dict):
+        value = attributes(event).get("eventDateTime")
+        return reports.parse_iso(value) if isinstance(value, str) else None
+
+    rows = [event for event in events if kind(event) in wanted]
+    rows.sort(key=lambda event: (instant(event) is not None, instant(event) or AUDIT_FLOOR), reverse=True)
+    counts = Counter(kind(event) for event in rows)
+    return {"rows": rows, "counts": counts.most_common(), "total": len(rows), "scanned": len(events)}
+
+
+def audit_edges() -> list[tuple[str, list[dict]]]:
+    """Hand-written audit_digest lists for what the drawn ones never reach (their stamps are all UTC): instants
+    written in mixed offsets and with fractional seconds, where abapit's string sort is wrong; every way an event
+    can lack a date; events without attributes, or with attributes or a type of another shape; types outside the
+    set, abapit's wrong demo names (defect 12) and future ones; and ties: one instant spelled five ways, counts
+    whose tie order is the rows' order and not the input's, and one stamp shared by six events, where abapit is
+    right. Literals only, so the drawn cases don't move."""
+    def events(rows: list) -> list[dict]:
+        """`(type, stamp)` pairs (MISSING as the stamp: no eventDateTime), or the attributes themselves (an object,
+        None, or MISSING: no attributes key)."""
+        out = []
+        for index, row in enumerate(rows):
+            event = {"type": "auditEvents", "id": f"evt-edge-{index:02d}"}
+            if isinstance(row, tuple):
+                kind, stamp = row
+                event["attributes"] = {"type": kind} if stamp is MISSING else {"type": kind, "eventDateTime": stamp}
+            elif row is not MISSING:
+                event["attributes"] = row
+            out.append(event)
+        return out
+
+    offsets = [("SUBSCRIPTION_CREATED", "2026-10-10T09:00:00-08:00"), ("SUBSCRIPTION_UPDATED", "2026-10-10T16:00:00Z"),
+               ("SUBSCRIPTION_DELETED", "2026-10-11T00:30:00+09:00"),
+               ("SUBJECT_HAS_APPLECARE_PURCHASE_ADDED", "2026-10-10T20:00:00+05:30"),
+               ("SUBSCRIPTION_CREATED", "2026-10-10T14:45:00+00:00"),
+               ("SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_REMOVED", "2026-10-09T23:59:59-14:00"),
+               ("SUBSCRIPTION_UPDATED", "20261010T180000Z")]
+    fractions = [("DEVICE_ADDED_TO_ORG", "2026-10-12T08:00:00Z"), ("DEVICE_ASSIGNED_TO_SERVER", "2026-10-12T08:00:00.5Z"),
+                 ("DEVICE_IS_ERASED", "2026-10-12T08:00:00.25Z"), ("DEVICE_ADDED_TO_ORG", "2026-10-12T08:00:00.250001Z"),
+                 ("DEVICE_REMOVED_FROM_ORG", "2026-10-12T08:00:00.999999+00:00"),
+                 ("DEVICE_UNASSIGNED_FROM_SERVER", "2026-10-12T08:00:01Z"),
+                 ("DEVICE_ASSIGNED_TO_SERVER", "2026-10-12T08:00:00.1234567Z"), ("DEVICE_IS_ERASED", "2026-10-12T08:00:00,75Z"),
+                 ("DEVICE_ADDED_TO_ORG", "2026-10-12T08:00:00.000000Z")]
+    undated = [("SUBSCRIPTION_CREATED", MISSING), ("SUBSCRIPTION_UPDATED", None), ("SUBSCRIPTION_DELETED", ""),
+               ("SUBSCRIPTION_CREATED", "not a date"), ("SUBSCRIPTION_UPDATED", "2026-10-14T10:00:00Z"),
+               ("SUBSCRIPTION_CREATED", "2026-13-01T00:00:00Z"), ("SUBSCRIPTION_DELETED", "2026-10-14"),
+               ("SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED", "2026-10-14T10:00:00ZZ"),
+               ("SUBSCRIPTION_UPDATED", "2026-10-13T23:00:00-02:00")]
+    # abapit compares a number, a list or an object with a string and raises TypeError.
+    not_strings = [("DEVICE_ADDED_TO_ORG", 20261012), ("DEVICE_IS_ERASED", "2026-10-12T08:00:00Z"),
+                   ("DEVICE_ASSIGNED_TO_SERVER", ["2026-10-12T09:00:00Z"]), ("DEVICE_ADDED_TO_ORG", "2026-10-12T07:00:00Z"),
+                   ("DEVICE_REMOVED_FROM_ORG", {"at": "2026-10-12T10:00:00Z"})]
+    shapes = [MISSING, {}, {"type": None, "eventDateTime": "2026-10-12T08:00:00Z"},
+              {"type": 5, "eventDateTime": "2026-10-12T09:00:00Z"}, {"eventDateTime": "2026-10-12T10:00:00Z"},
+              {"type": "DEVICE_IS_ERASED", "eventDateTime": "2026-10-12T06:00:00Z"}, MISSING,
+              {"type": "DEVICE_ADDED_TO_ORG", "eventDateTime": "2026-10-12T07:00:00Z", "outcome": "FAILURE"}]
+    # abapit: `None.get` raises AttributeError; a list type is unhashable, so `in set` raises TypeError.
+    null_attributes = [{"type": "DEVICE_IS_ERASED", "eventDateTime": "2026-10-12T06:00:00Z"}, None,
+                       {"type": "DEVICE_ADDED_TO_ORG", "eventDateTime": "2026-10-12T07:00:00Z"}]
+    list_type = [{"type": ["DEVICE_IS_ERASED"], "eventDateTime": "2026-10-12T06:00:00Z"},
+                 {"type": {"name": "DEVICE_IS_ERASED"}, "eventDateTime": "2026-10-12T05:00:00Z"},
+                 {"type": "DEVICE_IS_ERASED", "eventDateTime": "2026-10-12T07:00:00Z"}]
+    outside_lifecycle = [(kind, f"2026-10-12T{hour:02d}:00:00Z") for hour, kind in enumerate([
+        "SUBSCRIPTION_CREATED", "DEVICE_ADDED_TO_ORG", "ROLE_CREATED", "API_ACCOUNT_KEY_REVOKED", "DEVICE_IS_LOCKED",
+        "DEVICE_ADDED_TO_ORG_V2", "device_added_to_org", "DEVICE_ADDED_TO_ORG ", " DEVICE_ADDED_TO_ORG", "",
+        "DEVICE_ASSIGNED_TO_MDM", "DEVICE_UNASSIGNED_FROM_MDM", "DEVICE_ASSIGNED_TO_SERVER", "CONFIG_SETTINGS_UPDATED"])]
+    outside_subscriptions = [(kind, f"2026-10-13T{hour:02d}:30:00Z") for hour, kind in enumerate([
+        "SUBSCRIPTION_RENEWED", "SUBSCRIPTION_UPDATED", "SUBJECT_HAS_APPLECARE_PURCHASE_UPDATED", "DEVICE_ADDED_TO_ORG",
+        "TERMS_ACCEPTED", "SUBSCRIPTION_CREATED", "subscription_created", "SUBSCRIPTION", "SUBJECT_HAS_ICLOUD_STORAGE"])]
+    one_instant = [("SUBSCRIPTION_UPDATED", "2026-10-13T10:00:00Z"), ("SUBSCRIPTION_CREATED", "2026-10-13T12:00:00+02:00"),
+                   ("SUBSCRIPTION_DELETED", "2026-10-13T10:00:00.000Z"), ("SUBSCRIPTION_CREATED", "2026-10-13T05:00:00-05:00"),
+                   ("SUBSCRIPTION_UPDATED", "2026-10-13T10:00:00+00:00"), ("SUBSCRIPTION_DELETED", "2026-10-13T11:00:00Z"),
+                   ("SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED", "2026-10-13T09:00:00.000001Z"),
+                   ("SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED", "2026-10-13T10:00:00.000001+01:00")]
+    one_stamp = [(kind, "2026-10-15T07:30:00Z") for kind in [
+        "DEVICE_IS_ERASED", "DEVICE_ADDED_TO_ORG", "DEVICE_IS_ERASED", "DEVICE_REMOVED_FROM_ORG", "DEVICE_ADDED_TO_ORG",
+        "DEVICE_REMOVED_FROM_ORG"]] + [("DEVICE_ASSIGNED_TO_SERVER", "2026-10-15T07:29:59Z")]
+    return [("SUBSCRIPTION_EVENTS", events(offsets)), ("DEVICE_LIFECYCLE_EVENTS", events(fractions)),
+            ("SUBSCRIPTION_EVENTS", events(undated)), ("DEVICE_LIFECYCLE_EVENTS", events(not_strings)),
+            ("DEVICE_LIFECYCLE_EVENTS", events(shapes)), ("DEVICE_LIFECYCLE_EVENTS", events(null_attributes)),
+            ("DEVICE_LIFECYCLE_EVENTS", events(list_type)), ("DEVICE_LIFECYCLE_EVENTS", events(outside_lifecycle)),
+            ("SUBSCRIPTION_EVENTS", events(outside_subscriptions)), ("SUBSCRIPTION_EVENTS", events(one_instant)),
+            ("DEVICE_LIFECYCLE_EVENTS", events(one_stamp))]
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
@@ -465,11 +577,21 @@ def gen_reports(m: dict) -> None:
         years = rng.choice([1, 3, 4, 5])
         add("fleet_age_report", {"devices": devices, "applecare_items": care, "years": years},
             lambda: reports.fleet_age_report(devices, care, years, now=FIXED_NOW))
+    def audit_case(events: list[dict], which: str) -> None:
+        types = getattr(reports, which)
+        add("audit_digest", {"events": events, "types": which}, lambda: reports.audit_digest(events, types))
+        corrected = outcome(lambda: corrected_audit_digest(reports, events, types))
+        if "ok" not in corrected:
+            raise SystemExit(f"the corrected audit_digest refused a case: {corrected}")
+        # Only a list abapit orders, counts or reads differently deviates; the others keep abapit's output.
+        if cases[-1]["expected"] != corrected:
+            cases[-1]["abapit"], cases[-1]["expected"] = cases[-1]["expected"], corrected
+
     for _ in range(15):
         events = audit_events(rng, rng.randint(0, 30))
-        which = rng.choice(["SUBSCRIPTION_EVENTS", "DEVICE_LIFECYCLE_EVENTS"])
-        add("audit_digest", {"events": events, "types": which},
-            lambda: reports.audit_digest(events, getattr(reports, which)))
+        audit_case(events, rng.choice(["SUBSCRIPTION_EVENTS", "DEVICE_LIFECYCLE_EVENTS"]))
+    for which, events in audit_edges():
+        audit_case(events, which)
     for _ in range(20):
         shared = [fake_serial(rng) for _ in range(rng.randint(0, 10))]
         abm = [device(rng, s) for s in shared if rng.random() < 0.8] + fleet(rng, 0, 6)
@@ -515,7 +637,9 @@ def gen_reports(m: dict) -> None:
                             {"deviceModel": "", "name": None, "description": 0}, {"name": 5}])
         cases.append({"function": "item_label", "input": {"attributes": attrs},
                       "expected": {"ok": m["history"].item_label(attrs)}})
-    write("reports", {**header(1004), "cases": cases})
+    # abapit's two audit type sets, in its order: the Swift views' sets are held to them.
+    audit_types = {name: list(getattr(reports, name)) for name in ("SUBSCRIPTION_EVENTS", "DEVICE_LIFECYCLE_EVENTS")}
+    write("reports", {**header(1004), "audit_types": audit_types, "cases": cases})
 
 
 # -- CSV -------------------------------------------------------------------------------------------

@@ -132,4 +132,35 @@ struct ExportPolicyTests {
             #expect(!ExportPolicy.isSensitive(key), "\(key)")
         }
     }
+
+    /// Even abapit's every-key CSV, which no export may write, holds no custom setting's profile: what a configuration
+    /// hands out is withheld (Phase 2a review M2), so the CSV of its public resource can't hold the Wi-Fi password.
+    @Test func aConfigurationsCSVHoldsNoProfile() {
+        let canary = "canary-csv-password"
+        let configuration = Configuration(resource: Resource(type: "configurations", id: "C1", attributes: [
+            "type": .string("CUSTOM_SETTING"), "name": .string("Office Wi-Fi"),
+            "customSettingsValues": .object(["configurationProfile": .string("<plist version=\"1.0\"><dict><key>Password</key><string>\(canary)</string></dict></plist>"),
+                                             "filename": .string("Office.mobileconfig")]),
+        ]))
+        let items = [CSV.Item(configuration.resource)]
+        let every = CSV.write(items, columns: CSV.union(items))
+        #expect(every.contains("customSettingsValues") && every.contains("Office.mobileconfig") && !every.contains(canary), "\(every)")
+        #expect(!CSV.text(items, columns: ExportPolicy.devices).contains(canary))
+    }
+
+    /// What CSV never exports, a profile never shows: a string under a key holding each of the denylist's stems is masked.
+    /// `ProfileText` keeps its own list, since AppleModels can't import Reports, and it lacked `bypass` (an Activation Lock
+    /// bypass code, invariant 11's first), `assertion` and `unlockpin` with nothing holding the two lists to each other
+    /// (verifier round 2).
+    @Test func aProfileMasksEveryStemCSVWithholds() {
+        for stem in ExportPolicy.sensitiveStems {
+            for key in [stem, "Device_\(stem)_x"] {
+                guard case .plist(let text, let masked, _) = ProfileText("<plist version=\"1.0\"><dict><key>\(key)</key><string>canary-value</string></dict></plist>") else {
+                    Issue.record("\(key) not shown as a plist")
+                    continue
+                }
+                #expect(masked == 1 && !text.contains("canary-value"), "\(key)")
+            }
+        }
+    }
 }

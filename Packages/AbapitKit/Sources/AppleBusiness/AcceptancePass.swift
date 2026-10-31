@@ -38,9 +38,13 @@ public struct AcceptanceReport: Sendable, Equatable {
         public let status: Status
         /// Items read, up to where the check ended; nil when nothing was sent (skipped) or nothing is counted (a probe).
         public let count: Int?
-        /// Attribute names this version doesn't read, and `field=value`s it doesn't know, each as `acceptanceWord` shows it.
+        /// Attribute names this version doesn't read, keys inside the objects it reads (`phoneNumbers.isPrimary`), and
+        /// `field=value`s it doesn't know, each name and value as `acceptanceWord` shows it.
         public let unknownKeys: [String]
         public let unknownValues: [String]
+        /// An audit payload's fields its type doesn't document (`AuditEventPayload.unreadFields`) and keys inside its role
+        /// locations (`accountRoleLocationList.scope`), as `acceptanceWord` shows them.
+        public let unknownPayloadKeys: [String]
         /// What was cut, where a loop stopped, Apple's error `code` (only when code-shaped) and `source.parameter` (only a
         /// documented one), the token endpoint's code, this app's words for a malformed answer, the Vault's guidance.
         /// Never Apple's `detail`.
@@ -56,6 +60,7 @@ public struct AcceptanceReport: Sendable, Equatable {
             var parts = ["\(line.resource): \(line.status)" + (line.count.map { $0 == 1 ? ", 1 item" : ", \($0) items" } ?? "")]
             if !line.unknownKeys.isEmpty { parts.append("unknown keys \(line.unknownKeys.joined(separator: ", "))") }
             if !line.unknownValues.isEmpty { parts.append("unknown values \(line.unknownValues.joined(separator: ", "))") }
+            if !line.unknownPayloadKeys.isEmpty { parts.append("unknown payload keys \(line.unknownPayloadKeys.joined(separator: ", "))") }
             if let note = line.note { parts.append(note) }
             return parts.joined(separator: " · ")
         }.joined(separator: "\n")
@@ -67,8 +72,9 @@ extension AppleClient {
     /// caller's number can't turn the pass into a sweep (invariant 7; Phase 1b review: the sample was unbounded).
     public static let acceptanceSample = 5, acceptanceSampleLimit = 20
 
-    /// Runs every Phase 1 read: the device list, the services and their device lists, and for each sampled device
-    /// the single device, its AppleCare, its Activation Lock and its assigned service; then the probes.
+    /// Runs every read: Phase 1's device list, the services and their device lists, and for each sampled device the
+    /// single device, its AppleCare, its Activation Lock and its assigned service; then each Business-only list with one
+    /// item of each read alone (`businessChecks`); then the probes.
     public func acceptancePass(sample: Int = AppleClient.acceptanceSample) async -> AcceptanceReport {
         let scope = scope
         var lines: [AcceptanceReport.Line] = []
@@ -80,6 +86,7 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(devices.flatMap(\.unreadAttributes))
+            found.misread(devices)
             for device in devices {
                 found.unknown("productFamily", device.productFamily)
                 found.unknown("status", device.status)
@@ -96,10 +103,11 @@ extension AppleClient {
                 found.cut(page)
             }
             found.keys = Set(services.flatMap(\.unreadAttributes))
+            found.misread(services)
             for service in services {
                 found.unknown("serverType", service.type)
                 found.unknown("status", service.status)
-                for family in service.defaultProductFamilies { found.unknown("defaultProductFamilies", family) }
+                for family in service.defaultProductFamilies ?? [] { found.unknown("defaultProductFamilies", family) }
             }
         }
         lines.append(serviceList)
@@ -131,7 +139,9 @@ extension AppleClient {
             for (index, device) in sampled.enumerated() {
                 try found.at("device", index, of: sampled.count)
                 let single = try await self.device(Self.sendable(device.id))
-                found.keys.formUnion(try Self.typed([single], asked: device.id)[0].unreadAttributes)
+                let read = try Self.typed([single], asked: device.id)[0]
+                found.keys.formUnion(read.unreadAttributes)
+                found.misread([read])
                 found.count += 1
             }
         })
@@ -186,16 +196,199 @@ extension AppleClient {
         // The probes as checks too: a failure in the same words as the reads (`error transport -1005`, not a bare `error`),
         // a 200 that isn't a list is malformed, and a cancelled pass sends none.
         let now = Date()
+        lines += await businessChecks(now: now)
         for section in probedSections {
             lines.append(await Self.check("probe \(section.rawValue)", counted: false) { _ in try await self.probe(section, now: now) })
         }
         return AcceptanceReport(lines: lines)
     }
 
+    /// Each Business-only list, whole, with what this version doesn't know of its items; then the first item of each read
+    /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint with every
+    /// relationship included, and each relationship's own list; a configuration, a custom setting when there is one; an
+    /// Apple-managed device's details), and the last day's audit events, cursor by cursor. A School org has none of these:
+    /// each line says so, and nothing is sent.
+    private func businessChecks(now: Date) async -> [AcceptanceReport.Line] {
+        let school = isBusiness ? nil : "not in Apple School Manager's API"
+        var lines: [AcceptanceReport.Line] = []
+        let users = await listCheck("users", unless: school, { self.users() }) { user, found in
+            found.unknown("status", user.status)
+            for phone in user.phoneNumbers ?? [] { found.unknown("phoneNumbers.type", phone.type) }
+        }
+        lines.append(users.line)
+        lines.append(await detailCheck("users/{id}", users, "user", unless: school, { try await self.user($0) }) { user, found in
+            found.unknown("status", user.status)
+        })
+        let groups = await listCheck("userGroups", unless: school, { self.userGroups() }) { group, found in
+            found.unknown("type", group.type)
+            found.unknown("status", group.status)
+        }
+        lines.append(groups.line)
+        lines.append(await detailCheck("userGroups/{id}", groups, "user group", unless: school, { try await self.userGroup($0) }))
+        lines.append(await memberCheck("userGroups/{id}/relationships/users", groups, "user group", unless: school) { self.userGroupMemberIDs($0) })
+        let units = await listCheck("organizationalUnits", unless: school, { self.organizationalUnits() })
+        lines.append(units.line)
+        lines.append(await detailCheck("organizationalUnits/{id}", units, "org unit", unless: school, { try await self.organizationalUnit($0) }))
+        lines.append(await memberCheck("organizationalUnits/{id}/relationships/users", units, "org unit", unless: school) {
+            self.organizationalUnitMemberIDs($0)
+        })
+        let apps = await listCheck("apps", unless: school, { self.apps() }) { app, found in
+            for os in app.supportedOS ?? [] { found.unknown("supportedOS", os) }
+        }
+        lines.append(apps.line)
+        lines.append(await detailCheck("apps/{id}", apps, "app", unless: school, { try await self.app($0) }))
+        let packages = await listCheck("packages", unless: school, { self.packages() })
+        lines.append(packages.line)
+        lines.append(await detailCheck("packages/{id}", packages, "package", unless: school, { try await self.package($0) }))
+        let blueprints = await listCheck("blueprints", unless: school, { self.blueprints() }) { blueprint, found in
+            found.unknown("status", blueprint.status)
+        }
+        lines.append(blueprints.line)
+        lines.append(await blueprintCheck(blueprints, unless: school))
+        for relationship in Blueprint.Relationship.allCases {
+            lines.append(await memberCheck("blueprints/{id}/relationships/\(relationship.rawValue)", blueprints, "blueprint", unless: school) {
+                self.blueprintMemberIDs($0, relationship)
+            })
+        }
+        let configurations = await listCheck("configurations", unless: school, { self.configurations() }) { configuration, found in
+            found.unknown("type", configuration.type)
+            for platform in configuration.platforms ?? [] { found.unknown("configuredForPlatforms", platform) }
+            found.profileProblems += configuration.profileProblems
+        }
+        lines.append(configurations.line)
+        // A custom setting's when there is one: only it carries a profile.
+        let custom = configurations.items.first { $0.type?.known == .customSetting }
+        let sampled = (line: configurations.line, items: custom.map { [$0] } ?? configurations.items)
+        lines.append(await detailCheck("configurations/{id}", sampled, "configuration", unless: school, { try await self.configuration($0) }) {
+            configuration, found in
+            found.unknown("type", configuration.type)
+            found.profileProblems += configuration.profileProblems
+        })
+        let devices = await listCheck("mdmDevices", unless: school, { self.mdmDevices() }) { device, found in
+            found.unknown("productFamily", device.productFamily)
+        }
+        lines.append(devices.line)
+        // The details' id isn't checked against the device's: Apple documents neither, and gives no example.
+        lines.append(await detailCheck("mdmDevices/{id}/details", devices, "Apple-managed device", unless: school, asked: false,
+                                       { try await self.mdmDeviceDetails($0) }) { detail, found in
+            found.unknown("deviceLockStatus", detail.lockStatus)
+            found.unknown("deviceEraseStatus", detail.eraseStatus)
+            found.unknown("lostModeStatus", detail.lostModeStatus)
+        })
+        lines.append(await Self.check("auditEvents", unless: school) { found in
+            var events: [AuditEvent] = []
+            for try await page in self.auditEvents(try AuditQuery.last(days: 1, now: now)) {
+                events += try Self.typed(page.items)
+                found.count = events.count
+                found.cut(page)
+            }
+            found.keys = Set(events.flatMap(\.unreadAttributes))
+            found.payloadKeys = Set(events.flatMap { $0.payload?.unreadFields ?? [] })
+            found.unread(events.flatMap { $0.payload?.unreadNested ?? [] }, payload: true)
+            for event in events {
+                found.unknown("type", event.type)
+                found.unknown("category", event.category)
+                found.unknown("actorType", event.actorType)
+                found.unknown("subjectType", event.subjectType)
+                found.unknown("outcome", event.outcome)
+                found.unknown("purchaseSourceType", event.payload?.purchaseSourceType)
+                found.unknown("releaseEntityType", event.payload?.releaseEntityType)
+                found.unknown("protocol", event.payload?.idpProtocol)
+                found.unknown("vendorName", event.payload?.vendorName)
+            }
+            // Where a payload wasn't, in this app's words with a count: a named key that missed read `ok` with its payload
+            // unread and nothing said (Phase 2a review M1).
+            let problems = AuditEvent.PayloadProblem.allCases.compactMap { problem -> String? in
+                let count = events.count { $0.payloadProblems.contains(problem) }
+                return count == 0 ? nil : "\(problem.rawValue) in \(count) event\(count == 1 ? "" : "s")"
+            }
+            found.note = (problems + ["the last day"]).joined(separator: " · ")
+        })
+        return lines
+    }
+
+    /// A list's line and its items: every page, each item of `View`'s type, what the page cap cut, and the attribute names
+    /// and enum values (`values`) this version doesn't know. The stream is made only when the check runs: making one sends.
+    private func listCheck<View: ResourceView>(_ resource: String, unless skip: String?, _ stream: () -> AsyncThrowingStream<Page<View>, any Error>,
+                                               values: (View, inout Found) -> Void = { _, _ in }) async -> (line: AcceptanceReport.Line, items: [View]) {
+        var items: [View] = []
+        let line = await Self.check(resource, unless: skip) { found in
+            for try await page in stream() {
+                items += try Self.typed(page.items)
+                found.count = items.count
+                found.cut(page)
+            }
+            found.keys = Set(items.flatMap(\.unreadAttributes))
+            found.unread(items.flatMap(\.unreadNested))
+            found.misread(items)
+            for item in items { values(item, &found) }
+        }
+        return (line, items)
+    }
+
+    /// The first of a list's items read alone, by its id: the item asked for (`asked`, unless Apple's id for the answer
+    /// isn't documented as the same), of `View`'s type, with what this version doesn't know of it. `View` is the list's own
+    /// type but for an Apple-managed device, whose details are another resource.
+    private func detailCheck<Item: ResourceView, View: ResourceView>(_ resource: String, _ list: (line: AcceptanceReport.Line, items: [Item]), _ what: String,
+                                                 unless skip: String?, asked: Bool = true, _ read: (String) async throws -> View,
+                                                 values: (View, inout Found) -> Void = { _, _ in }) async -> AcceptanceReport.Line {
+        await Self.check(resource, unless: skip ?? (list.items.isEmpty ? Self.none("\(what) to read", list.line) : nil)) { found in
+            let id = list.items[0].id
+            let item = try Self.typed([await read(Self.sendable(id))], asked: asked ? id : nil)[0]
+            found.count = 1
+            found.keys = Set(item.unreadAttributes)
+            found.unread(item.unreadNested)
+            found.misread([item])
+            values(item, &found)
+        }
+    }
+
+    /// The first of a list's items' members, every page: linkages of the members' type (the client checks each).
+    private func memberCheck<View: ResourceView>(_ resource: String, _ list: (line: AcceptanceReport.Line, items: [View]), _ what: String,
+                                                 unless skip: String?, _ members: (String) -> AsyncThrowingStream<Page<String>, any Error>)
+        async -> AcceptanceReport.Line {
+        await Self.check(resource, unless: skip ?? (list.items.isEmpty ? Self.none("\(what) to read", list.line) : nil)) { found in
+            for try await page in members(try Self.sendable(list.items[0].id)) {
+                found.count += page.items.count
+                found.cut(page)
+            }
+        }
+    }
+
+    /// The first blueprint with every relationship included. When Apple refused the include and the blueprint was read
+    /// without it, the line is that refusal's status, never `ok`: its members weren't read (invariant 8). A relationship the
+    /// include's limit cut, or one Apple didn't list, is `truncated`.
+    private func blueprintCheck(_ list: (line: AcceptanceReport.Line, items: [Blueprint]), unless skip: String?) async -> AcceptanceReport.Line {
+        await Self.check("blueprints/{id}", unless: skip ?? (list.items.isEmpty ? Self.none("blueprint to read", list.line) : nil)) { found in
+            let id = list.items[0].id
+            let read = try await self.blueprint(Self.sendable(id), include: Set(Blueprint.Relationship.allCases))
+            let blueprint = try Self.typed([read.blueprint], asked: id)[0]
+            found.count = 1
+            found.keys = Set(blueprint.unreadAttributes)
+            found.unknown("status", blueprint.status)
+            switch read.members {
+            case .refused(let refused):
+                let failed = Self.acceptanceFailure(refused)
+                found.status = failed.status
+                found.note = ["the include was refused, so the blueprint was read without its members", failed.note].compactMap { $0 }.joined(separator: " · ")
+            case .read(let related, _):
+                let all = Blueprint.Relationship.allCases
+                let cut = all.filter { related[$0]?.isTruncated == true }.map(\.rawValue), unlisted = all.filter { related[$0] == nil }.map(\.rawValue)
+                found.truncation = [cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the include's limit",
+                                    unlisted.isEmpty ? nil : "\(unlisted.joined(separator: ", ")) not listed"].compactMap { $0 }.joined(separator: " · ").nonEmpty
+                // A relationship Apple didn't list has no count to say: a dash, never 0 (Phase 2a review L5's class).
+                found.note = all.map { "\($0.rawValue) \(related[$0].map { String($0.linkages.count) } ?? "-")" }.joined(separator: ", ")
+            }
+        }
+    }
+
     /// What a check found so far: kept when it fails part-way, so its line says how far it got.
     private struct Found {
         var count = 0
         var keys: Set<String> = []
+        var payloadKeys: Set<String> = []
+        /// The status a read that returned says, when not `ok` or `truncated`: a blueprint read again without its include.
+        var status: AcceptanceReport.Status?
         /// `field=value`s as the text shows them; only `unknown(_:_:)` adds one.
         private(set) var values: Set<String> = []
         /// What the page cap cut, in counts; when set, the check is `.truncated`.
@@ -204,6 +397,26 @@ extension AppleClient {
         var position: String?
         /// Counts said on success ("1 of 4 unassigned").
         var note: String?
+        /// Each configuration's `profileProblems`: said with a count (`profile not a string in 1 item`), never `ok` with
+        /// nothing said (verifier round 2: a string `customSettingsValues` read `configurations/{id}: ok, 1 item`).
+        var profileProblems: [Configuration.ProfileProblem] = []
+        /// Each item's `misreadLists`: said with a count (`defaultProductFamilies not read as a list in 1 item`), never `ok`
+        /// with nothing said (verifier round 3 of the Phase 2a fixes: review L6's one list reader made a families list
+        /// holding a number read nil, which the check iterated as none).
+        private(set) var misreadLists: [String] = []
+        mutating func misread<View: ResourceView>(_ items: [View]) { misreadLists += items.flatMap(\.misreadLists) }
+        var misreadNote: String? {
+            Set(misreadLists).sorted().map { field in
+                let count = misreadLists.count { $0 == field }
+                return "\(field) not read as a list in \(count) item\(count == 1 ? "" : "s")"
+            }.joined(separator: " · ").nonEmpty
+        }
+        var profileNote: String? {
+            Configuration.ProfileProblem.allCases.compactMap { problem in
+                let count = profileProblems.count { $0 == problem }
+                return count == 0 ? nil : "\(problem.rawValue) in \(count) item\(count == 1 ? "" : "s")"
+            }.joined(separator: " · ").nonEmpty
+        }
 
         /// On to a loop's next item: where the line says it stopped if it fails there, and nothing more is sent once the
         /// pass is cancelled (verifier round 2: over a transport that answers anyway, as the stub does, a check cancelled
@@ -227,6 +440,16 @@ extension AppleClient {
             guard page.truncated else { return }
             truncation = "stopped at the page cap with more to come" + (page.total.map { " (Apple's total \($0))" } ?? "")
         }
+
+        /// Keys inside the objects a view reads (`phoneNumbers.isPrimary`), as the text shows them; `payload` puts them
+        /// with the payload's keys. The attribute and Apple's key stay apart until here, each shown as `acceptanceWord`
+        /// shows it, so a key can't forge a line as a `.`-joined string would (Phase 2a review L1: nested objects'
+        /// unknown keys were never counted).
+        private(set) var nestedKeys: Set<String> = [], nestedPayloadKeys: Set<String> = []
+        mutating func unread(_ keys: [NestedKey], payload: Bool = false) {
+            let shown = keys.map { "\(AppleClient.acceptanceWord($0.attribute)).\(AppleClient.acceptanceWord($0.key))" }
+            if payload { nestedPayloadKeys.formUnion(shown) } else { nestedKeys.formUnion(shown) }
+        }
     }
 
     /// One resource's line: not sent when the pass was cancelled or `skip` says why; else what `body` found, cut short, or
@@ -234,7 +457,7 @@ extension AppleClient {
     private static func check(_ resource: String, unless skip: String? = nil, counted: Bool = true,
                               _ body: (inout Found) async throws -> Void) async -> AcceptanceReport.Line {
         if let skip = Task.isCancelled ? "the pass was cancelled" : skip {
-            return .init(resource: resource, status: .skipped(skip), count: nil, unknownKeys: [], unknownValues: [], note: nil)
+            return .init(resource: resource, status: .skipped(skip), count: nil, unknownKeys: [], unknownValues: [], unknownPayloadKeys: [], note: nil)
         }
         var found = Found()
         let status: AcceptanceReport.Status
@@ -244,8 +467,8 @@ extension AppleClient {
             // A cancelled `for try await` over a stream ends without throwing (Phase 1b review H2): without this, a walk
             // the cancellation cut short read `ok` with what it had (verifier round 1).
             try Task.checkCancellation()
-            status = found.truncation == nil ? .ok : .truncated
-            notes = [found.truncation, found.note]
+            status = found.status ?? (found.truncation == nil ? .ok : .truncated)
+            notes = [found.truncation, found.profileNote, found.misreadNote, found.note]
         } catch {
             let failed = acceptanceFailure(error)
             status = failed.status
@@ -253,7 +476,8 @@ extension AppleClient {
         }
         let note = notes.compactMap { $0 }.joined(separator: " · ")
         return .init(resource: resource, status: status, count: counted ? found.count : nil,
-                     unknownKeys: Set(found.keys.map(acceptanceWord)).sorted(), unknownValues: found.values.sorted(),
+                     unknownKeys: Set(found.keys.map(acceptanceWord)).union(found.nestedKeys).sorted(), unknownValues: found.values.sorted(),
+                     unknownPayloadKeys: Set(found.payloadKeys.map(acceptanceWord)).union(found.nestedPayloadKeys).sorted(),
                      note: note.isEmpty ? nil : note)
     }
 
@@ -317,6 +541,8 @@ extension AppleClient {
         // The Vault's guidance is this app's own words too (a cancelled Touch ID, a locked Mac), never Apple's.
         case AppleAPIError.vault(let guidance): (.error("error keychain"), guidance)
         case AppleAPIError.wrongHost: (.error("error wrong host"), nil)
+        // Never sent: the read isn't in the org's API.
+        case AppleAPIError.notInScope: (.skipped("not in Apple School Manager's API"), nil)
         case let error as AppleAPIError: (.error(probeStatus(error)), nil)
         case is CancellationError: (.error("error cancelled"), nil)
         default: (.error("error \(type(of: error))"), nil)

@@ -1061,7 +1061,13 @@ the JWS code.
 
 ### Phase 2: Apple read parity and new reads
 
-**Status:** not started.
+**Status:** split in two for review size (2026-10-30). **2a** (package: AppleModels for people, content, Apple
+MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every
+Phase 2 read in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's
+checked range, filters and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports'
+audit digests with the new Access & Security view, services not connected in N days and recent events): on branch
+`phase-2a-apple-reads`. **2b** (the People, Content, Apple MDM, Audit and Dashboard screens, their screen models in
+Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.
@@ -1114,7 +1120,12 @@ the JWS code.
 - **Collectors per provider** (Apple now; Mosyle in Phase 7):
   - devices, mdm_servers, assignments, people, content, mdm_enrolled (+ details);
   - **AppleCare sweep** and **Activation Lock sweep** (§3.6);
-  - per-resource errors recorded rather than aborting.
+  - per-resource errors recorded rather than aborting;
+  - **decided (operator, 2026-10-31): a snapshot keeps no custom setting's profile.** What can be read again from
+    Apple isn't kept, and the profile holds Wi-Fi and VPN passwords while SQLite is outside the Keychain (invariants 3,
+    11). A collector stores `Configuration.resource`, the profile withheld, and no hash of it either (a short Wi-Fi
+    password's hash is guessed offline); the detail reads the profile live. So a diff sees a profile change only
+    through the configuration's other attributes, such as `updatedDateTime`.
 - **Diff** (golden parity) and the Changes screen.
 - **Reports**:
   - coverage (with the new AppleCare fields);

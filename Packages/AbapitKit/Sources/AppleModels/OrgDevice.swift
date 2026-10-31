@@ -28,23 +28,27 @@ public struct OrgDevice: ResourceView {
     /// Only a single device's GET carries it (plan §2.1).
     public var releasedFromOrgDate: ISODate? { attributes.date("releasedFromOrgDateTime") }
     public var updatedDate: ISODate? { attributes.date("updatedDateTime") }
-    public var imei: [String] { attributes.strings("imei") }
-    public var meid: [String] { attributes.strings("meid") }
+    /// Lists read as every view reads one (`JSONObject.list(_:_:)`): nil when missing or when an item isn't a string
+    /// (Phase 2a review L6: Phase 1's reader kept the items that fit, so this read `[]` where `MDMDeviceDetail.imei`
+    /// read nil).
+    public var imei: [String]? { attributes.list("imei", \.string) }
+    public var meid: [String]? { attributes.list("meid", \.string) }
     public var eid: String? { attributes.string("eid") }
     public var purchaseSourceID: String? { attributes.string("purchaseSourceId") }
     public var purchaseSourceType: OpenEnum<PurchaseSourceType>? { attributes.open("purchaseSourceType") }
     public var wifiMAC: String? { attributes.string("wifiMacAddress") }
     public var bluetoothMAC: String? { attributes.string("bluetoothMacAddress") }
-    public var ethernetMACs: [String] { attributes.strings("ethernetMacAddress") }
+    public var ethernetMACs: [String]? { attributes.list("ethernetMacAddress", \.string) }
     public var isMigrationCapable: Bool? { attributes.bool("isMdmMigrationCapable") }
     public var migrationStatus: OpenEnum<MigrationStatus>? { attributes.open("mdmMigrationStatus") }
     public var migrationDeadline: ISODate? { attributes.date("mdmMigrationDeadlineDateTime") }
 
     /// Every identifier Find (⌘L) matches exactly, as abapit's `/find` did: serial, IMEI, MEID, EID, order
-    /// number and the network addresses (plan §4).
+    /// number and the network addresses (plan §4). A list that isn't a list of strings gives none.
     public var identifiers: [String] {
-        [serialNumber, eid, orderNumber, wifiMAC, bluetoothMAC].compactMap { $0 } + imei + meid + ethernetMACs
+        [serialNumber, eid, orderNumber, wifiMAC, bluetoothMAC].compactMap { $0 } + (imei ?? []) + (meid ?? []) + (ethernetMACs ?? [])
     }
+    public var misreadLists: [String] { misread(["imei": imei == nil, "meid": meid == nil, "ethernetMacAddress": ethernetMACs == nil]) }
 }
 
 /// `appleCareCoverage`: one coverage of a device.
@@ -97,9 +101,9 @@ public struct MDMService: ResourceView {
     public var lastConnected: ISODate? { attributes.date("lastConnectedDateTime") }
     /// Shown, never exported by default (plan §3.9).
     public var lastConnectedIP: String? { attributes.string("lastConnectedIp") }
-    public var defaultProductFamilies: [OpenEnum<ServiceProductFamily>] {
-        attributes.strings("defaultProductFamilies").map(OpenEnum.init)
-    }
+    /// Nil when missing or when an item isn't a string, as every list reads (Phase 2a review L6).
+    public var defaultProductFamilies: [OpenEnum<ServiceProductFamily>]? { attributes.list("defaultProductFamilies") { $0.open() } }
+    public var misreadLists: [String] { misread(["defaultProductFamilies": defaultProductFamilies == nil]) }
     public var disownFlag: Bool? { attributes.bool("enableMdmDisownFlag") }
     public var created: ISODate? { attributes.date("createdDateTime") }
 

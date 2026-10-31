@@ -27,6 +27,82 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-31 — A fix that made a read stricter made a new silence
+- **What happened:** Phase 2a review L6 gave every view one strict list reader: a list holding an item of another type
+  reads nil. Its test asserted the nil. In the acceptance pass the nil read as no items, so a service's families list
+  holding a number printed `mdmServers: ok, 1 item`, where Phase 1's lenient reader had named `GLASSES` (verifier round 3
+  of the fixes; failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #8 (never silent).
+- **Why it didn't hold:** the entry below says a test asserting nil for an odd shape asserts the shape is said, and it
+  was read as a rule for the read being fixed, not for the new nils a fix makes. A stricter read moves the silence: what
+  the old read showed, the new one drops.
+- **Would a rule have caught it?** yes, the existing one, applied to the fix's own diff: every new nil is said
+  (`misreadLists` now, said with a count by the pass). The same held for `==`: round 2 wrote one for
+  `CustomSettingsValues`, and `Configuration` would have got Swift's the day it was made `Equatable`.
+- **Enforcement home if changed:** the `pre-commit` skill's review step could ask of a fix: "which values now read nil,
+  and where is each said?"
+
+## 2026-10-30 — Holding a declaration's modifier didn't hold what reads it
+- **What happened:** Phase 2a's verifier round 2 added `public var rawText: String? { configurationProfile }` and
+  `public extension Configuration { var sent: Resource { received } }` to AbapitKit: every test in both packages stayed
+  green, though round 1's `whatHoldsTheRawProfileStaysPackage` pinned the three declarations' `package` level (the entry
+  below). `package` keeps the raw profile from the app, and any AbapitKit module can still hand it out under a new
+  public name (failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #11 (sensitive fields never leave).
+- **Why it didn't hold:** the entry below proposed pinning each held declaration's modifier, and that is half the
+  boundary: the other half is every public declaration that reads the held value, which the compiler doesn't check.
+- **Would a rule have caught it?** only if enforced differently: a value an invariant holds at `package` names its
+  readers in a test (`BoundaryTests.onlyTheListedLinesReadTheRawProfile` lists every AbapitKit line that names the raw
+  profile) and its stored layout (`whatAConfigurationStoresIsTheTwoCopies`: a new stored copy names neither). And a
+  type holding a secret writes its own `==`: Swift's compared the raw profile, an oracle for a guessed secret.
+- **Enforcement home if changed:** tripwire test: the one scan the entry below proposes lists, for each held
+  declaration, its modifier and every line that reads it (`Secret.bytes` and `Columns.init` too).
+
+## 2026-10-30 — "The compiler holds it" held only while a modifier did, and no test held the modifier
+- **What happened:** Phase 2a's verifier round 1 widened `Configuration.received`, `CustomSettingsValues.received` and
+  `.configurationProfile` to `public`, one at a time: `scripts/test.sh` stayed green in both packages. Only the app-side
+  name scan stood behind the claim, from the M2 fix just before, that the compiler holds the raw profile (failure-log
+  2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment").
+- **Invariant in force:** #11 (sensitive fields never leave), and #3's `Secret`'s `package` bytes the same way.
+- **Why it didn't hold:** the access level is the enforcement, and nothing tests it: a mutant of one word passes
+  everything. `Secret.bytes` and `ExportPolicy.Columns.init` rest on a modifier too, and no test in the packages pins
+  either (`noBuildSettingOpensThePackageBoundary` refuses a flag that would open them, not a widened declaration).
+- **Would a rule have caught it?** only if enforced differently: an invariant whose home is "the compiler" names a
+  test that pins the modifiers it depends on, as `BoundaryTests.whatHoldsTheRawProfileStaysPackage` now does for the
+  raw profile (a widening and a move into a `public extension` both fail it).
+- **Enforcement home if changed:** tripwire test: one source scan listing each `package` or `internal` declaration an
+  invariant's home names (`Secret.bytes`, `Columns.init`, the raw profile, later `WriteTicket.init`), each held at that
+  level and only that.
+
+## 2026-10-30 — A secret held by a doc comment, again: invariant 11 for a model, not only for CSV
+- **What happened:** Phase 2a's review found a custom setting's plaintext profile public on `Configuration`'s resource,
+  its custom settings' object and a blueprint's `included`; only "show it through `profileText`, never raw" kept it off a
+  screen (M2; failure-log 2026-10-30, "a lenient read pinned by a test, and a secret held by a doc comment"). The same
+  shape as CSV's every-key export (RULE-FEEDBACK 2026-10-16, below), one layer down.
+- **Invariant in force:** #11 (sensitive fields never leave; CSV export is an allowlist).
+- **Why it didn't hold:** wrong layer again. The fix for CSV moved the column list to the compiler, but the rule that
+  made the leak possible, "a view keeps its resource and the inspector shows every attribute", applied to every view,
+  and nothing asked which resources hold a secret.
+- **Would a rule have caught it?** only if enforced differently: a view whose resource holds a secret hands out a
+  copy with it withheld (as its `resource`, its description and its mirror) and keeps the raw at `package`, so the app
+  can't name it. Fixed that way (`Configuration.received`), with a canary test through the stub.
+- **Enforcement home if changed:** CLAUDE.md #11's home could name the compiler for models too (`Configuration.received`,
+  `CustomSettingsValues.configurationProfile` are `package`) and `aCustomSettingsProfileReachesNoPublicValue`; and the
+  `pre-commit` skill's item 10 could ask, for each new model, "does its resource hold a secret? then a canary test".
+
+## 2026-10-30 — A test pinned a lenient read, so the silence had a test holding it in place
+- **What happened:** an audit event whose named payload key missed read `payload == nil`, its fields uncounted, and the
+  acceptance pass printed `ok`. `AuditEventTests` asserted `missing.payload == nil` (M1; the same failure-log entry).
+  failure-log 2026-10-16 ("the mosyle stub agreed with the client") already said a lenient reading needs a source.
+- **Invariant in force:** #10 (unknown keys are counted, shown raw) and #8 (never silent).
+- **Why it didn't hold:** the lesson lived in a failure-log entry, not in a step anyone runs. A test that asserts what
+  the code does for an odd shape, nil or empty, passes whether the odd shape is said or not, and then guards the silence
+  against the fix.
+- **Would a rule have caught it?** yes, if stated as a check: a test asserting nil, empty or "none" for a shape Apple
+  doesn't document also asserts that the shape is said (counted as unknown, noted, or a status that isn't `ok`).
+- **Enforcement home if changed:** skill (`pre-commit` item 12, "never silent": "a test of an odd shape's nil asserts
+  its note too"), and the review brief.
+
 ## 2026-10-17 — A fix for invariant 8 made other data silent
 - **What happened:** the first fix for Phase 1b's M3 loaded devices and services side by side, each with its own
   state, but only the Services screen showed the services' state. While they were read, or after a 403, Devices
