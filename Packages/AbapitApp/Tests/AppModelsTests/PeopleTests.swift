@@ -494,6 +494,26 @@ struct PeopleTests {
         #expect(world.people.groupMembers.ids == ["u2"] && Self.isLoaded(world.people.groupMembers.state))
     }
 
+    /// A member read cancelled while its first page is still on its way: its loop ends without throwing, and it must not
+    /// say "loaded" over the next group's list, which is still being read.
+    @Test func aMemberReadCancelledBeforeItsPageSaysNothing() async throws {
+        let world = try await Self.world()
+        world.people.load()
+        await settled(world, 3)
+        let gate = world.gates["a"]!
+        gate.hold("G1", { $0.path().hasPrefix("/v1/userGroups/G1/") })
+        gate.hold("G2", { $0.path().hasPrefix("/v1/userGroups/G2/") })
+        world.people.selectedGroup = "G1"
+        await eventually("G1's members at the gate") { gate.held == 1 }
+        world.people.selectedGroup = "G2"
+        await members(world.people.groupMembers, 1)
+        #expect(world.people.groupMembers.state == .loading(count: 0), "G1's cancelled read said: \(world.people.groupMembers.state)")
+        gate.release("G1")
+        gate.release("G2")
+        await members(world.people.groupMembers, 2)
+        #expect(world.people.groupMembers.ids == ["u2"])
+    }
+
     /// The same for a failure: a member read that failed just before another group was chosen hands its error to a loop
     /// already cancelled, and it mustn't land on the new group.
     @Test func aSupersededMemberFailureLandsNowhere() async throws {
@@ -581,6 +601,7 @@ struct PeopleTests {
     @Test func aUsersDetailTypesPhonesAndRoles() async throws {
         let detailed = Self.user("u1", "Ada", "Fernhill", department: "Operations", extra: [
             "middleName": .string("J"), "jobTitle": .string("Lead"), "employeeNumber": .string("E1"), "startDateTime": .string("2024-02-01T09:00:00Z"),
+            "division": .string("North"), "costCenter": .string("CC-7"),
             "phoneNumbers": .array([.object(["phoneNumber": .string("+1 555-0100"), "type": .string("WORK")]),
                                     .object(["phoneNumber": .string("+1 555-0101"), "type": .string("PAGER")]),
                                     .object(["phoneNumber": .string("+1 555-0102")])]),
@@ -599,7 +620,7 @@ struct PeopleTests {
         #expect(fields.map(\.label) == ["Name", "Status", "Managed Apple Account", "Email", "External", "Employee number", "Department",
                                         "Job title", "Division", "Cost center", "Start date", "Created", "Updated"])
         #expect(fields.map(\.value) == ["Ada J Fernhill", "Active", "u1@appleid.example.com", "u1@example.com", "No", "E1", "Operations", "Lead",
-                                        "—", "—", day, "—", "—"])
+                                        "North", "CC-7", day, "—", "—"])
         #expect(Model.phones(of: row.user) == [Model.Field("Work", "+1 555-0100"), Model.Field("PAGER", "+1 555-0101"),
                                                       Model.Field("Phone", "+1 555-0102")])
         #expect(world.people.roles(of: row.user) == [Model.Field("Manager", "Head Office"), Model.Field("Staff", "OU7")])
@@ -689,6 +710,8 @@ struct PeopleTests {
         #expect(people.shownUsers.map(\.id) == ["u2", "u3", "u1"])
         people.userOrder = [KeyPathComparator(\Model.UserRow.name, order: .reverse)]
         #expect(people.shownUsers.map(\.id) == ["u1", "u3", "u2"])
+        // By name at first, which isn't Apple's order (G1, G2; OU1, OU2), then each order the table asks for.
+        #expect(people.shownGroups.map(\.id) == ["G2", "G1"] && people.shownUnits.map(\.id) == ["OU2", "OU1"])
         people.groupOrder = [KeyPathComparator(\Model.GroupRow.membersSort, order: .reverse)]
         #expect(people.shownGroups.map(\.id) == ["G1", "G2"])
         people.unitOrder = [KeyPathComparator(\Model.UnitRow.name, order: .reverse)]

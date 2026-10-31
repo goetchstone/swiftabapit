@@ -19,7 +19,8 @@ struct PeopleInspectorView: View {
             }
         }
         .formStyle(.grouped)
-        .accessibilityLabel("\(model.tab.title) detail")
+        // On the form and on single elements only: an identifier on a container can reach every row in it, and two rows
+        // would share it.
         .accessibilityIdentifier("people.inspector")
     }
 
@@ -39,13 +40,11 @@ struct PeopleInspectorView: View {
             fields(PeopleModel.phones(of: row.user))
             note(PeopleModel.listNote(row.user, .phoneNumbers))
         }
-        .accessibilityIdentifier("people.phones")
         Section("Roles") {
             fields(model.roles(of: row.user))
             note(PeopleModel.listNote(row.user, .roleOuList))
             note(model.unitNote(for: row.user.roleOuList?.map(\.ouID) ?? []), symbol: "questionmark.circle")
         }
-        .accessibilityIdentifier("people.roles")
         everyAttribute(row.user.attributes)
     }
 
@@ -88,7 +87,6 @@ struct PeopleInspectorView: View {
                 .accessibilityElement(children: .combine)
             }
         }
-        .accessibilityIdentifier("people.members")
     }
 
     private func fields(_ fields: [PeopleModel.Field]) -> some View {
