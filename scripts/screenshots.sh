@@ -17,12 +17,18 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
 status=0
-# name:section[:selected[:window]] — the narrow-* runs open a section in the smallest window with the
-# sidebar dragged to its widest, where SwiftGamGui's narrow-window layout loop crashed AppKit (its
-# failure-log 2026-10-10): they fail when the pane has too little room to spare, and on any non-zero exit.
-# The demo org: seeded fleet, strict stub. `first` selects the first device so the inspector shows.
-for spec in overview:overview devices:devices device-inspector:devices:first services:services settings:settings \
-            people:people narrow-overview:overview::smallest narrow-device-inspector:devices:first:smallest; do
+# name:section[:selected[:window]] — section is a SidebarItem raw value (AppModels/Navigation.swift). The narrow-*
+# runs open a section in the smallest window with the sidebar and any inspector dragged to their widest, where
+# SwiftGamGui's narrow-window layout loop crashed AppKit (its failure-log 2026-10-10): they fail when the pane has
+# too little room to spare, and on any non-zero exit. The demo org: seeded data, strict stub. `first` selects the
+# shown list's first row so its inspector shows (each screen's `selectsFirstRow` hook). NavigationTests holds this
+# list: every screen a run, every inspector a `first` run and a narrow one.
+for spec in overview:overview devices:devices device-inspector:devices:first services:services \
+            apple-mdm:apple-mdm apple-mdm-detail:apple-mdm:first people:people people-detail:people:first \
+            content:content content-detail:content:first activity:activity activity-detail:activity:first \
+            settings:settings narrow-overview:overview::smallest narrow-device-inspector:devices:first:smallest \
+            narrow-apple-mdm-detail:apple-mdm:first:smallest narrow-people-detail:people:first:smallest \
+            narrow-content-detail:content:first:smallest narrow-activity-detail:activity:first:smallest; do
   IFS=: read -r name section selected window <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"

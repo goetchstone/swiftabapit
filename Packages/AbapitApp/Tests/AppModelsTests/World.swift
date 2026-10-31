@@ -11,13 +11,19 @@ import TestSupport
 import Vault
 
 /// Two Apple Business orgs, `a` and `b`, each with its own strict `AppleStub` behind a `Gate`, a memory Vault
-/// holding their keys, and the three screen models over them, as the app builds them (Phase 1b review M6: the
-/// screen models had no tests). Adapted from the review's race tests (scratchpad review1b/racepkg).
+/// holding their keys, and every screen model over them, as `AppServices` builds them (Phase 1b review M6: the
+/// screen models had no tests). Adapted from the review's race tests (scratchpad review1b/racepkg). Phase 2b's five
+/// share the orgs, so an org switch reaches each the way it does in the app; the Dashboard counts `devices`.
 @MainActor
 struct World {
     let orgs: OrgsModel
     let devices: DevicesModel
     let detail: DeviceDetailModel
+    let people: PeopleModel
+    let content: ContentModel
+    let appleMDM: AppleMDMModel
+    let activity: ActivityModel
+    let dashboard: DashboardModel
     let stubs: [String: AppleStub]
     let gates: [String: Gate]
     let store: MemoryStore
@@ -44,7 +50,10 @@ struct World {
             keys[org] = key
             try await vault.storeKey(KeyImport.parse(Secret(key.pemRepresentation)), as: VaultItem(org: org, kind: .appleKey)!)
             let stub = AppleStub()
-            stub.register(AppleStub.Account(clientID: clientID(org), keyID: keyID(org), publicKey: key.publicKey))
+            // The account's scope is its profile's, so a School org (`profile(_:scope:)`) mints School tokens and reads
+            // from the School host, as Apple's would.
+            let scope = profiles?.first { $0.id == org }?.scope.known ?? .business
+            stub.register(AppleStub.Account(clientID: clientID(org), keyID: keyID(org), scope: scope.rawValue, publicKey: key.publicKey))
             stub.add(devices: (0..<(devices[org] ?? 0)).map { device(prefix(org), $0) })
             stubs[org] = stub
             gates[org] = Gate(stub)
@@ -63,14 +72,19 @@ struct World {
                                                     sleep: { clock.advance($0) }),
                                pageCap: pageCap, sleep: { _ in })
         }
-        return World(orgs: orgs, devices: DevicesModel(orgs: orgs), detail: DeviceDetailModel(orgs: orgs), stubs: stubs, gates: gates,
+        // In AppServices' order, so the switch handlers run in the app's order too.
+        let devices = DevicesModel(orgs: orgs)
+        return World(orgs: orgs, devices: devices, detail: DeviceDetailModel(orgs: orgs), people: PeopleModel(orgs: orgs),
+                     content: ContentModel(orgs: orgs), appleMDM: AppleMDMModel(orgs: orgs), activity: ActivityModel(orgs: orgs),
+                     dashboard: DashboardModel(orgs: orgs, devices: devices), stubs: stubs, gates: gates,
                      store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
 
-    /// Org `org`'s profile as the world makes it: Apple Business, its own client and key IDs.
-    static func profile(_ org: String, rate: Double = 0) -> OrgProfile {
+    /// Org `org`'s profile as the world makes it: Apple Business unless `scope` says School, its own client and key IDs.
+    /// A School org's Business-only reads throw `.notInScope` before anything is sent, so its stub sees none of them.
+    static func profile(_ org: String, rate: Double = 0, scope: Scope = .business) -> OrgProfile {
         var profile = OrgProfile(id: org, name: "Org \(org)", provider: .apple)
-        profile.scope = .known(.business)
+        profile.scope = .known(scope)
         profile.clientID = clientID(org)
         profile.keyID = keyID(org)
         profile.learnedReadsPerMinute = rate

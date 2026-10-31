@@ -42,6 +42,7 @@ struct DevicesView: View {
                     .width(min: 80, ideal: 100)
             }
             .accessibilityIdentifier("devices.table")
+            .selectsFirstRow($selection, first: model.shown.first?.id, ready: !model.state.isLoading)
         }
         .searchable(text: $model.search, prompt: "Serial, IMEI, order number, MAC…")
         .toolbar {

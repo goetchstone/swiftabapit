@@ -944,7 +944,8 @@ After Phase 1 merges, three tracks can run, each in its own `git worktree`:
 - **Track C** (Mosyle): 7.
 - Phase 9 waits for 2, 4 and 7.
 
-Shared files are **serialized**: `App/AbapitApp.swift` (Section enum, sidebar), `App/AppServices.swift`,
+Shared files are **serialized**: `App/AbapitApp.swift` (sidebar, routing), `AppModels/Navigation.swift` (the
+`SidebarItem` enum, since Phase 2b: there `swift test` holds its scope rule), `App/AppServices.swift`,
 `Package.swift`, `CLAUDE.md` and `README.md`. The second track to touch one rebases after the first
 merges and never stacks a PR on a branch that `--delete-branch` will remove. Each phase owns its
 module directories (listed per phase). Stubs in `TestSupport` are per-provider files, so Apple and
@@ -1067,7 +1068,10 @@ Phase 2 read in AppleRead/AppleClient, School-gated, with the blueprint include 
 checked range, filters and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports'
 audit digests with the new Access & Security view, services not connected in N days and recent events): on branch
 `phase-2a-apple-reads`. **2b** (the People, Content, Apple MDM, Audit and Dashboard screens, their screen models in
-Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team build.
+Packages/AbapitApp, the demo org's data): on branch `phase-2b-screens`; its scaffold (2026-10-31) holds the files the
+screens share (the sidebar's sections and scope rule in `AppModels/Navigation.swift`, routing and Refresh, every model
+built in AppServices and the tests' World, `LoadState.notInScope`, the snapshot runs and the `selectsFirstRow` hook) and
+a placeholder for each screen's own files, which five units fill in parallel. Live checks wait for S1's team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.

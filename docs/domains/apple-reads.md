@@ -33,10 +33,13 @@ org editor's save).
 - `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
   package so the compiler gives them AbapitKit's public API only, as it gives the app:
   `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
-  services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector).
+  services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector); Phase 2b's
+  `PeopleModel`, `ContentModel`, `AppleMDMModel`, `ActivityModel` and `DashboardModel` (over `DevicesModel`'s read), and
+  `Navigation.swift` (`SidebarItem`: each section's reads, its probe, and which sections a School org hides).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3): `parameters` (every GET's query parameters and
   allowed values, written out from the contract) and `paged`; `add(_:)`, `relate(_:_:_:to:)`, `setDetails(_:_:)` for the
-  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`.
+  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`. `DemoOrg.make()` loads the demo fleet,
+  then `DemoPeople`, `DemoContent`, `DemoAppleMDM` and `DemoAudit` into the stub (DEBUG only, invented data).
 
 ## Gotchas / stub-lies traps
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing**, and can still be handed a
@@ -136,6 +139,11 @@ org editor's save).
   (`Interceptor`), since it is the caller's, not Apple's.
 - **A Keychain refusal while signing is `AppleAPIError.vault(guidance)`** (Touch ID cancelled, a locked Mac,
   no key stored): nothing is sent, and the next read signs again. `MemoryStore.failNext(.sign, with:)` drives it.
+- **A School org's sidebar hides what it can't read** (plan §4): `SidebarItem.shown(for:)` drops a section when every read
+  it shows is Business-only (Apple MDM, People, Content, Activity), only for a known School scope of an Apple org; the
+  Overview stays (its audit panel says not in scope), and no org or an unknown scope hides nothing, since each screen says
+  why it can't read. `showing(_:for:)` puts the Overview on screen for a hidden section. A screen model still maps
+  `.notInScope` to `LoadState.notInScope` (`LoadState(after:)`), never to an empty table (`NavigationTests`, `ScaffoldTests`).
 - **School has no people, content, Apple MDM or audit endpoints** (plan §2.4): `AppleSection.businessOnly`. Their
   builders take no scope and build for the Business host only; `AppleClient` throws `.notInScope(section)` before
   anything is built, so a School org sends nothing, not even a token request (and its broker would refuse the

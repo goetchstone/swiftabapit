@@ -18,8 +18,24 @@ public enum LoadState: Equatable, Sendable {
     /// Nothing can be read: no organization, or one this version can't use, and why, as a sentence. Never idle
     /// zeros (Phase 1b review, LOW).
     case unusable(String)
+    /// The org's scope has no such read (Apple School Manager has no people, content, Apple MDM or audit endpoints,
+    /// plan §2.4; `AppleAPIError.notInScope`), and why, as a sentence: never an empty table. Unlike `unusable`, the
+    /// org itself is fine, so a screen that shows this beside other panels says it of this panel only.
+    case notInScope(String)
 
     public var isLoading: Bool { if case .loading = self { true } else { false } }
+
+    /// The state a read's error leaves: a 403 is "your role can't read this", a School org's Business-only read is not
+    /// in scope, in words; anything else failed, in the operator's words. Every screen model maps its errors here, so
+    /// the five screens say each the same way.
+    @MainActor
+    public init(after error: any Error) {
+        switch error as? AppleAPIError {
+        case .forbidden?: self = .forbidden
+        case .notInScope?: self = .notInScope(OrgsModel.message(error))
+        default: self = .failed(OrgsModel.message(error))
+        }
+    }
 }
 
 /// One row of the Devices table: the device with its service's name, made once per load (and once more when
@@ -161,7 +177,7 @@ public final class DevicesModel {
         case .loaded: servicesTruncated ? "The list of services stopped at the page limit." : nil
         case .forbidden: "Your role can't read device management services."
         case .failed(let why): "The services couldn't be read: \(why)"
-        case .unusable(let why): why
+        case .unusable(let why), .notInScope(let why): why
         }
     }
 
@@ -293,7 +309,7 @@ public final class DevicesModel {
             orgs.record(readsPerMinute: rate, for: org)
         } catch {
             guard current(token) else { return }
-            state = Self.state(after: error)
+            state = LoadState(after: error)
         }
     }
 
@@ -310,7 +326,7 @@ public final class DevicesModel {
             }
         } catch {
             guard current(token) else { return }
-            servicesState = Self.state(after: error)
+            servicesState = LoadState(after: error)
             assignments = .unreadable
             rows = rows.map { DeviceRow($0.device, assignment: .unknown) }
             unknownNote = servicesState == .forbidden
@@ -352,10 +368,5 @@ public final class DevicesModel {
         case .unreadable: .unknown
         case .read(let names, let complete): names[serial].map { .service($0) } ?? (complete ? .unassigned : .unknown)
         }
-    }
-
-    private static func state(after error: any Error) -> LoadState {
-        if let error = error as? AppleAPIError, case .forbidden = error { return .forbidden }
-        return .failed(message(error))
     }
 }

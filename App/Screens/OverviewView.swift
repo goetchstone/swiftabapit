@@ -10,9 +10,18 @@ import SwiftUI
 /// while the services are read, refused or failed (verifier round 1), and the device tiles while the devices are
 /// (verifier round 2).
 struct OverviewView: View {
-    let model: DevicesModel
+    /// The Dashboard's model; Phase 1's tiles and charts read the Devices screen's model it counts.
+    let dashboard: DashboardModel
     let hasOrg: Bool
     let addOrg: () -> Void
+
+    private var model: DevicesModel { dashboard.devices }
+
+    init(model: DashboardModel, hasOrg: Bool, addOrg: @escaping () -> Void) {
+        dashboard = model
+        self.hasOrg = hasOrg
+        self.addOrg = addOrg
+    }
 
     var body: some View {
         if !hasOrg {
@@ -36,7 +45,7 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total,
                                  partial: model.partialCount) {
-                        model.load(force: true)
+                        dashboard.load(force: true)
                     }
                     if let note = model.serviceNote {
                         Label(note, systemImage: "questionmark.circle").font(.callout).foregroundStyle(.secondary)
@@ -83,7 +92,7 @@ struct OverviewView: View {
                 }
                 .padding()
             }
-            .task { model.load() }
+            .task { dashboard.load() }
         }
     }
 }

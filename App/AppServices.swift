@@ -13,12 +13,25 @@ final class AppServices {
     let orgs: OrgsModel
     let devices: DevicesModel
     let detail: DeviceDetailModel
+    let people: PeopleModel
+    let content: ContentModel
+    let appleMDM: AppleMDMModel
+    let activity: ActivityModel
+    /// Counts `devices`: one device read for the Devices screen and the Dashboard.
+    let dashboard: DashboardModel
     let isDemo: Bool
 
+    /// Every screen model over the one `orgs`, so an org switch reaches each (`OrgsModel.onSwitch`). The tests' `World`
+    /// builds them the same way, in this order.
     private init(orgs: OrgsModel, isDemo: Bool) {
         self.orgs = orgs
         devices = DevicesModel(orgs: orgs)
         detail = DeviceDetailModel(orgs: orgs)
+        people = PeopleModel(orgs: orgs)
+        content = ContentModel(orgs: orgs)
+        appleMDM = AppleMDMModel(orgs: orgs)
+        activity = ActivityModel(orgs: orgs)
+        dashboard = DashboardModel(orgs: orgs, devices: devices)
         self.isDemo = isDemo
     }
 
@@ -39,7 +52,7 @@ final class AppServices {
 
     #if DEBUG
     /// Debug builds only: one Apple Business org whose key lives in memory and whose "Apple" is the strict
-    /// `AppleStub` serving the seeded demo fleet. Nothing is read from or written to the Keychain, `orgs.json`
+    /// `AppleStub` serving the demo org's data (`DemoOrg`). Nothing is read from or written to the Keychain, `orgs.json`
     /// or the network.
     static func demo() -> AppServices {
         let (store, stub) = DemoOrg.make()
