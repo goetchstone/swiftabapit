@@ -82,7 +82,8 @@
     `PassCode`, `PINs`), not only the last word's number words; the stems hold `ExportPolicy.sensitiveStems` (`bypass`,
     `assertion`, `unlockpin`, held by a test), unlock and access codes and a WEP key, found in the fold without its
     numbers; and a PuTTY key file, a JWK's private member and a private key in a `data:` URL are masked. The docs gave the
-    raw profile to Phase 3's snapshots; that is an open operator decision now (SQLite is outside the Keychain).
+    raw profile to Phase 3's snapshots; that was left to the operator (SQLite is outside the Keychain), who decided on
+    2026-10-31 that snapshots don't keep it.
   - Verifier round 3 (`fix(2a): verifier round 3`): both verifiers held; every finding was low. Review L6's one list
     reader made a families list holding a number read nil, which the pass iterated as none, so `mdmServers: ok, 1 item`
     said nothing where Phase 1's reader had named `GLASSES` (this entry's lesson a third time, from a fix): every view

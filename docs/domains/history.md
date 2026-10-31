@@ -69,11 +69,13 @@ are below.
 
 ## Gotchas / stub-lies traps
 
-- **Open for Phase 3 (operator): a configuration's custom-setting profile in a snapshot.** `Configuration.resource`
-  withholds it; the profile as Apple sent it (`Configuration.received`, `package`) holds Wi-Fi and VPN passwords and a
-  certificate's key, and a snapshot is SQLite on disk, outside the Keychain (invariants 3, 11). Until the operator
-  decides, a collector stores the withheld resource (`docs/domains/apple-reads.md`; Phase 2a verifier round 2: the
-  docs had named the snapshots as a use of the raw profile).
+- **A snapshot keeps no custom-setting profile** (operator, 2026-10-31: what can be read again from Apple isn't kept).
+  `Configuration.resource` withholds it; the profile as Apple sent it (`Configuration.received`, `package`) holds Wi-Fi
+  and VPN passwords and a certificate's key, and a snapshot is SQLite on disk, outside the Keychain (invariants 3, 11).
+  A collector stores the withheld resource, and no hash of the profile (a short password's hash is guessed offline).
+  A collector that read `received` would fail `BoundaryTests.onlyTheListedLinesReadTheRawProfile`. A diff sees a
+  profile change only through the configuration's other attributes (`updatedDateTime`). Phase 2a verifier round 2: the
+  docs had named the snapshots as a use of the raw profile.
 
 - **`String` APIs match `Character`s; Python matches code points.** `replacingOccurrences(of:with:)`,
   `contains(_:)`, `first` and `==` on a `String` see `"` + U+0301 as one `Character` that isn't `"`, and a

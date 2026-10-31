@@ -138,10 +138,10 @@ public struct Configuration: ResourceView, Equatable, CustomStringConvertible, C
 
     /// The resource, its profile withheld.
     public let resource: Resource
-    /// The resource as Apple sent it, profile and all: for `ProfileText` and Phase 5's writer. Whether Phase 3's snapshots
-    /// keep it is the operator's open decision, not a use: a snapshot is SQLite on disk, outside the Keychain, and the
-    /// profile holds Wi-Fi and VPN passwords (invariants 3 and 11; verifier round 2), so until it is decided a snapshot
-    /// stores `resource`. `BoundaryTests.onlyTheListedLinesReadTheRawProfile` lists every line in AbapitKit that names it.
+    /// The resource as Apple sent it, profile and all: for `ProfileText` and Phase 5's writer. Never for Phase 3's
+    /// snapshots, which store `resource` (operator, 2026-10-31: what can be read again from Apple isn't kept; a snapshot
+    /// is SQLite on disk, outside the Keychain, and the profile holds Wi-Fi and VPN passwords; invariants 3 and 11).
+    /// `BoundaryTests.onlyTheListedLinesReadTheRawProfile` lists every line in AbapitKit that names it.
     package let received: Resource
 
     public init(resource: Resource) {
