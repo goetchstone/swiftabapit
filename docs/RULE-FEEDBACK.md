@@ -27,6 +27,21 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-10-31 — A state a fix added was checked only after the reads settled
+- **What happened:** Phase 2b review L9's fix had `AppleMDMModel.pause()` mark the details not read yet "Not read". Coming
+  back read them without marking them back, so for the whole read every row said "Not read", the note said the read had
+  stopped when the screen was left, and Export was on and wrote "Not read" for devices being read (verifier round 2's
+  medium; failure-log 2026-10-31, "a whole-section lock outlived the per-list models"). Six pause and resume tests passed:
+  each waited for the reads to settle, then asserted the end.
+- **Invariant in force:** #8 (stale or truncated data is never silent) and #7 (a sweep is cancellable).
+- **Why it didn't hold:** not covered as a check. The entry below ("a fix that made a read stricter made a new silence")
+  asks where each new nil is said; a new state needs the same question for each way out of it, and a test that only waits
+  for `readsFinished` sees the state after the read, never during it.
+- **Would a rule have caught it?** yes, if stated as a check: a state a fix adds is asserted at each way out of it, and a
+  screen-model test of a read asserts what the screen says while the read is held at the gate, not only once it settles.
+- **Enforcement home if changed:** skill (`pre-commit` item 12: "for each new state, which call leaves it, and what does
+  the screen say while that call's read is held?") and the review brief.
+
 ## 2026-10-31 — A whole-section gate outlived the per-list models below it
 - **What happened:** Phase 2b's review (M1) found one refused probe (users, apps) locked all of People or Content, though
   2b had built and tested those models to show the readable lists beside the refused one; the screen never showed it

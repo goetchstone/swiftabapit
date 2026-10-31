@@ -392,10 +392,17 @@ public final class AppleMDMModel {
         await readDetails(client, token: token)
     }
 
-    /// Back on the screen after a pause: the selection's own read, then the details the pause left unread, in turn.
+    /// Back on the screen after a pause: the selection's own read, then the details the pause left unread, in turn. Those
+    /// within the limit are to be read again, so they say "Reading…", the note counts them as being read and Export waits,
+    /// as before the pause (Phase 2b verifier round 2: they said "Not read", the note said the read had stopped when the
+    /// screen was left while it ran, and Export wrote "Not read" for devices being read). Within the limit only a pause
+    /// leaves a device "Not read" (`detailsNote`), and the selection's own read has made its row "Reading…" first.
     private func resume(_ client: AppleClient) {
         guard !refused else { return }
         readSelected()
+        for device in devices.prefix(Self.detailLimit) {
+            if case .notRead? = details[device.id] { details[device.id] = nil }
+        }
         let token = token
         tasks.append(Task { [weak self] in
             await self?.readDetails(client, token: token)

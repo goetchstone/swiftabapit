@@ -27,8 +27,8 @@
   above them: the per-list behaviour the models were built and tested for sat under a lock that never let it reach the
   screen. The lows: decisions made in views, which have no test target (the recent events' words, the Services column, the
   inspector's placeholder, the Refresh switch); a credential mask keyed on a substring (`://` anywhere) instead of an
-  address's shape; a guard (`isPathSafe`) checked in one model of four (Device 360's, the fourth, was found only in
-  verifier round 1); and list code copied six times, whose words and
+  address's shape; a guard (`isPathSafe`) checked in one model of five (Device 360's was found only in verifier round 1,
+  the Devices read's walk of each service's device list only in round 2); and list code copied six times, whose words and
   tests drifted apart (DevicesModel had a refused-part-way test, People's copy didn't).
 - **Why not caught:** each half was tested alone. `NavigationTests.eachSectionLocksOnItsProbe` pinned the lock's table as a
   constant (`.people: "users"`), so a test held the old shape in place; the model tests held the per-list states; and
@@ -72,6 +72,25 @@
     path, review L1's class in a fourth model: it says `ScreenWords.unsendableID` and sends nothing. Not changed, and why,
     in the apple-reads runbook: an address split by an unencoded space inside other text, a user with no password and no
     path (`token@host`, an email's shape), a JSON key, and masking that errs toward hiding (`Requires:macOS;iOS`).
+  - Verifier round 2 (`fix(2b): verifier round 2`): one medium, the rest low. The medium came from round 1's L9 fix:
+    `pause()` marked the unread details "Not read", and coming back started their read without marking them back, so
+    while the return read them every row said "Not read", the note said the read had stopped when the screen was left,
+    and Export was on and wrote "Not read" for devices being read; every pause test waited for the reads to settle before
+    asserting, so the window between the return and the read's end had no test. The return now marks them to be read
+    ("Reading…", the progress note, Export held), held while the return's read is at the gate. Masking leaks no shape
+    list had named: an address inside another's path (a proxy's, an archive's, one joined by `,` or `;`) was copied as the
+    outer path, and a blank inside a Location's password cut the address, its first half shown as a host while the note
+    said the password was masked; each is masked. The package's title, Name, Version, Bundle IDs and Hash fields, its row
+    and its CSV, a file that leaves the app, showed raw what its attributes masked: round 1 masked the Description for
+    that reason and stopped there; each now goes through `addresses(in:)`. The Devices read sent nothing for a service
+    id that can't go in a path and called the service "no such item", review L1's class in a fifth model: it says the id
+    can't be sent. 14 mutants of round 1's code survived every suite (four guards of the glued split, CR, VT and FF as
+    blanks, a leading `@`, a null url, the path guard held for apps only, a return to a failed list, an unforced load
+    with no pause, the idle selection note, a stamp ahead of the clock): each has a test that kills it, as do the
+    mutants of this round's own fixes (the repairer's report lists each). Not changed, and
+    why, in the apple-reads runbook: one Apple MDM model shared by every window (a pause in one pauses another), an
+    address percent-encoded in a path segment, a password a blank splits in other text, and over-masks of an email after
+    a scheme or a label or before a path.
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
@@ -82,5 +101,10 @@
   RULE-FEEDBACK 2026-10-16's lesson again (the author mutates within the shape they already check: the fixer's 46 mutants
   held each fix's named shape, not its other ends) and 2026-10-31's "a fix that made a read stricter made a new silence"
   (a fix that deletes a view's check makes the model the only guard, and every screen's model then needs the test): no
-  new rule; the repairer's report lists each mutant and the test that kills it. Still only a stub: whether a
-  role refused users is refused user groups too, and what Apple's probes return for each list, is the Phase 2 live check.
+  new rule; the repairer's report lists each mutant and the test that kills it. Round 2's medium: RULE-FEEDBACK
+  2026-10-31, "a state a fix added was checked only after the reads settled" (a fix that adds a state is followed through
+  every way out of it, and asserted while a read is held at the gate, not only after `settled`). Its masking leaks repeat
+  RULE-FEEDBACK 2026-10-16 (the author mutates within the shape they already check) at the next layer: the fixer named
+  the review's shapes, round 1 the outer ones, round 2 the inner and the blank; no new rule for those. Still
+  only a stub: whether a role refused users is refused user groups too, and what Apple's probes return for each list, is
+  the Phase 2 live check.

@@ -47,6 +47,26 @@ struct PanelTests {
         #expect(world.devices.serviceNote?.contains("Lab MDM") == true)
     }
 
+    /// Phase 2b verifier round 2, probe vServiceWithAnUnsafeID: a service whose id can't go in a path is never asked for its
+    /// devices, and the note says why, never "Apple has no such item." of a service Apple has just listed (review L1's class
+    /// in a fifth model); the other services are read as before.
+    @Test func aServiceWhoseIDCantBeSentIsNeverAskedForItsDevices() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("S 1", name: "Spaced MDM"), World.service("s2", name: "Lab MDM")])
+        stub.assign("ADEV0000000", to: "s2")
+        world.devices.load()
+        await world.settled(2)
+        if case .loaded = world.devices.servicesState {} else { Issue.record("services: \(world.devices.servicesState)") }
+        #expect(!stub.requests.contains { $0.contains("S%201") || $0.contains("S 1") }, "\(stub.requests)")
+        #expect(world.devices.serviceNote == "A device not found in a service shows its service as Unknown: Spaced MDM's id can't be sent to "
+                + "Apple, so its devices weren't asked for.", "\(world.devices.serviceNote ?? "nil")")
+        #expect(!(world.devices.serviceNote ?? "").contains("no such item"))
+        #expect(world.devices.deviceCount == ["s2": 1])
+        let by = Dictionary(uniqueKeysWithValues: world.devices.rows.map { ($0.serial, $0.assignment) })
+        #expect(by["ADEV0000000"] == .service("Lab MDM") && by["ADEV0000001"] == .unknown)
+    }
+
     /// With every list read whole, a device in none of them is unassigned, and rows that arrived before the services
     /// get their names once the services arrive.
     @Test func everyListReadWholeTellsAssignedFromUnassigned() async throws {
@@ -89,6 +109,8 @@ struct PanelTests {
             service("unreadable", .string("yesterday")), service("deleted", status: "DELETED", .string("2025-01-01T00:00:00Z")),
             service("absent", nil), service("null", .null), service("thirty", stamp(30 * 86_400)), service("past", stamp(30 * 86_400 + 1)),
             service("today", stamp(2 * 3_600)), service("one", stamp(86_400 + 60)), service("inactive", status: "INACTIVE", stamp(40 * 86_400)),
+            // A stamp ahead of this Mac's clock (skew) is today, never "-1 days ago" (verifier round 2, mutant V-todayFuture).
+            service("ahead", stamp(-2 * 86_400)),
         ]
         let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now)) })
         #expect(cells["unreadable"] == ServiceConnection(text: #"Unreadable date: "yesterday""#, isQuiet: true, spoken: #"Unreadable date: "yesterday""#))
@@ -100,6 +122,7 @@ struct PanelTests {
         #expect(cells["today"] == ServiceConnection(text: "Today", isQuiet: false, spoken: "Today"))
         #expect(cells["one"]?.text == "1 day ago" && cells["one"]?.isQuiet == false)
         #expect(cells["inactive"] == ServiceConnection(text: "40 days ago", isQuiet: true, spoken: "Not connected for 40 days"))
+        #expect(cells["ahead"] == ServiceConnection(text: "Today", isQuiet: false, spoken: "Today"))
         let flagged = Set(services.filter { cells[$0.id]?.isQuiet == true }.map(\.id))
         #expect(flagged == Set(QuietServices(services, now: now, days: QuietServices.defaultDays).rows.map(\.service.id)))
         // The quiet card says each the same way.

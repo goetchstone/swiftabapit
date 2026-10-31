@@ -764,6 +764,9 @@ struct AppleMDMTests {
         world.appleMDM.pause()
         #expect(world.appleMDM.state == .idle && world.appleMDM.devices.isEmpty && world.appleMDM.rows.isEmpty)
         #expect(world.appleMDM.detailsNote == nil && world.appleMDM.emptyTitle == nil && !world.appleMDM.state.isLoading)
+        // The selection is kept, and the list is read again on the way back (Phase 2b verifier round 2, mutant
+        // N2-noteIdleFailed: an idle screen's note said the device couldn't be read).
+        #expect(world.appleMDM.selection == "M0001" && world.appleMDM.selectionNote == "Reading the devices…")
         await Self.settled(world, 2)
         gate.release("list")
         try await Task.sleep(for: .milliseconds(100))
@@ -881,5 +884,72 @@ struct AppleMDMTests {
         await eventually("b read while showing") { world.appleMDM.rows.map(\.id) == ["B0000"] }
         await Self.settled(world, 3)
         #expect(Self.isLoaded(world.appleMDM.state) && Self.asked(world, "b") == ["B0000/details"])
+    }
+
+    /// Coming back, the details a pause left are being read again: until each is read its row says "Reading…", the note
+    /// counts the read's progress, and Export waits, as before the pause (Phase 2b verifier round 2: the rows said "Not
+    /// read", the note said the read had stopped when the screen was left while it ran, and Export wrote "Not read" for
+    /// devices being read).
+    @Test func whileTheReturnReadsTheRowsSayReading() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 5)
+        let gate = world.gates["a"]!
+        gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+        world.appleMDM.load()
+        await eventually("the second device's details held") { gate.held == 1 }
+        let reading = ["Read", "Reading…", "Reading…", "Reading…", "Reading…"]
+        #expect(world.appleMDM.rows.map(\.details.word) == reading)
+        #expect(world.appleMDM.detailsNote == "Reading each device's details: 1 of 5 so far.")
+        #expect(world.appleMDM.exportBlocked == "The devices' details are still being read.")
+        world.appleMDM.pause()
+        await Self.settled(world, 1)
+        await eventually("the held read let go") { gate.held == 0 }
+        world.appleMDM.load()
+        await eventually("the return's read of the second device held") { gate.held == 1 }
+        #expect(world.appleMDM.rows.map(\.details.word) == reading, "\(world.appleMDM.rows.map(\.details.word))")
+        #expect(world.appleMDM.detailsNote == "Reading each device's details: 1 of 5 so far.", "\(world.appleMDM.detailsNote ?? "nil")")
+        #expect(world.appleMDM.exportBlocked == "The devices' details are still being read.", "\(world.appleMDM.exportBlocked ?? "nil")")
+        gate.release("second")
+        await Self.settled(world, 2)
+        #expect(world.appleMDM.rows.allSatisfy { $0.details.word == "Read" } && world.appleMDM.detailsNote == nil)
+        #expect(Self.asked(world) == ["M0000/details", "M0001/details", "M0002/details", "M0003/details", "M0004/details"])
+    }
+
+    /// A list that failed part-way reads no details, and coming back to it doesn't start them: only a Refresh reads it again
+    /// (Phase 2b verifier round 2, mutant V-resumeOnFailedList: a return swept the partial list's first 50).
+    @Test func comingBackToAFailedListAsksNoDetails() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        world.stubs["a"]!.add((0..<1001).map { Self.device(String(format: "M%04d", $0)) })
+        world.stubs["a"]!.queue(200, for: "/v1/mdmDevices?cursor=", body: "{}")
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        guard case .failed = world.appleMDM.state else { Issue.record("\(world.appleMDM.state)"); return }
+        world.appleMDM.pause()
+        world.appleMDM.load()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(Self.detailRequests(world).isEmpty, "\(Self.detailRequests(world).prefix(3))")
+        guard case .failed = world.appleMDM.state else { Issue.record("\(world.appleMDM.state)"); return }
+        #expect(world.appleMDM.rows.allSatisfy { if case .notRead = $0.details { true } else { false } })
+        #expect(world.appleMDM.detailsNote == "Details aren't read for a list that didn't finish: select a device to read its own.")
+    }
+
+    /// An unforced load while the details are being read, with no pause before it, asks for nothing: the screen is still
+    /// showing, and the read running goes on alone (Phase 2b verifier round 2, mutant N2-resumeWithoutPause: a second sweep
+    /// asked for the device in flight again).
+    @Test func anUnforcedLoadDuringTheDetailsAsksNothingTwice() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 3)
+        let gate = world.gates["a"]!
+        gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+        world.appleMDM.load()
+        await eventually("the second device's details held") { gate.held == 1 }
+        world.appleMDM.load()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(gate.held == 1, "the device in flight was asked for again")
+        gate.release("second")
+        await Self.settled(world, 1)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(Self.asked(world) == ["M0000/details", "M0001/details", "M0002/details"], "\(Self.asked(world))")
+        #expect(world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
     }
 }

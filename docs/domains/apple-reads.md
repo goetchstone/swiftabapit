@@ -329,7 +329,10 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   never sent and says so (`unsendableID`: the client's `.notFound` read "Apple has no such item." of an item Apple had just
   listed, review L1), in Content's detail, a group's or an org unit's members, an Apple MDM device's details and Device
   360's four device panels (verifier round 1: the timeline beside them said its own words, the four "no such item";
-  `aSerialThatCantBeSentIsNeverAskedFor`); Export's
+  `aSerialThatCantBeSentIsNeverAskedFor`); the Devices read's walk of each service's device list says so in its own
+  services note (verifier round 2: a fifth model, "Spaced MDM's devices couldn't be read (Apple has no such item.)",
+  `aServiceWhoseIDCantBeSentIsNeverAskedForItsDevices`); a Content detail's guard is held in each of the four lists
+  (mutant N2-pathContentAppsOnly: only an app's was); Export's
   rule (`exportBlocked`: still loading, partial, or nothing shown to export, the views only disable on it:
   `everyScreenSaysAnEmptyListHasNothingToExport`, and a search that hides every row on every list of every screen,
   `aSearchThatHidesEveryRowHasNothingToExport`: the views stopped checking `shown.isEmpty`, so Content's and People's
@@ -359,22 +362,41 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   glued before an address's `://` is kept and the address masked from its own scheme, when the `://` comes before any `/`,
   `?`, `#` or `@` (`jar:https://…`, `Mirror:https://…`, `x:y:https://…`, `token:` and a no-break space), and after a scheme
   one slash starts an authority as two do (`https:/user:pw@host`, which a browser reads as `https://`); verifier round 1:
-  each showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`). Every string of a
+  each showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`). An address inside another
+  one's path, a proxy's or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one joined by `,` or `;`, is
+  masked from its own scheme on, and the path before it kept (verifier round 2: it was copied as the outer path, its user
+  and password in clear; `anAddressInsideAnothersPathIsMasked`). In the Location a blank ends an address except inside the
+  first one's user and password: a client sends a password a blank splits (a browser encodes a space and drops a tab or a
+  newline there), so that authority runs past blanks to its last `@` (verifier round 2: `https://deploy:my pw@host` showed
+  `deploy:my` as a host while the note said the password was masked; `aBlankInsideALocationsPasswordIsMasked`). A `://`
+  after a leading `//`, or after a scheme's `?`, `/` or `#`, starts no glued address, and every ASCII blank ends a run in
+  other text, each held by its own case (verifier round 2: each of the split's guards and CR, VT and FF survived every
+  suite, each showing a credential; `aSchemeSlashesAfterTheQueryPathOrFragmentStartsNoGluedAddress`,
+  `everyBlankEndsAnAddressInOtherText`). Every string of a
   package's other attributes, at any depth (`JSONValue.mappingStrings`), and its Description field go through
   `ContentWords.addresses(in:)`, which masks each run between blanks that is an address (a scheme and more, `//`, a `://`,
   or a user before an `@` ahead of a path) and leaves a word, a version, a bundle id, a hash or an email address
-  (`it@example.com`, no path) as it came; the Description showed in clear what its attribute masked (verifier round 1).
+  (`it@example.com`, no path) as it came; the Description showed in clear what its attribute masked (verifier round 1),
+  and so did the title and the Name, Version, Bundle IDs and Hash fields, the list's row and the packages CSV, a file
+  that leaves the app (verifier round 2): each goes through `addresses(in:)` too (`ContentWords.shown`, the row's
+  `exported`; `everyFieldOfAPackageAndItsCSVAreMasked`).
   Every string of the package's own `url` attribute is masked as the Location is, whatever its shape: a url that isn't a
-  string reads "Not readable" in the Location, with a note, never a dash (`aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked`).
+  string reads "Not readable" in the Location, with a note, never a dash (`aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked`),
+  and a url sent as null is none, a dash and no note (`aNullURLIsNoLocation`, mutant N2-misreadNullIsMisread).
   Each arm of `addresses(in:)` is held through it, not only through `location` (`everyArmOfAnAddressInOtherTextIsMasked`:
   without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed until the stack overflowed; it
   now splits only where the address starts after the text, so it ends whatever the skip does).
-  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail. Not caught:
-  an address with no scheme, no `//` and no user (`host/a.pkg?sig=…`) inside other text, so the second half of one an
-  unencoded space split shows its query (the Location masks both halves); a user with no password and no path in other
-  text (`token@host`), which is an email address's shape; an address used as a JSON object's key (keys are Apple's
-  attribute names, kept by `mappingStrings`); and a `://` after something that isn't a scheme (`1://user:pw@host`), which
-  no address has.
+  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail, and an
+  email address after a scheme or a label (`mailto:it@example.com`, `Contact:it@example.com`) or before a path
+  (`Team@HQ/West`) reads as a user and password, a `user:pw@host`'s shape, and loses its name; in the Location, text after
+  a host and a blank up to an `@` (`https://host notes@x/…`) is masked as a user. Not caught: an address with no scheme,
+  no `//` and no user (`host/a.pkg?sig=…`) inside other text, so the second half of one an unencoded space split shows its
+  query (the Location masks both halves); a password a blank splits in other text (a description's words end at a blank,
+  so the part before it shows; the Location joins it); a user with no password and no path in other text (`token@host`),
+  which is an email address's shape; an address percent-encoded inside a path segment
+  (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), a segment's text until the server it names decodes it, which would take a
+  decoder per layer of encoding (`%253A` too); an address used as a JSON object's key (keys are Apple's attribute names,
+  kept by `mappingStrings`); and a `://` after something that isn't a scheme (`1://user:pw@host`), which no address has.
   `theDemosCustomSettingReachesNothingTheModelExposesUnmasked` follows the demo's canary password through the model.
 - **Apple MDM** (`AppleMDMModel`): `mdmDevices`, then each device's `/details` one at a time in list order, at most
   `detailLimit` (50), cancelled on a switch or Refresh; a row past it says "Not read" and reads its own when chosen. A 403
@@ -384,7 +406,15 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   since `AppleAPIError.message` lower-cases `displayName` ("no apple mdm enrolled"). Leaving the screen
   (`AppleMDMView.onDisappear` → `pause()`, invariant 7; review L9) cancels the details read and frees the org's shared rate
   limiter: the details not read yet say "Not read" (never "Reading…"), the note says the read stopped when the screen was
-  left, and coming back (an unforced `load()`) asks for those only; Refresh still reads everything. A pause during a list
+  left, and coming back (an unforced `load()`) asks for those only, which say "Reading…" again while the return reads them,
+  with the progress note and Export held, as before the pause (verifier round 2: they said "Not read", the note said the
+  read had stopped while it ran, and Export wrote "Not read" for devices being read; `whileTheReturnReadsTheRowsSayReading`);
+  Refresh still reads everything. A return to a list that failed part-way asks no details (`comingBackToAFailedListAsksNoDetails`),
+  nor does an unforced load during the read with no pause before it (`anUnforcedLoadDuringTheDetailsAsksNothingTwice`).
+  Not changed: every window shares one `AppServices` and so one `AppleMDMModel`, so leaving Apple MDM in one window pauses
+  the read another window still shows (verifier round 2); a count of the windows showing it would rest on SwiftUI pairing
+  each `onAppear` with an `onDisappear`, which no test can hold (App/ has no test target), and a drift would bring review
+  L9 back silently. The selection was already shared, so per-window screen models are Phase 3's question. A pause during a list
   read (a Refresh's, an org switch's) drops the part read and leaves the screen idle, and an org switch while the screen is
   away reads nothing until it shows (`leavingStopsTheDetailsAndComingBackAsksOnlyTheUnread`, `aPauseDuringARefreshLeaves…`,
   `aPauseDuringAnOrgSwitchLeaves…`, `aSwitchWhileAwayReadsNothingUntilShown`). A selection's own read stopped by a pause
@@ -412,7 +442,8 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
 - **Services' Last connected is the quiet card's rule** (`DevicesModel.connection(of:now:)` over `QuietServices`; review
   L4): a date this app can't read says so, never "Never", a deleted service isn't flagged, and quiet is more than 30 days
   by the instant, not by whole days, so the column flags exactly what the card lists at its default
-  (`theServicesColumnIsTheOverviewsQuietRule`). `DevicesModel.quietServices(after:)` is gone.
+  (`theServicesColumnIsTheOverviewsQuietRule`; a stamp ahead of this Mac's clock reads "Today", never "-1 days ago",
+  verifier round 2). `DevicesModel.quietServices(after:)` is gone.
 - **Long reads a leave doesn't cancel** (review L9; recorded, not changed): only Apple MDM pauses. The Dashboard's seven-day
   audit read walks every page (no `sort`) and runs on after the Overview is left, as do Activity's reads of up to 365 days
   and 200 pages, the Devices read's walk of every service's device list, People's three lists and Content's four (each at

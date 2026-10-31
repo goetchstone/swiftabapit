@@ -26,11 +26,14 @@ public protocol ContentRow: Identifiable, Sendable where ID == String {
     var name: String { get }
     /// What the search matches.
     var searched: [String] { get }
+    /// The row as its CSV holds it: the item's attributes, a package's with its addresses masked.
+    var exported: CSV.Item { get }
     init(_ item: Item)
 }
 
 extension ContentRow {
     public var id: String { item.id }
+    public var exported: CSV.Item { CSV.Item(item.resource) }
 }
 
 public struct AppRow: ContentRow {
@@ -65,12 +68,14 @@ public struct PackageRow: ContentRow {
     /// Sorts undated packages first, as a missing date reads oldest.
     public let updated: Date
     public var searched: [String] { [name, bundleIDs, item.id] }
+    public var exported: CSV.Item { ContentWords.exported(item) }
 
+    /// Each text with its addresses masked (`ContentWords.shown`), as the detail's attributes are.
     public init(_ package: ContentPackage) {
         item = package
-        name = package.name ?? package.id
-        version = package.version ?? ""
-        bundleIDs = ContentWords.list(package.bundleIDs, misread: package.misreadLists.contains("bundleIds"))
+        name = ContentWords.shown(package.name) ?? package.id
+        version = ContentWords.shown(package.version) ?? ""
+        bundleIDs = ContentWords.list(package.bundleIDs?.map(ContentWords.addresses(in:)), misread: package.misreadLists.contains("bundleIds"))
         updated = package.updated?.date ?? .distantPast
     }
 }
@@ -175,7 +180,7 @@ public final class ContentList<Row: ContentRow> {
 
     /// The CSV of what the table shows, with the list's columns only (invariant 11).
     public func csv(matching search: String) -> String {
-        CSV.text(shown(matching: search).map { CSV.Item($0.item.resource) }, columns: Row.columns)
+        CSV.text(shown(matching: search).map(\.exported), columns: Row.columns)
     }
 
     /// Cancels the running read, retires its token, drops what it read and stands at `state`.
@@ -474,20 +479,22 @@ public struct ContentDetail: Sendable {
     }
 
     /// A package's location is masked as `ContentWords.location` says, and every other place an address could be shown with
-    /// a credential in it, the description and every string of every attribute, through `ContentWords.addresses(in:)`
-    /// (Phase 2b verifier round 1: the Description field showed in clear what its attribute masked). A url Apple sent in a
-    /// shape this version can't read is said, never a dash that reads as no location.
+    /// a credential in it, the title, the name, version, bundle ids, hash and description fields and every string of every
+    /// attribute, through `ContentWords.addresses(in:)` (Phase 2b verifier round 1: the Description field showed in clear
+    /// what its attribute masked; round 2: so did the other four and the title). A url Apple sent in a shape this version
+    /// can't read is said, never a dash that reads as no location; a url Apple sent as null is none, a dash.
     init(package: ContentPackage) {
         let location = package.url.map(ContentWords.location)
         let misread = location == nil && package.attributes["url"].map { $0.jsonText != "null" } == true
         var notes: [String] = []
         if location?.masked == true { notes.append(ContentWords.maskedLocation) }
         if misread { notes.append(ContentWords.misreadLocation) }
-        self.init(title: package.name ?? package.id, fields: [
-            ContentField("Name", package.name ?? "—"), ContentField("Version", package.version ?? "—"),
+        let name = ContentWords.shown(package.name)
+        self.init(title: name ?? package.id, fields: [
+            ContentField("Name", name ?? "—"), ContentField("Version", ContentWords.shown(package.version) ?? "—"),
             ContentField("Bundle IDs", PackageRow(package).bundleIDs),
             ContentField("Location", location?.text ?? (misread ? "Not readable" : "—")),
-            ContentField("Hash", package.hash ?? "—"), ContentField("Description", package.summary.map(ContentWords.addresses(in:)) ?? "—"),
+            ContentField("Hash", ContentWords.shown(package.hash) ?? "—"), ContentField("Description", ContentWords.shown(package.summary) ?? "—"),
             ContentField("Created", ScreenWords.day(package.created?.date)), ContentField("Updated", ScreenWords.day(package.updated?.date)),
         ], notes: notes, attributes: ContentWords.packageAttributes(package))
     }
@@ -576,29 +583,53 @@ package enum ContentWords {
     /// basic-auth one carries its credential there; the scheme, host and path kept. A scheme is only a leading
     /// `[A-Za-z][A-Za-z0-9+.-]*:`, an authority follows `//` (`//user:pw@host` too), and with no `//` an `@` ahead of the path
     /// still ends a user and password (`user:pw@host`, whose `user:` reads as a scheme): Phase 2b review L2, where the first
-    /// `://` anywhere was taken for the scheme's, so one only in the query copied the query before it raw. Each run of text
-    /// between blanks is read as one address (an unencoded space splits one in two, each masked); after a scheme, any run of
-    /// slashes starts an authority (`https:/host`, which a browser reads as `https://host`); and text or an outer scheme glued
-    /// before an address's `://` (`url=https://…`, `jar:https://…`, `Mirror:https://…`) is kept as it came and the address
-    /// masked from its own scheme on (Phase 2b verifier round 1: a leading `jar:` was read as the scheme, and the address after
-    /// it copied as a path, its user and password in clear). Read as UTF-8 bytes, so a combining mark can't join a delimiter
-    /// into another character. Never opened or fetched (invariant 4). Not caught: an unencoded `/`, `?` or `#` inside a
-    /// password, which isn't a valid address: what comes before it shows as the host, and after it as the path, or masked as
-    /// the query or the fragment.
+    /// `://` anywhere was taken for the scheme's, so one only in the query copied the query before it raw. After a scheme,
+    /// any run of slashes starts an authority (`https:/host`, which a browser reads as `https://host`); text or an outer
+    /// scheme glued before an address's `://` (`url=https://…`, `jar:https://…`, `Mirror:https://…`) is kept as it came and
+    /// the address masked from its own scheme on (Phase 2b verifier round 1: a leading `jar:` was read as the scheme, and the
+    /// address after it copied as a path, its user and password in clear); and so is an address inside the path, a proxy's
+    /// or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one joined by `,` or `;` (Phase 2b verifier round
+    /// 2: the outer path was copied as it came, the inner user and password with it). A blank ends an address, so a second
+    /// one after an unencoded space is masked as its own, except inside the first one's user and password: a client sends a
+    /// password a blank splits (a browser encodes a space there and drops a tab or a newline), so that authority runs past
+    /// blanks to its last `@` (`https://deploy:my pw@host`, whose `deploy:my` showed as a host, verifier round 2). Read as
+    /// UTF-8 bytes, so a combining mark can't join a delimiter into another character. Never opened or fetched (invariant 4).
+    /// Not caught: an unencoded `/`, `?` or `#` inside a password, which isn't a valid address: what comes before it shows as
+    /// the host, and after it as the path, or masked as the query or the fragment; and an address percent-encoded inside a
+    /// path segment (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), which is a segment's text until the server it names
+    /// decodes it, and would take a decoder for each layer of encoding (`%253A` too).
     package static func location(_ url: String) -> (text: String, masked: Bool) {
-        masking(url) { _ in true }
+        masking(url, joiningUserinfo: true) { _ in true }
     }
 
     /// `text` with every address in it masked as `location` masks one, the rest as it came: a package's description and the
     /// strings of its other attributes, where Apple could add an address. A run of text between blanks is an address when it
     /// starts with a scheme and goes on, starts with `//`, holds a `://`, or has a user before an `@` ahead of a path; a word,
     /// a version, a bundle id, a hash or an email address (`it@example.com`, no path) is none of these and shows unchanged.
-    /// Masking errs toward hiding: `Requires:macOS;iOS` reads as a scheme and a path parameter and loses its tail. Not
-    /// caught: an address with no scheme, no `//` and no user (`host/a.pkg?sig=…`) inside other text, the second half of one
-    /// an unencoded space split, and a user with no password and no path (`token@host`), which is an email address's shape;
-    /// the package's own `url` is always read as one (`packageAttributes`).
+    /// Masking errs toward hiding: `Requires:macOS;iOS` reads as a scheme and a path parameter and loses its tail, and an
+    /// email address after a scheme or a label (`mailto:it@example.com`, `Contact:it@example.com`) or before a path
+    /// (`Team@HQ/West`) reads as a user and password and loses its name. Not caught: an address with no scheme, no `//` and
+    /// no user (`host/a.pkg?sig=…`) inside other text, the second half of one an unencoded space split, a password a blank
+    /// splits (in other text a blank ends a word, so what came before it shows: the Location joins it, `location`), and a
+    /// user with no password and no path (`token@host`), which is an email address's shape; the package's own `url` is
+    /// always read as one (`packageAttributes`).
     package static func addresses(in text: String) -> String {
         masking(text, isAddress).text
+    }
+
+    /// A package's name, version, bundle ids, hash and description, its row's and its detail's and its CSV's, each through
+    /// `addresses(in:)` as its attribute is among the detail's attributes (Phase 2b verifier round 2: the detail masked an
+    /// address in the description attribute, then showed the same address raw in the Name, Version, Bundle IDs and Hash
+    /// fields and the title, and the CSV wrote all five raw: a file that leaves the app was less careful than the screen,
+    /// invariant 11). Nil when Apple sent none.
+    static func shown(_ text: String?) -> String? { text.map(addresses(in:)) }
+
+    /// A package as its CSV holds it: every string of every attribute through `addresses(in:)`, at any depth. The `url`
+    /// isn't on the column list at all (`ExportPolicy.packages`).
+    static func exported(_ package: ContentPackage) -> CSV.Item {
+        var attributes = package.attributes
+        for key in attributes.keys { attributes[key] = attributes[key]?.mappingStrings(addresses(in:)) }
+        return CSV.Item(id: package.id, attributes: attributes)
     }
 
     /// Every attribute of a package, an attribute Apple adds included: each string at any depth through `addresses(in:)`,
@@ -646,16 +677,23 @@ package enum ContentWords {
     }
 
     /// `text` with each run between blanks that `isAddress` passes masked as an address (`address`); blanks as they came.
-    private static func masking(_ text: String, _ isAddress: (ArraySlice<UInt8>) -> Bool) -> (text: String, masked: Bool) {
+    /// `joiningUserinfo` (a Location, one address): the first run's authority, or its user part with no `//`, runs past
+    /// blanks to the last `@` ahead of the path (`userinfoEnd`).
+    private static func masking(_ text: String, joiningUserinfo: Bool = false,
+                                _ isAddress: (ArraySlice<UInt8>) -> Bool) -> (text: String, masked: Bool) {
         let bytes = Array(text.utf8)
-        var out: [UInt8] = [], masked = false, start = 0
+        var out: [UInt8] = [], masked = false, start = 0, first = joiningUserinfo
         while start < bytes.endIndex {
             guard !blanks.contains(bytes[start]) else {
                 out.append(bytes[start])
                 start += 1
                 continue
             }
-            let end = bytes[start...].firstIndex(where: blanks.contains) ?? bytes.endIndex
+            var end = bytes[start...].firstIndex(where: blanks.contains) ?? bytes.endIndex
+            if first {
+                first = false
+                end = userinfoEnd(bytes, run: start..<end) ?? end
+            }
             let run = bytes[start..<end]
             if isAddress(run) {
                 let shown = address(run)
@@ -667,6 +705,18 @@ package enum ContentWords {
             start = end
         }
         return (String(decoding: out, as: UTF8.self), masked)
+    }
+
+    /// Where a run that a blank cut inside its user and password really ends: when its authority (after its first `//`, else
+    /// from its start) has reached the blank with no `/`, `?` or `#`, and an `@` follows across blanks before any, the run
+    /// goes on to the blank after the last such `@`. Nil when the run is whole.
+    private static func userinfoEnd(_ bytes: [UInt8], run: Range<Int>) -> Int? {
+        let text = bytes[run]
+        let authority = text.firstRange(of: slashes)?.upperBound ?? run.lowerBound
+        guard !text[authority...].contains(where: { $0 == slash || $0 == question || $0 == hash }) else { return nil }
+        let ahead = bytes[run.upperBound...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? bytes.endIndex
+        guard let last = bytes[run.upperBound..<ahead].lastIndex(of: at) else { return nil }
+        return bytes[last...].firstIndex(where: blanks.contains) ?? bytes.endIndex
     }
 
     /// One address, its credentials masked (`location` says which parts).
@@ -713,7 +763,21 @@ package enum ContentWords {
         }
         let queryStart = run[index...].firstIndex(of: question) ?? run.endIndex
         let fragmentStart = run[index...].firstIndex(of: hash) ?? run.endIndex
-        let pathEnd = min(queryStart, fragmentStart)
+        var pathEnd = min(queryStart, fragmentStart)
+        // An address inside the path, a proxy's or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one
+        // joined by `,` or `;`: the path up to its scheme, then that address masked as one from its scheme on, its own user
+        // and password, query and fragment included (Phase 2b verifier round 2: the outer path was copied as it came, the
+        // inner user and password with it). It starts after the run's start, so this ends; a digit, `-`, `+` or `.` it
+        // starts with is its own glued split's text before a scheme.
+        var inner: Int?
+        if let found = run[index..<pathEnd].firstRange(of: schemeSlashes) {
+            var start = found.lowerBound
+            while start > index, isSchemeByte(run[start - 1]) { start -= 1 }
+            if start > run.startIndex, start < found.lowerBound {
+                inner = start
+                pathEnd = start
+            }
+        }
         // The path, each `;name=value` parameter's value masked.
         var position = index
         while position < pathEnd {
@@ -735,6 +799,10 @@ package enum ContentWords {
                 masked = true
             }
             position = end
+        }
+        if let inner {
+            let rest = address(run[inner...])
+            return (out + rest.bytes, masked || rest.masked)
         }
         if queryStart < fragmentStart {
             out.append(question)

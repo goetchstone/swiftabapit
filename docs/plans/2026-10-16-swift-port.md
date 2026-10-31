@@ -1088,7 +1088,12 @@ rules in their own words; the shared sentences, export rule and day formatter in
 (apple-reads runbook). The fix's two verifiers (round 1: both held; every finding low, 14 surviving mutants that were real test gaps) are answered in
 `fix(2b): verifier round 1`: a lock tested with each read refused alone, a locked Overview's own sentence, Device 360's
 unsendable serial, the location masking's outer schemes, single slashes, a url of another shape and the Description
-field, and a test for each surviving pause, export, Refresh and masking mutant. Live checks wait for S1's team build.
+field, and a test for each surviving pause, export, Refresh and masking mutant. Round 2 (one medium, the rest low) in
+`fix(2b): verifier round 2`: coming back to Apple MDM, the details still to read say "Reading…" with the progress note
+and Export held while the return reads them; an address inside another's path, a blank inside a Location's password, and
+a package's other fields, row and CSV masked; a service id that can't go in a path is never sent; a test for each of 14
+surviving mutants. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
+team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.

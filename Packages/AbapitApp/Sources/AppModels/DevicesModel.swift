@@ -369,6 +369,12 @@ public final class DevicesModel {
         var names: [String: String] = [:], counts: [String: Int] = [:], unread: [String] = []
         if servicesTruncated { unread.append("the list of services stopped at the page limit") }
         for service in list {
+            // A service id that can't go in a path is never sent: the client would call a service Apple has just listed
+            // "no such item" (Phase 2b verifier round 2: review L1's class in a fifth model).
+            guard AppleRead.isPathSafe(service.id) else {
+                unread.append("\(service.name)'s id can't be sent to Apple, so its devices weren't asked for")
+                continue
+            }
             var count = 0, cut = false
             do {
                 for try await page in client.serviceDeviceIDs(service.id) {
