@@ -23,7 +23,9 @@ trap 'rm -f "$log" "$marker"' EXIT
 crash_report() {
   local report=""
   for _ in $(seq 15); do
-    report="$(find "$HOME/Library/Logs/DiagnosticReports" -name 'abapit*.ips' -newer "$marker" 2>/dev/null | head -1 || true)"
+    for file in "$HOME"/Library/Logs/DiagnosticReports/abapit*.ips; do
+      if [ "$file" -nt "$marker" ]; then report="$file"; break; fi
+    done
     [ -n "$report" ] && break
     sleep 1
   done
