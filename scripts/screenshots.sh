@@ -14,7 +14,35 @@ binary="$app/Contents/MacOS/abapit"
 [ -x "$binary" ] || { echo "no executable at $binary" >&2; exit 1; }
 mkdir -p "$out"
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+marker="$(mktemp)"
+trap 'rm -f "$log" "$marker"' EXIT
+
+# A run that dies without a word (a precondition inside an optimized framework traps silently: PR 12's narrow People
+# run): the report macOS writes for it, so the log says where. Its exception, Apple's application-specific
+# information and the crashed thread's top frames; nothing else of the report, which holds no tenant data in the demo.
+crash_report() {
+  local report=""
+  for _ in $(seq 15); do
+    report="$(find "$HOME/Library/Logs/DiagnosticReports" -name 'abapit*.ips' -newer "$marker" 2>/dev/null | head -1 || true)"
+    [ -n "$report" ] && break
+    sleep 1
+  done
+  if [ -z "$report" ]; then echo "$1: no crash report within 15 s" >&2; return 0; fi
+  python3 -I - "$report" <<'PY' || true
+import json, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+body = json.loads(text.split("\n", 1)[1])
+print("crash:", json.dumps(body.get("exception", {})), json.dumps(body.get("termination", {}).get("indicator", "")))
+if "asi" in body:
+    print("asi:", json.dumps(body["asi"])[:2000])
+images = body.get("usedImages", [])
+thread = body.get("threads", [{}])[body.get("faultingThread", 0)]
+for i, frame in enumerate(thread.get("frames", [])[:30]):
+    index = frame.get("imageIndex", -1)
+    image = images[index].get("name", "?") if 0 <= index < len(images) else "?"
+    print(f"  {i:2} {image:28} {frame.get('symbol', hex(frame.get('imageOffset', 0)))}")
+PY
+}
 
 status=0
 # name:section[:selected[:window]] — section is a SidebarItem raw value (AppModels/Navigation.swift). The narrow-*
@@ -33,6 +61,7 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
   file="$out/$name.png"
   rm -f "$file"
   : > "$log"
+  touch "$marker"
   env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
     ABAPIT_DEMO=1 ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name.png" \
     ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} "$binary" > "$log" 2>&1 &
@@ -42,7 +71,10 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
   if kill -0 "$pid" 2>/dev/null; then kill "$pid"; hung=1; echo "::error::$name: no snapshot within 60 s" >&2; status=1; fi
   code=0; wait "$pid" || code=$?
   cat "$log"
-  if [ "$hung" = 0 ] && [ "$code" != 0 ]; then echo "::error::$name: abapit exited with status $code" >&2; status=1; fi
+  if [ "$hung" = 0 ] && [ "$code" != 0 ]; then
+    echo "::error::$name: abapit exited with status $code" >&2; status=1
+    [ "$code" -gt 128 ] && crash_report "$name"
+  fi
   written="$(sed -nE 's/^snapshot: (\/.*\.png)$/\1/p' "$log" | tail -1)"
   if [ -n "$written" ] && [ -s "$written" ]; then mv "$written" "$file"; echo "$name: $file"; else echo "::error::$name: no image written" >&2; status=1; fi
 done
