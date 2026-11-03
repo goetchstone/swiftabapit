@@ -91,6 +91,17 @@
     why, in the apple-reads runbook: one Apple MDM model shared by every window (a pause in one pauses another), an
     address percent-encoded in a path segment, a password a blank splits in other text, and over-masks of an email after
     a scheme or a label or before a path.
+  - Verifier round 3 (`fix(2b): verifier round 3, …`): every finding low. Nine mutants of rounds 1 and 2 survived every
+    suite, each a test gap with the code right: the scheme's bytes ending at its own `:` (an Azure SAS's
+    `st=…T00:00:00Z` and a `#t=1:` fragment, scheme-less, copied raw under the mutant), the scheme-less user arm's last
+    `@` (`deploy:p@ss@host`), the join's last `@`, the masked flag ORed over every run (a Location masked only before a
+    blank lost its note), and four of Apple MDM's: the selection asked first on return (only a past-limit one was
+    held), a Refresh clearing the pause (an org switch after it read nothing, and an unforced load ran a second sweep
+    beside the Refresh's), and the return's read among the tasks a pause or a Refresh cancels (its held request went out
+    after the screen was left). Each has a test that fails under it, run through the verifiers' own runners before and
+    after. `ContentTests.aSupersededDetailWritesNothing`, older than this diff, flaked: the superseded read's
+    `CancellationError` return counts in `readsFinished`, so the wait for one read could end on it with the second still
+    loading; it now waits for the first read at the gate, then for the detail itself.
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly

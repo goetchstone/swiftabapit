@@ -421,6 +421,11 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   says "Not read" and is read on return; a refusal holds across a return (nothing more is asked); and once shown again the
   screen is showing, so an org switch reads the new org (verifier round 1, four surviving mutants:
   `aPauseDuringASelectionsOwnReadReadsItOnReturn`, `comingBackAfterARefusalAsksNothing`, `aSwitchAfterComingBackReadsTheNewOrg`).
+  A selection within the limit that a pause left "Not read" is asked first on return, before the details waiting their
+  turn; a Refresh after a pause clears it, as a return does, so an org switch then reads the new org and an unforced load
+  starts no second sweep; and a pause or a Refresh during the return's read cancels it, its request never sent (verifier
+  round 3, four surviving mutants: `aSelectionAPauseLeftIsAskedFirstOnReturn`, `aSwitchAfterARefreshAfterAPauseReadsTheNewOrg`,
+  `anUnforcedLoadAfterARefreshAfterAPauseAsksNothingTwice`, `aPauseOrARefreshDuringTheReturnsReadCancelsIt`).
   A selection the list doesn't hold says why,
   as People's does (`selectionNote`: "Reading the devices…", "This device isn't in the list Apple sent."; review L7), in
   place of the inspector's "Select a device".
@@ -460,7 +465,9 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   own words and the sidebar hides Apple MDM for a School org.
 - **A test that holds the main actor holds a read too** (People): `World.buffer` blocks the main actor, so a read started
   from it hasn't sent its request yet; wait until the request is held at the gate, then buffer, or the buffer waits out its
-  20 s and the test passes for the wrong reason.
+  20 s and the test passes for the wrong reason. A superseded read's return counts in `readsFinished` too, cancelled or
+  not, so a test that supersedes a read waits for the state it asserts (the detail loaded), not for a count the superseded
+  read can meet first (verifier round 3: `aSupersededDetailWritesNothing` flaked, the detail still loading).
 - **The demo's files name one another**: blueprint members are `DemoPeople`'s users and groups (`DEMOUSER…`, `DEMOUG…`) and
   the fleet's serials; audit subjects and actors are `DemoPeople`'s users and org unit, `DemoContent`'s Wi-Fi setting and
   the fleet's serials (two released devices `TEST…`); Apple MDM's devices are the fleet's. `DemoTests` holds it.

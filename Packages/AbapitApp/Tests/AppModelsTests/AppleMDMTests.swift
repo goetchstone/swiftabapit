@@ -933,6 +933,119 @@ struct AppleMDMTests {
         #expect(world.appleMDM.detailsNote == "Details aren't read for a list that didn't finish: select a device to read its own.")
     }
 
+    /// A selected device within the limit that a pause left "Not read" is asked first on return, before the details still
+    /// waiting their turn, as `resume()` says (Phase 2b verifier round 3, mutants R3-resumeOrderSwapped and
+    /// A-resumeSelectedAfterReset: with the pause's marks cleared first, the selection waited its turn behind up to 49
+    /// others; only a selection past the limit was held).
+    @Test func aSelectionAPauseLeftIsAskedFirstOnReturn() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 5)
+        let gate = world.gates["a"]!
+        gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+        world.appleMDM.load()
+        await eventually("the second device's details held") { gate.held == 1 }
+        world.appleMDM.selection = "M0004"
+        #expect(Self.row(world, "M0004")?.details.word == "Reading…", "within the limit, it waits its turn")
+        world.appleMDM.pause()
+        #expect(Self.row(world, "M0004")?.details.word == "Not read")
+        await Self.settled(world, 1)
+        await eventually("the held read let go") { gate.held == 0 }
+        // The device next in turn is held again on the way back: the selection is read on its own, first.
+        world.appleMDM.load()
+        await eventually("the selection read first on return") { Self.row(world, "M0004")?.details.word == "Read" }
+        await eventually("the device next in turn held") { gate.held == 1 }
+        #expect(Self.asked(world) == ["M0000/details", "M0004/details"], "\(Self.asked(world))")
+        #expect(Self.row(world, "M0001")?.details.word == "Reading…")
+        gate.release("second")
+        await Self.settled(world, 3)
+        #expect(Self.asked(world) == ["M0000/details", "M0004/details", "M0001/details", "M0002/details", "M0003/details"], "\(Self.asked(world))")
+        #expect(world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+    }
+
+    /// Refresh after a pause shows the screen again, as coming back does: an org switch then reads the new org at once
+    /// (Phase 2b verifier round 3, mutants R3-forceKeepsPaused and A-pausedNeverClearedOnForce: the pause outlived the
+    /// Refresh and the switch read nothing; reachable when one window's leave pauses the model another window refreshes).
+    @Test func aSwitchAfterARefreshAfterAPauseReadsTheNewOrg() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, "a", count: 2, prefix: "A")
+        Self.fleet(world, "b", count: 1, prefix: "B")
+        world.appleMDM.load()
+        await Self.settled(world, 1)
+        world.appleMDM.pause()
+        world.appleMDM.load(force: true)
+        await Self.settled(world, 2)
+        world.orgs.select("b")
+        await eventually("b read while showing") { world.appleMDM.rows.map(\.id) == ["B0000"] }
+        await Self.settled(world, 3)
+        #expect(Self.isLoaded(world.appleMDM.state) && Self.asked(world, "b") == ["B0000/details"])
+    }
+
+    /// An unforced load after a pause and a Refresh asks for nothing the Refresh's read is reading: no pause is left to
+    /// resume (Phase 2b verifier round 3, mutant R3-forceKeepsPaused: a second sweep ran beside the Refresh's and asked
+    /// each device it hadn't reached yet twice).
+    @Test func anUnforcedLoadAfterARefreshAfterAPauseAsksNothingTwice() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0])
+        Self.fleet(world, count: 3)
+        let gate = world.gates["a"]!
+        gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+        world.appleMDM.load()
+        await eventually("the second device's details held") { gate.held == 1 }
+        world.appleMDM.pause()
+        await Self.settled(world, 1)
+        await eventually("the held read let go") { gate.held == 0 }
+        world.appleMDM.load(force: true)
+        await eventually("the Refresh's read of the second device held") { gate.held == 1 }
+        world.appleMDM.load()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(gate.held == 1, "the device in flight was asked for again")
+        gate.release("second")
+        await Self.settled(world, 2)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(Self.asked(world) == ["M0000/details", "M0000/details", "M0001/details", "M0002/details"], "\(Self.asked(world))")
+        #expect(Self.lists(world) == 2 && world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+    }
+
+    /// Leaving, or Refresh, while the return reads the details a pause left cancels that read: its request held at the gate
+    /// lets go and is never sent (Phase 2b verifier round 3, mutant R3-resumeTaskUntracked: the return's read wasn't among
+    /// the tasks a pause, a Refresh or a switch cancels, so its request went out after the screen was left, review L9's
+    /// class at a bound of one).
+    @Test func aPauseOrARefreshDuringTheReturnsReadCancelsIt() async throws {
+        for refresh in [false, true] {
+            let world = try await World.make(devices: ["a": 0, "b": 0])
+            Self.fleet(world, count: 3)
+            let gate = world.gates["a"]!
+            gate.hold("second", { $0.path() == "/v1/mdmDevices/M0001/details" })
+            world.appleMDM.load()
+            await eventually("the second device's details held") { gate.held == 1 }
+            world.appleMDM.pause()
+            await Self.settled(world, 1)
+            await eventually("the held read let go") { gate.held == 0 }
+            world.appleMDM.load()
+            await eventually("the return's read of the second device held") { gate.held == 1 }
+            if refresh {
+                world.appleMDM.load(force: true)
+                await eventually("the Refresh read the first device again") { Self.asked(world) == ["M0000/details", "M0000/details"] }
+                // Long enough for the Refresh's own read of the second device to reach the gate, and for a cancelled one
+                // to have let go: only the Refresh's is held.
+                try await Task.sleep(for: .milliseconds(100))
+                #expect(gate.held == 1, "the return's read is still held beside the Refresh's")
+                gate.release("second")
+                await Self.settled(world, 3)
+                try await Task.sleep(for: .milliseconds(100))
+                #expect(Self.asked(world) == ["M0000/details", "M0000/details", "M0001/details", "M0002/details"], "\(Self.asked(world))")
+                #expect(world.appleMDM.rows.allSatisfy { $0.details.word == "Read" })
+            } else {
+                world.appleMDM.pause()
+                await eventually("the return's held read let go") { gate.held == 0 }
+                await Self.settled(world, 2)
+                gate.release("second")
+                try await Task.sleep(for: .milliseconds(100))
+                #expect(Self.asked(world) == ["M0000/details"], "a details read went on after the screen was left: \(Self.asked(world))")
+                #expect(world.appleMDM.rows.map(\.details.word) == ["Read", "Not read", "Not read"])
+            }
+        }
+    }
+
     /// An unforced load while the details are being read, with no pause before it, asks for nothing: the screen is still
     /// showing, and the read running goes on alone (Phase 2b verifier round 2, mutant N2-resumeWithoutPause: a second sweep
     /// asked for the device in flight again).

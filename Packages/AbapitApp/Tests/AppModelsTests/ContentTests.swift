@@ -385,12 +385,17 @@ struct ContentTests {
         Self.stocked(world)
         world.content.load()
         await Self.settled(world, 4)
-        world.gates["a"]!.hold("first", { $0.path() == "/v1/apps/1000000001" })
+        let gate = world.gates["a"]!
+        gate.hold("first", { $0.path() == "/v1/apps/1000000001" })
         world.content.selection = "1000000001"
+        // The first read is at the gate before the second is chosen, and the wait is for the detail, not a count: the
+        // superseded read's return counts in `readsFinished` too, so a count could be met by it while the second was still
+        // on its way (Phase 2b verifier round 3: a rare flake, the detail still loading).
+        await eventually("the first read held") { gate.held == 1 }
         world.content.selection = "1000000002"
-        await Self.detailSettled(world, 1)
+        await eventually("the second read landed") { if case .loaded = world.content.detail.item { true } else { false } }
         #expect(try Self.detail(world).title == "Example Timesheets")
-        world.gates["a"]!.release("first")
+        gate.release("first")
         await Self.detailSettled(world, 2)
         #expect(try Self.detail(world).title == "Example Timesheets")
         #expect(world.content.detail.shown == ContentSelection(kind: .apps, id: "1000000002"))
@@ -483,6 +488,9 @@ struct ContentTests {
             ("packages.example.com/a.pkg?sig=1", "packages.example.com/a.pkg?sig=********", true),
             ("https://u\u{301}:p\u{301}@h.example.com/\u{E9}", "https://********@h.example.com/\u{E9}", true),
             ("https://packages.example.com/a.pkg?", "https://packages.example.com/a.pkg?", false),
+            // Phase 2b verifier round 3, mutant R3B-maskedLastRunOnly: masked when only an earlier run is, so the detail's
+            // note still says why the field shows the mask.
+            ("https://u:p@h.example.com/a.pkg b.pkg", "https://********@h.example.com/a.pkg b.pkg", true),
             ("", "", false),
         ]
         for (url, shown, masked) in cases {
@@ -509,6 +517,15 @@ struct ContentTests {
             ("  https://deploy:TOPSECRET12@packages.example.com/a.pkg", "  https://********@packages.example.com/a.pkg"),
             ("https://packages.example.com/my pkg.pkg?sig=TOPSECRET13", "https://packages.example.com/my pkg.pkg?sig=********"),
             ("url=https://deploy:TOPSECRET14@packages.example.com/a.pkg", "url=https://********@packages.example.com/a.pkg"),
+            // Phase 2b verifier round 3, mutant R3-schemeToFirstColon: a scheme's bytes end at its `:`, so a scheme-less
+            // address whose first `:` is in its query (an Azure SAS's `st=…T00:00:00Z`) or its fragment isn't read as a
+            // scheme up to there and copied raw.
+            ("acct.blob.example.com/c/a.pkg?sv=2022&st=2025-10-31T00:00:00Z&sig=TOPSECRET15",
+             "acct.blob.example.com/c/a.pkg?sv=********&st=********&sig=********"),
+            ("packages.example.com/a.pkg#t=1:TOPSECRET16", "packages.example.com/a.pkg#********"),
+            // Mutant R3-userArmFirstAt: with no `//`, the user and password run to the last `@` ahead of the path, as an
+            // authority's do.
+            ("deploy:p@ssTOPSECRET17@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
         ]
         for (url, shown) in cases {
             let result = ContentWords.location(url)
@@ -602,6 +619,8 @@ struct ContentTests {
             ("ask deploy@h.example.com?sig=TOPSECRET5", "ask ********@h.example.com?sig=********"),
             ("https://a.example.com/x\nhttps://deploy:TOPSECRET6@b.example.com/y", "https://a.example.com/x\nhttps://********@b.example.com/y"),
             ("https://a.example.com/x\thttps://deploy:TOPSECRET7@b.example.com/y", "https://a.example.com/x\thttps://********@b.example.com/y"),
+            // Phase 2b verifier round 3, mutant R3-userArmFirstAt: to the last `@` in other text too.
+            ("Mirror deploy:p@ssTOPSECRET9@h.example.com/a.pkg today", "Mirror ********@h.example.com/a.pkg today"),
         ]
         for (text, shown) in cases {
             let other = ContentWords.addresses(in: text)
@@ -659,6 +678,9 @@ struct ContentTests {
                 ("jar:https://deploy:my" + blank + "TOPSECRET4@h.example.com/a.jar", "jar:https://********@h.example.com/a.jar"),
                 ("  https://deploy:my" + blank + "TOPSECRET5@h.example.com:8443/a.pkg", "  https://********@h.example.com:8443/a.pkg"),
                 ("https://h.example.com/a.pkg" + blank + "user:TOPSECRET6@m.example.com/b", "https://h.example.com/a.pkg" + blank + "********@m.example.com/b"),
+                // Phase 2b verifier round 3, mutant C-joinFirstAt: a password with an `@` and blanks runs to its last `@`,
+                // so no part of it shows as a host.
+                ("https://deploy:my" + blank + "pw@x" + blank + "TOPSECRET7@h.example.com/a.pkg", "https://********@h.example.com/a.pkg"),
             ]
             for (url, shown) in cases {
                 let result = ContentWords.location(url)
@@ -770,6 +792,24 @@ struct ContentTests {
         #expect(detail.fields.first { $0.label == "Location" }?.value == "—")
         #expect(detail.notes.isEmpty, "\(detail.notes)")
         #expect(detail.attributes.first { $0.label == "url" }?.value == "—")
+    }
+
+    /// Phase 2b verifier round 3, mutant R3B-maskedLastRunOnly: a Location masked only before a blank, its last run left
+    /// as it came, still says why the field shows the mask (invariant 8: the note the masking added is never dropped).
+    @Test func aLocationMaskedOnlyBeforeABlankStillSaysSo() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Split"), "url": .string("https://deploy:TOPSECRET1@h.example.com/a.pkg b.pkg"),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        #expect(detail.fields.first { $0.label == "Location" }?.value == "https://********@h.example.com/a.pkg b.pkg")
+        #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                 + "It is shown here, never opened."], "\(detail.notes)")
     }
 
     /// Phase 2b verifier round 2, probe vPackageFieldsAndCSV: the detail masked an address in a package's attributes, then
