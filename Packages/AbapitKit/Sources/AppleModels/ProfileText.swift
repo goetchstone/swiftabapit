@@ -286,12 +286,14 @@ public enum ProfileText: Sendable, Equatable {
 /// end in a secret word or names a policy (`PasswordRequired`, `maxPINAgeInDays`, `PasscodeMinLength` are policies; a
 /// numeric `Passcode`, `UnlockCode` or `SharedSecret` isn't); every string holding a private key, wherever it is; and every data
 /// blob, wherever it is (a certificate, a PKCS#12 identity, a shared secret: none readable, some secret, and an Exchange
-/// payload carries an identity outside any certificate payload). Bounded in depth and in the values it visits.
+/// payload carries an identity outside any certificate payload). Also every string under a credential header's name in a
+/// dictionary of HTTP headers (`ProfileSecrets.isCredentialHeader`). Bounded in depth and in the values it visits.
 private struct MaskingWalk {
     var masked = 0, merged = 0, visited = 0
     var refusal = ProfileText.unreadable
 
-    mutating func mask(_ value: Any, depth: Int) -> Any? {
+    /// `headers`: the value sits under a key that names HTTP headers, so its keys are header names.
+    mutating func mask(_ value: Any, depth: Int, headers: Bool = false) -> Any? {
         visited += 1
         guard visited <= ProfileText.maximumValues else { refusal = ProfileText.tooMany; return nil }
         if let dictionary = value as? [String: Any] {
@@ -303,11 +305,12 @@ private struct MaskingWalk {
             var out: [String: Any] = [:]
             for (key, item) in dictionary {
                 if ProfileSecrets.isSecret(key) && (item is String || item is Data || item is [Any] || item is [String: Any])
-                    || ProfileSecrets.isNumber(item) && ProfileSecrets.endsInASecretWord(key) {
+                    || ProfileSecrets.isNumber(item) && ProfileSecrets.endsInASecretWord(key)
+                    || headers && item is String && ProfileSecrets.isCredentialHeader(key) {
                     out[key] = ProfileText.mask
                     masked += 1
                 } else {
-                    guard let walked = mask(item, depth: depth + 1) else { return nil }
+                    guard let walked = mask(item, depth: depth + 1, headers: ProfileSecrets.namesHeaders(key)) else { return nil }
                     out[key] = walked
                 }
             }
@@ -317,7 +320,7 @@ private struct MaskingWalk {
             guard depth < ProfileText.maximumDepth else { refusal = ProfileText.tooDeep; return nil }
             var out: [Any] = []
             for item in array {
-                guard let walked = mask(item, depth: depth + 1) else { return nil }
+                guard let walked = mask(item, depth: depth + 1, headers: headers) else { return nil }
                 out.append(walked)
             }
             return out
@@ -347,6 +350,18 @@ enum ProfileSecrets {
                         "clientkey", "accesskey", "licensekey", "bypass", "assertion", "unlockpin", "unlockcode", "accesscode", "wepkey"]
     /// A secret by its own word, or as the folded key's ending: too short to find inside a longer word.
     static let secretWords = ["pin", "pw", "puk"]
+
+    /// HTTP headers that carry a credential: a token, a password in base64, a session. Masked only as a header, under a
+    /// key that names headers (the relay payload's `AdditionalHTTPHeaderFields`), because the same words are policies
+    /// elsewhere: the privacy payload's `Authorization` is Allow or Deny for each of 24 services, and an `authorization`
+    /// stem would have hidden every one (held by `ProfileSchemaContractTests`, over Apple's schemas).
+    static let credentialHeaders = ["authorization", "proxyauthorization", "cookie", "setcookie"]
+
+    static func isCredentialHeader(_ key: String) -> Bool { credentialHeaders.contains { same(letters(key), $0) } }
+
+    /// Whether a key's value is a dictionary of HTTP headers, keyed by their names: `AdditionalHTTPHeaderFields`,
+    /// `Headers`. A list of name and value pairs isn't read as headers (no Apple payload has one).
+    static func namesHeaders(_ key: String) -> Bool { Array(letters(key).utf8).firstRange(of: Array("header".utf8)) != nil }
 
     static func isSecret(_ key: String) -> Bool {
         let letters = letters(key)

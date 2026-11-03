@@ -328,7 +328,7 @@ SwiftAbapit/                          (D1)
     Sources/AppModels/                @MainActor screen models (orgs, devices, inspector)
     Tests/AppModelsTests/             invariant 8's screen-model tests
   Contracts/apple/                    business-2.6.json, school-1.7.json (generated, committed; §3.10)
-  Contracts/device-management/        profiles-27.0.json (generated from apple/device-management, Phase 5)
+  Contracts/device-management/        profiles-27.0.json (generated from apple/device-management; masking test now, validation Phase 5)
   Tests/Fixtures/                     parity/ (golden from frozen abapit), docc/ (Apple examples),
                                       recorded/ (scrubbed live), demo/
   Config/  Signing/  Fuzz/  scripts/  .github/  .claude/
@@ -669,7 +669,7 @@ Apple publishes no OpenAPI spec, but its DocC pages are machine-readable JSON
   - Recorded, scrubbed live responses back each read.
   - Write shapes come only from the official doc and the Postman collection.
   - The "lock_device posted to /variables" Postman bug is noted as untrusted.
-- **apple/device-management** (Phase 5):
+- **apple/device-management** (vendored early, 2026-11-03, for `ProfileText`'s masking test; Phase 5 adds the validation):
   - `scripts/device_management_schemas.py` converts `mdm/profiles/*.yaml` at the pinned commit
     `09f249a0` into `Contracts/device-management/profiles-27.0.json`;
   - PyYAML runs only in a dev venv;

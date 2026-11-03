@@ -243,11 +243,21 @@ org editor's save).
   secret key is masked whole, a policy word in the key or not (`PasswordHistory`: walked, its items have no key of their
   own; verifier round 3 of the fixes, `aContainerUnderASecretKeyIsMaskedWhole`). A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. A key written twice alike
   (Foundation's reader keeps one, the last) and two keys equal once normalized (merged when Foundation's dictionary
-  becomes Swift's) are counted in `.plist`'s `merged`, the first from the XML's own keys, and `note` says it. Not
-  caught: a secret under a key no stem or word names that isn't a private key in a form above (a homoglyph spelling,
+  becomes Swift's) are counted in `.plist`'s `merged`, the first from the XML's own keys, and `note` says it.
+  - Credential headers: in a dictionary under a key that names headers (the relay payload's
+    `AdditionalHTTPHeaderFields`), a string under `Authorization`, `Proxy-Authorization`, `Cookie` or `Set-Cookie` is
+    masked. Those names are left alone elsewhere, because the privacy payload's `Authorization` is Allow or Deny
+    for 24 services.
+  - Held to Apple's own schemas (`ProfileSchemaContractTests`, over `Contracts/device-management/profiles-27.0.json`).
+    Each of the 39 keys whose description in Apple's YAML says it holds a secret is masked: passwords, shared
+    secrets, the SCEP challenge, the SSO registration token and the content filter's bearer token. Every data
+    key is masked. Every other string, number and untyped key is shown, except 12 over-masks named in the test.
+  - Not caught: a secret under a key no stem or word names that isn't a private key in a form above (a homoglyph spelling,
   an unusual name, a number under `AuthCode`, `AuthKey` or `SetupKey`), a secret inside a string's text (a WireGuard
-  `PrivateKey =` line, an `Authorization: Basic` header, a URL's `user:password@`, an OpenVPN static key, an SSH2-format
-  or unarmoured DER private key: verifier round 3 of the fixes), a key wrapped twice (base64 of base64), and a binary plist's repeated
+  `PrivateKey =` line, an `Authorization: Basic` header written in text, a URL's `user:password@`, an OpenVPN static key, an SSH2-format
+  or unarmoured DER private key: verifier round 3 of the fixes), a key wrapped twice (base64 of base64), a secret inside
+  a vendor's dictionary under a name no stem holds (`VendorConfig`, a DNS proxy's `ProviderConfiguration`, an SSO
+  extension's `ExtensionData`: no schema says what they hold), and a binary plist's repeated
   keys (its dictionaries can be shared, so its table isn't the tree). Over-masked, the safe way: a policy value under
   a secret word, such as Kerberos' `pwReqText` and `pwChangeURL` or `passwordContentRegex`, a flag written as an
   integer (`askForPassword` = 1, `forcePIN` = 1), and `credentialBundleIdACL` and `credentialUseMode`; the key shows,
