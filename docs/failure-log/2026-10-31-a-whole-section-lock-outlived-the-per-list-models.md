@@ -122,6 +122,18 @@
     repair's own guards each have a case that a mutant of them fails; two mutants are equivalent: the join to the first
     `@` in place of the last (the Location reads the run again, still open, and goes on to the next `@`), and a
     digit-led prefix read as a scheme with no `//` after it (it only masks more).
+  CI's first snapshot run, on PR 12 at 68172bd, found what no package test could, since App/ has no test target:
+  - the Activity screen crashed the app on every Activity run (AppKit: "more Update Constraints in Window passes than
+    there are views in the window");
+  - the Apple MDM and People tables outgrew the window: all eleven and all eight columns need 800 and 730 pt at their
+    narrowest, more than the smallest window's pane;
+  - narrow-people-detail trapped (exit 133, with no message).
+
+  The fixes:
+  - Activity's header wraps with an ideal width of 0, as Apple MDM's note does. It had used
+    `.fixedSize(horizontal: false, vertical: true)`, which let its counts line set the column's width.
+  - Each of the three tables shows by default only the columns whose minimums fit within the Devices table's (530 pt).
+    The rest are a right-click on the header away (`TableColumnCustomization`, kept per window).
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
@@ -142,3 +154,6 @@
   by shape". Still
   only a stub: whether a role refused users is refused user groups too, and what Apple's probes return for each list, is
   the Phase 2 live check.
+  The snapshot failures are the merge report's "unproven until CI runs the snapshots" come true. Four review rounds
+  ran before any snapshot did, because CI first ran when the PR opened: RULE-FEEDBACK 2026-11-03, "the screens were
+  reviewed before they were ever drawn".

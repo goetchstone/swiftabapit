@@ -11,6 +11,8 @@ import UniformTypeIdentifiers
 struct PeopleView: View {
     @Bindable var model: PeopleModel
     @State private var exporting = false
+    /// Which user columns show, and their order and widths: the operator's, kept with the window.
+    @SceneStorage("people.users.columns") private var userColumns = TableColumnCustomization<PeopleModel.UserRow>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -67,24 +69,38 @@ struct PeopleView: View {
         }
     }
 
+    /// Five of the eight columns show by default, within the Devices table's minimum width: all eight need 730 pt at their
+    /// narrowest, more than the smallest window's pane, so the table outgrew the window (CI's snapshots, PR 12). The other
+    /// three are a right-click on the header away; the inspector and the CSV hold every one.
     private var users: some View {
-        Table(model.shownUsers, selection: $model.selectedUser, sortOrder: $model.userOrder) {
+        Table(model.shownUsers, selection: $model.selectedUser, sortOrder: $model.userOrder, columnCustomization: $userColumns) {
             TableColumn("Name", value: \.name)
                 .width(min: 120, ideal: 170)
+                .customizationID("name")
             TableColumn("Managed Apple Account", value: \.account)
                 .width(min: 140, ideal: 220)
+                .customizationID("account")
             TableColumn("Email", value: \.email)
                 .width(min: 120, ideal: 190)
+                .customizationID("email")
             TableColumn("Status", value: \.status)
                 .width(min: 60, ideal: 90)
+                .customizationID("status")
             TableColumn("External", value: \.external)
                 .width(min: 50, ideal: 60)
+                .customizationID("external")
+                .defaultVisibility(.hidden)
             TableColumn("Department", value: \.department)
                 .width(min: 80, ideal: 120)
+                .customizationID("department")
+                .defaultVisibility(.hidden)
             TableColumn("Job title", value: \.jobTitle)
                 .width(min: 80, ideal: 140)
+                .customizationID("job-title")
             TableColumn("Start date", value: \.startedSort) { Text(ScreenWords.day($0.started)) }
                 .width(min: 80, ideal: 100)
+                .customizationID("start-date")
+                .defaultVisibility(.hidden)
         }
         .accessibilityLabel("Users")
         .accessibilityIdentifier("people.users.table")

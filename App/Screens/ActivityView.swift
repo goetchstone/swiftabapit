@@ -11,6 +11,8 @@ struct ActivityView: View {
     @Bindable var model: ActivityModel
     @State private var exporting = false
     @State private var filtering = false
+    /// Which columns show, and their order and widths: the operator's, kept with the window.
+    @SceneStorage("activity.columns") private var columns = TableColumnCustomization<ActivityRow>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -30,15 +32,21 @@ struct ActivityView: View {
                 }
                 .accessibilityIdentifier("activity.empty")
             } else {
-                Table(model.shown, selection: $model.selection, sortOrder: $model.sortOrder) {
+                // Five of the six columns show by default, within the Devices table's minimum width (all six need 590 pt
+                // at their narrowest); Category is a right-click on the header away, and the panes already group by it.
+                Table(model.shown, selection: $model.selection, sortOrder: $model.sortOrder, columnCustomization: $columns) {
                     TableColumn("When", value: \.timeSort) { row in
                         Text(row.time?.formatted(date: .abbreviated, time: .shortened) ?? "—")
                     }
                     .width(min: 120, ideal: 150)
+                    .customizationID("when")
                     TableColumn("Type", value: \.type)
                         .width(min: 140, ideal: 220)
+                        .customizationID("type")
                     TableColumn("Category", value: \.category)
                         .width(min: 80, ideal: 120)
+                        .customizationID("category")
+                        .defaultVisibility(.hidden)
                     TableColumn("Outcome", value: \.outcome) { row in
                         if row.failed {
                             Label(row.outcome, systemImage: "xmark.octagon").foregroundStyle(.red)
@@ -47,10 +55,13 @@ struct ActivityView: View {
                         }
                     }
                     .width(min: 70, ideal: 80)
+                    .customizationID("outcome")
                     TableColumn("Actor", value: \.actor)
                         .width(min: 90, ideal: 150)
+                        .customizationID("actor")
                     TableColumn("Subject", value: \.subject)
                         .width(min: 90, ideal: 150)
+                        .customizationID("subject")
                 }
                 .accessibilityIdentifier("activity.table")
                 .selectsFirstRow($model.selection, first: model.shown.first?.id, ready: !model.state.isLoading)
@@ -127,7 +138,10 @@ private struct ActivityHeader: View {
             }
         }
         .font(.callout)
-        .fixedSize(horizontal: false, vertical: true)
+        // Wraps to the pane rather than asking for its longest line's width, as Apple MDM's note does. With
+        // `.fixedSize(horizontal: false, vertical: true)` the counts line set the column's ideal width, the wrap set the
+        // height, and AppKit's constraint passes never settled: the app crashed on every Activity snapshot (PR 12).
+        .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
     }
 }

@@ -27,6 +27,23 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-03 — The screens were reviewed before they were ever drawn
+- **What happened:** Phase 2b's five screens went through one review and three verifier rounds, all on `swift test` and
+  builds. CI's snapshot run, the only thing that renders App/, first ran when PR 12 opened. It found:
+  - Activity crashing the app in AppKit's constraint passes;
+  - the Apple MDM and People tables wider than the window;
+  - a trap in the narrow People inspector.
+
+  The merge report had flagged the snapshots as unproven. See failure-log 2026-10-31.
+- **Invariant in force:** none: new shape (a view's layout has no test but the snapshot run).
+- **Why it didn't hold:** wrong layer. Agents may not run `scripts/screenshots.sh`, because it launches the app, so the
+  only renderer is CI, and CI ran last.
+- **Would a rule have caught it?** Only if enforced differently: push the branch as a draft PR once the units merge, so
+  CI's snapshots run beside the review rather than after it. Separately, hold a table's default columns to the
+  width the smallest window was shown to fit (the Devices table's 530 pt of minimums).
+- **Enforcement home if changed:** skill (soft): the phase brief's merge step opens the draft PR. Tripwire: the
+  snapshot harness's edge check already fails a table that outgrows the window.
+
 ## 2026-11-03 — A credential mask found shape by shape
 - **What happened:** Phase 2b's package-location mask (`ContentWords.location`, `addresses(in:)`) leaked a new shape in each
   of four rounds: the review's (`://` in a query, `//user:pw@`), round 1's (a label or an outer scheme glued before the

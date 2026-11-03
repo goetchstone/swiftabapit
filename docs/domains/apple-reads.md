@@ -322,7 +322,14 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   reads again only if it was showing; `load()` reads once per org, `load(force: true)` (Refresh, ⌘R) cancels and reads
   again, an open detail too. Each model counts its reads in a `package readsFinished` the tests wait on. Each inspector is
   `ColumnWidths.inspector`, each table adopts `selectsFirstRow`, and the snapshot harness fails a `first` run whose screen
-  selected nothing.
+  selected nothing. A table shows by default only the columns whose minimums fit within the Devices table's (530 pt):
+  - Apple MDM: six of eleven;
+  - People's users: five of eight;
+  - Activity: five of six.
+
+  The rest are a right-click on the header away (`TableColumnCustomization`, kept per window); the inspector and the
+  CSV hold every one. A header of wrapping text takes an ideal width of 0, so its longest line never sets the column's
+  width (Activity crashed AppKit that way; PR 12's first snapshot run).
 - **What every screen says alike is written once** (`ScreenWords`; Phase 2b review L10): no organization yet
   (`noOrganization`, Apple School Manager named: Apple MDM's copy had dropped it) or one that can't be used (`unusable`), in
   every list and every inspector panel (`everyScreenSaysWhyNothingCanBeReadAlike`); an id `AppleRead.isPathSafe` refuses is

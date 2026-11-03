@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 struct AppleMDMView: View {
     @Bindable var model: AppleMDMModel
     @State private var exporting = false
+    /// Which columns show, and their order and widths: the operator's, kept with the window.
+    @SceneStorage("apple-mdm.columns") private var columns = TableColumnCustomization<AppleMDMRow>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -59,34 +61,53 @@ struct AppleMDMView: View {
         .onDisappear { model.pause() }
     }
 
-    /// Eleven columns, in two groups: a column builder takes ten.
+    /// Eleven columns, in two groups: a column builder takes ten. Six show by default, within the Devices table's minimum
+    /// width: all eleven need 800 pt at their narrowest, more than the smallest window's pane, so the table outgrew the
+    /// window (CI's snapshots, PR 12). The other five are a right-click on the header away; the inspector and the CSV
+    /// hold every one.
     private var table: some View {
-        Table(model.shown, selection: $model.selection, sortOrder: $model.sortOrder) {
+        Table(model.shown, selection: $model.selection, sortOrder: $model.sortOrder, columnCustomization: $columns) {
             Group {
                 TableColumn("Serial", value: \AppleMDMRow.serial, comparator: String.StandardComparator.lexical) { Text($0.serial).monospaced() }
                     .width(min: 110, ideal: 130)
+                    .customizationID("serial")
                 TableColumn("Name", value: \AppleMDMRow.name)
                     .width(min: 100, ideal: 170)
+                    .customizationID("name")
                 TableColumn("Family", value: \AppleMDMRow.family)
                     .width(min: 50, ideal: 70)
+                    .customizationID("family")
+                    .defaultVisibility(.hidden)
                 TableColumn("OS", value: \AppleMDMRow.os) { PostureText(row: $0, text: $0.os) }
                     .width(min: 50, ideal: 70)
+                    .customizationID("os")
                 TableColumn("Last check-in", value: \AppleMDMRow.checkInSort) { PostureText(row: $0, text: $0.checkIn) }
                     .width(min: 90, ideal: 140)
+                    .customizationID("check-in")
             }
             Group {
                 TableColumn("FileVault", value: \AppleMDMRow.fileVault) { PostureText(row: $0, text: $0.fileVault) }
                     .width(min: 60, ideal: 75)
+                    .customizationID("filevault")
                 TableColumn("Firewall", value: \AppleMDMRow.firewall) { PostureText(row: $0, text: $0.firewall) }
                     .width(min: 60, ideal: 75)
+                    .customizationID("firewall")
                 TableColumn("Lock", value: \AppleMDMRow.lock) { PostureText(row: $0, text: $0.lock) }
                     .width(min: 60, ideal: 80)
+                    .customizationID("lock")
+                    .defaultVisibility(.hidden)
                 TableColumn("Erase", value: \AppleMDMRow.erase) { PostureText(row: $0, text: $0.erase) }
                     .width(min: 60, ideal: 80)
+                    .customizationID("erase")
+                    .defaultVisibility(.hidden)
                 TableColumn("Lost mode", value: \AppleMDMRow.lostMode) { PostureText(row: $0, text: $0.lostMode) }
                     .width(min: 60, ideal: 75)
+                    .customizationID("lost-mode")
+                    .defaultVisibility(.hidden)
                 TableColumn("Storage", value: \AppleMDMRow.storageSort) { PostureText(row: $0, text: $0.storage) }
                     .width(min: 100, ideal: 150)
+                    .customizationID("storage")
+                    .defaultVisibility(.hidden)
             }
         }
         .accessibilityLabel("Apple MDM devices")
