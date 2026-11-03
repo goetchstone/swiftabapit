@@ -29,7 +29,7 @@ crash_report() {
     [ -n "$report" ] && break
     sleep 1
   done
-  if [ -z "$report" ]; then echo "$1: no crash report within 15 s" >&2; return 0; fi
+  if [ -z "$report" ]; then echo "$1: no crash report within 15 s; running it under lldb" >&2; debug_run; return 0; fi
   python3 -I - "$report" <<'PY' || true
 import json, sys
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
@@ -44,6 +44,23 @@ for i, frame in enumerate(thread.get("frames", [])[:30]):
     image = images[index].get("name", "?") if 0 <= index < len(images) else "?"
     print(f"  {i:2} {image:28} {frame.get('symbol', hex(frame.get('imageOffset', 0)))}")
 PY
+}
+
+# No report (CI's runners write none): the same run again under lldb, which stops at the signal and prints the
+# crashed thread's frames. Bounded like any run; its picture, if it gets that far, is dropped.
+debug_run() {
+  local dlog
+  dlog="$(mktemp)"
+  env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
+    ABAPIT_DEMO=1 ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name-lldb.png" \
+    ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} \
+    /usr/bin/lldb --batch -o run -k "thread backtrace -c 40" -k "quit" -- "$binary" > "$dlog" 2>&1 &
+  local pid=$!
+  for _ in $(seq 120); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "$name: lldb run still going after 120 s" >&2; fi
+  wait "$pid" || true
+  grep -E 'stop reason|frame #|Fatal error|precondition|error:' "$dlog" || echo "$name: lldb printed no frames" >&2
+  rm -f "$dlog"
 }
 
 status=0
