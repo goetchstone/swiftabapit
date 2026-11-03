@@ -227,10 +227,11 @@ org editor's save).
   `aViewReadsApplesAttributes` fails until the view lists it, which is where it gets withheld.
 - **What `ProfileText` masks** (Phase 2a review L2): every value under a key whose fold, without its numbers, holds a
   stem (`password`, `secret`, `token`, `psk`, `sharedkey`, an encryption, client, access or licence key, `bypass`,
-  `assertion`, an unlock or access code, a WEP key, …; every stem of `ExportPolicy.sensitiveStems`, which
-  `aProfileMasksEveryStemCSVWithholds` holds), or that has `PIN`, `PW` or `PUK` as a word or a plural one (`PINs`), or
-  whose fold ends in one past a plural and the trailing words `code`, `number`, `value` (`pincode`, `rootpw`, `SIMPINs`),
-  unless it is a flag, a date, or a number that isn't a secret; a number whose fold ends in a stem or one of those
+  `assertion`, an unlock or access code, a WEP key, ACME's `clientidentifier`, …; every stem of
+  `ExportPolicy.sensitiveStems`, which `aProfileMasksEveryStemCSVWithholds` holds), or that has `PIN`, `PW` or `PUK` as a
+  word or a plural one (`PINs`), or whose fold ends in one or in `PPK` (IKEv2's post-quantum pre-shared key, a secret
+  only as the ending, so `PPKIdentifier` shows) past a plural and the trailing words `code`, `number`, `value`
+  (`pincode`, `rootpw`, `SIMPINs`), unless it is a flag, a date, or a number that isn't a secret; a number whose fold ends in a stem or one of those
   words, past the same (`Passcode`, `UserPIN`, `UnlockCode`, `PINCode`, `PassCode`, `SharedSecret`, `LicenseKey`,
   `Passwords`), unless a policy word is in the key, whole (`MaxPIN`, `PasscodeMinLength`; `AgentPIN` isn't `age`; a
   string under a policy-worded key is masked all the same); every string holding a private key, whatever its key and
@@ -244,14 +245,31 @@ org editor's save).
   own; verifier round 3 of the fixes, `aContainerUnderASecretKeyIsMaskedWhole`). A flag is a `CFBoolean` (`objCType` `c`); a number is any other `NSNumber`. A key written twice alike
   (Foundation's reader keeps one, the last) and two keys equal once normalized (merged when Foundation's dictionary
   becomes Swift's) are counted in `.plist`'s `merged`, the first from the XML's own keys, and `note` says it.
-  - Credential headers: in a dictionary under a key that names headers (the relay payload's
-    `AdditionalHTTPHeaderFields`), a string under `Authorization`, `Proxy-Authorization`, `Cookie` or `Set-Cookie` is
-    masked. Those names are left alone elsewhere, because the privacy payload's `Authorization` is Allow or Deny
-    for 24 services.
-  - Held to Apple's own schemas (`ProfileSchemaContractTests`, over `Contracts/device-management/profiles-27.0.json`).
-    Each of the 39 keys whose description in Apple's YAML says it holds a secret is masked: passwords, shared
-    secrets, the SCEP challenge, the SSO registration token and the content filter's bearer token. Every data
-    key is masked. Every other string, number and untyped key is shown, except 12 over-masks named in the test.
+  - HTTP headers (review M-3): under a key whose fold holds `header` (the relay payload's `AdditionalHTTPHeaderFields`),
+    every value of a dictionary is masked whatever its type (a string, a number, a list, a dictionary one level
+    deeper), and every item of a list (name and value pairs), so a credential hides under any header name
+    (`X-Authorization`, `Ocp-Apim-Subscription-Key`). A string under such a key is any other string (EAS `HeaderMagic`),
+    and no header name is a stem, because the privacy payload's `Authorization` is Allow or Deny for 24 services
+    (`everyValueOfHTTPHeadersIsMasked`).
+  - Held to Apple's own schemas (`ProfileSchemaContractTests`, over `Contracts/device-management/profiles-27.0.json`:
+    127 payload files, 2,321 keys). Each payload is written as a profile carries it, every key in its real nesting
+    (a list holds one item, the schema's item name no key) with a unique value of its own type, and what the detail
+    shows is searched for each: 1,199 values (every string, untyped, integer, real and data key, and the 4 keys that
+    repeat an ancestor, given a sample); a flag or a date carries none. What is masked is exactly the test's 44
+    `secrets`, its 17 `overMasked` and the 26 data keys, so masking more fails as masking less does (review M-1: each key
+    had been read alone at the top level, so AirPlay's `Passwords` list, masked whole, hid two device names unseen;
+    `eachBuiltProfileHoldsEveryKeyAtItsPath` checks the builder). Which keys are secrets follows Apple's descriptions
+    (review M-2): the script marks `describedAsSecret` on the 45 keys whose description is a secret's ("the password
+    for", "the user's password", a secret, pre-shared, "the token", a challenge, anti-replay, a passphrase, a private
+    key; never on a flag), and each is on `secrets` or on the 3-key `notSecret` with the reason, so a described secret
+    can't move to `overMasked`; the two secrets no description names (`IKEv2.SharedSecret`, a header's value) are marked
+    in the test. The data secrets (an APN password, IPSec's shared secret, IKEv2's `PPK`) are also written as strings.
+    The contract's counts and SHA-256 are recomputed from its payloads (review L-3).
+  - What no schema key exercises: there, `password`, `secret`, `token`, `passcode`, `credential`, `challenge`,
+    `accesskey`, `clientidentifier`, the `PW` word and the `PPK` ending are each the only reason some value is masked.
+    Every other stem and word (`PIN`, `PUK`, `psk`, `passphrase`, `privatekey`, `bypass`, an unlock code, …) is held
+    only by `ProfileTextTests` (and the CSV's stems by `ExportPolicyTests`); the contract test sees them only if they
+    start to mask a key that isn't a flag.
   - Not caught: a secret under a key no stem or word names that isn't a private key in a form above (a homoglyph spelling,
   an unusual name, a number under `AuthCode`, `AuthKey` or `SetupKey`), a secret inside a string's text (a WireGuard
   `PrivateKey =` line, an `Authorization: Basic` header written in text, a URL's `user:password@`, an OpenVPN static key, an SSH2-format
@@ -260,8 +278,9 @@ org editor's save).
   extension's `ExtensionData`: no schema says what they hold), and a binary plist's repeated
   keys (its dictionaries can be shared, so its table isn't the tree). Over-masked, the safe way: a policy value under
   a secret word, such as Kerberos' `pwReqText` and `pwChangeURL` or `passwordContentRegex`, a flag written as an
-  integer (`askForPassword` = 1, `forcePIN` = 1), and `credentialBundleIdACL` and `credentialUseMode`; the key shows,
-  and the note counts it. Masking is a denylist for the detail's display: the raw profile never leaves AbapitKit, so a
+  integer (`askForPassword` = 1, `forcePIN` = 1), `credentialBundleIdACL` and `credentialUseMode`, and a name beside
+  a secret in a list masked whole (AirPlay's device names in `Passwords`, Platform SSO's `TokenToUserMapping`, the
+  regex's descriptions under `passwordContentDescription`); the key shows, and the note counts it. Masking is a denylist for the detail's display: the raw profile never leaves AbapitKit, so a
   miss shows a secret on the detail's screen, never in the CSV or the pass (each held by a canary test).
 - **The stub's parameter table is the contract's, written out** (`AppleStub.parameters`, `paged`), never computed from
   the client or the models (failure-log 2026-10-16, "the mosyle stub agreed with the client"): `AppleStubTests` holds

@@ -2,10 +2,12 @@
  "source": "https://github.com/apple/device-management",
  "commit": "09f249a06e7e3289930bf6d05f38fb562f748ebf",
  "release": "Release-v27.0",
- "sha256": "65ad3a65d0a5f407b3a5e77ea7294d9228ebb3bca2000ee8b593225598a39b3c",
+ "pyyaml": "6.0.3",
+ "sha256": "75c3526d2941401c83ada42531100e01eb30dba1d38c1a00029de9943f5e272d",
  "counts": {
   "files": 127,
-  "keys": 2321
+  "keys": 2321,
+  "describedAsSecret": 45
  },
  "license": "Copyright \u00a9 2022-2026 Apple Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
  "payloads": [
@@ -421,7 +423,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -848,7 +851,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -1776,7 +1780,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -5698,7 +5703,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -5714,7 +5720,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     }
    ]
   },
@@ -5799,7 +5806,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -5985,7 +5993,8 @@
      ],
      "type": "<data>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -8490,7 +8499,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -8566,7 +8576,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -8680,7 +8691,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -8746,7 +8758,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -9012,7 +9025,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -10253,7 +10267,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -10277,7 +10292,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -11080,7 +11096,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -11740,7 +11757,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -11859,7 +11877,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -13227,7 +13246,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -13295,7 +13315,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -13633,7 +13654,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -13801,7 +13823,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -13809,7 +13832,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -15122,7 +15146,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -15239,7 +15264,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     }
    ]
   },
@@ -15292,7 +15318,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -15720,7 +15747,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -16228,7 +16256,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -16365,7 +16394,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -16779,7 +16809,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -18746,7 +18777,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -19214,7 +19246,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -19359,7 +19392,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -19404,7 +19438,8 @@
      ],
      "type": "<data>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -19801,7 +19836,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -19855,7 +19891,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -20313,7 +20350,8 @@
      ],
      "type": "<data>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -20322,7 +20360,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -20707,7 +20746,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -21241,7 +21281,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -21561,7 +21602,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -21727,7 +21769,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -21807,7 +21850,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -21860,7 +21904,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -22262,7 +22307,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "optional"
+     "presence": "optional",
+     "describedAsSecret": true
     },
     {
      "path": [
@@ -22448,7 +22494,8 @@
      ],
      "type": "<string>",
      "valuetype": null,
-     "presence": "required"
+     "presence": "required",
+     "describedAsSecret": true
     }
    ]
   },

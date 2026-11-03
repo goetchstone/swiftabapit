@@ -157,6 +157,10 @@ struct ProfileTextTests {
         ("ActivationLockBypass", true), ("ClientAssertion", true), ("unlockpinx", true), ("UnlockCode", true), ("AccessCode", true),
         ("WEP40Key", true),
         ("URLs", false), ("IPsec", false), ("Spinner", false), ("Passes", false), ("IPv4Address", false), ("Pinning", false),
+        // Review M-2: ACME's anti-replay `ClientIdentifier` and IKEv2's `PPK` as a string were shown; `PPK` is a secret only
+        // as the key's ending, so the key that names it isn't one.
+        ("ClientIdentifier", true), ("client_identifier", true), ("PPK", true), ("IKEv2PPK", true), ("PPKs", true),
+        ("PPKIdentifier", false), ("PPKMandatory", false),
     ])
     func aSecretKeyIsFoundHoweverItIsSpelled(key: String, secret: Bool) throws {
         let plist = "<plist version=\"1.0\"><dict><key>\(key)</key><string>s3cr3t-value</string></dict></plist>"
@@ -219,6 +223,8 @@ struct ProfileTextTests {
         ("PUK", true), ("SIMPIN", true), ("pincode", true), ("adminpw", true), ("PINCodeValue", true), ("WEP40Key", true),
         ("TokenExpiry", false), ("SecretRotationDays", false), ("KeySize", false), ("ChallengeRetries", false), ("Pinning", false),
         ("MaxPasscodes", false), ("PINsRequired", false),
+        // Review M-2: the new stem and ending, for a number as for a string.
+        ("ClientIdentifier", true), ("PPK", true), ("PPKMandatory", false), ("PPKIdentifier", false),
     ])
     func aNumberUnderASecretWordIsMaskedAndAPolicyIsNot(key: String, secret: Bool) throws {
         for (value, written) in [("<integer>4321</integer>", "4321"), ("<real>43.5</real>", "43.5"), ("<integer>0</integer>", "<integer>0</integer>")] {
@@ -270,6 +276,14 @@ struct ProfileTextTests {
                              ("PINsCount", ["pins", "count"]), ("PINSet", ["pin", "set"]), ("PINCode", ["pin", "code"]), ("IPsec", ["i", "psec"]),
                              ("DevicePIN2", ["device", "pin", "2"]), ("pin_code", ["pin", "code"]), ("URLSession", ["url", "session"])] {
             #expect(ProfileSecrets.words(key) == words, "\(key): \(ProfileSecrets.words(key))")
+        }
+    }
+
+    /// A key names HTTP headers when its fold, without its numbers, holds `header`, as a stem is found (review M-3).
+    @Test func aKeyNamesHeadersByItsLetters() {
+        for (key, headers) in [("AdditionalHTTPHeaderFields", true), ("Headers", true), ("additional_http_headers", true),
+                               ("Head2ers", true), ("H\u{200B}eaders", true), ("Heading", false), ("Leader", false), ("Head", false)] {
+            #expect(ProfileSecrets.namesHeaders(key) == headers, "\(key)")
         }
     }
 

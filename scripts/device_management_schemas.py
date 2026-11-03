@@ -3,12 +3,15 @@
 
 Apple's device-management repository describes every MDM profile payload as YAML: its payload type, the OS
 versions that support it, and every payload key with its type, value type and presence. This script reads
-`mdm/profiles/*.yaml` at one pinned commit and writes, deterministically (sorted, no timestamps):
+`mdm/profiles/*.yaml` at one pinned commit and writes, deterministically (files by path, keys in the YAML's own order,
+no timestamps), so a re-run at the same pin changes no byte:
 
     Contracts/device-management/profiles-<version>.json
 
-Now: the contract `ProfileText`'s masking is held to (a key Apple says holds a secret is masked; any other key
-is shown, or is on the recorded over-mask list). Phase 5: the validation of a custom setting before upload.
+Now: the contract `ProfileText`'s masking is held to. A key whose description says its value is a secret is marked
+`describedAsSecret` (`SECRET`); the description itself isn't stored. The test holds every marked key to its reviewed
+secret or not-secret list, so a secret Apple adds in a later release fails there before anyone writes it down.
+Phase 5: the validation of a custom setting before upload.
 
 Downloaded files are DATA: YAML read with `yaml.safe_load` and nothing else, capped in size and count, fetched
 only over HTTPS from api.github.com (the tree, once) and raw.githubusercontent.com (each file at the pinned
@@ -25,6 +28,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 import urllib.parse
@@ -42,6 +46,32 @@ MAX_FILES = 400           # 127 profile schemas at 27.0
 MAX_BYTES = 2 * 1024 * 1024
 DELAY = 0.05
 PLATFORMS = ["iOS", "macOS", "tvOS", "visionOS", "watchOS"]
+
+# Apple's own wording for a value that is a secret, read from every description at 27.0 (review M-2): "The password
+# for/of the account", "The password used to authenticate", "The user's password", "The AirPlay password", "An optional
+# user password", "The password to the identity"; "a preshared secret", "the shared secret"; "the Post-quantum Pre-shared
+# key"; "The token this device uses", "an HTTP bearer token", "the per-user authentication token"; a challenge; "an
+# anti-replay code"; a passphrase; a private key. Words that only name a secret elsewhere stay out: "token requests",
+# "a token card", "the bootstrap token" (a capability), "a password to unlock" (a policy). Matched on the description
+# with its whitespace collapsed, so `^` is its start.
+SECRET = re.compile(r"""
+    \bpassword\ (?:for|of|used)\b
+  | ^(?:the|an?)\ (?:[\w']+\ ){0,2}password\b
+  | \bthe\ user's\ password\b
+  | \bsecret\b
+  | \bpre-?shared\b
+  | \b(?:the|bearer|authentication)\ token\b
+  | \bchallenge\b
+  | \banti-replay\b
+  | \bpassphrase\b
+  | \bprivate\ key\b
+""", re.IGNORECASE | re.VERBOSE)
+
+
+def described_as_secret(item: dict) -> bool:
+    """Whether Apple's description says the key's value is a secret. A flag is never one: its description names the
+    secret it governs (`AllowAllAppsAccess`: "access to the private key"), and `ProfileText` never masks a flag."""
+    return item.get("type") != "<boolean>" and SECRET.search(" ".join(str(item.get("content") or "").split())) is not None
 
 
 class NoRedirects(urllib.request.HTTPRedirectHandler):
@@ -73,14 +103,16 @@ def blob_sha(body: bytes) -> str:
 
 
 def keys_of(items, prefix: list[str], seen: tuple[int, ...], out: list[dict]) -> None:
-    """Every payload key, depth first, with its path. A schema that names itself through a YAML anchor (an allow list's
-    sub-apps, the Home Screen's pages) is marked `recursive` where it repeats, not walked again."""
+    """Every payload key, depth first in the YAML's order, with its path. A schema that names itself through a YAML anchor
+    (an allow list's sub-apps, the Home Screen's pages) is marked `recursive` where it repeats, not walked again."""
     for item in items or []:
         if not isinstance(item, dict) or "key" not in item:
             continue
         path = prefix + [str(item["key"])]
         key = {"path": path, "type": item.get("type"), "valuetype": item.get("valuetype") or item.get("subtype"),
                "presence": item.get("presence")}
+        if described_as_secret(item):
+            key["describedAsSecret"] = True
         if id(item) in seen:
             out.append({**key, "recursive": True})
             continue
@@ -106,7 +138,6 @@ def main() -> int:
     files = sorted(p for p in blobs if p.startswith("mdm/profiles/") and p.endswith(".yaml"))
     if not files or len(files) > MAX_FILES:
         raise SystemExit(f"{len(files)} profile schemas; expected 1 to {MAX_FILES}")
-    whole = hashlib.sha256()
     payloads = []
     for path in files + ["LICENSE.txt"]:
         body = fetch(f"https://raw.githubusercontent.com/{REPO}/{COMMIT}/{path}")
@@ -115,19 +146,22 @@ def main() -> int:
         if path == "LICENSE.txt":
             license_text = body.decode("utf-8")
             continue
-        whole.update(path.encode() + b"\0" + body)
         doc = yaml.safe_load(body)
         payload = doc.get("payload") or {}
         keys: list[dict] = []
         keys_of(doc.get("payloadkeys"), [], (), keys)
         payloads.append({"file": path, "sha256": hashlib.sha256(body).hexdigest(), "payloadtype": payload.get("payloadtype"),
                          "supportedOS": supported(payload), "keys": keys})
+    # Over the files' own SHA-256s, sorted, one per line: recomputable from the output alone (review L-6).
+    whole = hashlib.sha256("".join(f"{h}\n" for h in sorted(p["sha256"] for p in payloads)).encode())
     result = {
         "source": f"https://github.com/{REPO}",
         "commit": COMMIT,
         "release": RELEASE,
+        "pyyaml": yaml.__version__,
         "sha256": whole.hexdigest(),
-        "counts": {"files": len(payloads), "keys": sum(len(p["keys"]) for p in payloads)},
+        "counts": {"files": len(payloads), "keys": sum(len(p["keys"]) for p in payloads),
+                   "describedAsSecret": sum(1 for p in payloads for k in p["keys"] if k.get("describedAsSecret"))},
         "license": license_text,
         "payloads": payloads,
     }
