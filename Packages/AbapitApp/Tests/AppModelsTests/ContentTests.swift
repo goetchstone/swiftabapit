@@ -681,6 +681,16 @@ struct ContentTests {
                 // Phase 2b verifier round 3, mutant C-joinFirstAt: a password with an `@` and blanks runs to its last `@`,
                 // so no part of it shows as a host.
                 ("https://deploy:my" + blank + "pw@x" + blank + "TOPSECRET7@h.example.com/a.pkg", "https://********@h.example.com/a.pkg"),
+                // Round 3: in every address of the Location, not only the first: a second one, one inside the path, and a
+                // path segment's user and password.
+                ("https://h.example.com/a.pkg" + blank + "https://deploy:my" + blank + "TOPSECRET8@h2.example.com/b.pkg",
+                 "https://h.example.com/a.pkg" + blank + "https://********@h2.example.com/b.pkg"),
+                ("https://proxy.example.com/fetch/https://deploy:my" + blank + "TOPSECRET9@origin.example.com/a.pkg",
+                 "https://proxy.example.com/fetch/https://********@origin.example.com/a.pkg"),
+                ("https://proxy.example.com/fetch/deploy:my" + blank + "TOPSECRET10@origin.example.com/a.pkg",
+                 "https://proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+                // A blank in the text before a glued scheme keeps it from being read as a label (the split would copy it).
+                ("deploy:my" + blank + "TOPSECRET11 jar:https:\\\\x@h.example.com/a", "********@h.example.com/a"),
             ]
             for (url, shown) in cases {
                 let result = ContentWords.location(url)
@@ -701,6 +711,12 @@ struct ContentTests {
             ("x:a?token=TOPSECRET2&next=https://y.example.com/", "x:a?token=********&next=********"),
             ("file:/a;sid=TOPSECRET3/https://y.example.com/", "file:/a;sid=********/https://y.example.com/"),
             ("x:a#access_token=TOPSECRET4&u=https://y.example.com", "x:a#********"),
+            // Phase 2b verifier round 3: with no scheme ahead, the split was taken anyway, so a scheme-less address's query,
+            // a parameter or a user part before the inner scheme was copied raw.
+            ("packages.example.com/a.pkg?sig=TOPSECRET5&next=https://y.example.com/", "packages.example.com/a.pkg?sig=********&next=********"),
+            ("a;sid=TOPSECRET6,https://u:TOPSECRET7@y.example.com/", "a;sid=********https://********@y.example.com/"),
+            ("x:a;sid=TOPSECRET8,https://y.example.com/", "x:a;sid=********https://y.example.com/"),
+            ("deploy@https://u:TOPSECRET9@y.example.com/a", "********@https://********@y.example.com/a"),
         ]
         for (url, shown) in cases {
             let result = ContentWords.location(url)
@@ -722,6 +738,118 @@ struct ContentTests {
         }
         for text in ["Needs @acme/vpn-helper 2.1", "@acme/vpn-helper"] {
             #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+    }
+
+    /// Phase 2b verifier round 3, probes V3Probes and V3Probes2: a blank inside a Location's query, fragment or path
+    /// parameter ended the address, so the run after it read as a path and showed the values after the blank in clear, under
+    /// the note that the query was masked. In the Location the query and the fragment run to the end and a parameter's value
+    /// to its next `/`, `;`, `?` or `#`, each blank; blanks after the last run are kept as they came.
+    @Test func aBlankInsideALocationsQueryFragmentOrParameterIsMasked() {
+        for blank in [" ", "\t", "\n", "\r", "\u{0B}", "\u{0C}"] {
+            let cases: [(String, String)] = [
+                ("https://cdn.example.com/dl?file=My" + blank + "App.pkg&token=TOPSECRET1", "https://cdn.example.com/dl?file=********&token=********"),
+                ("https://h.example.com/a.pkg?x=1" + blank + "2&sig=TOPSECRET2", "https://h.example.com/a.pkg?x=********&sig=********"),
+                ("https://h.example.com/a.pkg?sig=AAAA" + blank + "TOPSECRET3", "https://h.example.com/a.pkg?sig=********"),
+                ("https://h.example.com/a.pkg#token=AAAA" + blank + "TOPSECRET4", "https://h.example.com/a.pkg#********"),
+                ("https://h.example.com/a.pkg;jsessionid=AAAA" + blank + "TOPSECRET5", "https://h.example.com/a.pkg;jsessionid=********"),
+                ("https://deploy:pw@h.example.com/a.pkg?a=1" + blank + "&sig=TOPSECRET6", "https://********@h.example.com/a.pkg?a=********&sig=********"),
+                ("https://h.example.com/dl;sid=AAAA" + blank + "TOPSECRET7/a.pkg?k=v", "https://h.example.com/dl;sid=********/a.pkg?k=********"),
+                // A parameter's value with a `:` is still a parameter's, not a user part waiting for an `@`.
+                ("https://h.example.com/a.pkg;sid=x:AAAA" + blank + "TOPSECRET8", "https://h.example.com/a.pkg;sid=********"),
+                ("packages.example.com/a.pkg?sig=AAAA" + blank + "TOPSECRET9" + blank, "packages.example.com/a.pkg?sig=********" + blank),
+                // A parameter runs on only to its segment's end: an address after the next blank is read as its own.
+                ("https://h.example.com/a;v=1" + blank + "b/c" + blank + "TOPSECRET10@x.example.com/y",
+                 "https://h.example.com/a;v=********/c" + blank + "********@x.example.com/y"),
+            ]
+            for (url, shown) in cases {
+                let result = ContentWords.location(url)
+                #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(Array(blank.utf8)): \(url) -> \(result)")
+                #expect(!result.text.contains("TOPSECRET"), "\(result.text)")
+            }
+        }
+    }
+
+    /// Phase 2b verifier round 3, probe V3Probes: an inner scheme with one slash, a backslash or none (`jar:https:/…`,
+    /// `url=https:/…`, `…/fetch/https:\\…`, `…/fetch/https:deploy:pw@…`), which a browser reads as `://`, was no address
+    /// to the glued split or the nested one, so its user and password showed, with no note, in the Location and in other
+    /// text, a description's in the packages CSV; and so did a path segment's `deploy:pw@` with no scheme. Each is masked.
+    @Test func anInnerSchemeWithOneSlashABackslashOrNoneIsMasked() {
+        let cases: [(String, String)] = [
+            ("jar:https:/deploy:TOPSECRET1@h.example.com/a.jar", "jar:https:/********@h.example.com/a.jar"),
+            ("url=https:/deploy:TOPSECRET2@h.example.com/a.pkg", "url=https:/********@h.example.com/a.pkg"),
+            ("Mirror:https:/deploy:TOPSECRET3@h.example.com/a.pkg", "Mirror:https:/********@h.example.com/a.pkg"),
+            ("jar:https:\\\\deploy:TOPSECRET4@h.example.com/a.jar", "jar:https:\\\\********@h.example.com/a.jar"),
+            ("jar:https:/TOPSECRET5@h.example.com/a.jar", "jar:https:/********@h.example.com/a.jar"),
+            ("https://proxy.example.com/fetch/https:/deploy:TOPSECRET6@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/https:deploy:TOPSECRET7@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/https:\\\\deploy:TOPSECRET8@o.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:\\\\********@o.example.com/a.pkg"),
+            ("https://proxy.example.com/f,https:/deploy:TOPSECRET9@o.example.com/a", "https://proxy.example.com/f,https:/********@o.example.com/a"),
+            ("https://proxy.example.com/fetch/https:/TOPSECRET10@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/deploy:TOPSECRET11@origin.example.com/a.pkg?sig=TOPSECRET12",
+             "https://proxy.example.com/fetch/********@origin.example.com/a.pkg?sig=********"),
+            ("proxy.example.com/fetch/deploy:TOPSECRET13@origin.example.com/a.pkg", "proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            // To the segment's last `@`, and in other text an address by that alone; one slash's user alone after a label.
+            ("proxy.example.com/fetch/svc@corp:TOPSECRET17@origin.example.com/a.pkg", "proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            ("url=https:/TOPSECRET18@h.example.com/a.pkg", "url=https:/********@h.example.com/a.pkg"),
+            // Probe C4: a line separator isn't a blank, so it glues text into the path segment.
+            ("https://h.example.com/a.pkg\u{2028}deploy:TOPSECRET14@o.example.com/b", "https://h.example.com/********@o.example.com/b"),
+            // Mutant R3-schemeFirstDigit's leak, `1://user:pw@host` (no address has one): read as an authority, and inside
+            // a path too.
+            ("1://deploy:TOPSECRET15@h.example.com/a", "1://********@h.example.com/a"),
+            ("https://h.example.com/x/1://deploy:TOPSECRET16@o.example.com/a", "https://h.example.com/x/1://********@o.example.com/a"),
+            // A user alone, which no segment rule reads as one: only the authority after the prefix masks it.
+            ("1://TOPSECRET19@h.example.com/a", "1://********@h.example.com/a"),
+            // A `:/` after no scheme's byte is no inner scheme, and doesn't hide the one after it from the nested split.
+            ("https://proxy.example.com/~:/https:/TOPSECRET20@origin.example.com/a.pkg", "https://proxy.example.com/~:/https:/********@origin.example.com/a.pkg"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+        // A path segment's `@` with no password, or a folder's, is no user and password (`img@2x`).
+        let plain = "https://h.example.com/img@2x/icon.png"
+        #expect(ContentWords.location(plain) == (plain, false) && ContentWords.addresses(in: plain) == plain)
+    }
+
+    /// Phase 2b verifier round 3, probe V3Probes.aPackageShapesThroughTheModel: each shape above as the detail and the
+    /// packages CSV show it, the masked note with it. The CSV, a file that leaves the app, held a description's password.
+    @Test func anInnerSchemesUserAndPasswordAreMaskedInTheDetailAndTheCSV() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([
+            Resource(type: "packages", id: "P1", attributes: [
+                "name": .string("One slash"), "url": .string("jar:https:/deploy:TOPSECRET1@h.example.com/a.jar"),
+                "description": .string("Mirror url=https:/deploy:TOPSECRET2@d.example.com/a.pkg"),
+            ]),
+            Resource(type: "packages", id: "P2", attributes: [
+                "name": .string("Spaced query"), "url": .string("https://h.example.com/a.pkg?x=1 2&sig=TOPSECRET3"),
+                "description": .string("From https://proxy.example.com/fetch/https:deploy:TOPSECRET4@o.example.com/a.pkg"),
+            ]),
+        ])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        let csv = world.content.csv(for: .packages)
+        #expect(!csv.contains("TOPSECRET") && !csv.contains("deploy"), "\(csv)")
+        #expect(csv.contains("Mirror url=https:/********@d.example.com/a.pkg"), "\(csv)")
+        #expect(csv.contains("From https://proxy.example.com/fetch/********@o.example.com/a.pkg"), "\(csv)")
+        for (id, location) in [("P1", "jar:https:/********@h.example.com/a.jar"), ("P2", "https://h.example.com/a.pkg?x=********&sig=********")] {
+            let before = world.content.detail.readsFinished
+            world.content.selection = id
+            await Self.detailSettled(world, before + 1)
+            let detail = try Self.detail(world)
+            #expect(detail.fields.first { $0.label == "Location" }?.value == location, "\(id)")
+            #expect(detail.attributes.first { $0.label == "url" }?.value == location, "\(id)")
+            #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                     + "It is shown here, never opened."], "\(id): \(detail.notes)")
+            let shown = (detail.fields + detail.attributes).map(\.value) + [detail.title]
+            #expect(!shown.contains { $0.contains("TOPSECRET") || $0.contains("deploy") }, "\(shown)")
         }
     }
 
@@ -931,6 +1059,23 @@ struct ContentTests {
             let reads = world.stubs["a"]!.requests.filter { $0.contains("/v1/blueprints/demo-blueprint-02") }
             #expect(reads.count == 2 && reads[0].contains("include=") && !reads[1].contains("include="), "\(reads)")
         }
+    }
+
+    /// Phase 2b verifier round 3: a blueprint's included packages were named raw in its member list, where the package's
+    /// own row, detail and CSV mask an address in its name; the list masks it the same way (`ContentWords.shown`).
+    @Test func aBlueprintsPackageNamesAreMaskedAsThePackagesOwn() async throws {
+        let world = try await World.make()
+        let stub = world.stubs["a"]!
+        stub.add([Resource(type: "packages", id: "P1", attributes: ["name": .string("Agent from https://deploy:TOPSECRET1@pkgs.example.com/agent.pkg")]),
+                  Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Office")])])
+        stub.relate("blueprints", "B1", "packages", to: ["P1"])
+        world.content.load()
+        await Self.settled(world, 4)
+        let row = try #require(world.content.packages.rows.first)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let packages = try #require(detail.members.first { $0.relationship == .packages })
+        #expect(packages.members == [ContentMember(id: "P1", name: "Agent from https://********@pkgs.example.com/agent.pkg")], "\(packages.members)")
+        #expect(packages.members.first?.name == row.name)
     }
 
     // MARK: configurations

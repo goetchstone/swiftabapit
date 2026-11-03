@@ -359,44 +359,68 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
   of the path still ends a user and password (review L2: the first `://` anywhere was the scheme's, so one in the query
   copied the query before it raw; `//user:pw@host`, `user:pw@host` and `;jsessionid=` showed raw). Text or an outer scheme
-  glued before an address's `://` is kept and the address masked from its own scheme, when the `://` comes before any `/`,
-  `?`, `#` or `@` (`jar:https://…`, `Mirror:https://…`, `x:y:https://…`, `token:` and a no-break space), and after a scheme
-  one slash starts an authority as two do (`https:/user:pw@host`, which a browser reads as `https://`); verifier round 1:
-  each showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`). An address inside another
-  one's path, a proxy's or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one joined by `,` or `;`, is
+  glued before an address is kept and the address masked from its own scheme, when that scheme's `:` has a slash or a
+  backslash after it (`://`, and the `:/` and `:\\` a browser reads as `://`) and no `/`, `?`, `#`, `@`, `;` or blank before
+  it (`jar:https://…`, `jar:https:/…`, `url=https:/…`, `Mirror:https://…`, `x:y:https://…`, `token:` and a no-break space);
+  after a scheme one slash starts an authority as two do, and backslashes as slashes (`https:/user:pw@host`,
+  `https:\\user:pw@host`), and so does a `//` after a digit-led prefix (`1://user:pw@host`, which no address has); verifier
+  round 1: each `://` shape showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`), and
+  round 3 each slash or backslash shape and the digit-led one (`anInnerSchemeWithOneSlashABackslashOrNoneIsMasked`,
+  mutant R3-schemeFirstDigit). The guard holds with no scheme ahead too (round 3: `host/a.pkg?sig=…&next=https://…` was
+  split at `https` and its signature copied raw, as was `a;sid=…,https://…`'s parameter;
+  `aSchemeSlashesAfterTheQueryPathOrFragmentStartsNoGluedAddress`). An address inside another one's path, a proxy's or an
+  archive's (`https://proxy/fetch/https://user:pw@origin/…`, one slash or a backslash too) or one joined by `,` or `;`, is
   masked from its own scheme on, and the path before it kept (verifier round 2: it was copied as the outer path, its user
-  and password in clear; `anAddressInsideAnothersPathIsMasked`). In the Location a blank ends an address except inside the
-  first one's user and password: a client sends a password a blank splits (a browser encodes a space and drops a tab or a
-  newline there), so that authority runs past blanks to its last `@` (verifier round 2: `https://deploy:my pw@host` showed
-  `deploy:my` as a host while the note said the password was masked; `aBlankInsideALocationsPasswordIsMasked`). A `://`
-  after a leading `//`, or after a scheme's `?`, `/` or `#`, starts no glued address, and every ASCII blank ends a run in
-  other text, each held by its own case (verifier round 2: each of the split's guards and CR, VT and FF survived every
-  suite, each showing a credential; `aSchemeSlashesAfterTheQueryPathOrFragmentStartsNoGluedAddress`,
+  and password in clear; `anAddressInsideAnothersPathIsMasked`). A path segment's user and password, before its last `@`,
+  are masked whatever comes before them in the segment (`…/fetch/deploy:pw@origin/…`, `…/fetch/https:deploy:pw@origin/…`,
+  which a browser reads as `https://deploy:pw@origin/…`, and a line separator, not a blank, gluing one to the segment), and
+  a segment's `@` with no `:` before it (`/img@2x/`) is none (verifier round 3: each copied raw). In the Location a blank
+  doesn't end an address inside its user and password (its authority, its user part with no `//`, or a path segment with a
+  `:`), a path parameter, its query or its fragment, in each address it holds: a client sends such a value whole (a
+  browser encodes a space and drops a tab or a newline), so a user and password run past blanks to their last `@` ahead of
+  the path, a parameter's value to its next `/`, `;`, `?` or `#`, and a query or a fragment to the Location's last
+  run (verifier round 2: `https://deploy:my pw@host` showed `deploy:my` as a host while the note said the password was
+  masked; round 3: `?file=My App.pkg&token=…` showed the values after the blank in clear under that note, and a second
+  address's password its first part; `aBlankInsideALocationsPasswordIsMasked`,
+  `aBlankInsideALocationsQueryFragmentOrParameterIsMasked`). Elsewhere a blank ends an address, so one after an unencoded
+  space in a path is masked as its own, and the note shows whenever any run was masked, not only the last
+  (`aLocationMaskedOnlyBeforeABlankStillSaysSo`, mutant R3B-maskedLastRunOnly). A `://` after a leading `//`, or after a
+  scheme's `?`, `/` or `#`, starts no glued address, and every ASCII blank ends a run in other text, each held by its own
+  case (verifier round 2: each of the split's guards and CR, VT and FF survived every suite, each showing a credential;
   `everyBlankEndsAnAddressInOtherText`). Every string of a
   package's other attributes, at any depth (`JSONValue.mappingStrings`), and its Description field go through
   `ContentWords.addresses(in:)`, which masks each run between blanks that is an address (a scheme and more, `//`, a `://`,
-  or a user before an `@` ahead of a path) and leaves a word, a version, a bundle id, a hash or an email address
-  (`it@example.com`, no path) as it came; the Description showed in clear what its attribute masked (verifier round 1),
+  a scheme's `:` before a slash or a backslash, a user before an `@` ahead of a path, or a user and password before a path
+  segment's `@`) and leaves a word, a version, a bundle id, a hash or an email address (`it@example.com`, no path) as it
+  came; the Description showed in clear what its attribute masked (verifier round 1),
   and so did the title and the Name, Version, Bundle IDs and Hash fields, the list's row and the packages CSV, a file
-  that leaves the app (verifier round 2): each goes through `addresses(in:)` too (`ContentWords.shown`, the row's
-  `exported`; `everyFieldOfAPackageAndItsCSVAreMasked`).
+  that leaves the app (verifier round 2), and a blueprint's member list (round 3): each goes through `addresses(in:)` too
+  (`ContentWords.shown`, the row's `exported`; `everyFieldOfAPackageAndItsCSVAreMasked`,
+  `aBlueprintsPackageNamesAreMaskedAsThePackagesOwn`, `anInnerSchemesUserAndPasswordAreMaskedInTheDetailAndTheCSV`). A
+  blueprint's other members (apps, configurations, devices, users, user groups) are named as Apple sent them, as their own
+  screens show them: only a package's text is read for addresses.
   Every string of the package's own `url` attribute is masked as the Location is, whatever its shape: a url that isn't a
   string reads "Not readable" in the Location, with a note, never a dash (`aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked`),
   and a url sent as null is none, a dash and no note (`aNullURLIsNoLocation`, mutant N2-misreadNullIsMisread).
   Each arm of `addresses(in:)` is held through it, not only through `location` (`everyArmOfAnAddressInOtherTextIsMasked`:
   without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed until the stack overflowed; it
   now splits only where the address starts after the text, so it ends whatever the skip does).
-  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail, and an
-  email address after a scheme or a label (`mailto:it@example.com`, `Contact:it@example.com`) or before a path
-  (`Team@HQ/West`) reads as a user and password, a `user:pw@host`'s shape, and loses its name; in the Location, text after
-  a host and a blank up to an `@` (`https://host notes@x/…`) is masked as a user. Not caught: an address with no scheme,
-  no `//` and no user (`host/a.pkg?sig=…`) inside other text, so the second half of one an unencoded space split shows its
-  query (the Location masks both halves); a password a blank splits in other text (a description's words end at a blank,
-  so the part before it shows; the Location joins it); a user with no password and no path in other text (`token@host`),
-  which is an email address's shape; an address percent-encoded inside a path segment
-  (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), a segment's text until the server it names decodes it, which would take a
-  decoder per layer of encoding (`%253A` too); an address used as a JSON object's key (keys are Apple's attribute names,
-  kept by `mappingStrings`); and a `://` after something that isn't a scheme (`1://user:pw@host`), which no address has.
+  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail, a
+  `16:9@60` reads as a user and password, and an email address after a scheme or a label (`mailto:it@example.com`,
+  `Contact:it@example.com`) or before a path (`Team@HQ/West`) reads as a user and password, a `user:pw@host`'s shape, and
+  loses its name; in the Location, text after a host and a blank up to an `@` (`https://host notes@x/…`) is masked as a
+  user, and a query, a fragment or a parameter takes in what follows a blank, a second address after a blank in a query
+  included. Not caught, each recorded with why: in other text a blank ends a word, so an address with no scheme, no `//`
+  and no user (`host/a.pkg?sig=…`) isn't one, and the second half of one an unencoded space split shows its query, and
+  what follows a blank inside an address's password, query, fragment or path parameter shows (`?sig=AAAA BBBB`,
+  `deploy:my pw@host`'s `deploy:my`): a description's words can't be told from such a value's halves (the Location, one
+  address, joins them); a user with no password in other text with no path (`token@host`, an email address's shape) or in
+  a path segment with no scheme before it (`/fetch/token@origin/`, an `img@2x` folder's shape); a parameter's value glued
+  to an inner scheme (`;sid=S3https://…`), whose value reads as the scheme's first letters; an unencoded `/`, `?` or `#`
+  inside a password, which isn't a valid address (what comes before it shows as the host); an address percent-encoded
+  inside a path segment (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), a segment's text until the server it names decodes
+  it, which would take a decoder per layer of encoding (`%253A` too); and an address used as a JSON object's key (keys are
+  Apple's attribute names, kept by `mappingStrings`).
   `theDemosCustomSettingReachesNothingTheModelExposesUnmasked` follows the demo's canary password through the model.
 - **Apple MDM** (`AppleMDMModel`): `mdmDevices`, then each device's `/details` one at a time in list order, at most
   `detailLimit` (50), cancelled on a switch or Refresh; a row past it says "Not read" and reads its own when chosen. A 403
@@ -424,7 +448,7 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   A selection within the limit that a pause left "Not read" is asked first on return, before the details waiting their
   turn; a Refresh after a pause clears it, as a return does, so an org switch then reads the new org and an unforced load
   starts no second sweep; and a pause or a Refresh during the return's read cancels it, its request never sent (verifier
-  round 3, four surviving mutants: `aSelectionAPauseLeftIsAskedFirstOnReturn`, `aSwitchAfterARefreshAfterAPauseReadsTheNewOrg`,
+  round 3, five surviving mutants: `aSelectionAPauseLeftIsAskedFirstOnReturn`, `aSwitchAfterARefreshAfterAPauseReadsTheNewOrg`,
   `anUnforcedLoadAfterARefreshAfterAPauseAsksNothingTwice`, `aPauseOrARefreshDuringTheReturnsReadCancelsIt`).
   A selection the list doesn't hold says why,
   as People's does (`selectionNote`: "Reading the devices…", "This device isn't in the list Apple sent."; review L7), in

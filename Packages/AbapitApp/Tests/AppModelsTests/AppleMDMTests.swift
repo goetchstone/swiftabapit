@@ -1025,9 +1025,10 @@ struct AppleMDMTests {
             if refresh {
                 world.appleMDM.load(force: true)
                 await eventually("the Refresh read the first device again") { Self.asked(world) == ["M0000/details", "M0000/details"] }
-                // Long enough for the Refresh's own read of the second device to reach the gate, and for a cancelled one
-                // to have let go: only the Refresh's is held.
+                // Long enough for the cancelled read to have let go before the gate opens; then only the Refresh's own read
+                // of the second device is held, whenever it gets there. The count of requests below tells a read that went on.
                 try await Task.sleep(for: .milliseconds(100))
+                await eventually("the Refresh's read of the second device held") { gate.held == 1 }
                 #expect(gate.held == 1, "the return's read is still held beside the Refresh's")
                 gate.release("second")
                 await Self.settled(world, 3)

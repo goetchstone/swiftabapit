@@ -95,13 +95,33 @@
     suite, each a test gap with the code right: the scheme's bytes ending at its own `:` (an Azure SAS's
     `st=…T00:00:00Z` and a `#t=1:` fragment, scheme-less, copied raw under the mutant), the scheme-less user arm's last
     `@` (`deploy:p@ss@host`), the join's last `@`, the masked flag ORed over every run (a Location masked only before a
-    blank lost its note), and four of Apple MDM's: the selection asked first on return (only a past-limit one was
-    held), a Refresh clearing the pause (an org switch after it read nothing, and an unforced load ran a second sweep
-    beside the Refresh's), and the return's read among the tasks a pause or a Refresh cancels (its held request went out
-    after the screen was left). Each has a test that fails under it, run through the verifiers' own runners before and
-    after. `ContentTests.aSupersededDetailWritesNothing`, older than this diff, flaked: the superseded read's
+    blank lost its note), and five of Apple MDM's, three behaviours (both lenses found the first two): the selection
+    asked first on return (only a past-limit one was held), a Refresh clearing the pause (an org switch after it read
+    nothing, and an unforced load ran a second sweep beside the Refresh's), and the return's read among the tasks a
+    pause or a Refresh cancels (its held request went out after the screen was left). Each has a test that fails under it, run through the verifiers' own runners before and
+    after the tests (and, once the parser below moved four of the mutation runner's other patterns, so that it refuses
+    its whole list, through a runner with the same edits). `ContentTests.aSupersededDetailWritesNothing`, older than this
+    diff, flaked: the superseded read's
     `CancellationError` return counts in `readsFinished`, so the wait for one read could end on it with the second still
-    loading; it now waits for the first read at the gate, then for the detail itself.
+    loading; it now waits for the first read at the gate, then for the detail itself. Masking leaks no shape list had
+    named, the fourth layer of review L2's class: an inner scheme with one slash, a backslash or none (`jar:https:/…`,
+    `url=https:/…`, `…/fetch/https:\\…`, `…/fetch/https:deploy:pw@…`), since the glued and nested splits looked only for
+    `://`, showed its user and password with no note, in the Location and in a description, so in the packages CSV, a file
+    that leaves the app (invariant 11); and a blank inside a Location's query, fragment or parameter ended the address, so
+    the values after it showed under the note that the query was masked, and a second address's password a blank split
+    showed its first part (only the first address was joined). Each is masked: one `slashedColon` for both splits, a path
+    segment's user and password masked before its last `@`, backslashes read as slashes after a scheme, and in the
+    Location an address that a blank cuts while open (in a user part, a parameter, a query or a fragment) runs on and is
+    read again, in every address of it. Reading the parser for those found three more, each fixed with a test: a
+    scheme-less location whose query held a `://` (`host/a.pkg?sig=…&next=https://…`) was split there by the glued split,
+    whose guard applied only after a scheme, and its signature copied raw; a parameter before an inner scheme
+    (`a;sid=…,https://…`) likewise; and a bare `deploy:pw@origin` segment in a path. A digit-led `1://user:pw@host`, which
+    no address has and the runbook listed as not caught, is now an authority (mutant R3-schemeFirstDigit only masked
+    more). A blueprint's member list named its packages raw, a sixth place round 2's masking missed: it goes through
+    `ContentWords.shown`. What stays unmasked, each with why, is in the apple-reads runbook's Not caught list. The
+    repair's own guards each have a case that a mutant of them fails; two mutants are equivalent: the join to the first
+    `@` in place of the last (the Location reads the run again, still open, and goes on to the next `@`), and a
+    digit-led prefix read as a scheme with no `//` after it (it only masks more).
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
@@ -116,6 +136,9 @@
   2026-10-31, "a state a fix added was checked only after the reads settled" (a fix that adds a state is followed through
   every way out of it, and asserted while a read is held at the gate, not only after `settled`). Its masking leaks repeat
   RULE-FEEDBACK 2026-10-16 (the author mutates within the shape they already check) at the next layer: the fixer named
-  the review's shapes, round 1 the outer ones, round 2 the inner and the blank; no new rule for those. Still
+  the review's shapes, round 1 the outer ones, round 2 the inner and the blank; no new rule for those. Round 3's leaks are
+  the same class a fourth time, and its nine surviving mutants the same lesson (each fix's other end untested): that a
+  mask written shape by shape keeps leaking at the next shape is RULE-FEEDBACK 2026-11-03, "a credential mask found shape
+  by shape". Still
   only a stub: whether a role refused users is refused user groups too, and what Apple's probes return for each list, is
   the Phase 2 live check.

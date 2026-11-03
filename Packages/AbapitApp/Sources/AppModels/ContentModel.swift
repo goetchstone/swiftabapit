@@ -512,13 +512,14 @@ public struct ContentDetail: Sendable {
                                               summary: "Apple didn't list the blueprint's \(relationship.noun(2)), so none are shown or counted.")
                 }
                 // Each member's name from what Apple included, matched by its id's bytes: a device's model, a person's name
-                // or Managed Apple Account, anything else's name.
+                // or Managed Apple Account, anything else's name; a package's with its addresses masked, as its own row,
+                // detail and CSV show it (Phase 2b verifier round 3: the member list showed it raw).
                 var names: [[UInt8]: String] = [:]
                 for resource in blueprint.included(relationship, from: included) {
                     let key = Array(resource.id.utf8)
                     let name: String? = switch relationship {
                     case .apps: ContentApp(resource: resource).name
-                    case .packages: ContentPackage(resource: resource).name
+                    case .packages: ContentWords.shown(ContentPackage(resource: resource).name)
                     case .configurations: Configuration(resource: resource).name
                     case .orgDevices: OrgDevice(resource: resource).deviceModel
                     case .users: User(resource: resource).fullName ?? User(resource: resource).managedAppleAccount
@@ -589,39 +590,50 @@ package enum ContentWords {
     /// the address masked from its own scheme on (Phase 2b verifier round 1: a leading `jar:` was read as the scheme, and the
     /// address after it copied as a path, its user and password in clear); and so is an address inside the path, a proxy's
     /// or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one joined by `,` or `;` (Phase 2b verifier round
-    /// 2: the outer path was copied as it came, the inner user and password with it). A blank ends an address, so a second
-    /// one after an unencoded space is masked as its own, except inside the first one's user and password: a client sends a
-    /// password a blank splits (a browser encodes a space there and drops a tab or a newline), so that authority runs past
-    /// blanks to its last `@` (`https://deploy:my pw@host`, whose `deploy:my` showed as a host, verifier round 2). Read as
-    /// UTF-8 bytes, so a combining mark can't join a delimiter into another character. Never opened or fetched (invariant 4).
-    /// Not caught: an unencoded `/`, `?` or `#` inside a password, which isn't a valid address: what comes before it shows as
-    /// the host, and after it as the path, or masked as the query or the fragment; and an address percent-encoded inside a
-    /// path segment (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), which is a segment's text until the server it names
-    /// decodes it, and would take a decoder for each layer of encoding (`%253A` too).
+    /// 2: the outer path was copied as it came, the inner user and password with it). An inner scheme counts with one slash,
+    /// a backslash or two (`jar:https:/…`, `…/fetch/https:\\…`, which a browser reads as `://`), and a path segment's user
+    /// and password are masked before its last `@` whatever comes before them (`…/fetch/https:deploy:pw@origin/…`,
+    /// `…/fetch/deploy:pw@origin/…`): Phase 2b verifier round 3, each copied raw. A `://` after a digit-led prefix
+    /// (`1://user:pw@host`) starts an authority too, which no address has, but its user and password are masked. A blank
+    /// doesn't end an address inside its user and password, a path parameter, its query or its fragment, in each address of
+    /// the Location: a client sends such a value whole (a browser encodes a space and drops a tab or a newline), so its
+    /// authority or user part runs past blanks to the last `@` ahead of the path (`https://deploy:my pw@host`, whose
+    /// `deploy:my` showed as a host, verifier round 2; a second address's too, round 3), a parameter's value to its next
+    /// `/`, `;`, `?` or `#`, and a query or a fragment to the end (verifier round 3: `?file=My App.pkg&token=…` showed `token`'s value under the
+    /// note that the query was masked). Elsewhere a blank ends an address, so one after an unencoded space in the path is
+    /// masked as its own. Read as UTF-8 bytes, so a combining mark can't join a delimiter into another character. Never
+    /// opened or fetched (invariant 4). Not caught: an unencoded `/`, `?` or `#` inside a password, which isn't a valid
+    /// address: what comes before it shows as the host, and after it as the path, or masked as the query or the fragment; a
+    /// parameter's value glued to an inner scheme (`;sid=S3https://…`), whose value reads as the scheme; and an address
+    /// percent-encoded inside a path segment (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), which is a segment's text until
+    /// the server it names decodes it, and would take a decoder for each layer of encoding (`%253A` too).
     package static func location(_ url: String) -> (text: String, masked: Bool) {
-        masking(url, joiningUserinfo: true) { _ in true }
+        masking(url, oneAddress: true) { _ in true }
     }
 
     /// `text` with every address in it masked as `location` masks one, the rest as it came: a package's description and the
     /// strings of its other attributes, where Apple could add an address. A run of text between blanks is an address when it
-    /// starts with a scheme and goes on, starts with `//`, holds a `://`, or has a user before an `@` ahead of a path; a word,
-    /// a version, a bundle id, a hash or an email address (`it@example.com`, no path) is none of these and shows unchanged.
-    /// Masking errs toward hiding: `Requires:macOS;iOS` reads as a scheme and a path parameter and loses its tail, and an
-    /// email address after a scheme or a label (`mailto:it@example.com`, `Contact:it@example.com`) or before a path
-    /// (`Team@HQ/West`) reads as a user and password and loses its name. Not caught: an address with no scheme, no `//` and
-    /// no user (`host/a.pkg?sig=…`) inside other text, the second half of one an unencoded space split, a password a blank
-    /// splits (in other text a blank ends a word, so what came before it shows: the Location joins it, `location`), and a
-    /// user with no password and no path (`token@host`), which is an email address's shape; the package's own `url` is
-    /// always read as one (`packageAttributes`).
+    /// starts with a scheme and goes on, starts with `//`, holds a `://` or a scheme's `:` before a slash or a backslash
+    /// (`url=https:/…`), has a user before an `@` ahead of a path, or a user and password before a path segment's `@`
+    /// (`host/fetch/deploy:pw@origin/…`); a word, a version, a bundle id, a hash or an email address (`it@example.com`, no
+    /// path) is none of these and shows unchanged. Masking errs toward hiding: `Requires:macOS;iOS` reads as a scheme and a
+    /// path parameter and loses its tail, a `16:9@60` reads as a user and password, and an email address after a scheme or
+    /// a label (`mailto:it@example.com`, `Contact:it@example.com`) or before a path (`Team@HQ/West`) reads as a user and
+    /// password and loses its name. Not caught, since in other text a blank ends a word: an address with no scheme, no `//`
+    /// and no user (`host/a.pkg?sig=…`), so the second half of one an unencoded space split shows its query; and what
+    /// follows a blank inside an address's password, query, fragment or path parameter (`?sig=AAAA BBBB`), which the
+    /// Location joins (`location`) and a description can't tell from its next word. Nor a user with no password, with no
+    /// path (`token@host`, an email address's shape) or in a path segment (`/fetch/token@origin/`, an `img@2x` folder's);
+    /// the package's own `url` is always read as one (`packageAttributes`).
     package static func addresses(in text: String) -> String {
         masking(text, isAddress).text
     }
 
-    /// A package's name, version, bundle ids, hash and description, its row's and its detail's and its CSV's, each through
-    /// `addresses(in:)` as its attribute is among the detail's attributes (Phase 2b verifier round 2: the detail masked an
-    /// address in the description attribute, then showed the same address raw in the Name, Version, Bundle IDs and Hash
-    /// fields and the title, and the CSV wrote all five raw: a file that leaves the app was less careful than the screen,
-    /// invariant 11). Nil when Apple sent none.
+    /// A package's name, version, bundle ids, hash and description, its row's and its detail's and its CSV's, and its name in
+    /// a blueprint's member list, each through `addresses(in:)` as its attribute is among the detail's attributes (Phase 2b
+    /// verifier round 2: the detail masked an address in the description attribute, then showed the same address raw in the
+    /// Name, Version, Bundle IDs and Hash fields and the title, and the CSV wrote all five raw: a file that leaves the app was
+    /// less careful than the screen, invariant 11; round 3: so did the member list). Nil when Apple sent none.
     static func shown(_ text: String?) -> String? { text.map(addresses(in:)) }
 
     /// A package as its CSV holds it: every string of every attribute through `addresses(in:)`, at any depth. The `url`
@@ -642,7 +654,8 @@ package enum ContentWords {
         }
     }
 
-    private static let slash = UInt8(ascii: "/"), question = UInt8(ascii: "?"), hash = UInt8(ascii: "#"), at = UInt8(ascii: "@")
+    private static let slash = UInt8(ascii: "/"), backslash = UInt8(ascii: "\\"), question = UInt8(ascii: "?"), hash = UInt8(ascii: "#")
+    private static let at = UInt8(ascii: "@"), colon = UInt8(ascii: ":")
     private static let semicolon = UInt8(ascii: ";"), equals = UInt8(ascii: "="), ampersand = UInt8(ascii: "&")
     private static let slashes = Array("//".utf8), schemeSlashes = Array("://".utf8)
     /// ASCII blanks: an address holds none, so they split `text` into runs, and are kept as they came.
@@ -654,10 +667,13 @@ package enum ContentWords {
     }
 
     /// Where a leading scheme's `:` ends (RFC 3986: a letter, then letters, digits, `+`, `-` or `.`); nil when `run` has none.
+    /// A digit, `+`, `-` or `.` may lead it when `//` follows (`1://user:pw@host`): no address has one, but what follows is
+    /// read as an authority and its user and password masked (Phase 2b verifier round 3, mutant R3-schemeFirstDigit: they
+    /// showed in clear, and the mutant only masked more).
     private static func schemeEnd(_ run: ArraySlice<UInt8>) -> Int? {
-        guard let first = run.first, isLetter(first) else { return nil }
+        guard let first = run.first, isSchemeByte(first) else { return nil }
         guard let colon = run.dropFirst().firstIndex(where: { !isSchemeByte($0) }), run[colon] == UInt8(ascii: ":") else { return nil }
-        return colon + 1
+        return isLetter(first) || run[(colon + 1)...].starts(with: slashes) ? colon + 1 : nil
     }
 
     /// The end of the authority or of the user part: the first `/`, `?` or `#` from `start`, else the run's end.
@@ -665,9 +681,25 @@ package enum ContentWords {
         run[start...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? run.endIndex
     }
 
+    /// The first `:` in `run[range]` after a scheme's byte and before a `/` or a `\`: `://`, and the `:/` and `:\` a browser
+    /// reads as one (Phase 2b verifier round 3: `jar:https:/deploy:pw@…` and `…/fetch/https:\\deploy:pw@…` were copied raw,
+    /// only `://` being looked for). Where an address glued to text, or inside a path, may have its scheme.
+    private static func slashedColon(_ run: ArraySlice<UInt8>, in range: Range<Int>) -> Int? {
+        run[range].indices.first { index in
+            run[index] == colon && index > range.lowerBound && isSchemeByte(run[index - 1])
+                && index + 1 < range.upperBound && (run[index + 1] == slash || run[index + 1] == backslash)
+        }
+    }
+
+    /// Whether a segment of `run` between slashes has a user and password before its last `@` (`deploy:pw@origin`).
+    private static func hasSegmentUserinfo(_ run: ArraySlice<UInt8>) -> Bool {
+        run.split(separator: slash).contains { segment in segment.lastIndex(of: at).map { segment[..<$0].contains(colon) } ?? false }
+    }
+
     private static func isAddress(_ run: ArraySlice<UInt8>) -> Bool {
         if let end = schemeEnd(run), end < run.endIndex { return true }
         if run.starts(with: slashes) || run.firstRange(of: schemeSlashes) != nil { return true }
+        if slashedColon(run, in: run.startIndex..<run.endIndex) != nil || hasSegmentUserinfo(run) { return true }
         // A user before an `@` ahead of a path (`deploy@host/a.pkg`; a password's `:` is a scheme above). With nothing after
         // the host it is an email address (`it@example.com`, `ask it@example.com?`), shown as it came (Phase 2b verifier
         // round 1: an email in a description lost its name).
@@ -676,13 +708,27 @@ package enum ContentWords {
         return path + 1 < run.endIndex
     }
 
+    /// Where a run ended inside an address, so that in a Location what follows a blank there may still be that address's.
+    private enum Open {
+        /// In its authority, its user part with no `//`, or a path segment with a `:`: a user and password up to an `@`
+        /// across blanks (`userinfoEnd`).
+        case userinfo
+        /// In a `;name=value` path parameter: what follows, to its next `/`, `;`, `?` or `#`, is its value's still.
+        case parameter
+        /// In its query or its fragment: so is everything after it.
+        case rest
+    }
+
     /// `text` with each run between blanks that `isAddress` passes masked as an address (`address`); blanks as they came.
-    /// `joiningUserinfo` (a Location, one address): the first run's authority, or its user part with no `//`, runs past
-    /// blanks to the last `@` ahead of the path (`userinfoEnd`).
-    private static func masking(_ text: String, joiningUserinfo: Bool = false,
+    /// `oneAddress` (a Location): a run an address is still open at (`Open`) goes on past the blank and is read again, as
+    /// `location` says, in each address of it (Phase 2b verifier round 3: only the first address's user and password were
+    /// joined).
+    private static func masking(_ text: String, oneAddress: Bool = false,
                                 _ isAddress: (ArraySlice<UInt8>) -> Bool) -> (text: String, masked: Bool) {
         let bytes = Array(text.utf8)
-        var out: [UInt8] = [], masked = false, start = 0, first = joiningUserinfo
+        // The end of the last run: blanks after it are kept as they came, a query's or a fragment's too.
+        let last = (bytes.lastIndex { !blanks.contains($0) } ?? -1) + 1
+        var out: [UInt8] = [], masked = false, start = 0
         while start < bytes.endIndex {
             guard !blanks.contains(bytes[start]) else {
                 out.append(bytes[start])
@@ -690,58 +736,74 @@ package enum ContentWords {
                 continue
             }
             var end = bytes[start...].firstIndex(where: blanks.contains) ?? bytes.endIndex
-            if first {
-                first = false
-                end = userinfoEnd(bytes, run: start..<end) ?? end
-            }
-            let run = bytes[start..<end]
-            if isAddress(run) {
-                let shown = address(run)
+            if isAddress(bytes[start..<end]) {
+                var shown = address(bytes[start..<end])
+                while oneAddress, end < last, let open = shown.open, let stretched = Self.further(bytes, from: end, open, last: last) {
+                    end = stretched
+                    shown = address(bytes[start..<end])
+                }
                 out += shown.bytes
                 masked = masked || shown.masked
             } else {
-                out += run
+                out += bytes[start..<end]
             }
             start = end
         }
         return (String(decoding: out, as: UTF8.self), masked)
     }
 
-    /// Where a run that a blank cut inside its user and password really ends: when its authority (after its first `//`, else
-    /// from its start) has reached the blank with no `/`, `?` or `#`, and an `@` follows across blanks before any, the run
-    /// goes on to the blank after the last such `@`. Nil when the run is whole.
-    private static func userinfoEnd(_ bytes: [UInt8], run: Range<Int>) -> Int? {
-        let text = bytes[run]
-        let authority = text.firstRange(of: slashes)?.upperBound ?? run.lowerBound
-        guard !text[authority...].contains(where: { $0 == slash || $0 == question || $0 == hash }) else { return nil }
-        let ahead = bytes[run.upperBound...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? bytes.endIndex
-        guard let last = bytes[run.upperBound..<ahead].lastIndex(of: at) else { return nil }
+    /// Where a Location's address that a blank cut at `end` while `open` ends: its user and password's last `@` across blanks
+    /// (`userinfoEnd`); for a parameter, the end of the run holding the next `/`, where its segment ends (a `;` before it
+    /// starts another parameter, a `?` or a `#` the query or the fragment, each open as far; one run at a time, a long value
+    /// would be read again at every blank); the last run's for a query or a fragment; nil when the blank ends it. Always past
+    /// `end`, so `masking` ends.
+    private static func further(_ bytes: [UInt8], from end: Int, _ open: Open, last: Int) -> Int? {
+        switch open {
+        case .userinfo:
+            return userinfoEnd(bytes, from: end)
+        case .parameter:
+            let stop = bytes[end..<last].firstIndex(of: slash) ?? last
+            return bytes[stop..<last].firstIndex(where: blanks.contains) ?? last
+        case .rest:
+            return last
+        }
+    }
+
+    /// Where a run that a blank cut at `end` inside its user and password really ends: when an `@` follows across blanks
+    /// before any `/`, `?` or `#`, the blank after the last such `@`. Nil when none follows. (`masking` reads the run again
+    /// and is still open there, so it would reach the last `@` from the first too, a step at a time.)
+    private static func userinfoEnd(_ bytes: [UInt8], from end: Int) -> Int? {
+        let ahead = bytes[end...].firstIndex { $0 == slash || $0 == question || $0 == hash } ?? bytes.endIndex
+        guard let last = bytes[end..<ahead].lastIndex(of: at) else { return nil }
         return bytes[last...].firstIndex(where: blanks.contains) ?? bytes.endIndex
     }
 
-    /// One address, its credentials masked (`location` says which parts).
-    private static func address(_ run: ArraySlice<UInt8>) -> (bytes: [UInt8], masked: Bool) {
+    /// One address, its credentials masked (`location` says which parts), and where it was still open at the run's end.
+    private static func address(_ run: ArraySlice<UInt8>) -> (bytes: [UInt8], masked: Bool, open: Open?) {
         let mask = Array(Self.mask.utf8)
         // An address glued to the text before it (`url=https://…`), or to a label or an outer scheme (`Mirror:https://…`,
-        // `jar:https://…`): that text as it came, from the address's own scheme on an address. After a leading scheme only
-        // when the `://` comes before any `/`, `?`, `#` or `@`, so one in a query stays the query's (review L2) and a user
-        // before an `@` is still masked. The address starts after the text (`start > run.startIndex`), so this ends.
-        if !run.starts(with: slashes), let found = run.firstRange(of: schemeSlashes),
-           schemeEnd(run) == nil || !run[..<found.lowerBound].contains(where: { $0 == slash || $0 == question || $0 == hash || $0 == at }) {
-            var start = found.lowerBound
+        // `jar:https://…`, `jar:https:/…`): that text as it came, from the address's own scheme on an address. Only when the
+        // text before the scheme's `:` holds no `/`, `?`, `#`, `@`, `;` or blank, so one in a path, a query, a fragment, a user
+        // part or a parameter stays theirs and what came before it is masked as theirs (review L2; Phase 2b verifier round 3:
+        // with no scheme ahead, `host/a.pkg?sig=…&next=https://…` was split at `https` and its signature copied raw, and so was
+        // `a;sid=…,https://…`'s parameter). The address starts after the text (`start > run.startIndex`), so this ends.
+        if !run.starts(with: slashes), let found = slashedColon(run, in: run.startIndex..<run.endIndex),
+           !run[..<found].contains(where: { $0 == slash || $0 == question || $0 == hash || $0 == at || $0 == semicolon || blanks.contains($0) }) {
+            var start = found
             while start > run.startIndex, isSchemeByte(run[start - 1]) { start -= 1 }
-            while start < found.lowerBound, !isLetter(run[start]) { start += 1 }
-            if start > run.startIndex, start < found.lowerBound {
+            while start < found, !isLetter(run[start]) { start += 1 }
+            if start > run.startIndex, start < found {
                 let rest = address(run[start...])
-                return (Array(run[..<start]) + rest.bytes, rest.masked)
+                return (Array(run[..<start]) + rest.bytes, rest.masked, rest.open)
             }
         }
-        var out: [UInt8] = [], masked = false
+        var out: [UInt8] = [], masked = false, open: Open?
         let afterScheme = schemeEnd(run) ?? run.startIndex
-        let leadingSlashes = run[afterScheme...].prefix { $0 == slash }.count
+        let leadingSlashes = run[afterScheme...].prefix { $0 == slash || $0 == backslash }.count
         var index: Int
         if leadingSlashes >= 2 || (leadingSlashes == 1 && afterScheme > run.startIndex) {
-            // An authority, after `//` or a scheme's slashes: everything before its last `@` is a user and password.
+            // An authority, after `//` or a scheme's slashes (backslashes too, as a browser reads them): everything before its
+            // last `@` is a user and password.
             let authority = afterScheme + leadingSlashes
             out += run[..<authority]
             if let last = run[authority..<pathStart(run, from: authority)].lastIndex(of: at) {
@@ -761,48 +823,69 @@ package enum ContentWords {
             out += run[..<afterScheme]
             index = afterScheme
         }
+        // The authority or the user part reaches the run's end: an `@` after a blank would end a user and password.
+        if pathStart(run, from: index) == run.endIndex { open = .userinfo }
         let queryStart = run[index...].firstIndex(of: question) ?? run.endIndex
         let fragmentStart = run[index...].firstIndex(of: hash) ?? run.endIndex
-        var pathEnd = min(queryStart, fragmentStart)
-        // An address inside the path, a proxy's or an archive's (`https://proxy/fetch/https://user:pw@origin/…`) or one
-        // joined by `,` or `;`: the path up to its scheme, then that address masked as one from its scheme on, its own user
-        // and password, query and fragment included (Phase 2b verifier round 2: the outer path was copied as it came, the
-        // inner user and password with it). It starts after the run's start, so this ends; a digit, `-`, `+` or `.` it
-        // starts with is its own glued split's text before a scheme.
+        let restStart = min(queryStart, fragmentStart)
+        var pathEnd = restStart
+        // An address inside the path, a proxy's or an archive's (`https://proxy/fetch/https://user:pw@origin/…`, one slash or
+        // a backslash too) or one joined by `,` or `;`: the path up to its scheme, then that address masked as one from its
+        // scheme on, its own user and password, query and fragment included (Phase 2b verifier round 2: the outer path was
+        // copied as it came, the inner user and password with it). It starts after the run's start, so this ends; a digit,
+        // `-`, `+` or `.` it starts with is its own glued split's text before a scheme.
         var inner: Int?
-        if let found = run[index..<pathEnd].firstRange(of: schemeSlashes) {
-            var start = found.lowerBound
+        if let found = slashedColon(run, in: index..<pathEnd) {
+            var start = found
             while start > index, isSchemeByte(run[start - 1]) { start -= 1 }
-            if start > run.startIndex, start < found.lowerBound {
+            if start > run.startIndex, start < found {
                 inner = start
                 pathEnd = start
             }
         }
-        // The path, each `;name=value` parameter's value masked.
+        // The path, segment by segment: a user and password before a segment's last `@` masked, whatever comes before them
+        // in the segment (`…/fetch/deploy:pw@origin/…`, and `…/fetch/https:deploy:pw@origin/…`, which a browser reads as
+        // `https://deploy:pw@origin/…`; Phase 2b verifier round 3: both copied raw), then each `;name=value` parameter's value.
         var position = index
         while position < pathEnd {
-            guard let parameter = run[position..<pathEnd].firstIndex(of: semicolon) else {
-                out += run[position..<pathEnd]
-                break
+            var from = position
+            if run[from] == slash {
+                out.append(slash)
+                from += 1
             }
-            out += run[position...parameter]
-            let end = run[(parameter + 1)..<pathEnd].firstIndex { $0 == slash || $0 == semicolon } ?? pathEnd
-            let part = run[(parameter + 1)..<end]
-            if let sign = part.firstIndex(of: equals) {
-                out += part[...sign]
-                if sign + 1 < end {
+            let end = run[from..<pathEnd].firstIndex(of: slash) ?? pathEnd
+            if let last = run[from..<end].lastIndex(of: at), run[from..<last].contains(colon) {
+                out += mask
+                masked = true
+                from = last
+            }
+            var parameter = run[from..<end].firstIndex(of: semicolon) ?? end
+            out += run[from..<parameter]
+            while parameter < end {
+                out.append(semicolon)
+                let next = run[(parameter + 1)..<end].firstIndex(of: semicolon) ?? end
+                let part = run[(parameter + 1)..<next]
+                if let sign = part.firstIndex(of: equals) {
+                    out += part[...sign]
+                    if sign + 1 < next {
+                        out += mask
+                        masked = true
+                    }
+                } else if !part.isEmpty {
                     out += mask
                     masked = true
                 }
-            } else if !part.isEmpty {
-                out += mask
-                masked = true
+                parameter = next
             }
+            // The last segment reaches the run's end: a user and password in it may run on past a blank, and a parameter's
+            // value does.
+            if end == run.endIndex, run[from..<end].contains(colon) { open = .userinfo }
+            if end == run.endIndex, run[from..<end].contains(semicolon) { open = .parameter }
             position = end
         }
         if let inner {
             let rest = address(run[inner...])
-            return (out + rest.bytes, masked || rest.masked)
+            return (out + rest.bytes, masked || rest.masked, rest.open)
         }
         if queryStart < fragmentStart {
             out.append(question)
@@ -828,7 +911,8 @@ package enum ContentWords {
                 masked = true
             }
         }
-        return (out, masked)
+        if restStart < run.endIndex { open = .rest }
+        return (out, masked, open)
     }
 
     /// A relationship's count in words: "5 apps", "1 user group", "None", or "showing N of more than N" when the

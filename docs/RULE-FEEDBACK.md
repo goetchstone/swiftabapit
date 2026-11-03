@@ -27,6 +27,27 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-03 — A credential mask found shape by shape
+- **What happened:** Phase 2b's package-location mask (`ContentWords.location`, `addresses(in:)`) leaked a new shape in each
+  of four rounds: the review's (`://` in a query, `//user:pw@`), round 1's (a label or an outer scheme glued before the
+  address), round 2's (an address in a path, a blank in a password), round 3's (one slash, a backslash or none after an
+  inner scheme; a blank in a query, a fragment or a parameter; a second address; a description's in the packages CSV,
+  invariant 11). Each round's tests named the shapes that round had found, and the next verifier found the one beside them
+  (failure-log 2026-10-31, "a whole-section lock outlived the per-list models", verifier round 3).
+- **Invariant in force:** #11 (sensitive fields never leave the app; CSV export is an allowlist).
+- **Why it didn't hold:** the wrong layer. #11 is held by `RedactionTests` and an allowlist of columns, which suits a field
+  that is a secret; a free-text field that may hold one inside an address needs a parser, and a hand parser's tests are
+  only the shapes its author thought of. RULE-FEEDBACK 2026-10-16's lesson (the author mutates within the shape they
+  already check), at the level of inputs rather than mutants.
+- **Would a rule have caught it?** only if enforced differently: a generated test over a small grammar of addresses (a
+  label or an outer scheme or none; a scheme with `://`, `:/`, `:\`, `:` or none; a canary in the user, the password, a
+  parameter, the query and the fragment; nested in a path or after a `,`; a blank at each position) asserting the canary
+  never survives `location`, and never `addresses(in:)` for the shapes it claims, the Not caught list being the grammar's
+  stated holes.
+- **Enforcement home if changed:** tripwire test (a seeded generator in `ContentTests`, or the libFuzzer target if
+  `ContentWords` moves to a pure module); the `pre-commit` skill's item 14 could name "a parser of operator or API text
+  that masks a secret: a generated canary test, not a list of cases".
+
 ## 2026-10-31 — A state a fix added was checked only after the reads settled
 - **What happened:** Phase 2b review L9's fix had `AppleMDMModel.pause()` mark the details not read yet "Not read". Coming
   back read them without marking them back, so for the whole read every row said "Not read", the note said the read had

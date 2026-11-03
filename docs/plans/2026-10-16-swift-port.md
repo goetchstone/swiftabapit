@@ -1092,7 +1092,11 @@ field, and a test for each surviving pause, export, Refresh and masking mutant. 
 `fix(2b): verifier round 2`: coming back to Apple MDM, the details still to read say "Reading…" with the progress note
 and Export held while the return reads them; an address inside another's path, a blank inside a Location's password, and
 a package's other fields, row and CSV masked; a service id that can't go in a path is never sent; a test for each of 14
-surviving mutants. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
+surviving mutants. Round 3 (every finding low) in `fix(2b): verifier round 3, …`: a test for each of nine surviving
+mutants (five of them Apple MDM's pause and resume) and a fix for an older flaky test; an inner scheme with one slash, a
+backslash or none, a path segment's user and password, a blank inside a Location's query, fragment or parameter, a
+second address's password, a scheme-less location's query before a glued scheme, and a blueprint's package names
+masked. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
 team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
