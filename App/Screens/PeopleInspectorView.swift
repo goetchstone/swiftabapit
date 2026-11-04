@@ -91,8 +91,13 @@ struct PeopleInspectorView: View {
 
     private func fields(_ fields: [PeopleModel.Field]) -> some View {
         ForEach(Array(fields.enumerated()), id: \.offset) { _, field in
-            LabeledContent(field.label, value: field.value)
-                .textSelection(.enabled)
+            // Label above value: "Managed Apple Account" beside an address with nowhere to break can't share a row in the
+            // smallest window's inspector, and the row's wrap is what the narrow People snapshot's layout loop points at.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(field.label).font(.caption).foregroundStyle(.secondary)
+                Text(field.value).textSelection(.enabled)
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 

@@ -60,6 +60,9 @@ debug_run() {
   if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "$name: lldb run still going after 120 s" >&2; fi
   wait "$pid" || true
   grep -E 'stop reason|frame #|Fatal error|precondition|error:' "$dlog" || echo "$name: lldb printed no frames" >&2
+  # AppKit's _crashOnException writes the exception's reason to the system log, not to stderr.
+  /usr/bin/log show --last 5m --style compact --predicate 'process == "abapit"' > "$dlog" 2>&1 || true
+  grep -E 'Exception|exception|needing another' "$dlog" || echo "$name: no exception in the system log" >&2
   rm -f "$dlog"
 }
 
