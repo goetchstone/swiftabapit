@@ -16,16 +16,6 @@ struct PeopleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Picker("Show", selection: $model.tab) {
-                ForEach(PeopleModel.Tab.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel("Show users, groups or org units")
-            .accessibilityIdentifier("people.tab")
-            .padding(.horizontal)
-            .padding(.top, 8)
             switch model.tab {
             case .users: list(model.users) { users }
             case .groups: list(model.groups) { groups }
@@ -34,6 +24,17 @@ struct PeopleView: View {
         }
         .searchable(text: $model.search, prompt: model.tab.prompt)
         .toolbar {
+            // In the toolbar, as Content's list picker is: `.fixedSize()` in the pane is the one thing this screen alone
+            // had, and its smallest-window snapshot crashed in AppKit's constraint passes (PR 12).
+            ToolbarItem {
+                Picker("Show", selection: $model.tab) {
+                    ForEach(PeopleModel.Tab.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityLabel("Show users, groups or org units")
+                .accessibilityIdentifier("people.tab")
+            }
             ToolbarItem {
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
                     .disabled(model.exportBlocked(model.tab) != nil)
