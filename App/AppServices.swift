@@ -11,14 +11,23 @@ import TestSupport
 /// @ bfdb494): the Keychain and `orgs.json` for real use; memory and the strict stub for the demo.
 final class AppServices {
     let orgs: OrgsModel
-    let devices: DevicesModel
-    let detail: DeviceDetailModel
+    /// Every screen model over the one `orgs`, so an org switch reaches each (`OrgsModel.onSwitch`), and each section's
+    /// Refresh (`ScreenModels.refresh`). The tests' `World` builds the same `ScreenModels`.
+    let screens: ScreenModels
     let isDemo: Bool
+
+    var devices: DevicesModel { screens.devices }
+    var detail: DeviceDetailModel { screens.detail }
+    var people: PeopleModel { screens.people }
+    var content: ContentModel { screens.content }
+    var appleMDM: AppleMDMModel { screens.appleMDM }
+    var activity: ActivityModel { screens.activity }
+    /// Counts `devices`: one device read for the Devices screen and the Dashboard.
+    var dashboard: DashboardModel { screens.dashboard }
 
     private init(orgs: OrgsModel, isDemo: Bool) {
         self.orgs = orgs
-        devices = DevicesModel(orgs: orgs)
-        detail = DeviceDetailModel(orgs: orgs)
+        screens = ScreenModels(orgs: orgs)
         self.isDemo = isDemo
     }
 
@@ -39,7 +48,7 @@ final class AppServices {
 
     #if DEBUG
     /// Debug builds only: one Apple Business org whose key lives in memory and whose "Apple" is the strict
-    /// `AppleStub` serving the seeded demo fleet. Nothing is read from or written to the Keychain, `orgs.json`
+    /// `AppleStub` serving the demo org's data (`DemoOrg`). Nothing is read from or written to the Keychain, `orgs.json`
     /// or the network.
     static func demo() -> AppServices {
         let (store, stub) = DemoOrg.make()

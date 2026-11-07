@@ -944,7 +944,8 @@ After Phase 1 merges, three tracks can run, each in its own `git worktree`:
 - **Track C** (Mosyle): 7.
 - Phase 9 waits for 2, 4 and 7.
 
-Shared files are **serialized**: `App/AbapitApp.swift` (Section enum, sidebar), `App/AppServices.swift`,
+Shared files are **serialized**: `App/AbapitApp.swift` (sidebar, routing), `AppModels/Navigation.swift` (the
+`SidebarItem` enum, since Phase 2b: there `swift test` holds its scope rule), `App/AppServices.swift`,
 `Package.swift`, `CLAUDE.md` and `README.md`. The second track to touch one rebases after the first
 merges and never stacks a PR on a branch that `--delete-branch` will remove. Each phase owns its
 module directories (listed per phase). Stubs in `TestSupport` are per-provider files, so Apple and
@@ -1061,13 +1062,42 @@ the JWS code.
 
 ### Phase 2: Apple read parity and new reads
 
-**Status:** split in two for review size (2026-10-30). **2a** (package: AppleModels for people, content, Apple
-MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every
-Phase 2 read in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's
-checked range, filters and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports'
-audit digests with the new Access & Security view, services not connected in N days and recent events): on branch
-`phase-2a-apple-reads`. **2b** (the People, Content, Apple MDM, Audit and Dashboard screens, their screen models in
-Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team build.
+**Status:** split in two for review size (2026-10-30). **2a** merged (package: AppleModels for people, content, Apple
+MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every Phase 2 read
+in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's checked range, filters
+and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports' audit digests with the new
+Access & Security view, services not connected in N days and recent events). **2b** on branch `phase-2b-screens`
+(2026-10-31: a scaffold, then five screen units built in parallel and merged): the People, Content, Apple MDM, Activity
+and Dashboard screens over their screen models in Packages/AbapitApp, each list its own panel and load token, every state
+said in words (loading, refused, cut at the page cap, failed and partial, a School org's not in scope, never an empty
+table); a group's and an org unit's members, a blueprint's through `BlueprintRead.members`, a configuration's profile only
+as `profileText`, a package's location masked; Activity's panes as views over one audit read, and Device 360's audit
+timeline by `filter[subjectId]`; the Dashboard in Swift Charts, counting only lists read whole, its recent events from its
+own seven-day read; CSV columns in Reports for every list (no profile, no package url, no audit payload); the sidebar's
+scope rule in `AppModels/Navigation.swift`; the demo org's people, content, Apple MDM devices and audit events, which
+name one another (`DemoTests`). Apple MDM reads up to 50 devices' `/details` as the page loads, one at a time and
+cancelled on a switch, a Refresh or leaving the screen (resumed on return), the rest on selection: a bounded deviation
+from §3.6's "never on page load". The screens' snapshots are CI's to render, and a `first` run that selects nothing fails.
+2b's adversarial review (9dca2ae: one medium, ten lows) is fixed on the branch (`fix(2b): …` commits; failure-log
+2026-10-31, "a whole-section lock outlived the per-list models"): a section locks only when every read it shows was
+refused; an id that can't go in a path is never sent and says so; a package's location and its nested attributes are
+masked by a real address parse; the Dashboard's recent events in Activity's words; one quiet-service rule on both screens;
+Apple MDM's inspector says why a selection is missing and the details read pauses when the screen is left; the filter's id
+rules in their own words; the shared sentences, export rule and day formatter in `ScreenWords`; Refresh routed by
+`ScreenModels`, tested; test gaps for a cut timeline and a list refused part-way. The copied list code waits for Phase 3
+(apple-reads runbook). The fix's two verifiers (round 1: both held; every finding low, 14 surviving mutants that were real test gaps) are answered in
+`fix(2b): verifier round 1`: a lock tested with each read refused alone, a locked Overview's own sentence, Device 360's
+unsendable serial, the location masking's outer schemes, single slashes, a url of another shape and the Description
+field, and a test for each surviving pause, export, Refresh and masking mutant. Round 2 (one medium, the rest low) in
+`fix(2b): verifier round 2`: coming back to Apple MDM, the details still to read say "Reading…" with the progress note
+and Export held while the return reads them; an address inside another's path, a blank inside a Location's password, and
+a package's other fields, row and CSV masked; a service id that can't go in a path is never sent; a test for each of 14
+surviving mutants. Round 3 (every finding low) in `fix(2b): verifier round 3, …`: a test for each of nine surviving
+mutants (five of them Apple MDM's pause and resume) and a fix for an older flaky test; an inner scheme with one slash, a
+backslash or none, a path segment's user and password, a blank inside a Location's query, fragment or parameter, a
+second address's password, a scheme-less location's query before a glued scheme, and a blueprint's package names
+masked. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
+team build.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.
@@ -1127,6 +1157,9 @@ Packages/AbapitApp, the demo org's data): next. Live checks wait for S1's team b
     password's hash is guessed offline); the detail reads the profile live. So a diff sees a profile change only
     through the configuration's other attributes, such as `updatedDateTime`.
 - **Diff** (golden parity) and the Changes screen.
+  - Activity's `SidebarItem.reads` must change when Changes joins it: Changes is local history, readable in a School org
+    and with the audit log refused, but with `[.auditEvents]` alone a School org keeps the section hidden
+    (`SidebarItem.shown(for:)`) and a role refused the audit log has it locked (`isLocked(for:)`, Phase 2b review M1).
 - **Reports**:
   - coverage (with the new AppleCare fields);
   - fleet age;

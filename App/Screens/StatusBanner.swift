@@ -2,8 +2,8 @@ import AppModels
 import SwiftUI
 
 /// Where a list's data stands, always in words (invariant 8): loading and how far, loaded and when, cut short
-/// by the page cap, forbidden for this role, failed and why (and how many rows were read before it), or unusable
-/// and why.
+/// by the page cap, forbidden for this role, failed and why (and how many rows were read before it), unusable
+/// and why, or not in the org's scope and why.
 struct StatusBanner: View {
     let state: LoadState
     var shown: Int? = nil
@@ -43,6 +43,8 @@ struct StatusBanner: View {
                 if let retry { Button("Try Again", action: retry) }
             case .unusable(let why):
                 Label(why, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+            case .notInScope(let why):
+                Label(why, systemImage: "building.columns").foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }

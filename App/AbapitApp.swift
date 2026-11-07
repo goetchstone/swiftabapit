@@ -33,7 +33,8 @@ struct AbapitApp: App {
         .defaultSize(width: 1200, height: 760)
         .commands {
             CommandGroup(after: .toolbar) {
-                Button("Refresh") { services.devices.load(force: true) }
+                // The window's section decides what it reads again (`ContentView.refresh`).
+                Button("Refresh") { NotificationCenter.default.post(name: .refreshSection, object: nil) }
                     .keyboardShortcut("r")
                 Button("Find Device…") { NotificationCenter.default.post(name: .findDevice, object: nil) }
                     .keyboardShortcut("l")
@@ -49,26 +50,18 @@ struct AbapitApp: App {
 
 extension Notification.Name {
     static let findDevice = Notification.Name("io.github.goetchstone.swiftabapit.findDevice")
+    static let refreshSection = Notification.Name("io.github.goetchstone.swiftabapit.refreshSection")
 }
 
-/// The sidebar, mirroring abapit's navigation (plan §4). A section a probe found forbidden shows a lock.
-enum SidebarItem: String, CaseIterable, Identifiable {
-    case overview = "Overview"
-    case devices = "Devices"
-    case services = "Services"
-    case people = "People"
-    case content = "Content"
-    case activity = "Activity"
-    case reports = "Reports"
-    case settings = "Settings"
-
-    var id: Self { self }
-
+/// What the app adds to the sidebar's sections (`SidebarItem`, in AppModels, where the scope and lock rules are
+/// tested): each one's symbol and the section a launch opens on.
+extension SidebarItem {
     var symbol: String {
         switch self {
         case .overview: "gauge.with.dots.needle.33percent"
         case .devices: "laptopcomputer.and.iphone"
         case .services: "server.rack"
+        case .appleMDM: "ipad.and.iphone"
         case .people: "person.2"
         case .content: "square.stack.3d.up"
         case .activity: "list.bullet.clipboard"
@@ -77,33 +70,11 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The probe section whose "forbidden" locks this one.
-    var probed: String? {
-        switch self {
-        case .devices: "devices"
-        case .services: "mdm_servers"
-        case .people: "users"
-        case .content: "apps"
-        case .activity: "audit_events"
-        default: nil
-        }
-    }
-
-    /// The phase that brings a placeholder section to life (plan §8).
-    var arrives: String? {
-        switch self {
-        case .people, .content: "Phase 2"
-        case .activity: "Phases 2 and 4"
-        case .reports: "Phase 3"
-        default: nil
-        }
-    }
-
-    /// The section a launch opens on: Overview, or in debug builds `ABAPIT_SCREEN` (for snapshots).
+    /// The section a launch opens on: Overview, or in debug builds `ABAPIT_SCREEN` (a raw value, for snapshots).
     static var initial: SidebarItem {
         #if DEBUG
         if let name = ProcessInfo.processInfo.environment["ABAPIT_SCREEN"],
-           let section = allCases.first(where: { $0.rawValue.lowercased() == name.lowercased() }) { return section }
+           let section = allCases.first(where: { $0.rawValue == name.lowercased() }) { return section }
         #endif
         return .overview
     }
@@ -128,18 +99,22 @@ struct ContentView: View {
 
     private var orgs: OrgsModel { services.orgs }
 
+    /// The section on screen: the one chosen, unless the active org's scope hides it (a School org has no people,
+    /// content, Apple MDM or audit to read: plan §2.4, §4), then the Overview.
+    private var shown: SidebarItem { SidebarItem.showing(section, for: orgs.active) }
+
     var body: some View {
         NavigationSplitView {
-            List(SidebarItem.allCases, selection: $section) { item in
-                let locked = item.probed.map { orgs.active?.deniedSections.contains($0) == true } ?? false
-                Label(item.rawValue, systemImage: locked ? "lock" : item.symbol)
-                    .accessibilityLabel(locked ? "\(item.rawValue), your role can't read this" : item.rawValue)
-                    .accessibilityIdentifier("sidebar.\(item.rawValue.lowercased())")
+            List(SidebarItem.shown(for: orgs.active), selection: $section) { item in
+                let locked = item.isLocked(for: orgs.active)
+                Label(item.title, systemImage: locked ? "lock" : item.symbol)
+                    .accessibilityLabel(locked ? "\(item.title), your role can't read this" : item.title)
+                    .accessibilityIdentifier("sidebar.\(item.rawValue)")
             }
             .navigationSplitViewColumnWidth(min: ColumnWidths.sidebar.min, ideal: ColumnWidths.sidebar.ideal, max: ColumnWidths.sidebar.max)
         } detail: {
-            detail(section ?? .overview)
-                .navigationTitle((section ?? .overview).rawValue)
+            detail(shown)
+                .navigationTitle(shown.title)
         }
         .navigationSubtitle(orgs.active.map { "\($0.name)\($0.role.isEmpty ? "" : " · \($0.role)")" } ?? "No organization yet")
         .toolbar {
@@ -152,40 +127,54 @@ struct ContentView: View {
                 }
             }
             ToolbarItem {
-                Button("Refresh", systemImage: "arrow.clockwise") { services.devices.load(force: true) }
-                    .help("Read again from Apple (⌘R)")
+                Button("Refresh", systemImage: "arrow.clockwise", action: refresh)
+                    .help("Read this section again from Apple (⌘R)")
                     .disabled(orgs.active == nil)
+                    .accessibilityIdentifier("toolbar.refresh")
             }
         }
         .onChange(of: orgs.generation) { selection = nil }
+        // A section the org's scope hides isn't left selected: an org switch, or a launch on one, moves to the Overview.
+        .onChange(of: shown, initial: true) { _, now in if section != now { section = now } }
         .onReceive(NotificationCenter.default.publisher(for: .findDevice)) { _ in finding = true }
+        .onReceive(NotificationCenter.default.publisher(for: .refreshSection)) { _ in refresh() }
         .sheet(isPresented: $finding) { findSheet }
         .frame(minWidth: ColumnWidths.windowMin, minHeight: ColumnWidths.windowMinHeight)
         #if DEBUG
-        .task { await selectForSnapshot() }
+        // The snapshot harness's row selection (`ABAPIT_SELECT=first`): each screen with an inspector reads it
+        // through `selectsFirstRow` (Screens/FirstRowSelection.swift).
+        .environment(\.selectsFirstRow, ProcessInfo.processInfo.environment["ABAPIT_SELECT"] == "first")
         #endif
     }
 
+    /// Refresh (⌘R, the toolbar): the section on screen reads again from Apple, by `ScreenModels.refresh`'s routing, which
+    /// the package's tests hold.
+    private func refresh() { services.screens.refresh(shown) }
+
     @ViewBuilder private func detail(_ section: SidebarItem) -> some View {
-        if let probed = section.probed, orgs.active?.deniedSections.contains(probed) == true {
+        if section.isLocked(for: orgs.active) {
             ContentUnavailableView {
                 Label("Your role can't read this", systemImage: "lock")
             } description: {
-                Text("The last permissions check found this API account's role can't read \(section.rawValue.lowercased()).")
+                Text(section.lockedNote)
             } actions: {
                 Button("Re-check in Settings") { self.section = .settings }
             }
         } else {
             switch section {
-            case .overview: OverviewView(model: services.devices, hasOrg: orgs.active != nil) { self.section = .settings }
+            case .overview: OverviewView(model: services.dashboard, hasOrg: orgs.active != nil) { self.section = .settings }
             case .devices: DevicesView(model: services.devices, detail: services.detail, selection: $selection)
             case .services: ServicesView(model: services.devices)
+            case .appleMDM: AppleMDMView(model: services.appleMDM)
+            case .people: PeopleView(model: services.people)
+            case .content: ContentScreen(model: services.content)
+            case .activity: ActivityView(model: services.activity)
             case .settings: SettingsView(orgs: orgs, isDemo: services.isDemo)
-            default:
+            case .reports:
                 ContentUnavailableView {
-                    Label(section.rawValue, systemImage: section.symbol)
+                    Label(section.title, systemImage: section.symbol)
                 } description: {
-                    Text("This section arrives in \(section.arrives ?? "a later phase") of the port.")
+                    Text("This section arrives in Phase 3 of the port.")
                 }
             }
         }
@@ -221,19 +210,4 @@ struct ContentView: View {
         finding = false
         query = ""
     }
-
-    #if DEBUG
-    /// `ABAPIT_SELECT=first` for snapshots: selects the first device once the table has loaded, so the inspector
-    /// shows (demo serials come from a seed, so the picture is stable).
-    private func selectForSnapshot() async {
-        guard ProcessInfo.processInfo.environment["ABAPIT_SELECT"] == "first" else { return }
-        for _ in 0..<40 {
-            if let first = services.devices.shown.first, !services.devices.state.isLoading {
-                selection = first.id
-                return
-            }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-    }
-    #endif
 }

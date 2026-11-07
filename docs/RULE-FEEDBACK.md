@@ -27,6 +27,74 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-03 — The screens were reviewed before they were ever drawn
+- **What happened:** Phase 2b's five screens went through one review and three verifier rounds, all on `swift test` and
+  builds. CI's snapshot run, the only thing that renders App/, first ran when PR 12 opened. It found:
+  - Activity crashing the app in AppKit's constraint passes;
+  - the Apple MDM and People tables wider than the window;
+  - a trap in the narrow People inspector.
+
+  The merge report had flagged the snapshots as unproven. See failure-log 2026-10-31.
+- **Invariant in force:** none: new shape (a view's layout has no test but the snapshot run).
+- **Why it didn't hold:** wrong layer. Agents may not run `scripts/screenshots.sh`, because it launches the app, so the
+  only renderer is CI, and CI ran last.
+- **Would a rule have caught it?** Only if enforced differently: push the branch as a draft PR once the units merge, so
+  CI's snapshots run beside the review rather than after it. Separately, hold a table's default columns to the
+  width the smallest window was shown to fit (the Devices table's 530 pt of minimums).
+- **Enforcement home if changed:** skill (soft): the phase brief's merge step opens the draft PR. Tripwire: the
+  snapshot harness's edge check already fails a table that outgrows the window.
+
+## 2026-11-03 — A credential mask found shape by shape
+- **What happened:** Phase 2b's package-location mask (`ContentWords.location`, `addresses(in:)`) leaked a new shape in each
+  of four rounds: the review's (`://` in a query, `//user:pw@`), round 1's (a label or an outer scheme glued before the
+  address), round 2's (an address in a path, a blank in a password), round 3's (one slash, a backslash or none after an
+  inner scheme; a blank in a query, a fragment or a parameter; a second address; a description's in the packages CSV,
+  invariant 11). Each round's tests named the shapes that round had found, and the next verifier found the one beside them
+  (failure-log 2026-10-31, "a whole-section lock outlived the per-list models", verifier round 3).
+- **Invariant in force:** #11 (sensitive fields never leave the app; CSV export is an allowlist).
+- **Why it didn't hold:** the wrong layer. #11 is held by `RedactionTests` and an allowlist of columns, which suits a field
+  that is a secret; a free-text field that may hold one inside an address needs a parser, and a hand parser's tests are
+  only the shapes its author thought of. RULE-FEEDBACK 2026-10-16's lesson (the author mutates within the shape they
+  already check), at the level of inputs rather than mutants.
+- **Would a rule have caught it?** only if enforced differently: a generated test over a small grammar of addresses (a
+  label or an outer scheme or none; a scheme with `://`, `:/`, `:\`, `:` or none; a canary in the user, the password, a
+  parameter, the query and the fragment; nested in a path or after a `,`; a blank at each position) asserting the canary
+  never survives `location`, and never `addresses(in:)` for the shapes it claims, the Not caught list being the grammar's
+  stated holes.
+- **Enforcement home if changed:** tripwire test (a seeded generator in `ContentTests`, or the libFuzzer target if
+  `ContentWords` moves to a pure module); the `pre-commit` skill's item 14 could name "a parser of operator or API text
+  that masks a secret: a generated canary test, not a list of cases".
+
+## 2026-10-31 — A state a fix added was checked only after the reads settled
+- **What happened:** Phase 2b review L9's fix had `AppleMDMModel.pause()` mark the details not read yet "Not read". Coming
+  back read them without marking them back, so for the whole read every row said "Not read", the note said the read had
+  stopped when the screen was left, and Export was on and wrote "Not read" for devices being read (verifier round 2's
+  medium; failure-log 2026-10-31, "a whole-section lock outlived the per-list models"). Six pause and resume tests passed:
+  each waited for the reads to settle, then asserted the end.
+- **Invariant in force:** #8 (stale or truncated data is never silent) and #7 (a sweep is cancellable).
+- **Why it didn't hold:** not covered as a check. The entry below ("a fix that made a read stricter made a new silence")
+  asks where each new nil is said; a new state needs the same question for each way out of it, and a test that only waits
+  for `readsFinished` sees the state after the read, never during it.
+- **Would a rule have caught it?** yes, if stated as a check: a state a fix adds is asserted at each way out of it, and a
+  screen-model test of a read asserts what the screen says while the read is held at the gate, not only once it settles.
+- **Enforcement home if changed:** skill (`pre-commit` item 12: "for each new state, which call leaves it, and what does
+  the screen say while that call's read is held?") and the review brief.
+
+## 2026-10-31 — A whole-section gate outlived the per-list models below it
+- **What happened:** Phase 2b's review (M1) found one refused probe (users, apps) locked all of People or Content, though
+  2b had built and tested those models to show the readable lists beside the refused one; the screen never showed it
+  (failure-log 2026-10-31, "a whole-section lock outlived the per-list models"). A test pinned the lock's one-probe table
+  as a constant, so it held the old shape in place.
+- **Invariant in force:** #8 ("a section a probe found forbidden says 'your role can't read this'").
+- **Why it didn't hold:** weak wording and the wrong layer. #8 names a section and a probe, one each, which was true when a
+  section was one list; once a section is several panels, "the section's probe" reads as one of them, and the gate sat in
+  the view's composition while the per-list behaviour sat in the models, each half tested alone.
+- **Would a rule have caught it?** only if worded differently: "a screen is locked only when every read it shows was
+  refused; otherwise each refused panel says so itself", and a gate is tested over the reads it gates, not as a table.
+- **Enforcement home if changed:** tripwire test (`NavigationTests` over `SidebarItem.reads`, as now); the `improve-rules`
+  pass could reword #8's clause; and the `pre-commit` skill's screen item could ask of a split model: "what gates sit above
+  it, and are they re-derived from the same reads?"
+
 ## 2026-10-31 — A fix that made a read stricter made a new silence
 - **What happened:** Phase 2a review L6 gave every view one strict list reader: a list holding an item of another type
   reads nil. Its test asserted the nil. In the acceptance pass the nil read as no items, so a service's families list

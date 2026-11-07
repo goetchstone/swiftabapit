@@ -5,7 +5,8 @@ import Foundation
 /// App/Spikes.swift:73-115 @ bfdb494. `ABAPIT_SNAPSHOT=<name>.png` renders the window's screen pane to a
 /// PNG and quits. The App Sandbox lets the app write only inside its container, so the picture goes to the
 /// container's temporary folder under that file name, the path is printed (`snapshot: <path>`), and
-/// `scripts/screenshots.sh` moves it out; `ABAPIT_SCREEN` picks the section, `ABAPIT_SELECT` a row, `ABAPIT_WINDOW` the size
+/// `scripts/screenshots.sh` moves it out; `ABAPIT_SCREEN` picks the section (a `SidebarItem` raw value), `ABAPIT_SELECT=first`
+/// the first row of the screen's table (each screen's `selectsFirstRow` hook, Screens/FirstRowSelection.swift), `ABAPIT_WINDOW` the size
 /// (`WIDTHxHEIGHT` or `smallest`) and `ABAPIT_DEMO=1` fills it from the demo org (strict stubs, memory
 /// only). Environment variables, not launch arguments: AppKit reads `-key value` arguments as defaults,
 /// and a bare path left over is taken as a document to open. CI runs it (`scripts/screenshots.sh`); it
@@ -72,6 +73,10 @@ enum Snapshots {
         let outside = controlsOutsideTheWindow(in: content)
         if !outside.isEmpty {
             print("snapshot: a control reaches past the window's edge: \(outside.joined(separator: "; "))")
+            exit(EXIT_FAILURE)
+        }
+        if selecting, !FirstRowSelected.yet {
+            print("snapshot: ABAPIT_SELECT asked for the first row and the screen selected none, so no inspector shows")
             exit(EXIT_FAILURE)
         }
         Task { @MainActor in

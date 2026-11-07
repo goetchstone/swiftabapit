@@ -33,10 +33,16 @@ org editor's save).
 - `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
   package so the compiler gives them AbapitKit's public API only, as it gives the app:
   `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
-  services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector).
+  services as separate panels, `LoadState`, `DeviceRow.Assignment`), `DeviceDetailModel` (the inspector); Phase 2b's
+  `PeopleModel`, `ContentModel`, `AppleMDMModel`, `ActivityModel` and `DashboardModel` (over `DevicesModel`'s read),
+  `Navigation.swift` (`SidebarItem`: each section's reads, when the recorded probes lock it, and which sections a School org
+  hides), `ScreenModels` (every screen model over one `OrgsModel`, and each section's Refresh) and `ScreenWords` (what every
+  screen says alike).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3): `parameters` (every GET's query parameters and
   allowed values, written out from the contract) and `paged`; `add(_:)`, `relate(_:_:_:to:)`, `setDetails(_:_:)` for the
-  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`.
+  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`. `DemoOrg.make()` loads the demo fleet,
+  then `DemoPeople`, `DemoContent`, `DemoAppleMDM` and `DemoAudit` into the stub (`DemoOrg.load(into:)`; DEBUG only,
+  invented data).
 
 ## Gotchas / stub-lies traps
 - **A cancelled `for try await` over an `AsyncThrowingStream` ends without throwing**, and can still be handed a
@@ -136,6 +142,22 @@ org editor's save).
   (`Interceptor`), since it is the caller's, not Apple's.
 - **A Keychain refusal while signing is `AppleAPIError.vault(guidance)`** (Touch ID cancelled, a locked Mac,
   no key stored): nothing is sent, and the next read signs again. `MemoryStore.failNext(.sign, with:)` drives it.
+- **A School org's sidebar hides what it can't read** (plan §4): `SidebarItem.shown(for:)` drops a section when every read
+  it shows is Business-only (Apple MDM, People, Content, Activity), only for a known School scope of an Apple org; the
+  Overview stays (its audit panel says not in scope), and no org or an unknown scope hides nothing, since each screen says
+  why it can't read. `showing(_:for:)` puts the Overview on screen for a hidden section. A screen model still maps
+  `.notInScope` to `LoadState.notInScope` (`LoadState(after:)`), never to an empty table (`NavigationTests`, `ScaffoldTests`).
+- **A section locks only when the recorded probes refused every read it shows** (`SidebarItem.isLocked(for:)`, over
+  `reads`; Phase 2b review M1). One probe per section (users for People, apps for Content) locked the whole screen, though
+  the models show the groups beside refused users and the blueprints beside refused apps: a partly refused section shows
+  its screen, each refused panel saying so in its own `.forbidden`. A read with no probe result on record (an older check,
+  or a School org's Business-only reads, which aren't probed) isn't refused, and neither is an `error …` status. The
+  Overview locks only when its devices, services and audit log were all refused (`aPartlyDeniedSectionIsUnlocked`,
+  `aReadNoProbeRecordedDoesntLock`). Each read of a section is refused alone, and left readable alone, in
+  `aSectionOfSeveralReadsLocksOnNoOneOfThem` (verifier round 1, mutant N-lockLastOnly: every partly refused case had its
+  last read readable, so a lock on the last read passed). The locked screen's sentence is `SidebarItem.lockedNote`, a
+  locked Overview's naming its three reads (it read "can't read overview.", written in the view before the Overview could
+  lock).
 - **School has no people, content, Apple MDM or audit endpoints** (plan §2.4): `AppleSection.businessOnly`. Their
   builders take no scope and build for the Business host only; `AppleClient` throws `.notInScope(section)` before
   anything is built, so a School org sends nothing, not even a token request (and its broker would refuse the
@@ -316,6 +338,211 @@ org editor's save).
     service's `lastConnectedDateTime` is (absent and null read as never, any other non-date as unreadable); whether
     `APPLE_CONFIGURATOR` and `APPLE_MDM` services ever set it (if not, they read as never connected for good and may
     need leaving out by `serverType`); and whether an `INACTIVE` service still connects (only `DELETED` is skipped).
+
+## Screens (Phase 2b)
+Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `App/Screens/`, its CSV columns in
+`Reports/Export<Name>.swift` (`ExportPolicy.Columns`, never a profile, a package url or an audit payload) and its demo in
+`TestSupport/Demo<Name>.swift`.
+- **What every screen does the same way.** A list is a panel with its own state and load token, checked after every page
+  and every await; an error becomes `LoadState(after:)` (403 "your role can't read this", a School org's Business-only read
+  not in scope in words, else failed), a single read's panel too (`Panel(after:)`, the content detail's included); a School
+  org sends nothing and shows the sentence, never an empty table; a list cut at the page cap says "showing N of ≥M"; a list
+  a failure cut short says "Partial: N" and doesn't export. An org switch clears the screen, its selection included, and
+  reads again only if it was showing; `load()` reads once per org, `load(force: true)` (Refresh, ⌘R) cancels and reads
+  again, an open detail too. Each model counts its reads in a `package readsFinished` the tests wait on. Each inspector is
+  `ColumnWidths.inspector`, each table adopts `selectsFirstRow`, and the snapshot harness fails a `first` run whose screen
+  selected nothing. A table shows by default only the columns whose minimums fit within the Devices table's (530 pt):
+  - Apple MDM: six of eleven;
+  - People's users: five of eight;
+  - Activity: five of six.
+
+  The rest are a right-click on the header away (`TableColumnCustomization`, kept per window); the inspector and the
+  CSV hold every one. A header of wrapping text takes an ideal width of 0, so its longest line never sets the column's
+  width (Activity crashed AppKit that way; PR 12's first snapshot run).
+- **What every screen says alike is written once** (`ScreenWords`; Phase 2b review L10): no organization yet
+  (`noOrganization`, Apple School Manager named: Apple MDM's copy had dropped it) or one that can't be used (`unusable`), in
+  every list and every inspector panel (`everyScreenSaysWhyNothingCanBeReadAlike`); an id `AppleRead.isPathSafe` refuses is
+  never sent and says so (`unsendableID`: the client's `.notFound` read "Apple has no such item." of an item Apple had just
+  listed, review L1), in Content's detail, a group's or an org unit's members, an Apple MDM device's details and Device
+  360's four device panels (verifier round 1: the timeline beside them said its own words, the four "no such item";
+  `aSerialThatCantBeSentIsNeverAskedFor`); the Devices read's walk of each service's device list says so in its own
+  services note (verifier round 2: a fifth model, "Spaced MDM's devices couldn't be read (Apple has no such item.)",
+  `aServiceWhoseIDCantBeSentIsNeverAskedForItsDevices`); a Content detail's guard is held in each of the four lists
+  (mutant N2-pathContentAppsOnly: only an app's was); Export's
+  rule (`exportBlocked`: still loading, partial, or nothing shown to export, the views only disable on it:
+  `everyScreenSaysAnEmptyListHasNothingToExport`, and a search that hides every row on every list of every screen,
+  `aSearchThatHidesEveryRowHasNothingToExport`: the views stopped checking `shown.isEmpty`, so Content's and People's
+  units' count of the rows read passed every suite, verifier round 1); and one day formatter (`day`, `distantPast` read as
+  none).
+- **Refresh's routing is `ScreenModels.refresh(_:)`**, which `ContentView` only calls: in the app it had no test, and routing
+  People's Refresh to the devices (review mutant X1) left every suite green (`refreshReadsTheSectionsOwnModel`). Refresh on
+  a section already read reads it again, in every section (`refreshOnASectionAlreadyReadReadsAgain`; verifier round 1:
+  Content's and Apple MDM's routing to an unforced `load()` survived, since only People's force was held).
+- **People** (`PeopleModel`): users, user groups and org units side by side, one tab on screen; a group's or an org
+  unit's members read when it is chosen (`PeopleModel.Members`, its own token) and matched to the users read by their
+  bytes. A member the users read lacks shows by its id, with a note counting them and saying why (still reading, the
+  role can't read users, the users list was cut, Apple's list lacks it); a member list cut at the page cap shows Apple's
+  `totalMemberCount` beside the count read; a phone or role list of another shape is said (`listNote`), never "None". The
+  users list carries every attribute, so there is no single user read. A list refused part-way (a 403 on a later page)
+  keeps its rows, is partial and doesn't export (`aListRefusedPartWayIsPartial`, `groupsRefusedPartWayArePartial`; review
+  L6, mutant P4).
+- **Content** (`ContentModel`, `ContentDetailModel`): apps, packages, blueprints and configurations side by side
+  (`ContentList` each); the chosen row is read alone. A blueprint is read with its six relationships at `limit=1000` and
+  counted only through `BlueprintRead.members`: "N apps", "Showing N of more than N", "Apple didn't list …" with no count,
+  and a refused include one note and no counts. A configuration's profile is only `profileText`, and one that can't be
+  shown says why. A package's location is shown with its user, password, query values, path parameters' values and
+  fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
+  A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
+  of the path still ends a user and password (review L2: the first `://` anywhere was the scheme's, so one in the query
+  copied the query before it raw; `//user:pw@host`, `user:pw@host` and `;jsessionid=` showed raw). Text or an outer scheme
+  glued before an address is kept and the address masked from its own scheme, when that scheme's `:` has a slash or a
+  backslash after it (`://`, and the `:/` and `:\\` a browser reads as `://`) and no `/`, `?`, `#`, `@`, `;` or blank before
+  it (`jar:https://…`, `jar:https:/…`, `url=https:/…`, `Mirror:https://…`, `x:y:https://…`, `token:` and a no-break space);
+  after a scheme one slash starts an authority as two do, and backslashes as slashes (`https:/user:pw@host`,
+  `https:\\user:pw@host`), and so does a `//` after a digit-led prefix (`1://user:pw@host`, which no address has); verifier
+  round 1: each `://` shape showed its user and password in clear (`anOuterSchemeOrALabelBeforeAnAddressIsMasked`), and
+  round 3 each slash or backslash shape and the digit-led one (`anInnerSchemeWithOneSlashABackslashOrNoneIsMasked`,
+  mutant R3-schemeFirstDigit). The guard holds with no scheme ahead too (round 3: `host/a.pkg?sig=…&next=https://…` was
+  split at `https` and its signature copied raw, as was `a;sid=…,https://…`'s parameter;
+  `aSchemeSlashesAfterTheQueryPathOrFragmentStartsNoGluedAddress`). An address inside another one's path, a proxy's or an
+  archive's (`https://proxy/fetch/https://user:pw@origin/…`, one slash or a backslash too) or one joined by `,` or `;`, is
+  masked from its own scheme on, and the path before it kept (verifier round 2: it was copied as the outer path, its user
+  and password in clear; `anAddressInsideAnothersPathIsMasked`). A path segment's user and password, before its last `@`,
+  are masked whatever comes before them in the segment (`…/fetch/deploy:pw@origin/…`, `…/fetch/https:deploy:pw@origin/…`,
+  which a browser reads as `https://deploy:pw@origin/…`, and a line separator, not a blank, gluing one to the segment), and
+  a segment's `@` with no `:` before it (`/img@2x/`) is none (verifier round 3: each copied raw). In the Location a blank
+  doesn't end an address inside its user and password (its authority, its user part with no `//`, or a path segment with a
+  `:`), a path parameter, its query or its fragment, in each address it holds: a client sends such a value whole (a
+  browser encodes a space and drops a tab or a newline), so a user and password run past blanks to their last `@` ahead of
+  the path, a parameter's value to its next `/`, `;`, `?` or `#`, and a query or a fragment to the Location's last
+  run (verifier round 2: `https://deploy:my pw@host` showed `deploy:my` as a host while the note said the password was
+  masked; round 3: `?file=My App.pkg&token=…` showed the values after the blank in clear under that note, and a second
+  address's password its first part; `aBlankInsideALocationsPasswordIsMasked`,
+  `aBlankInsideALocationsQueryFragmentOrParameterIsMasked`). Elsewhere a blank ends an address, so one after an unencoded
+  space in a path is masked as its own, and the note shows whenever any run was masked, not only the last
+  (`aLocationMaskedOnlyBeforeABlankStillSaysSo`, mutant R3B-maskedLastRunOnly). A `://` after a leading `//`, or after a
+  scheme's `?`, `/` or `#`, starts no glued address, and every ASCII blank ends a run in other text, each held by its own
+  case (verifier round 2: each of the split's guards and CR, VT and FF survived every suite, each showing a credential;
+  `everyBlankEndsAnAddressInOtherText`). Every string of a
+  package's other attributes, at any depth (`JSONValue.mappingStrings`), and its Description field go through
+  `ContentWords.addresses(in:)`, which masks each run between blanks that is an address (a scheme and more, `//`, a `://`,
+  a scheme's `:` before a slash or a backslash, a user before an `@` ahead of a path, or a user and password before a path
+  segment's `@`) and leaves a word, a version, a bundle id, a hash or an email address (`it@example.com`, no path) as it
+  came; the Description showed in clear what its attribute masked (verifier round 1),
+  and so did the title and the Name, Version, Bundle IDs and Hash fields, the list's row and the packages CSV, a file
+  that leaves the app (verifier round 2), and a blueprint's member list (round 3): each goes through `addresses(in:)` too
+  (`ContentWords.shown`, the row's `exported`; `everyFieldOfAPackageAndItsCSVAreMasked`,
+  `aBlueprintsPackageNamesAreMaskedAsThePackagesOwn`, `anInnerSchemesUserAndPasswordAreMaskedInTheDetailAndTheCSV`). A
+  blueprint's other members (apps, configurations, devices, users, user groups) are named as Apple sent them, as their own
+  screens show them: only a package's text is read for addresses.
+  Every string of the package's own `url` attribute is masked as the Location is, whatever its shape: a url that isn't a
+  string reads "Not readable" in the Location, with a note, never a dash (`aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked`),
+  and a url sent as null is none, a dash and no note (`aNullURLIsNoLocation`, mutant N2-misreadNullIsMisread).
+  Each arm of `addresses(in:)` is held through it, not only through `location` (`everyArmOfAnAddressInOtherTextIsMasked`:
+  without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed until the stack overflowed; it
+  now splits only where the address starts after the text, so it ends whatever the skip does).
+  Masking errs toward hiding: a `word:word;word` or `word:word?word` value reads as a scheme and loses its tail, a
+  `16:9@60` reads as a user and password, and an email address after a scheme or a label (`mailto:it@example.com`,
+  `Contact:it@example.com`) or before a path (`Team@HQ/West`) reads as a user and password, a `user:pw@host`'s shape, and
+  loses its name; in the Location, text after a host and a blank up to an `@` (`https://host notes@x/…`) is masked as a
+  user, and a query, a fragment or a parameter takes in what follows a blank, a second address after a blank in a query
+  included. Not caught, each recorded with why: in other text a blank ends a word, so an address with no scheme, no `//`
+  and no user (`host/a.pkg?sig=…`) isn't one, and the second half of one an unencoded space split shows its query, and
+  what follows a blank inside an address's password, query, fragment or path parameter shows (`?sig=AAAA BBBB`,
+  `deploy:my pw@host`'s `deploy:my`): a description's words can't be told from such a value's halves (the Location, one
+  address, joins them); a user with no password in other text with no path (`token@host`, an email address's shape) or in
+  a path segment with no scheme before it (`/fetch/token@origin/`, an `img@2x` folder's shape); a parameter's value glued
+  to an inner scheme (`;sid=S3https://…`), whose value reads as the scheme's first letters; an unencoded `/`, `?` or `#`
+  inside a password, which isn't a valid address (what comes before it shows as the host); an address percent-encoded
+  inside a path segment (`/https%3A%2F%2Fuser%3Apw%40origin%2Fa.pkg`), a segment's text until the server it names decodes
+  it, which would take a decoder per layer of encoding (`%253A` too); and an address used as a JSON object's key (keys are
+  Apple's attribute names, kept by `mappingStrings`).
+  `theDemosCustomSettingReachesNothingTheModelExposesUnmasked` follows the demo's canary password through the model.
+- **Apple MDM** (`AppleMDMModel`): `mdmDevices`, then each device's `/details` one at a time in list order, at most
+  `detailLimit` (50), cancelled on a switch or Refresh; a row past it says "Not read" and reads its own when chosen. A 403
+  stops the reads and is said, a 404 is "No details", an id that can't go in a path is never sent, details naming another
+  serial are refused. A posture cell without details says why (Reading…, Not read, No details, Role can't read, Failed),
+  so an unread FileVault never reads Off; the CSV adds its own `detailsStatus`. A School org gets the model's own words,
+  since `AppleAPIError.message` lower-cases `displayName` ("no apple mdm enrolled"). Leaving the screen
+  (`AppleMDMView.onDisappear` → `pause()`, invariant 7; review L9) cancels the details read and frees the org's shared rate
+  limiter: the details not read yet say "Not read" (never "Reading…"), the note says the read stopped when the screen was
+  left, and coming back (an unforced `load()`) asks for those only, which say "Reading…" again while the return reads them,
+  with the progress note and Export held, as before the pause (verifier round 2: they said "Not read", the note said the
+  read had stopped while it ran, and Export wrote "Not read" for devices being read; `whileTheReturnReadsTheRowsSayReading`);
+  Refresh still reads everything. A return to a list that failed part-way asks no details (`comingBackToAFailedListAsksNoDetails`),
+  nor does an unforced load during the read with no pause before it (`anUnforcedLoadDuringTheDetailsAsksNothingTwice`).
+  Not changed: every window shares one `AppServices` and so one `AppleMDMModel`, so leaving Apple MDM in one window pauses
+  the read another window still shows (verifier round 2); a count of the windows showing it would rest on SwiftUI pairing
+  each `onAppear` with an `onDisappear`, which no test can hold (App/ has no test target), and a drift would bring review
+  L9 back silently. The selection was already shared, so per-window screen models are Phase 3's question. A pause during a list
+  read (a Refresh's, an org switch's) drops the part read and leaves the screen idle, and an org switch while the screen is
+  away reads nothing until it shows (`leavingStopsTheDetailsAndComingBackAsksOnlyTheUnread`, `aPauseDuringARefreshLeaves…`,
+  `aPauseDuringAnOrgSwitchLeaves…`, `aSwitchWhileAwayReadsNothingUntilShown`). A selection's own read stopped by a pause
+  says "Not read" and is read on return; a refusal holds across a return (nothing more is asked); and once shown again the
+  screen is showing, so an org switch reads the new org (verifier round 1, four surviving mutants:
+  `aPauseDuringASelectionsOwnReadReadsItOnReturn`, `comingBackAfterARefusalAsksNothing`, `aSwitchAfterComingBackReadsTheNewOrg`).
+  A selection within the limit that a pause left "Not read" is asked first on return, before the details waiting their
+  turn; a Refresh after a pause clears it, as a return does, so an org switch then reads the new org and an unforced load
+  starts no second sweep; and a pause or a Refresh during the return's read cancels it, its request never sent (verifier
+  round 3, five surviving mutants: `aSelectionAPauseLeftIsAskedFirstOnReturn`, `aSwitchAfterARefreshAfterAPauseReadsTheNewOrg`,
+  `anUnforcedLoadAfterARefreshAfterAPauseAsksNothingTwice`, `aPauseOrARefreshDuringTheReturnsReadCancelsIt`).
+  A selection the list doesn't hold says why,
+  as People's does (`selectionNote`: "Reading the devices…", "This device isn't in the list Apple sent."; review L7), in
+  place of the inspector's "Select a device".
+- **Activity** (`ActivityModel`): one audit read over an `AuditFilter` (the last 1, 7, 30, 90 or 365 days or a range, and
+  Apple's type, actor and subject filters), checked through `AuditQuery` when set, so a refused range is said and nothing
+  is sent. A refused actor or subject id is told which of `isPathSafe`'s rules it broke: its characters, a leading dot, or
+  more than 128 characters (`AuditFilter.idProblem`; review L8). The panes are views over that one read: a type this version
+  doesn't know is in Other types and an untyped event only in Audit, both said (`unplacedNote`), never dropped; counts by
+  type only over a list read whole. Device 360's timeline (`DeviceDetailModel.timeline`) reads `filter[subjectId]=<serial>`
+  over 30 days in its own panel, counted apart (`timelineReadsFinished`); cut at the page cap, it says "Showing N events: the
+  list stopped at the page limit" (`aTimelineCutAtThePageCapSaysSo`; review L5, mutant T2).
+- **Dashboard** (`DashboardModel`): counts the Devices screen's read (one device read for both) and only a list read
+  whole, else each card says why (`fleetWords`, `servicesWords`, `unassignedWords`, `quietWords`); services not connected
+  through Reports' `QuietServices`; the newest ten of the last seven days' audit events from its own read and
+  `auditState`, so a refusal or a School org is said in that card alone. The recent events are `recentRows`, Activity's
+  `ActivityRow`s: type and outcome in words, an actor or a subject Apple named only by id shown by its id (review L3: the
+  card showed a dash and the raw type, decided in the view), each with its own id for the card's `ForEach` (verifier round 1,
+  mutant N-recentRowsSameID).
+- **Services' Last connected is the quiet card's rule** (`DevicesModel.connection(of:now:)` over `QuietServices`; review
+  L4): a date this app can't read says so, never "Never", a deleted service isn't flagged, and quiet is more than 30 days
+  by the instant, not by whole days, so the column flags exactly what the card lists at its default
+  (`theServicesColumnIsTheOverviewsQuietRule`; a stamp ahead of this Mac's clock reads "Today", never "-1 days ago",
+  verifier round 2). `DevicesModel.quietServices(after:)` is gone.
+- **Long reads a leave doesn't cancel** (review L9; recorded, not changed): only Apple MDM pauses. The Dashboard's seven-day
+  audit read walks every page (no `sort`) and runs on after the Overview is left, as do Activity's reads of up to 365 days
+  and 200 pages, the Devices read's walk of every service's device list, People's three lists and Content's four (each at
+  most the page cap). Device 360's five panels are cancelled by another selection or a closed inspector, not by leaving the
+  screen with it open. Each is one bounded read the operator asked for by opening the screen, not a sweep; each still
+  shares the org's limiter with what the operator opens next. If that proves slow live, each gets a `pause()` as Apple MDM's.
+- **Follow-up for Phase 3, not done here** (review L10, scope decided): the list code is copied, not shared. The token,
+  `current(_:)`, `reset`, `partialCount` and the page loop are written separately in `PeopleModel.Listing` and its `read`,
+  `ContentList`, `AppleMDMModel`'s list read, `ActivityModel`, `DashboardModel`'s audit read, `DeviceDetailModel`'s timeline
+  and `DevicesModel`; `PeopleModel.Members` is a fifth member-list copy. Their words now come from `ScreenWords`; merging the
+  loops into one list type waits for Phase 3, which adds the Changes and Reports lists.
+- **Known, not fixed**: `AppleAPIError.notInScope(.mdmEnrolled).message` reads "Apple School Manager's API has no apple mdm
+  enrolled to read." (AbapitKit lower-cases `AppleSection.displayName`); no screen shows it, as `AppleMDMModel` says its
+  own words and the sidebar hides Apple MDM for a School org.
+- **A test that holds the main actor holds a read too** (People): `World.buffer` blocks the main actor, so a read started
+  from it hasn't sent its request yet; wait until the request is held at the gate, then buffer, or the buffer waits out its
+  20 s and the test passes for the wrong reason. A superseded read's return counts in `readsFinished` too, cancelled or
+  not, so a test that supersedes a read waits for the state it asserts (the detail loaded), not for a count the superseded
+  read can meet first (verifier round 3: `aSupersededDetailWritesNothing` flaked, the detail still loading).
+- **The demo's files name one another**: blueprint members are `DemoPeople`'s users and groups (`DEMOUSER…`, `DEMOUG…`) and
+  the fleet's serials; audit subjects and actors are `DemoPeople`'s users and org unit, `DemoContent`'s Wi-Fi setting and
+  the fleet's serials (two released devices `TEST…`); Apple MDM's devices are the fleet's. `DemoTests` holds it.
+- **Check live (Phase 2):** whether the users list carries `phoneNumbers` and `roleOuList` or only `users/{id}` does;
+  whether a group's `totalMemberCount` is its linkage count (smart groups too), and whether member lists hold users
+  `/v1/users` doesn't return; whether a group's and a role's `ouId`, and an audit role's `locationUniqueIdentifier`, are org
+  unit ids; whether a USER audit subject's or actor's id is the `/v1/users` id, and a device event's `subjectId` its serial
+  (the timeline filters on it; else it says no event names the device); whether `apps/{id}` and `packages/{id}` carry the
+  lists' attributes, a package's url ever carries credentials or a signed query, and a custom app has an `appStoreUrl`;
+  whether a blueprint read includes the user and group resources the role can read (for names); whether a
+  `CUSTOM_PROFILE` carries `customSettingsValues`; whether a role that can't read details gets 403 on every device's, a
+  details record's serial always matches, and what iPhones and iPads send for FileVault and the firewall; whether 50
+  details per load suits real fleets and rates; and how long the Dashboard's seven-day audit read takes on a busy org,
+  since the endpoint has no `sort` and every page is read to find the newest ten. Manual: whether VoiceOver reads a
+  Chart's `accessibilityValue` (each chart's summary).
 
 ## Testing / live-verification status
 - Offline: green. Live (operator, Phase 1): device count and a 20-serial sample against abapit; Activation

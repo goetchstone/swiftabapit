@@ -4,7 +4,7 @@ import JSONAPI
 import SwiftUI
 
 /// The Device inspector, ABM half (plan §4; Device 360's Mosyle half arrives in Phase 7): the device's
-/// attributes, its AppleCare, its Activation Lock and its assigned service, each panel loaded on its own.
+/// attributes, its AppleCare, its Activation Lock, its assigned service and its audit timeline, each panel loaded on its own.
 struct DeviceInspectorView: View {
     let model: DeviceDetailModel
 
@@ -70,9 +70,37 @@ struct DeviceInspectorView: View {
                     }
                 }
             }
+            // Device 360's ABM timeline: the device's audit events, by Apple's subject filter. A role that can't read the
+            // audit log is told so here, and only here.
+            Section("Audit timeline, last \(DeviceDetailModel.timelineDays) days") {
+                PanelView(model.timeline) { timeline in
+                    if case .read(let rows, _) = timeline {
+                        ForEach(rows) { row in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.type).bold()
+                                Text("\(row.time?.formatted(date: .abbreviated, time: .shortened) ?? "—") · \(row.byline)")
+                                    .foregroundStyle(row.failed ? .red : .secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                    if let note = timeline.note {
+                        Label(note, systemImage: Self.symbol(timeline)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .accessibilityIdentifier("inspector.timeline")
         }
         .formStyle(.grouped)
         .accessibilityIdentifier("device.inspector")
+    }
+
+    static func symbol(_ timeline: DeviceTimeline) -> String {
+        switch timeline {
+        case .notInScope: "building.columns"
+        case .read(_, true): "exclamationmark.triangle"
+        case .read: "clock"
+        }
     }
 
     static func date(_ value: ISODate?) -> String {

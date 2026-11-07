@@ -42,6 +42,7 @@ struct DevicesView: View {
                     .width(min: 80, ideal: 100)
             }
             .accessibilityIdentifier("devices.table")
+            .selectsFirstRow($selection, first: model.shown.first?.id, ready: !model.state.isLoading)
         }
         .searchable(text: $model.search, prompt: "Serial, IMEI, order number, MAC…")
         .toolbar {
@@ -57,12 +58,13 @@ struct DevicesView: View {
                 }
                 .accessibilityIdentifier("devices.status")
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(model.shown.isEmpty || model.exportBlocked != nil)
+                    .disabled(model.exportBlocked != nil)
                     .help(model.exportBlocked ?? "Exports the devices shown, with the Devices columns only")
                     .accessibilityIdentifier("devices.export")
             }
         }
-        .fileExporter(isPresented: $exporting, document: CSVDocument(text: model.csv()), contentType: .commaSeparatedText,
+        // Built only while exporting: a large list's CSV isn't rebuilt on every redraw as its pages arrive.
+        .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
                       defaultFilename: "devices.csv") { _ in }
         .inspector(isPresented: Binding(get: { selection != nil }, set: { if !$0 { selection = nil } })) {
             DeviceInspectorView(model: detail)

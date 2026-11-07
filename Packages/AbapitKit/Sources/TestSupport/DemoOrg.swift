@@ -6,8 +6,8 @@ import Foundation
 import Vault
 
 /// The demo org (plan §4): a fresh key in a memory store, and the strict stub trusting it and serving the
-/// demo fleet. Debug builds of the app and the screenshots use it; nothing touches the Keychain, `orgs.json`
-/// or the network.
+/// demo fleet, people, content, Apple MDM devices and audit events. Debug builds of the app and the screenshots use
+/// it; nothing touches the Keychain, `orgs.json` or the network.
 public enum DemoOrg {
     public static let orgID = "demo-business"
     public static let name = "Example Business (demo)"
@@ -20,8 +20,19 @@ public enum DemoOrg {
         if let item = VaultItem(org: orgID, kind: .appleKey) { try? store.storeKey(key, as: item) }
         let stub = AppleStub()
         stub.register(AppleStub.Account(clientID: clientID, keyID: keyID, publicKey: key.publicKey))
-        stub.load(DemoFleet.make())
+        load(into: stub)
         return (store, stub)
+    }
+
+    /// Fills `stub` with the demo org's data: the fleet, then its people, content, Apple MDM devices and audit events,
+    /// which name one another (a blueprint's users, an audit event's subject). `make()` uses it, and so do the tests that
+    /// hold the demo's screens to each other's ids.
+    public static func load(into stub: AppleStub) {
+        stub.load(DemoFleet.make())
+        DemoPeople.load(into: stub)
+        DemoContent.load(into: stub)
+        DemoAppleMDM.load(into: stub)
+        DemoAudit.load(into: stub)
     }
 }
 #endif
