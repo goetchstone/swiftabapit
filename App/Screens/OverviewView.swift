@@ -1,18 +1,23 @@
-import AppleModels
 import AppModels
-import Charts
-import Reports
 import SwiftUI
 
-/// Overview (plan §8 Phase 1: the minimal dashboard): the fleet's counts, devices added per month, the
-/// unassigned ones, and services that haven't connected lately. Built from the Devices screen's load. An org that
-/// can't be read says why instead of showing zeros (Phase 1b review, LOW); so do the service tiles and the health box
-/// while the services are read, refused or failed (verifier round 1), and the device tiles while the devices are
-/// (verifier round 2).
+/// Overview › Dashboard (plan §8 Phase 2; Appendix B): the fleet's counts, by family, by status and added per month;
+/// devices per service and the unassigned ones; services not connected in N days; the last seven days' audit events.
+/// Thin over `DashboardModel`, which decides what each card may count and says why when it can't (invariant 8): a dash
+/// or words, never a zero nobody counted. An org that can't be read says why instead of showing zeros (Phase 1b review,
+/// LOW). The cards are in Screens/DashboardCards.swift.
 struct OverviewView: View {
-    let model: DevicesModel
+    let dashboard: DashboardModel
     let hasOrg: Bool
     let addOrg: () -> Void
+
+    private var model: DevicesModel { dashboard.devices }
+
+    init(model: DashboardModel, hasOrg: Bool, addOrg: @escaping () -> Void) {
+        dashboard = model
+        self.hasOrg = hasOrg
+        self.addOrg = addOrg
+    }
 
     var body: some View {
         if !hasOrg {
@@ -22,6 +27,7 @@ struct OverviewView: View {
                 Text("Add an Apple Business or Apple School Manager API account in Settings.")
             } actions: {
                 Button("Open Settings", action: addOrg)
+                    .accessibilityIdentifier("overview.open-settings")
             }
         } else if case .unusable(let why) = model.state {
             ContentUnavailableView {
@@ -30,60 +36,43 @@ struct OverviewView: View {
                 Text(why)
             } actions: {
                 Button("Open Settings", action: addOrg)
+                    .accessibilityIdentifier("overview.unusable.open-settings")
             }
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
                     StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total,
                                  partial: model.partialCount) {
-                        model.load(force: true)
+                        dashboard.load(force: true)
                     }
                     if let note = model.serviceNote {
                         Label(note, systemImage: "questionmark.circle").font(.callout).foregroundStyle(.secondary)
                     }
-                    let stats = DeviceStats(model.devices.map(\.resource), now: Date())
+                    // One `now` and one count per drawing, so every card counts the same list at the same moment.
+                    let now = Date()
+                    let stats = dashboard.stats(now: now)
                     HStack(spacing: 12) {
-                        // A dash until the list is read whole; the banner says how far it got and why.
-                        Tile(title: "Devices", value: model.devicesReadWhole ? stats.total : nil)
-                        Tile(title: "Added in 30 days", value: model.devicesReadWhole ? stats.added30 : nil)
-                        // A dash until every service's device list is read whole: unknown is never counted as none.
-                        Tile(title: "Not assigned to a service", value: model.unassignedCount)
-                        Tile(title: "Services", value: model.serviceCount)
+                        // A dash until the list it counts is read whole; the cards and the banner say why.
+                        Tile(title: "Devices", id: "devices", value: stats?.total)
+                        Tile(title: "Added in 30 days", id: "added-30", value: stats?.added30)
+                        Tile(title: "Added in 90 days", id: "added-90", value: stats?.added90)
+                        Tile(title: "Not assigned to a service", id: "unassigned", value: model.unassignedCount)
+                        Tile(title: "Services", id: "services", value: model.serviceCount)
                     }
-                    GroupBox("By family") {
-                        Chart(stats.byFamily, id: \.name) { tally in
-                            BarMark(x: .value("Devices", tally.count), y: .value("Family", tally.name))
-                        }
-                        .frame(height: CGFloat(max(stats.byFamily.count, 1)) * 28 + 20)
-                        .accessibilityLabel("Devices by family: " + stats.byFamily.map { "\($0.name) \($0.count)" }.joined(separator: ", "))
+                    MonthsCard(dashboard: dashboard, stats: stats)
+                    // Two columns in the smallest window (its pane is about 790 pt wide), more in a wider one.
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
+                        FamilyCard(dashboard: dashboard, stats: stats)
+                        StatusCard(dashboard: dashboard, stats: stats)
+                        ServiceCountCard(dashboard: dashboard)
+                        UnassignedCard(dashboard: dashboard)
+                        QuietServicesCard(dashboard: dashboard, now: now)
                     }
-                    GroupBox("Added per month") {
-                        Chart(stats.addedByMonth, id: \.name) { tally in
-                            BarMark(x: .value("Month", tally.name), y: .value("Devices", tally.count))
-                        }
-                        .frame(height: 160)
-                        .accessibilityLabel("Devices added per month, last 12 months: " + stats.addedByMonth.map { "\($0.name) \($0.count)" }.joined(separator: ", "))
-                    }
-                    GroupBox("Service health") {
-                        if let why = model.servicesUnread {
-                            Label(why, systemImage: "questionmark.circle")
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else if let quiet = model.quietServices(after: ServicesView.staleAfter), !quiet.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(quiet) { service in
-                                    HStack { Text(service.name); Spacer(); LastConnected(service: service) }
-                                }
-                            }
-                        } else {
-                            Label("Every service has connected in the last \(ServicesView.staleAfter) days.", systemImage: "checkmark.circle")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                    RecentEventsCard(dashboard: dashboard)
                 }
                 .padding()
             }
-            .task { model.load() }
+            .task { dashboard.load() }
         }
     }
 }
@@ -91,6 +80,7 @@ struct OverviewView: View {
 /// A count, or a dash when nobody could count it (never a zero; the reason is said beside it).
 struct Tile: View {
     let title: String
+    let id: String
     let value: Int?
 
     var body: some View {
@@ -103,5 +93,6 @@ struct Tile: View {
         .padding()
         .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 10))
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("overview.tile.\(id)")
     }
 }

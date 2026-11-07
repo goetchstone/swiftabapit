@@ -9,7 +9,7 @@ import JSONAPI
 /// Apple adds and a missing one are kept: nothing documents that an inactive service stops connecting, and an
 /// inactive one that still holds devices is what the operator should see.
 public struct QuietServices: Sendable {
-    /// The Overview's N, the Services screen's `staleAfter`.
+    /// The Overview's N, and the Services screen's (`DevicesModel.connection(of:now:)`).
     public static let defaultDays = 30
 
     public enum LastConnected: Sendable, Equatable {
@@ -50,7 +50,9 @@ public struct QuietServices: Sendable {
         }.map(\.row)
     }
 
-    static func lastConnected(_ service: MDMService) -> LastConnected {
+    /// When `service` last connected, as this rule reads it: the Services screen's column says it the same way (Phase 2b
+    /// review L4).
+    public static func lastConnected(_ service: MDMService) -> LastConnected {
         switch service.attributes["lastConnectedDateTime"] {
         case nil, .null?: .never
         case let value?: ISODate.parse(value.string).map(LastConnected.at) ?? .unreadable

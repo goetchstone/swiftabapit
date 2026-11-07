@@ -1,0 +1,1185 @@
+import AppleBusiness
+import AppleModels
+import AppModels
+import Foundation
+import JSONAPI
+import Reports
+import Testing
+import TestSupport
+
+/// Content's screen model (plan Phase 2; Appendix B: apps, packages, blueprints, configurations), invariant 8's tests for
+/// it: four lists read side by side, each with its own state; an org switch, a superseded load and a refresh write
+/// nothing of the old read; truncated, forbidden, failed, not in scope and unusable each said; a detail per list; a
+/// blueprint's members said as read, cut, unlisted or refused (no count); a custom setting's profile only masked
+/// (invariant 11), the demo's canary in nothing the model exposes, its CSV included.
+@MainActor
+@Suite("Content", .serialized)
+struct ContentTests {
+    static func app(_ index: Int) -> Resource {
+        Resource(type: "apps", id: String(2_000_000_000 + index), attributes: [
+            "name": .string(String(format: "App %05d", index)), "bundleId": .string("com.example.app\(index)"),
+        ])
+    }
+
+    /// The demo's content in org a's stub, its blueprints' devices org a's (`ADEV…`, Macs).
+    static func stocked(_ world: World) {
+        DemoContent.load(into: world.stubs["a"]!, fleet: (0..<3).map { World.device(World.prefix("a"), $0) })
+    }
+
+    /// Waits until `reads` list reads, superseded ones too, have returned.
+    static func settled(_ world: World, _ reads: Int) async {
+        await eventually("\(reads) content reads, \(world.content.readsFinished) so far") { world.content.readsFinished >= reads }
+    }
+
+    static func detailSettled(_ world: World, _ reads: Int) async {
+        await eventually("\(reads) detail reads, \(world.content.detail.readsFinished) so far") { world.content.detail.readsFinished >= reads }
+    }
+
+    static func isLoaded(_ state: LoadState) -> Bool { if case .loaded = state { true } else { false } }
+
+    static func detail(_ world: World) throws -> ContentDetail {
+        guard case .loaded(let detail) = world.content.detail.item else { throw Unexpected(world.content.detail.item) }
+        return detail
+    }
+
+    struct Unexpected: Error, CustomStringConvertible {
+        let description: String
+        init(_ value: Any) { description = "\(value)" }
+    }
+
+    static let laterAppPages: @Sendable (URL) -> Bool = { $0.path() == "/v1/apps" && ($0.query() ?? "").contains("cursor=") }
+    static let appPages: @Sendable (URL) -> Bool = { $0.path() == "/v1/apps" }
+
+    // MARK: the lists
+
+    @Test func everyListLoadsSideBySideSortedByName() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        let content = world.content
+        #expect(content.apps.state == .idle)
+        content.load()
+        #expect(content.apps.state.isLoading && content.configurations.state.isLoading)
+        await Self.settled(world, 4)
+        let counts: [Int] = [content.apps.rows.count, content.packages.rows.count, content.blueprints.rows.count, content.configurations.rows.count]
+        #expect(counts == [12, 4, 4, 8])
+        #expect([content.apps.state, content.packages.state, content.blueprints.state, content.configurations.state].allSatisfy(Self.isLoaded))
+        let apps = content.apps.shown(matching: "")
+        #expect(apps.first?.name == "Example Badge" && apps.last?.name == "Example Training", "\(apps.map(\.name))")
+        let badge = try #require(apps.first)
+        #expect(badge.bundleID == "com.example.badge" && badge.version == "1.0.4" && badge.platforms == "iOS" && badge.source == "Custom")
+        #expect(apps.first { $0.name == "Example Notes" }?.platforms == "macOS, iOS, iPadOS, visionOS")
+        #expect(apps.first { $0.name == "Example Chat" }?.source == "App Store")
+        let wifi = try #require(content.configurations.rows.first { $0.id == "demo-config-02" })
+        #expect(wifi.type == "Wi-Fi" && wifi.platforms == "iOS and iPadOS, macOS")
+        #expect(content.blueprints.rows.first { $0.id == "demo-blueprint-03" }?.licences == "Too few")
+        #expect(content.blueprints.rows.first { $0.id == "demo-blueprint-04" }?.status == "To be deleted")
+        #expect(content.packages.rows.first { $0.id == "demo-package-02" }?.bundleIDs == "com.example.vpnclient, com.example.vpnclient.helper")
+        // Loaded once: the view's `.task` reading again on show reads nothing new.
+        let sent = world.stubs["a"]!.requests.count
+        content.load()
+        #expect(content.readsFinished == 4 && world.stubs["a"]!.requests.count == sent)
+        // Nothing reads the single items, the members or a profile until a row is chosen.
+        #expect(!world.stubs["a"]!.requests.contains { $0.contains("/v1/configurations/") || $0.contains("/v1/blueprints/") })
+    }
+
+    @Test func theSearchFiltersEachListByWhatItShows() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        let content = world.content
+        #expect(content.apps.shown(matching: "help").map(\.name) == ["Example Help Desk"])
+        #expect(content.apps.shown(matching: " com.example.maps ").map(\.name) == ["Example Maps"])
+        #expect(content.apps.shown(matching: "1000000003").map(\.name) == ["Example Reader"])
+        #expect(content.configurations.shown(matching: "wi-fi").map(\.id) == ["demo-config-02", "demo-config-01"])
+        #expect(content.apps.shown(matching: "nothing like this").isEmpty)
+        // The CSV is what the table shows, with the list's columns.
+        content.search = "help"
+        #expect(content.csv(for: .apps) == "id,name,bundleId,version,supportedOS,isCustomApp,appStoreUrl,websiteUrl\r\n"
+                + "1000000006,Example Help Desk,com.example.helpdesk,5.1,SUPPORTED_OS_MACOS; SUPPORTED_OS_IOS,True,,https://www.example.com/helpdesk\r\n")
+    }
+
+    /// Each list's CSV has its own columns (`ExportPolicy`), the configurations' no custom setting's profile.
+    @Test func eachListExportsItsColumns() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        func header(_ kind: ContentKind) -> String { String(world.content.csv(for: kind).prefix { $0 != "\r\n" }) }
+        #expect(header(.apps) == "id,name,bundleId,version,supportedOS,isCustomApp,appStoreUrl,websiteUrl")
+        #expect(header(.packages) == "id,name,version,bundleIds,hash,description,createdDateTime,updatedDateTime")
+        #expect(header(.blueprints) == "id,name,status,appLicenseDeficient,description,createdDateTime,updatedDateTime")
+        #expect(header(.configurations) == "id,name,type,configuredForPlatforms,createdDateTime,updatedDateTime")
+        #expect(world.content.csv(for: .configurations).split(separator: "\r\n").count == 9)
+        for kind in ContentKind.allCases { #expect(world.content.exportBlocked(for: kind) == nil, "\(kind)") }
+    }
+
+    /// The failure-log entry "the screen models had no tests": after a switch nothing of org a's stays, in the lists, a CSV
+    /// or the detail, and org b is read at once.
+    @Test func aSwitchClearsEveryListAndTheDetailAndReadsTheNewOrg() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        let content = world.content
+        content.load()
+        await Self.settled(world, 4)
+        content.selection = "1000000005"
+        await Self.detailSettled(world, 1)
+        #expect(try Self.detail(world).title == "Example Badge")
+        world.gates["b"]!.hold("b", Self.appPages)
+
+        world.orgs.select("b")
+        #expect(content.apps.rows.isEmpty && content.packages.rows.isEmpty && content.blueprints.rows.isEmpty && content.configurations.rows.isEmpty)
+        #expect(content.selection == nil && content.detail.shown == nil)
+        for kind in ContentKind.allCases { #expect(!content.csv(for: kind).contains("Example"), "\(kind)") }
+        #expect(content.apps.state == .loading(count: 0), "a switch reads the new org at once: \(content.apps.state)")
+
+        world.gates["b"]!.release("b")
+        await Self.settled(world, 8)
+        #expect(Self.isLoaded(content.apps.state) && content.apps.rows.isEmpty)
+        #expect(content.apps.emptyWords == "No apps in this organization.")
+        #expect(content.packages.emptyWords == "No packages in this organization.")
+    }
+
+    /// A switch with nothing shown yet reads nothing: the screen reads when it's shown.
+    @Test func aSwitchBeforeTheScreenIsShownReadsNothing() async throws {
+        let world = try await World.make()
+        world.orgs.select("b")
+        #expect(world.content.apps.state == .idle && world.content.readsFinished == 0)
+        #expect(!world.stubs["b"]!.requests.contains { $0.contains("/v1/apps") })
+    }
+
+    /// a's walk, cut off by the switch, hands on its held page: none of it lands on b's screen.
+    @Test func aSupersededLoadWritesNothing() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add((0..<2500).map(Self.app))
+        world.gates["a"]!.hold("later", Self.laterAppPages)
+        world.content.load()
+        await eventually("a's first page") { world.content.apps.rows.count == 1000 }
+        world.gates["b"]!.hold("b", Self.appPages)
+
+        world.orgs.select("b")
+        world.gates["a"]!.release("later")
+        // a's four reads have returned, and b's apps are still held.
+        await Self.settled(world, 7)
+        #expect(world.content.apps.state == .loading(count: 0), "\(world.content.apps.state) while org b's apps are held")
+        #expect(world.content.apps.rows.isEmpty)
+        world.gates["b"]!.release("b")
+        await Self.settled(world, 8)
+        #expect(Self.isLoaded(world.content.apps.state) && world.content.apps.rows.isEmpty)
+    }
+
+    /// A switch stops the old org's reads, a list's walk and the detail's read alike: each held read ends (the gate's wait
+    /// is cancellable, as a slow tenant's page is) rather than waiting on, and nothing more is sent for org a.
+    @Test func aSwitchStopsTheOldOrgsReads() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.stubs["a"]!.add((0..<1500).map(Self.app))
+        let gate = world.gates["a"]!
+        gate.hold("later", Self.laterAppPages)
+        gate.hold("detail", { $0.path() == "/v1/blueprints/demo-blueprint-01" })
+        world.content.load()
+        await eventually("a's first page") { world.content.apps.rows.count == 1000 }
+        world.content.kind = .blueprints
+        world.content.selection = "demo-blueprint-01"
+        await eventually("the detail's read held") { gate.held == 2 }
+
+        world.orgs.select("b")
+        // a's held page and held detail return, cancelled, with the holds still on; b's four lists read.
+        await Self.settled(world, 8)
+        await Self.detailSettled(world, 1)
+        #expect(gate.held == 0 && world.content.detail.shown == nil)
+        let sent = world.stubs["a"]!.requests.count
+        gate.release("later")
+        gate.release("detail")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(world.stubs["a"]!.requests.count == sent, "org a's reads went on after the switch")
+    }
+
+    /// Refresh during a load cancels it: the old walk's page never mixes into the new one, and the new one is whole.
+    @Test func aRefreshCancelsTheRunningLoadAndTheNewOneIsWhole() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add((0..<2500).map(Self.app))
+        let gate = world.gates["a"]!
+        gate.hold("later", Self.laterAppPages)
+        world.content.load()
+        await eventually("a's first page") { world.content.apps.rows.count == 1000 }
+        gate.hold("all", Self.appPages)
+
+        world.content.load(force: true)
+        gate.release("later")
+        await Self.settled(world, 5)
+        #expect(world.content.apps.state == .loading(count: 0), "\(world.content.apps.state) while the refresh's first page is held")
+        #expect(world.content.apps.rows.isEmpty)
+        gate.release("all")
+        await Self.settled(world, 8)
+        #expect(world.content.apps.rows.count == 2500 && Set(world.content.apps.rows.map(\.id)).count == 2500)
+        #expect(Self.isLoaded(world.content.apps.state) && !world.content.apps.truncated)
+    }
+
+    /// A page already answered when Refresh is pressed waits in the old walk's buffer, and a cancelled loop can still be
+    /// handed it: the check inside the loop drops it.
+    @Test func aPageAlreadyOnItsWayWhenRefreshedIsDropped() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add((0..<3500).map(Self.app))
+        let gate = world.gates["a"]!
+        gate.hold("later", Self.laterAppPages)
+        world.content.load()
+        await eventually("a's first page") { world.content.apps.rows.count == 1000 }
+        gate.hold("third", { $0.path() == "/v1/apps" && ($0.query() ?? "").contains("cursor=2000") })
+        world.buffer("a", release: "later")
+        gate.hold("all", Self.appPages)
+        world.content.load(force: true)
+        await Self.settled(world, 7)
+        #expect(world.content.apps.rows.isEmpty, "\(world.content.apps.rows.count) rows of the cancelled read landed in the new one")
+        #expect(world.content.apps.state == .loading(count: 0))
+        gate.release("third")
+        gate.release("all")
+        await Self.settled(world, 8)
+        #expect(world.content.apps.rows.count == 3500)
+    }
+
+    /// The same for a failure: the old walk's error, already on its way, never lands on the new read.
+    @Test func aFailureAlreadyOnItsWayWhenRefreshedIsDropped() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add((0..<2500).map(Self.app))
+        let gate = world.gates["a"]!
+        gate.hold("later", Self.laterAppPages)
+        world.content.load()
+        await eventually("a's first page") { world.content.apps.rows.count == 1000 }
+        world.stubs["a"]!.failTransport(5)
+        world.buffer("a", release: "later", count: 5)
+        gate.hold("all", Self.appPages)
+        world.content.load(force: true)
+        await Self.settled(world, 7)
+        #expect(world.content.apps.state == .loading(count: 0), "the cancelled read's failure landed on the new one: \(world.content.apps.state)")
+        gate.release("all")
+        await Self.settled(world, 8)
+        #expect(world.content.apps.rows.count == 2500 && Self.isLoaded(world.content.apps.state))
+    }
+
+    /// The page cap stops a list and says so ("showing N of ≥M", the banner); a list cut there still exports, as the
+    /// Devices list does, and isn't said to be empty.
+    @Test func aListCutAtThePageCapSaysSo() async throws {
+        let world = try await World.make(pageCap: 1)
+        world.stubs["a"]!.add((0..<1001).map(Self.app))
+        world.content.load()
+        await Self.settled(world, 4)
+        let apps = world.content.apps
+        #expect(apps.rows.count == 1000 && apps.truncated && Self.isLoaded(apps.state))
+        #expect(apps.emptyWords == nil && world.content.exportBlocked(for: .apps) == nil)
+        #expect(!world.content.packages.truncated)
+    }
+
+    /// One list the role can't read says so; the others load (load each panel as its own Result).
+    @Test func aForbiddenListSaysSoAndTheOthersLoad() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.stubs["a"]!.forbid("/v1/configurations")
+        world.content.load()
+        await Self.settled(world, 4)
+        #expect(world.content.configurations.state == .forbidden)
+        #expect(world.content.configurations.emptyWords
+                == "Your role can't read configurations. An administrator can change the API account's role in Apple Business.")
+        #expect(world.content.apps.rows.count == 12 && Self.isLoaded(world.content.apps.state))
+    }
+
+    /// A walk that fails part-way keeps what it read, says it is partial, and doesn't export (a file can't say so).
+    @Test func aWalkThatFailsPartWayIsPartialAndDoesNotExport() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add((0..<2500).map(Self.app))
+        world.stubs["a"]!.queue(400, for: "/v1/apps?cursor=")
+        world.content.load()
+        await Self.settled(world, 4)
+        let apps = world.content.apps
+        guard case .failed(let why) = apps.state else { Issue.record("\(apps.state)"); return }
+        #expect(why.hasPrefix("Apple refused the request"), "\(why)")
+        #expect(apps.rows.count == 1000 && apps.partialCount == 1000 && apps.emptyWords == nil)
+        #expect(world.content.exportBlocked(for: .apps) == "The list is partial: 1,000 apps were read before the error. Refresh, then export.")
+        world.stubs["a"]!.queue(403, for: "/v1/packages")
+        world.content.load(force: true)
+        #expect(world.content.exportBlocked(for: .apps) == "The list is still loading.")
+        await Self.settled(world, 8)
+        #expect(apps.rows.count == 2500 && world.content.exportBlocked(for: .apps) == nil)
+        #expect(world.content.packages.state == .forbidden && world.content.packages.partialCount == nil)
+    }
+
+    /// Apple School Manager has no content endpoints (plan §2.4): each list says so in words, never an empty table, and
+    /// nothing is sent.
+    @Test func aSchoolOrgSaysNotInScopeAndSendsNothing() async throws {
+        let world = try await World.make(profiles: [World.profile("a", scope: .school)])
+        world.content.load()
+        await Self.settled(world, 4)
+        let lists: [(LoadState, String?, String)] = [
+            (world.content.apps.state, world.content.apps.emptyWords, "apps"),
+            (world.content.packages.state, world.content.packages.emptyWords, "packages"),
+            (world.content.blueprints.state, world.content.blueprints.emptyWords, "blueprints"),
+            (world.content.configurations.state, world.content.configurations.emptyWords, "configurations"),
+        ]
+        for (state, words, noun) in lists {
+            let said = "Apple School Manager's API has no \(noun) to read."
+            #expect(state == .notInScope(said) && words == said, "\(state)")
+        }
+        #expect(!world.stubs["a"]!.requests.contains { $0.contains("/v1/apps") || $0.contains("/v1/packages") || $0.contains("/v1/blueprints")
+            || $0.contains("/v1/configurations") }, "\(world.stubs["a"]!.requests)")
+    }
+
+    /// No org, or one this version can't use: each list says why, never idle or an empty table.
+    @Test func anOrgThatCantBeReadSaysWhy() async throws {
+        let none = try await World.make(profiles: [])
+        none.content.load()
+        #expect(none.content.apps.state == .unusable("No organization yet: add an Apple Business or Apple School Manager API account in Settings."))
+        #expect(none.content.configurations.emptyWords == "No organization yet: add an Apple Business or Apple School Manager API account in Settings.")
+        let district = try await World.make(profiles: [World.unusable])
+        district.content.load()
+        guard case .unusable(let why) = district.content.blueprints.state else { Issue.record("\(district.content.blueprints.state)"); return }
+        #expect(why.hasPrefix("This organization can't be used: "), "\(why)")
+        district.content.selection = "B1"
+        guard case .failed(let detail) = district.content.detail.item else { Issue.record("\(district.content.detail.item)"); return }
+        #expect(detail.hasPrefix("This organization can't be used: "))
+    }
+
+    /// A list Apple sent in a shape this version can't read is said, never shown as none.
+    @Test func aListThatDidNotReadIsSaid() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "apps", id: "A1", attributes: ["name": .string("Odd"), "supportedOS": .array([.number("1")])]),
+                               Resource(type: "apps", id: "A2", attributes: ["name": .string("None"), "supportedOS": .array([])]),
+                               Resource(type: "apps", id: "A3", attributes: ["name": .string("Unsaid")]),
+                               Resource(type: "apps", id: "A4", attributes: ["name": .string("Future"), "supportedOS": .array([.string("SUPPORTED_OS_GLASSES")])])])
+        world.content.load()
+        await Self.settled(world, 4)
+        let rows = Dictionary(uniqueKeysWithValues: world.content.apps.rows.map { ($0.id, $0.platforms) })
+        #expect(rows == ["A1": "Not readable", "A2": "None", "A3": "—", "A4": "SUPPORTED_OS_GLASSES"])
+    }
+
+    // MARK: the details
+
+    @Test func anAppsDetailIsItsOwnReadWithItsAddressesAsText() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.selection = "1000000001"
+        #expect(world.content.detail.shown == ContentSelection(kind: .apps, id: "1000000001"))
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        #expect(detail.title == "Example Field Notes")
+        #expect(detail.fields == [
+            ContentField("Name", "Example Field Notes"), ContentField("Bundle ID", "com.example.fieldnotes"), ContentField("Version", "4.2.1"),
+            ContentField("Platforms", "iOS, iPadOS"), ContentField("Kind", "App Store app"),
+            ContentField("App Store", "https://apps.example.com/app/id1000000001"), ContentField("Website", "https://www.example.com/fieldnotes"),
+            ContentField("Adam ID", "1000000001"),
+        ])
+        #expect(detail.attributes.first == ContentField("name", "Example Field Notes"))
+        #expect(detail.attributes.contains(ContentField("supportedOS", "SUPPORTED_OS_IOS, SUPPORTED_OS_IPADOS")))
+        #expect(detail.attributes.contains(ContentField("isCustomApp", "No")))
+        // The same row chosen again (a table sets its selection more than once) reads nothing more.
+        world.content.selection = "1000000001"
+        #expect(world.content.detail.readsFinished == 1 && world.content.detail.item.isLoaded)
+        #expect(world.stubs["a"]!.requests.filter { $0.hasPrefix("GET api-business.apple.com/v1/apps/1000000001") }.count == 1)
+    }
+
+    /// Choosing another list clears the selection and the detail; a detail read superseded by another choice writes
+    /// nothing, even when it answers last.
+    @Test func aSupersededDetailWritesNothing() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        let gate = world.gates["a"]!
+        gate.hold("first", { $0.path() == "/v1/apps/1000000001" })
+        world.content.selection = "1000000001"
+        // The first read is at the gate before the second is chosen, and the wait is for the detail, not a count: the
+        // superseded read's return counts in `readsFinished` too, so a count could be met by it while the second was still
+        // on its way (Phase 2b verifier round 3: a rare flake, the detail still loading).
+        await eventually("the first read held") { gate.held == 1 }
+        world.content.selection = "1000000002"
+        await eventually("the second read landed") { if case .loaded = world.content.detail.item { true } else { false } }
+        #expect(try Self.detail(world).title == "Example Timesheets")
+        gate.release("first")
+        await Self.detailSettled(world, 2)
+        #expect(try Self.detail(world).title == "Example Timesheets")
+        #expect(world.content.detail.shown == ContentSelection(kind: .apps, id: "1000000002"))
+
+        world.content.kind = .packages
+        #expect(world.content.selection == nil && world.content.detail.shown == nil)
+        world.content.selection = "demo-package-01"
+        #expect(world.content.detail.shown == ContentSelection(kind: .packages, id: "demo-package-01"))
+        await Self.detailSettled(world, 3)
+        #expect(try Self.detail(world).title == "Example Printer Driver")
+    }
+
+    /// A detail read already answered when another row is chosen waits, unread, to land on the main actor: the checks
+    /// drop it, so the inspector never shows one row's detail under another's selection.
+    @Test func aDetailAlreadyOnItsWayWhenAnotherIsChosenIsDropped() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        let gate = world.gates["a"]!
+        gate.hold("first", { $0.path() == "/v1/apps/1000000001" })
+        gate.hold("second", { $0.path() == "/v1/apps/1000000002" })
+        world.content.selection = "1000000001"
+        await eventually("the first read held") { gate.held == 1 }
+        world.buffer("a", release: "first")
+        world.content.selection = "1000000002"
+        await Self.detailSettled(world, 1)
+        #expect(world.content.detail.shown == ContentSelection(kind: .apps, id: "1000000002"))
+        if case .loaded(let detail) = world.content.detail.item { Issue.record("\(detail.title) landed under the second row's selection") }
+        gate.release("second")
+        await Self.detailSettled(world, 2)
+        #expect(try Self.detail(world).title == "Example Timesheets")
+    }
+
+    /// Refresh reads the open detail again too, and a refused detail read says "your role can't read this".
+    @Test func aRefreshReadsTheOpenDetailAgain() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "demo-package-04"
+        await Self.detailSettled(world, 1)
+        world.stubs["a"]!.queue(403, for: "/v1/packages/demo-package-04")
+        world.content.load(force: true)
+        #expect(world.content.selection == "demo-package-04")
+        await Self.detailSettled(world, 2)
+        guard case .forbidden = world.content.detail.item else { Issue.record("\(world.content.detail.item)"); return }
+        await Self.settled(world, 8)
+    }
+
+    /// A package's location is shown as text, never fetched, with what could be a credential masked: the user and
+    /// password, every query value and the fragment. Its CSV holds no location at all.
+    @Test func aPackagesLocationIsShownWithItsCredentialsMasked() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        for (id, shown, secret) in [
+            ("demo-package-03", "https://********@packages.example.com/agent/security-agent-3.2.7.pkg", "demo-not-a-password"),
+            ("demo-package-02", "https://packages.example.com/vpn/vpn-client-6.1.pkg?expires=********&signature=********", "TESTSIGNATURE0001"),
+        ] {
+            let before = world.content.detail.readsFinished
+            world.content.selection = id
+            await Self.detailSettled(world, before + 1)
+            let detail = try Self.detail(world)
+            #expect(detail.fields.first { $0.label == "Location" }?.value == shown)
+            #expect(detail.attributes.first { $0.label == "url" }?.value == shown)
+            #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                     + "It is shown here, never opened."])
+            let everything = (detail.fields + detail.attributes).map(\.value) + detail.notes + [detail.title, String(describing: detail.fields)]
+            #expect(!everything.contains { $0.contains(secret) || $0.contains("deploy") }, "\(everything)")
+        }
+        world.content.selection = "demo-package-01"
+        await Self.detailSettled(world, 3)
+        #expect(try Self.detail(world).notes.isEmpty)
+        #expect(!world.content.csv(for: .packages).contains("packages.example.com"))
+    }
+
+    /// The masking itself: the user and password, each query value and the fragment; the host and path kept; bytes, so a
+    /// combining mark can't join a delimiter.
+    @Test func aLocationsCredentialsAreMasked() {
+        let cases: [(String, String, Bool)] = [
+            ("https://packages.example.com/a.pkg", "https://packages.example.com/a.pkg", false),
+            ("https://user:pass@packages.example.com/a.pkg", "https://********@packages.example.com/a.pkg", true),
+            ("https://token@packages.example.com", "https://********@packages.example.com", true),
+            ("https://a@b@packages.example.com/x@y", "https://********@packages.example.com/x@y", true),
+            ("https://packages.example.com/a.pkg?X-Amz-Signature=abc&flag&empty=", "https://packages.example.com/a.pkg?X-Amz-Signature=********&********&empty=", true),
+            ("https://packages.example.com/a.pkg#access_token=abc", "https://packages.example.com/a.pkg#********", true),
+            ("https://u:p@h.example.com?k=v#f", "https://********@h.example.com?k=********#********", true),
+            ("packages.example.com/a.pkg?sig=1", "packages.example.com/a.pkg?sig=********", true),
+            ("https://u\u{301}:p\u{301}@h.example.com/\u{E9}", "https://********@h.example.com/\u{E9}", true),
+            ("https://packages.example.com/a.pkg?", "https://packages.example.com/a.pkg?", false),
+            // Phase 2b verifier round 3, mutant R3B-maskedLastRunOnly: masked when only an earlier run is, so the detail's
+            // note still says why the field shows the mask.
+            ("https://u:p@h.example.com/a.pkg b.pkg", "https://********@h.example.com/a.pkg b.pkg", true),
+            ("", "", false),
+        ]
+        for (url, shown, masked) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked == masked, "\(url) -> \(result)")
+        }
+    }
+
+    /// Phase 2b review L2, probe p3: a scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, so a `://` in the query is the
+    /// query's (the first `://` anywhere was taken for the scheme's, and everything before it, query values included, was
+    /// copied raw); a leading `//` starts an authority, and an `@` ahead of the path ends a user and password with no `//`;
+    /// a path parameter's value (`;jsessionid=`) is masked.
+    @Test func everyShapeOfALocationsCredentialIsMasked() {
+        let cases: [(String, String)] = [
+            ("file:/pkgs/a.pkg?token=TOPSECRET4&next=https://example.com/x", "file:/pkgs/a.pkg?token=********&next=********"),
+            ("//deploy:TOPSECRET5@packages.example.com/a.pkg", "//********@packages.example.com/a.pkg"),
+            ("deploy:TOPSECRET6@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
+            ("deploy@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
+            ("https://packages.example.com/a.pkg;jsessionid=TOPSECRET7", "https://packages.example.com/a.pkg;jsessionid=********"),
+            ("https://packages.example.com/dl;sid=TOPSECRET9/a.pkg;v=2?k=v", "https://packages.example.com/dl;sid=********/a.pkg;v=********?k=********"),
+            ("https://packages.example.com/a.pkg;TOPSECRET10;empty=", "https://packages.example.com/a.pkg;********;empty="),
+            ("HTTPS://deploy:TOPSECRET8@packages.example.com/a.pkg", "HTTPS://********@packages.example.com/a.pkg"),
+            ("svn+ssh://deploy:TOPSECRET11@packages.example.com/repo", "svn+ssh://********@packages.example.com/repo"),
+            ("  https://deploy:TOPSECRET12@packages.example.com/a.pkg", "  https://********@packages.example.com/a.pkg"),
+            ("https://packages.example.com/my pkg.pkg?sig=TOPSECRET13", "https://packages.example.com/my pkg.pkg?sig=********"),
+            ("url=https://deploy:TOPSECRET14@packages.example.com/a.pkg", "url=https://********@packages.example.com/a.pkg"),
+            // Phase 2b verifier round 3, mutant R3-schemeToFirstColon: a scheme's bytes end at its `:`, so a scheme-less
+            // address whose first `:` is in its query (an Azure SAS's `st=…T00:00:00Z`) or its fragment isn't read as a
+            // scheme up to there and copied raw.
+            ("acct.blob.example.com/c/a.pkg?sv=2022&st=2025-10-31T00:00:00Z&sig=TOPSECRET15",
+             "acct.blob.example.com/c/a.pkg?sv=********&st=********&sig=********"),
+            ("packages.example.com/a.pkg#t=1:TOPSECRET16", "packages.example.com/a.pkg#********"),
+            // Mutant R3-userArmFirstAt: with no `//`, the user and password run to the last `@` ahead of the path, as an
+            // authority's do.
+            ("deploy:p@ssTOPSECRET17@packages.example.com/a.pkg", "********@packages.example.com/a.pkg"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            #expect(!result.text.contains("TOPSECRET") && !result.text.contains("deploy"), "\(result.text)")
+        }
+    }
+
+    /// A plain address and a string that isn't one show as they came, in the Location and among the attributes.
+    @Test func aPlainAddressAndAPlainStringShowUnchanged() {
+        // With no scheme, one leading `/` starts a path, not an authority: `img@2x` is a folder's name.
+        for plain in ["https://packages.example.com/a.pkg", "packages.example.com/a.pkg", "file:/pkgs/a.pkg", "//packages.example.com/a.pkg",
+                      "/img@2x/icon.png"] {
+            let result = ContentWords.location(plain)
+            #expect(Array(result.text.utf8) == Array(plain.utf8) && !result.masked, "\(plain) -> \(result)")
+            #expect(Array(ContentWords.addresses(in: plain).utf8) == Array(plain.utf8))
+        }
+        for text in ["Acme VPN client, version 6.1 (signed)", "com.example.vpnclient", "3.2.7", "e3b0c44298fc1c149afbf4c8996fb924",
+                     "Is this the one? Yes #2; see notes", "C# runtime & tools", "@everyone", "Note: for Macs", "  spaced  out  ", ""] {
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+        #expect(ContentWords.addresses(in: "Mirror at https://deploy:TOPSECRET15@mirror.example.com/a.pkg, or ask")
+                == "Mirror at https://********@mirror.example.com/a.pkg, or ask")
+    }
+
+    /// Phase 2b review L2, probe p2: an address inside an object or a list of objects among a package's attributes is
+    /// masked as the Location is; a nested value with no address shows as it came.
+    @Test func anAddressNestedInAPackagesAttributesIsMasked() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Nested"), "url": .string("packages.example.com/a.pkg?sig=TOPSECRET1"),
+            "mirror": .object(["url": .string("https://deploy:TOPSECRET2@mirror.example.com/a.pkg"), "weight": .number("2")]),
+            "mirrors": .array([.object(["url": .string("https://deploy:TOPSECRET3@m2.example.com/a.pkg")]), .string("//deploy:TOPSECRET4@m3.example.com/a.pkg")]),
+            "deep": .object(["list": .array([.array([.string("deploy:TOPSECRET5@m4.example.com/a.pkg")])])]),
+            "notes": .object(["text": .string("Built by the release team."), "count": .number("3"), "flag": .bool(true)]),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        let shown = detail.fields + detail.attributes
+        #expect(!shown.contains { $0.value.contains("TOPSECRET") || $0.value.contains("deploy") }, "\(shown)")
+        func attribute(_ key: String) -> String? { detail.attributes.first { $0.label == key }?.value }
+        #expect(attribute("url") == "packages.example.com/a.pkg?sig=********", "the url is the Location, whatever its shape")
+        #expect(detail.fields.first { $0.label == "Location" }?.value == "packages.example.com/a.pkg?sig=********")
+        #expect(attribute("mirror") == #"{"url": "https://********@mirror.example.com/a.pkg", "weight": 2}"#)
+        #expect(attribute("mirrors") == #"{"url": "https://********@m2.example.com/a.pkg"}, //********@m3.example.com/a.pkg"#)
+        #expect(attribute("deep") == #"{"list": [["********@m4.example.com/a.pkg"]]}"#)
+        #expect(attribute("notes") == #"{"text": "Built by the release team.", "count": 3, "flag": true}"#)
+    }
+
+    /// Phase 2b verifier round 1: an outer scheme or a label glued before an address (`jar:https://…`, `Mirror:https://…`,
+    /// `x:y:https://…`, a no-break space after `token:`) was read as the address's scheme, and the address after it copied
+    /// as a path with its user and password in clear; a scheme's single slash (`https:/host`) was no authority. Each is
+    /// masked, in the Location and in other text alike, and the text before it kept.
+    @Test func anOuterSchemeOrALabelBeforeAnAddressIsMasked() {
+        let cases: [(String, String)] = [
+            ("jar:https://deploy:TOPSECRET1@host.example.com/a.jar!/", "jar:https://********@host.example.com/a.jar!/"),
+            ("mirror:https://deploy:TOPSECRET2@host.example.com/a.pkg", "mirror:https://********@host.example.com/a.pkg"),
+            ("Location:https://deploy:TOPSECRET3@host.example.com/a.pkg?sig=TOPSECRET4", "Location:https://********@host.example.com/a.pkg?sig=********"),
+            ("view-source:https://deploy:TOPSECRET5@host.example.com/a", "view-source:https://********@host.example.com/a"),
+            ("x:y:https://deploy:TOPSECRET6@host.example.com/a", "x:y:https://********@host.example.com/a"),
+            ("token:\u{A0}https://deploy:TOPSECRET7@host.example.com/a.pkg", "token:\u{A0}https://********@host.example.com/a.pkg"),
+            ("https:/deploy:TOPSECRET8@host.example.com/a.pkg", "https:/********@host.example.com/a.pkg"),
+            ("https:///deploy:TOPSECRET9@host.example.com/a.pkg", "https:///********@host.example.com/a.pkg"),
+            ("deploy:TOPSECRET10@https://host.example.com/a", "********@https://host.example.com/a"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+        // A `://` after the path, in the query, is still the query's (review L2).
+        #expect(ContentWords.location("file:/pkgs/a.pkg?token=TOPSECRET11&next=https://example.com/x").text == "file:/pkgs/a.pkg?token=********&next=********")
+    }
+
+    /// Phase 2b verifier round 1, mutants N-gluedNoLetterSkip, N-isAddressNoSchemeSlashes, N-isAddressNoUserArm and a blank
+    /// dropped: each way `addresses(in:)` finds an address in other text, held through it, not only through `location`.
+    /// Without the skip past a digit, `-`, `+` or `.` before a glued scheme, the split recursed on the same text until the
+    /// stack overflowed.
+    @Test func everyArmOfAnAddressInOtherTextIsMasked() {
+        let cases: [(String, String)] = [
+            ("see 2https://deploy:TOPSECRET1@h.example.com/a.pkg", "see 2https://********@h.example.com/a.pkg"),
+            ("-https://deploy:TOPSECRET2@h.example.com/a.pkg", "-https://********@h.example.com/a.pkg"),
+            ("(+https://deploy:TOPSECRET3@h.example.com/a.pkg)", "(+https://********@h.example.com/a.pkg)"),
+            ("url=https://deploy:TOPSECRET4@h.example.com/a.pkg", "url=https://********@h.example.com/a.pkg"),
+            ("deploy@h.example.com/a.pkg", "********@h.example.com/a.pkg"),
+            ("ask deploy@h.example.com?sig=TOPSECRET5", "ask ********@h.example.com?sig=********"),
+            ("https://a.example.com/x\nhttps://deploy:TOPSECRET6@b.example.com/y", "https://a.example.com/x\nhttps://********@b.example.com/y"),
+            ("https://a.example.com/x\thttps://deploy:TOPSECRET7@b.example.com/y", "https://a.example.com/x\thttps://********@b.example.com/y"),
+            // Phase 2b verifier round 3, mutant R3-userArmFirstAt: to the last `@` in other text too.
+            ("Mirror deploy:p@ssTOPSECRET9@h.example.com/a.pkg today", "Mirror ********@h.example.com/a.pkg today"),
+        ]
+        for (text, shown) in cases {
+            let other = ContentWords.addresses(in: text)
+            #expect(Array(other.utf8) == Array(shown.utf8), "\(text) -> \(other)")
+        }
+        #expect(ContentWords.location("1https://deploy:TOPSECRET8@h.example.com/x").text == "1https://********@h.example.com/x")
+    }
+
+    /// An email address is no address with a credential: in a description or another attribute it shows as it came, a path
+    /// after the host or a password's `:` still marking a user to mask (Phase 2b verifier round 1: "Contact
+    /// ********@example.com").
+    @Test func anEmailAddressInOtherTextShowsUnchanged() {
+        for text in ["Contact it@example.com for help", "Ask it@example.com?", "Team@HQ", "ops@example.com.", "it@example.com/"] {
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+        #expect(ContentWords.addresses(in: "it:TOPSECRET@example.com") == "********@example.com")
+    }
+
+    /// Phase 2b verifier round 2, probe q1 and vMaskingShapes: an address inside another's path (a proxy's, an archive's, or
+    /// a list joined by `,` or `;`) was copied as the outer path, its user and password in clear. Each is masked from its
+    /// own scheme on, in the Location and in other text, and one with nothing to mask shows as it came.
+    @Test func anAddressInsideAnothersPathIsMasked() {
+        let cases: [(String, String)] = [
+            ("https://proxy.example.com/fetch/https://deploy:TOPSECRET1@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https://********@origin.example.com/a.pkg"),
+            ("https://a.example.com/x.pkg,https://deploy:TOPSECRET2@b.example.com/y.pkg", "https://a.example.com/x.pkg,https://********@b.example.com/y.pkg"),
+            ("https://a.example.com/x.pkg;https://deploy:TOPSECRET3@b.example.com/y.pkg", "https://a.example.com/x.pkg;https://********@b.example.com/y.pkg"),
+            ("https://web.example.com/web/2020/https://deploy:TOPSECRET4@origin.example.com/a.pkg?sig=TOPSECRET5",
+             "https://web.example.com/web/2020/https://********@origin.example.com/a.pkg?sig=********"),
+            ("x:/https://deploy:TOPSECRET6@h.example.com/a", "x:/https://********@h.example.com/a"),
+            ("https://u:TOPSECRET7@proxy.example.com/https://deploy:TOPSECRET8@origin.example.com/a.pkg",
+             "https://********@proxy.example.com/https://********@origin.example.com/a.pkg"),
+            ("https://h.example.com/dl;sid=TOPSECRET9/https://origin.example.com/b.pkg", "https://h.example.com/dl;sid=********/https://origin.example.com/b.pkg"),
+            ("https://a://deploy:TOPSECRET10@b.example.com/", "https://a://********@b.example.com/"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+        let plain = "https://web.example.com/web/2020/https://origin.example.com/a.pkg"
+        #expect(ContentWords.location(plain) == (plain, false) && ContentWords.addresses(in: plain) == plain)
+    }
+
+    /// Phase 2b verifier round 2, probe vMaskingShapes: a blank inside a Location's password cut the address, so the part
+    /// before it showed as a host (`deploy:my`) while the note said the password was masked. The first address's authority
+    /// runs past blanks to its last `@`, each blank; a second address after a blank is still masked as its own.
+    @Test func aBlankInsideALocationsPasswordIsMasked() {
+        for blank in [" ", "\t", "\n", "\r", "\u{0B}", "\u{0C}"] {
+            let cases: [(String, String)] = [
+                ("https://deploy:my" + blank + "TOPSECRET1@h.example.com/a.pkg", "https://********@h.example.com/a.pkg"),
+                ("deploy:my" + blank + "TOPSECRET2@h.example.com/a.pkg", "********@h.example.com/a.pkg"),
+                ("//deploy:my" + blank + "TOPSECRET3@h.example.com/a.pkg", "//********@h.example.com/a.pkg"),
+                ("jar:https://deploy:my" + blank + "TOPSECRET4@h.example.com/a.jar", "jar:https://********@h.example.com/a.jar"),
+                ("  https://deploy:my" + blank + "TOPSECRET5@h.example.com:8443/a.pkg", "  https://********@h.example.com:8443/a.pkg"),
+                ("https://h.example.com/a.pkg" + blank + "user:TOPSECRET6@m.example.com/b", "https://h.example.com/a.pkg" + blank + "********@m.example.com/b"),
+                // Phase 2b verifier round 3, mutant C-joinFirstAt: a password with an `@` and blanks runs to its last `@`,
+                // so no part of it shows as a host.
+                ("https://deploy:my" + blank + "pw@x" + blank + "TOPSECRET7@h.example.com/a.pkg", "https://********@h.example.com/a.pkg"),
+                // Round 3: in every address of the Location, not only the first: a second one, one inside the path, and a
+                // path segment's user and password.
+                ("https://h.example.com/a.pkg" + blank + "https://deploy:my" + blank + "TOPSECRET8@h2.example.com/b.pkg",
+                 "https://h.example.com/a.pkg" + blank + "https://********@h2.example.com/b.pkg"),
+                ("https://proxy.example.com/fetch/https://deploy:my" + blank + "TOPSECRET9@origin.example.com/a.pkg",
+                 "https://proxy.example.com/fetch/https://********@origin.example.com/a.pkg"),
+                ("https://proxy.example.com/fetch/deploy:my" + blank + "TOPSECRET10@origin.example.com/a.pkg",
+                 "https://proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+                // A blank in the text before a glued scheme keeps it from being read as a label (the split would copy it).
+                ("deploy:my" + blank + "TOPSECRET11 jar:https:\\\\x@h.example.com/a", "********@h.example.com/a"),
+            ]
+            for (url, shown) in cases {
+                let result = ContentWords.location(url)
+                #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(Array(blank.utf8)): \(url) -> \(result)")
+            }
+            let host = "https://h.example.com" + blank + "mirror/a.pkg"
+            #expect(ContentWords.location(host) == (host, false), "\(Array(blank.utf8))")
+        }
+    }
+
+    /// Phase 2b verifier round 2, probe q6 and mutants N2-gluedNoSlashesGuard, N2-nestedSplitNoQuestionCheck,
+    /// N2-nestedSplitNoSlashCheck and N2-nestedSplitNoHashCheck: a `://` after a leading `//`, or after a scheme's `?`, `/` or
+    /// `#`, is the query's, the path's or the fragment's, never a glued address's start: split there, what came before it
+    /// was copied raw, a user and password, a query value, a path parameter or a fragment with it.
+    @Test func aSchemeSlashesAfterTheQueryPathOrFragmentStartsNoGluedAddress() {
+        let cases: [(String, String)] = [
+            ("//deploy:TOPSECRET1@h.example.com/x?next=https://y.example.com/", "//********@h.example.com/x?next=********"),
+            ("x:a?token=TOPSECRET2&next=https://y.example.com/", "x:a?token=********&next=********"),
+            ("file:/a;sid=TOPSECRET3/https://y.example.com/", "file:/a;sid=********/https://y.example.com/"),
+            ("x:a#access_token=TOPSECRET4&u=https://y.example.com", "x:a#********"),
+            // Phase 2b verifier round 3: with no scheme ahead, the split was taken anyway, so a scheme-less address's query,
+            // a parameter or a user part before the inner scheme was copied raw.
+            ("packages.example.com/a.pkg?sig=TOPSECRET5&next=https://y.example.com/", "packages.example.com/a.pkg?sig=********&next=********"),
+            ("a;sid=TOPSECRET6,https://u:TOPSECRET7@y.example.com/", "a;sid=********https://********@y.example.com/"),
+            ("x:a;sid=TOPSECRET8,https://y.example.com/", "x:a;sid=********https://y.example.com/"),
+            ("deploy@https://u:TOPSECRET9@y.example.com/a", "********@https://********@y.example.com/a"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+    }
+
+    /// Phase 2b verifier round 2, mutants N2-blanksNoCR (and VT, FF) and N2-userArmLeadingAt: every ASCII blank ends a run in
+    /// other text, so a user and password after one is masked as its own address (with CR dropped, it joined the address
+    /// before it as its path, in clear); and a leading `@` before a path is a handle, not a user (`@acme/vpn-helper`).
+    @Test func everyBlankEndsAnAddressInOtherText() {
+        for blank in [" ", "\t", "\n", "\r", "\u{0B}", "\u{0C}"] {
+            let text = "https://a.example.com/x" + blank + "deploy:TOPSECRET@b.example.com/y"
+            let shown = "https://a.example.com/x" + blank + "********@b.example.com/y"
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(shown.utf8), "\(Array(blank.utf8)): \(ContentWords.addresses(in: text))")
+            #expect(Array(ContentWords.location(text).text.utf8) == Array(shown.utf8), "\(Array(blank.utf8))")
+        }
+        for text in ["Needs @acme/vpn-helper 2.1", "@acme/vpn-helper"] {
+            #expect(Array(ContentWords.addresses(in: text).utf8) == Array(text.utf8), "\(text) -> \(ContentWords.addresses(in: text))")
+        }
+    }
+
+    /// Phase 2b verifier round 3, probes V3Probes and V3Probes2: a blank inside a Location's query, fragment or path
+    /// parameter ended the address, so the run after it read as a path and showed the values after the blank in clear, under
+    /// the note that the query was masked. In the Location the query and the fragment run to the end and a parameter's value
+    /// to its next `/`, `;`, `?` or `#`, each blank; blanks after the last run are kept as they came.
+    @Test func aBlankInsideALocationsQueryFragmentOrParameterIsMasked() {
+        for blank in [" ", "\t", "\n", "\r", "\u{0B}", "\u{0C}"] {
+            let cases: [(String, String)] = [
+                ("https://cdn.example.com/dl?file=My" + blank + "App.pkg&token=TOPSECRET1", "https://cdn.example.com/dl?file=********&token=********"),
+                ("https://h.example.com/a.pkg?x=1" + blank + "2&sig=TOPSECRET2", "https://h.example.com/a.pkg?x=********&sig=********"),
+                ("https://h.example.com/a.pkg?sig=AAAA" + blank + "TOPSECRET3", "https://h.example.com/a.pkg?sig=********"),
+                ("https://h.example.com/a.pkg#token=AAAA" + blank + "TOPSECRET4", "https://h.example.com/a.pkg#********"),
+                ("https://h.example.com/a.pkg;jsessionid=AAAA" + blank + "TOPSECRET5", "https://h.example.com/a.pkg;jsessionid=********"),
+                ("https://deploy:pw@h.example.com/a.pkg?a=1" + blank + "&sig=TOPSECRET6", "https://********@h.example.com/a.pkg?a=********&sig=********"),
+                ("https://h.example.com/dl;sid=AAAA" + blank + "TOPSECRET7/a.pkg?k=v", "https://h.example.com/dl;sid=********/a.pkg?k=********"),
+                // A parameter's value with a `:` is still a parameter's, not a user part waiting for an `@`.
+                ("https://h.example.com/a.pkg;sid=x:AAAA" + blank + "TOPSECRET8", "https://h.example.com/a.pkg;sid=********"),
+                ("packages.example.com/a.pkg?sig=AAAA" + blank + "TOPSECRET9" + blank, "packages.example.com/a.pkg?sig=********" + blank),
+                // A parameter runs on only to its segment's end: an address after the next blank is read as its own.
+                ("https://h.example.com/a;v=1" + blank + "b/c" + blank + "TOPSECRET10@x.example.com/y",
+                 "https://h.example.com/a;v=********/c" + blank + "********@x.example.com/y"),
+            ]
+            for (url, shown) in cases {
+                let result = ContentWords.location(url)
+                #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(Array(blank.utf8)): \(url) -> \(result)")
+                #expect(!result.text.contains("TOPSECRET"), "\(result.text)")
+            }
+        }
+    }
+
+    /// Phase 2b verifier round 3, probe V3Probes: an inner scheme with one slash, a backslash or none (`jar:https:/…`,
+    /// `url=https:/…`, `…/fetch/https:\\…`, `…/fetch/https:deploy:pw@…`), which a browser reads as `://`, was no address
+    /// to the glued split or the nested one, so its user and password showed, with no note, in the Location and in other
+    /// text, a description's in the packages CSV; and so did a path segment's `deploy:pw@` with no scheme. Each is masked.
+    @Test func anInnerSchemeWithOneSlashABackslashOrNoneIsMasked() {
+        let cases: [(String, String)] = [
+            ("jar:https:/deploy:TOPSECRET1@h.example.com/a.jar", "jar:https:/********@h.example.com/a.jar"),
+            ("url=https:/deploy:TOPSECRET2@h.example.com/a.pkg", "url=https:/********@h.example.com/a.pkg"),
+            ("Mirror:https:/deploy:TOPSECRET3@h.example.com/a.pkg", "Mirror:https:/********@h.example.com/a.pkg"),
+            ("jar:https:\\\\deploy:TOPSECRET4@h.example.com/a.jar", "jar:https:\\\\********@h.example.com/a.jar"),
+            ("jar:https:/TOPSECRET5@h.example.com/a.jar", "jar:https:/********@h.example.com/a.jar"),
+            ("https://proxy.example.com/fetch/https:/deploy:TOPSECRET6@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/https:deploy:TOPSECRET7@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/https:\\\\deploy:TOPSECRET8@o.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:\\\\********@o.example.com/a.pkg"),
+            ("https://proxy.example.com/f,https:/deploy:TOPSECRET9@o.example.com/a", "https://proxy.example.com/f,https:/********@o.example.com/a"),
+            ("https://proxy.example.com/fetch/https:/TOPSECRET10@origin.example.com/a.pkg",
+             "https://proxy.example.com/fetch/https:/********@origin.example.com/a.pkg"),
+            ("https://proxy.example.com/fetch/deploy:TOPSECRET11@origin.example.com/a.pkg?sig=TOPSECRET12",
+             "https://proxy.example.com/fetch/********@origin.example.com/a.pkg?sig=********"),
+            ("proxy.example.com/fetch/deploy:TOPSECRET13@origin.example.com/a.pkg", "proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            // To the segment's last `@`, and in other text an address by that alone; one slash's user alone after a label.
+            ("proxy.example.com/fetch/svc@corp:TOPSECRET17@origin.example.com/a.pkg", "proxy.example.com/fetch/********@origin.example.com/a.pkg"),
+            ("url=https:/TOPSECRET18@h.example.com/a.pkg", "url=https:/********@h.example.com/a.pkg"),
+            // Probe C4: a line separator isn't a blank, so it glues text into the path segment.
+            ("https://h.example.com/a.pkg\u{2028}deploy:TOPSECRET14@o.example.com/b", "https://h.example.com/********@o.example.com/b"),
+            // Mutant R3-schemeFirstDigit's leak, `1://user:pw@host` (no address has one): read as an authority, and inside
+            // a path too.
+            ("1://deploy:TOPSECRET15@h.example.com/a", "1://********@h.example.com/a"),
+            ("https://h.example.com/x/1://deploy:TOPSECRET16@o.example.com/a", "https://h.example.com/x/1://********@o.example.com/a"),
+            // A user alone, which no segment rule reads as one: only the authority after the prefix masks it.
+            ("1://TOPSECRET19@h.example.com/a", "1://********@h.example.com/a"),
+            // A `:/` after no scheme's byte is no inner scheme, and doesn't hide the one after it from the nested split.
+            ("https://proxy.example.com/~:/https:/TOPSECRET20@origin.example.com/a.pkg", "https://proxy.example.com/~:/https:/********@origin.example.com/a.pkg"),
+        ]
+        for (url, shown) in cases {
+            let result = ContentWords.location(url)
+            #expect(Array(result.text.utf8) == Array(shown.utf8) && result.masked, "\(url) -> \(result)")
+            let other = ContentWords.addresses(in: "Mirror " + url + " today")
+            #expect(Array(other.utf8) == Array(("Mirror " + shown + " today").utf8), "\(url) -> \(other)")
+        }
+        // A path segment's `@` with no password, or a folder's, is no user and password (`img@2x`).
+        let plain = "https://h.example.com/img@2x/icon.png"
+        #expect(ContentWords.location(plain) == (plain, false) && ContentWords.addresses(in: plain) == plain)
+    }
+
+    /// Phase 2b verifier round 3, probe V3Probes.aPackageShapesThroughTheModel: each shape above as the detail and the
+    /// packages CSV show it, the masked note with it. The CSV, a file that leaves the app, held a description's password.
+    @Test func anInnerSchemesUserAndPasswordAreMaskedInTheDetailAndTheCSV() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([
+            Resource(type: "packages", id: "P1", attributes: [
+                "name": .string("One slash"), "url": .string("jar:https:/deploy:TOPSECRET1@h.example.com/a.jar"),
+                "description": .string("Mirror url=https:/deploy:TOPSECRET2@d.example.com/a.pkg"),
+            ]),
+            Resource(type: "packages", id: "P2", attributes: [
+                "name": .string("Spaced query"), "url": .string("https://h.example.com/a.pkg?x=1 2&sig=TOPSECRET3"),
+                "description": .string("From https://proxy.example.com/fetch/https:deploy:TOPSECRET4@o.example.com/a.pkg"),
+            ]),
+        ])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        let csv = world.content.csv(for: .packages)
+        #expect(!csv.contains("TOPSECRET") && !csv.contains("deploy"), "\(csv)")
+        #expect(csv.contains("Mirror url=https:/********@d.example.com/a.pkg"), "\(csv)")
+        #expect(csv.contains("From https://proxy.example.com/fetch/********@o.example.com/a.pkg"), "\(csv)")
+        for (id, location) in [("P1", "jar:https:/********@h.example.com/a.jar"), ("P2", "https://h.example.com/a.pkg?x=********&sig=********")] {
+            let before = world.content.detail.readsFinished
+            world.content.selection = id
+            await Self.detailSettled(world, before + 1)
+            let detail = try Self.detail(world)
+            #expect(detail.fields.first { $0.label == "Location" }?.value == location, "\(id)")
+            #expect(detail.attributes.first { $0.label == "url" }?.value == location, "\(id)")
+            #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                     + "It is shown here, never opened."], "\(id): \(detail.notes)")
+            let shown = (detail.fields + detail.attributes).map(\.value) + [detail.title]
+            #expect(!shown.contains { $0.contains("TOPSECRET") || $0.contains("deploy") }, "\(shown)")
+        }
+    }
+
+    /// Phase 2b verifier round 1, probe v3: a package's Description field showed in clear the address its description
+    /// attribute masked; and a url that isn't a string read as no location (a dash) while its strings were read only as other
+    /// text, so a scheme-less address's signature showed. The Description is masked as its attribute is, the Location says
+    /// it can't be read, and every string of the url is masked as a Location.
+    @Test func aPackagesDescriptionAndAUrlOfAnotherShapeAreMasked() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Odd"), "description": .string("Mirror https://deploy:TOPSECRET1@mirror.example.com/a.pkg, or ask it@example.com"),
+            "url": .object(["href": .string("https://deploy:TOPSECRET2@h.example.com/a.pkg"), "sig": .string("host.example.com/a.pkg?sig=TOPSECRET3")]),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        let shown = (detail.fields + detail.attributes).map(\.value) + detail.notes + [detail.title]
+        #expect(!shown.contains { $0.contains("TOPSECRET") || $0.contains("deploy") }, "\(shown)")
+        func field(_ label: String) -> String? { detail.fields.first { $0.label == label }?.value }
+        #expect(field("Description") == "Mirror https://********@mirror.example.com/a.pkg, or ask it@example.com")
+        #expect(detail.attributes.first { $0.label == "description" }?.value == field("Description"))
+        #expect(field("Location") == "Not readable")
+        #expect(detail.notes == ["Apple sent the location in a shape this version can't read: its url attribute below is shown with every "
+                                 + "address in it masked."])
+        #expect(detail.attributes.first { $0.label == "url" }?.value
+                == #"{"href": "https://********@h.example.com/a.pkg", "sig": "host.example.com/a.pkg?sig=********"}"#)
+    }
+
+    /// Phase 2b review L1: a row whose id can't go in a path is never read, and its detail says so, never "Apple has no such
+    /// item." (the client's word for a read it refused to build) of an item Apple has just listed. In each of the four lists
+    /// (Phase 2b verifier round 2, mutant N2-pathContentAppsOnly: only an app's was held).
+    @Test func aDetailWhoseIDCantBeSentIsNeverAskedFor() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "apps", id: "A B", attributes: ["name": .string("Spaced")]),
+                               Resource(type: "packages", id: "P 1", attributes: ["name": .string("Spaced")]),
+                               Resource(type: "blueprints", id: "B 1", attributes: ["name": .string("Spaced")]),
+                               Resource(type: "configurations", id: "C 1", attributes: ["name": .string("Spaced")])])
+        world.content.load()
+        await Self.settled(world, 4)
+        #expect(world.content.apps.rows.map(\.id) == ["A B"])
+        for (kind, id) in [(ContentKind.apps, "A B"), (.packages, "P 1"), (.blueprints, "B 1"), (.configurations, "C 1")] {
+            world.content.kind = kind
+            let before = world.stubs["a"]!.requests.count
+            world.content.selection = id
+            guard case .failed(let why) = world.content.detail.item else { Issue.record("\(kind): \(world.content.detail.item)"); continue }
+            #expect(why == "This id can't be sent to Apple, so nothing was asked for.", "\(kind)")
+            #expect(why == ScreenWords.unsendableID)
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(world.stubs["a"]!.requests.count == before, "\(kind): \(world.stubs["a"]!.requests.dropFirst(before))")
+        }
+        #expect(world.content.detail.readsFinished == 0, "no read was started")
+    }
+
+    /// Phase 2b verifier round 2, mutant N2-misreadNullIsMisread: a url Apple sent as null is no location, a dash and no
+    /// note, not a url of a shape this version can't read.
+    @Test func aNullURLIsNoLocation() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: ["name": .string("Null url"), "url": .null])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        #expect(detail.fields.first { $0.label == "Location" }?.value == "—")
+        #expect(detail.notes.isEmpty, "\(detail.notes)")
+        #expect(detail.attributes.first { $0.label == "url" }?.value == "—")
+    }
+
+    /// Phase 2b verifier round 3, mutant R3B-maskedLastRunOnly: a Location masked only before a blank, its last run left
+    /// as it came, still says why the field shows the mask (invariant 8: the note the masking added is never dropped).
+    @Test func aLocationMaskedOnlyBeforeABlankStillSaysSo() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("Split"), "url": .string("https://deploy:TOPSECRET1@h.example.com/a.pkg b.pkg"),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        #expect(detail.fields.first { $0.label == "Location" }?.value == "https://********@h.example.com/a.pkg b.pkg")
+        #expect(detail.notes == ["The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
+                                 + "It is shown here, never opened."], "\(detail.notes)")
+    }
+
+    /// Phase 2b verifier round 2, probe vPackageFieldsAndCSV: the detail masked an address in a package's attributes, then
+    /// showed it raw in the title and the Name, Version, Bundle IDs and Hash fields, and the row and the CSV, a file that
+    /// leaves the app, wrote every one raw, the description too. Each goes through `addresses(in:)`, as its attribute does.
+    @Test func everyFieldOfAPackageAndItsCSVAreMasked() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P1", attributes: [
+            "name": .string("https://deploy:TOPSECRET1@n.example.com/a.pkg"), "version": .string("deploy:TOPSECRET2@v.example.com/6.1"),
+            "bundleIds": .array([.string("com.example.vpn"), .string("https://deploy:TOPSECRET3@b.example.com/x")]),
+            "hash": .string("https://deploy:TOPSECRET4@h.example.com/sum"),
+            "description": .string("Mirror https://deploy:TOPSECRET5@d.example.com/a.pkg"),
+            "url": .string("https://deploy:TOPSECRET6@u.example.com/a.pkg"),
+        ])])
+        world.content.load()
+        await Self.settled(world, 4)
+        world.content.kind = .packages
+        let row = try #require(world.content.packages.rows.first)
+        #expect(row.name == "https://********@n.example.com/a.pkg" && row.version == "********@v.example.com/6.1")
+        #expect(row.bundleIDs == "com.example.vpn, https://********@b.example.com/x")
+        let csv = world.content.csv(for: .packages)
+        #expect(!csv.contains("TOPSECRET") && !csv.contains("deploy"), "\(csv)")
+        #expect(csv.contains("https://********@n.example.com/a.pkg") && csv.contains("Mirror https://********@d.example.com/a.pkg"), "\(csv)")
+        world.content.selection = "P1"
+        await Self.detailSettled(world, 1)
+        let detail = try Self.detail(world)
+        let shown = (detail.fields + detail.attributes).map(\.value) + detail.notes + [detail.title]
+        #expect(!shown.contains { $0.contains("TOPSECRET") || $0.contains("deploy") }, "\(shown)")
+        func field(_ label: String) -> String? { detail.fields.first { $0.label == label }?.value }
+        #expect(detail.title == "https://********@n.example.com/a.pkg" && field("Name") == detail.title)
+        #expect(field("Version") == "********@v.example.com/6.1" && field("Hash") == "https://********@h.example.com/sum")
+        #expect(field("Bundle IDs") == "com.example.vpn, https://********@b.example.com/x")
+        for (label, key) in [("Name", "name"), ("Version", "version"), ("Hash", "hash"), ("Description", "description")] {
+            #expect(field(label) == detail.attributes.first { $0.label == key }?.value, "\(label)")
+        }
+    }
+
+    // MARK: blueprints
+
+    static func blueprintDetail(_ world: World, _ id: String) async throws -> ContentDetail {
+        world.content.kind = .blueprints
+        let before = world.content.detail.readsFinished
+        world.content.selection = id
+        await Self.detailSettled(world, before + 1)
+        return try Self.detail(world)
+    }
+
+    /// A blueprint is read with every relationship included, each member named from what Apple included where it can be,
+    /// its id always, and each count from `members`.
+    @Test func aBlueprintsMembersAreReadWithIt() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        let detail = try await Self.blueprintDetail(world, "demo-blueprint-01")
+        let read = try #require(world.stubs["a"]!.requests.first { $0.contains("/v1/blueprints/demo-blueprint-01") }?.removingPercentEncoding)
+        for relationship in ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"] {
+            #expect(read.contains("limit[\(relationship)]=1000") && read.contains(relationship), "\(read)")
+        }
+        #expect(detail.title == "Example Office Macs" && detail.membersNote == nil)
+        #expect(detail.members.map(\.title) == ["Apps", "Packages", "Configurations", "Devices", "Users", "User groups"])
+        #expect(detail.members.map(\.summary) == ["5 apps", "3 packages", "4 configurations", "3 devices", "None", "1 user group"])
+        #expect(detail.members.map(\.count) == [5, 3, 4, 3, 0, 1])
+        let apps = try #require(detail.members.first)
+        #expect(apps.members.first == ContentMember(id: "1000000001", name: "Example Field Notes"))
+        #expect(detail.members[3].members.first == ContentMember(id: "ADEV0000000", name: "MacBook Air"))
+        // DemoPeople's group, by its id; named once DemoPeople is loaded too, as the demo org does (DemoTests).
+        #expect(detail.members[5].members.map(\.id) == ["DEMOUG01"])
+        #expect(detail.fields.contains(ContentField("Licences", "Enough for its apps")) && detail.fields.contains(ContentField("Status", "Active")))
+    }
+
+    /// A relationship cut at the include's limit says "showing N of more than N", never the count as all.
+    @Test func aRelationshipCutAtTheIncludesLimitSaysSo() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Big")])])
+        world.stubs["a"]!.relate("blueprints", "B1", "orgDevices", to: (0..<1001).map { String(format: "TEST%07d", $0) })
+        world.stubs["a"]!.relate("blueprints", "B1", "apps", to: ["1"])
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let devices = try #require(detail.members.first { $0.relationship == .orgDevices })
+        #expect(devices.isTruncated && devices.count == 1000 && devices.members.count == 1000)
+        #expect(devices.summary == "Showing 1,000 of more than 1,000 devices: Apple lists at most 1,000 of each with the blueprint.")
+        #expect(detail.members.first?.summary == "1 app" && detail.members.first?.isTruncated == false)
+    }
+
+    /// A relationship Apple didn't list (links only) is said, with no count: never "None".
+    @Test func aRelationshipAppleDidNotListIsSaidWithNoCount() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Partial")])])
+        let base = "https://api-business.apple.com/v1/blueprints/B1"
+        func listed(_ name: String, _ ids: [String]) -> String {
+            "\"\(name)\":{\"links\":{\"self\":\"\(base)/relationships/\(name)\"},\"data\":[\(ids.map { "{\"type\":\"\(name)\",\"id\":\"\($0)\"}" }.joined(separator: ","))]}"
+        }
+        let relationships = [listed("apps", ["1", "2"]), listed("packages", []), listed("configurations", []), listed("orgDevices", []),
+                             "\"users\":{\"links\":{\"self\":\"\(base)/relationships/users\"}}", listed("userGroups", [])].joined(separator: ",")
+        world.stubs["a"]!.queue(200, for: "/v1/blueprints/B1?include=", body: """
+            {"data":{"type":"blueprints","id":"B1","attributes":{"name":"Partial"},"relationships":{\(relationships)}},"links":{"self":"\(base)"},"included":[]}
+            """)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let users = try #require(detail.members.first { $0.relationship == .users })
+        #expect(users.count == nil && users.members.isEmpty && users.summary == "Apple didn't list the blueprint's users, so none are shown or counted.")
+        #expect(detail.members.first?.summary == "2 apps" && detail.members[1].summary == "None")
+    }
+
+    /// A refused include (a 400, or a 403 for a role that can't read users) is said, and nothing is counted: the bare
+    /// blueprint still shows (Phase 2a review L5: a refusal read as no members).
+    @Test func aRefusedIncludeIsSaidAndCountsNothing() async throws {
+        for status in [400, 403] {
+            let world = try await World.make()
+            Self.stocked(world)
+            world.stubs["a"]!.forbid("/v1/users")
+            if status == 403 { world.stubs["a"]!.refuseIncludes(with: 403) }
+            let detail = try await Self.blueprintDetail(world, "demo-blueprint-02")
+            #expect(detail.title == "Example Field iPads" && detail.members.isEmpty, "\(status)")
+            let note = try #require(detail.membersNote)
+            if status == 403 {
+                #expect(note == "Your role can't read this: Apple refused to include the blueprint's members, so none are shown or counted.")
+            } else {
+                #expect(note.hasPrefix("Apple refused to include the blueprint's members, so none are shown or counted: Apple refused the request"), "\(note)")
+            }
+            // Read with the include, refused, then read again without it.
+            let reads = world.stubs["a"]!.requests.filter { $0.contains("/v1/blueprints/demo-blueprint-02") }
+            #expect(reads.count == 2 && reads[0].contains("include=") && !reads[1].contains("include="), "\(reads)")
+        }
+    }
+
+    /// Phase 2b verifier round 3: a blueprint's included packages were named raw in its member list, where the package's
+    /// own row, detail and CSV mask an address in its name; the list masks it the same way (`ContentWords.shown`).
+    @Test func aBlueprintsPackageNamesAreMaskedAsThePackagesOwn() async throws {
+        let world = try await World.make()
+        let stub = world.stubs["a"]!
+        stub.add([Resource(type: "packages", id: "P1", attributes: ["name": .string("Agent from https://deploy:TOPSECRET1@pkgs.example.com/agent.pkg")]),
+                  Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Office")])])
+        stub.relate("blueprints", "B1", "packages", to: ["P1"])
+        world.content.load()
+        await Self.settled(world, 4)
+        let row = try #require(world.content.packages.rows.first)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let packages = try #require(detail.members.first { $0.relationship == .packages })
+        #expect(packages.members == [ContentMember(id: "P1", name: "Agent from https://********@pkgs.example.com/agent.pkg")], "\(packages.members)")
+        #expect(packages.members.first?.name == row.name)
+    }
+
+    // MARK: configurations
+
+    static func configurationDetail(_ world: World, _ id: String) async throws -> ContentDetail {
+        world.content.kind = .configurations
+        let before = world.content.detail.readsFinished
+        world.content.selection = id
+        await Self.detailSettled(world, before + 1)
+        return try Self.detail(world)
+    }
+
+    /// Every text a value can be turned into: its description, its debug description and its dump.
+    static func printed(_ value: Any) -> String {
+        var dumped = ""
+        dump(value, to: &dumped)
+        return [String(describing: value), String(reflecting: value), dumped].joined(separator: "\n")
+    }
+
+    /// The demo's Wi-Fi custom setting, through the strict stub and the model: its profile shows masked, and its canary
+    /// password is in nothing the model exposes: no row, no field, no attribute, no note, no description or dump of the
+    /// detail or its view, no CSV of any list, and no blueprint that holds it (invariant 11; Phase 2a review M2).
+    @Test func theDemosCustomSettingReachesNothingTheModelExposesUnmasked() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.content.load()
+        await Self.settled(world, 4)
+        let detail = try await Self.configurationDetail(world, "demo-config-01")
+        #expect(world.stubs["a"]!.requests.contains { $0.hasPrefix("GET api-business.apple.com/v1/configurations/demo-config-01") })
+        let profile = try #require(detail.profile)
+        #expect(profile.contains("<string>Example Office</string>") && profile.contains(ProfileText.mask) && profile.contains("<key>Password</key>"))
+        #expect(detail.profileNote == "1 value masked")
+        #expect(detail.fields == [
+            ContentField("Name", "Example Office Wi-Fi (profile)"), ContentField("Type", "Custom setting"),
+            ContentField("Platforms", "macOS, iOS and iPadOS"),
+            ContentField("Created", DemoFleet.reference.addingTimeInterval(-500 * 86_400).formatted(date: .abbreviated, time: .omitted)),
+            ContentField("Updated", DemoFleet.reference.addingTimeInterval(-20 * 86_400).formatted(date: .abbreviated, time: .omitted)),
+            ContentField("Profile file", "office-wifi.mobileconfig"),
+        ])
+        #expect(detail.attributes.contains { $0.label == "customSettingsValues" && $0.value.contains(CustomSettingsValues.withheld) })
+
+        let blueprint = try await Self.blueprintDetail(world, "demo-blueprint-01")
+        #expect(blueprint.members[2].members.first == ContentMember(id: "demo-config-01", name: "Example Office Wi-Fi (profile)"))
+
+        let content = world.content
+        var exposed = [Self.printed(detail), Self.printed(blueprint), Self.printed(content.configurations.rows),
+                       Self.printed(content.blueprints.rows), Self.printed(content.detail.item)]
+        exposed += (detail.fields + detail.attributes).map { "\($0.label)=\($0.value)" } + detail.notes + [profile, detail.profileNote ?? ""]
+        exposed += ContentKind.allCases.map { content.csv(for: $0) }
+        for row in content.configurations.rows { exposed += [row.name, row.type, row.platforms, JSONValue.object(row.item.attributes).jsonText] }
+        for text in exposed { #expect(!text.contains(DemoContent.canary), "the canary in \(text.prefix(300))") }
+        #expect(!content.csv(for: .configurations).contains("customSettingsValues"))
+    }
+
+    /// A built-in configuration is shown typed (its type in words, its platforms), with what Apple's API gives of it; a
+    /// type this version doesn't know is shown as sent.
+    @Test func aBuiltInConfigurationIsShownTyped() async throws {
+        let world = try await World.make()
+        Self.stocked(world)
+        world.stubs["a"]!.add([Resource(type: "configurations", id: "C9", attributes: ["type": .string("HOLOGRAM_POLICY"), "name": .string("Future"),
+                                                                                       "configuredForPlatforms": .array([.string("PLATFORM_GLASSES")])])])
+        let wifi = try await Self.configurationDetail(world, "demo-config-02")
+        #expect(Array(wifi.fields.prefix(3)) == [ContentField("Name", "Example Guest Wi-Fi"), ContentField("Type", "Wi-Fi"),
+                                          ContentField("Platforms", "iOS and iPadOS, macOS")])
+        #expect(wifi.profile == nil && wifi.profileNote == nil)
+        #expect(wifi.notes == ["A built-in configuration: Apple's API gives its name, type and platforms, not its settings."])
+        let future = try await Self.configurationDetail(world, "C9")
+        #expect(Array(future.fields.prefix(3)) == [ContentField("Name", "Future"), ContentField("Type", "HOLOGRAM_POLICY"), ContentField("Platforms", "PLATFORM_GLASSES")])
+        #expect(future.notes == ["A type this version doesn't know, shown as Apple sent it."])
+    }
+
+    /// A custom setting whose profile can't be shown says why, never nothing: another shape, none sent, not a property
+    /// list, a signed one.
+    @Test func aCustomSettingWhoseProfileIsNotShownSaysWhy() async throws {
+        let world = try await World.make()
+        let signed = Data([0x30, 0x82, 0x01, 0x00, 0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02] + Array(repeating: 0, count: 64)).base64EncodedString()
+        let cases: [(String, JSONValue, String)] = [
+            ("C1", .string("not an object"),
+             "The profile isn't shown: Apple sent it in a shape this version can't read (custom settings not an object)."),
+            ("C2", .object(["configurationProfile": .object(["SSID_STR": .string("Office")])]),
+             "The profile isn't shown: Apple sent it in a shape this version can't read (profile not a string)."),
+            ("C3", .null, "Apple sent no profile with this custom setting."),
+            ("C4", .object(["configurationProfile": .string("plain words"), "filename": .string("x.mobileconfig")]),
+             "Not a property list, not shown."),
+            ("C5", .object(["configurationProfile": .string("<plist version=\"1.0\"><dict><key>SSID_STR</key><string>Office</string></dict></plist>")]),
+             "No value in it looked secret, so nothing is masked."),
+        ]
+        world.stubs["a"]!.add(cases.map { id, values, _ in
+            Resource(type: "configurations", id: id, attributes: ["type": .string("CUSTOM_SETTING"), "name": .string(id), "customSettingsValues": values])
+        })
+        for (id, _, said) in cases {
+            let detail = try await Self.configurationDetail(world, id)
+            #expect(detail.profileNote == said, "\(id)")
+            #expect((detail.profile != nil) == (id == "C5"), "\(id)")
+        }
+        world.stubs["a"]!.add([Resource(type: "configurations", id: "C6", attributes: [
+            "type": .string("CUSTOM_SETTING"), "customSettingsValues": .object(["configurationProfile": .string(signed)])])])
+        let detail = try await Self.configurationDetail(world, "C6")
+        #expect(detail.profile == nil && detail.profileNote == "Signed profile, 79 bytes, not shown: its content holds its secrets in the clear.",
+                "\(detail.profileNote ?? "nil")")
+        #expect(detail.title == "C6")
+    }
+}
+
+extension Panel {
+    var isLoaded: Bool { if case .loaded = self { true } else { false } }
+}
