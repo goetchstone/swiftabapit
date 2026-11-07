@@ -358,7 +358,8 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
 
   The rest are a right-click on the header away (`TableColumnCustomization`, kept per window); the inspector and the
   CSV hold every one. A header of wrapping text takes an ideal width of 0, so its longest line never sets the column's
-  width (Activity crashed AppKit that way; PR 12's first snapshot run).
+  width (Activity crashed AppKit that way; PR 12's first snapshot run). A list screen keeps no `.fixedSize()` in its pane: People's
+  segmented picker crashed the smallest window the same way, and sits in the toolbar now, as Content's does.
 - **What every screen says alike is written once** (`ScreenWords`; Phase 2b review L10): no organization yet
   (`noOrganization`, Apple School Manager named: Apple MDM's copy had dropped it) or one that can't be used (`unusable`), in
   every list and every inspector panel (`everyScreenSaysWhyNothingCanBeReadAlike`); an id `AppleRead.isPathSafe` refuses is

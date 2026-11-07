@@ -127,13 +127,16 @@
     there are views in the window");
   - the Apple MDM and People tables outgrew the window: all eleven and all eight columns need 800 and 730 pt at their
     narrowest, more than the smallest window's pane;
-  - narrow-people-detail trapped (exit 133, with no message).
+  - narrow-people-detail crashed the app in the same constraint passes as Activity. At first it gave no message (exit 133),
+    so the harness gained an `lldb` rerun and the system log's exception text to say where.
 
   The fixes:
   - Activity's header wraps with an ideal width of 0, as Apple MDM's note does. It had used
     `.fixedSize(horizontal: false, vertical: true)`, which let its counts line set the column's width.
   - Each of the three tables shows by default only the columns whose minimums fit within the Devices table's (530 pt).
     The rest are a right-click on the header away (`TableColumnCustomization`, kept per window).
+  - People's segmented picker moves from the pane into the toolbar, as Content's is (6a2a0ce). It was the one `.fixedSize()`
+    left in a list screen's pane. A first guess, stacking the inspector's fields (4fb5dfe), was disproved by CI and reverted.
 - **Prevention:** each fix has a test that fails on the unfixed code or on its mutant (the fix's report lists 46 mutants and
   what killed each, the review's T2, P4 and X1 among them: 45 killed, and one equivalent, `pause()`'s token bump, since it
   cancels every task and `current(_:)` checks `Task.isCancelled` too). The lock is tested over the reads it gates, partly and wholly
