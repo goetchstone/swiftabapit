@@ -272,6 +272,17 @@ struct MosyleScreenTests {
         #expect(fields.first == PeopleModel.Field("Serial", "MAC1") && fields.contains(PeopleModel.Field("OS version", "26.1")))
         #expect(!fields.contains { $0.value.contains("CANARY") })
         #expect(MosyleModel.timeline(of: row).map(\.kind) == ["beat"])
+        // Mosyle's numbers as strings (defect 19), shown as numbers; anything else as sent.
+        var numbers = Self.device("MAC2")
+        (numbers["total_disk"], numbers["available_disk"], numbers["battery"]) = (.string("256.0000000000"), .string("79.26"), .string("0.81"))
+        world.mosyleStub.add(devices: [numbers], os: "mac")
+        world.mosyle.load(force: true)
+        await eventually("again") { Self.loaded(world.mosyle.devices.state) }
+        world.mosyle.selectedDevice = "MAC2"
+        let shown = MosyleModel.fields(of: try #require(world.mosyle.device))
+        #expect(shown.contains(PeopleModel.Field("Disk, GB", "256")) && shown.contains(PeopleModel.Field("Free, GB", "79.3")), "\(shown.filter { $0.label.contains("GB") })")
+        #expect(shown.contains(PeopleModel.Field("Battery", "81%")))
+        #expect(world.mosyle.csv(.devices).contains("256.0000000000"), "the CSV keeps Mosyle's text")
         world.mosyle.selectedDevice = "GONE"
         #expect(world.mosyle.selectionNote == "This device isn't in the list Mosyle sent.")
     }

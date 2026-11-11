@@ -536,8 +536,9 @@ public final class MosyleModel {
             PeopleModel.Field("Serial", row.serial), field("Name", "deviceName"), field("Model", "deviceModel"), field("Family", "productFamily"),
             field("OS version", "osVersion"), PeopleModel.Field("User", row.user), field("Status", "status"),
             PeopleModel.Field("Supervised", flag(a["isSupervised"])), field("Lost mode", "lostModeStatus"),
-            field("Enrollment", "enrollmentType"), field("Asset tag", "assetTag"), field("Battery", "batteryLevel"),
-            field("Disk, GB", "totalDiskGB"), field("Free, GB", "availableDiskGB"), field("IMEI", "imei"),
+            field("Enrollment", "enrollmentType"), field("Asset tag", "assetTag"), PeopleModel.Field("Battery", battery(a["batteryLevel"])),
+            PeopleModel.Field("Disk, GB", gigabytes(a["totalDiskGB"])), PeopleModel.Field("Free, GB", gigabytes(a["availableDiskGB"])),
+            field("IMEI", "imei"),
             field("Wi-Fi MAC", "wifiMacAddress"), field("Bluetooth MAC", "bluetoothMacAddress"), field("UDID", "deviceUdid"),
         ]
     }
@@ -680,6 +681,21 @@ public final class MosyleModel {
             }
         default: "—"
         }
+    }
+
+    /// Mosyle's numbers come as strings (plan §2.3 defect 19: `"total_disk": "64.0000000000"`, in GB): a number shown as one,
+    /// to a tenth; anything else as sent. The CSV keeps Mosyle's text.
+    nonisolated static func gigabytes(_ value: JSONValue?) -> String {
+        guard let text = value?.string ?? value.flatMap({ if case .number(let n) = $0 { n } else { nil } }),
+              let number = Double(text.trimmingCharacters(in: .whitespaces)), number.isFinite else { return text(value) }
+        return number.formatted(.number.precision(.fractionLength(0...1)))
+    }
+
+    /// Mosyle's battery level, a fraction as a string (`"0.81"`): a percentage; anything else as sent.
+    nonisolated static func battery(_ value: JSONValue?) -> String {
+        guard let text = value?.string ?? value.flatMap({ if case .number(let n) = $0 { n } else { nil } }),
+              let number = Double(text.trimmingCharacters(in: .whitespaces)), (0...1).contains(number) else { return text(value) }
+        return "\(Int((number * 100).rounded()))%"
     }
 
     /// Mosyle's platform word in Apple's: `ios` is iOS and iPadOS, `mac` macOS.
