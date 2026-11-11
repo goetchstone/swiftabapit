@@ -23,7 +23,10 @@ org editor's save).
   every attribute, CSV keeps Apple's order, snapshots store what came. `unreadAttributes` (and an audit payload's
   `unreadFields`) feed the acceptance pass. `ProfileText` shows a custom setting's profile with its secrets masked;
   `Configuration` and `CustomSettingsValues` hand out the profile withheld and keep it as it came at `package` access.
-  `Sections.swift`: `AppleSection.businessOnly`.
+  `Webhooks.swift` (Business 2.8): `Webhook`, `WebhookDelivery` (with `WebhookDeliveryRequest` and `…Response`) and
+  `WebhookEvent`, whose `payload` string is read as `WebhookPayload` (`WebhookPayloadType`, from Apple's guide); a webhook
+  and a delivery hand out their URL as `WebhookURL.destination` and withhold the rest (below, "Webhooks"), keeping what
+  Apple sent as `asSent`, `package`. `Sections.swift`: `AppleSection.businessOnly`.
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
   builders take no scope; `AuditQuery`, the audit read's checked range and filters), `AppleClient` (pages as an
   `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; member lists as linkage streams; read
@@ -78,8 +81,9 @@ org editor's save).
 - **`fields[orgDevices]` can't name the MDM-migration attributes** (`isMdmMigrationCapable`,
   `mdmMigrationStatus`, `mdmMigrationDeadlineDateTime`), and the device table filters on them, so the device
   list asks for every attribute. The services list uses sparse fields.
-- **Apple's own example says `purchaseSourceUid`; its field list says `purchaseSourceId`** (2.6). The view
-  reads the documented name; the other survives raw, and the contract test pins it as the one gap.
+- **Apple's device examples said `purchaseSourceUid` where its field list says `purchaseSourceId`** until 2.7 fixed
+  them. The view always read the documented name; `ModelContractTests.knownUnread` is empty now, so a gap that comes back
+  fails the example test until it is listed with its reason.
 - **Assumed, check live (Phase 1 live check):**
   - `GET orgDevices/{id}/relationships/assignedServer` for an unassigned device: the stub answers 404 as the
     full read does (abapit saw that live); the client takes 404 or `{"data": null}` alike.
@@ -202,6 +206,12 @@ org editor's save).
   as "no payload", the event's serial or subscription went unread, its unknown fields uncounted, and the pass said
   `ok`. `AuditEvent.payloadProblems` holds a named key that is absent, `""` or not a string, and a payload that isn't an
   object (`null` included); the pass's note says each with a count (`payload key named but absent in 1 event`).
+- **An audit payload's URL shows only where it goes** (2.8): `WEBHOOK_CREATED` and `WEBHOOK_UPDATED` carry the webhook's
+  `url`, which can hold the receiver's token, and the Activity inspector shows every payload field. `AuditEvent.resource`
+  shows the value under any key of a payload object that is `url` or ends in it (any case, any type's payload, an unknown
+  type's too) as `WebhookURL.destination`, a non-string withheld whole; no copy as Apple sent it is kept, since nothing
+  reads the URL from an event (`aWebhookURLInAnEventShowsOnlyWhereItGoes`). The common attributes aren't touched. The three
+  webhook types are in Access & Security (`AuditView`): a webhook sends the fleet's changes, serials included, off-site.
 - **Keys inside the objects a view reads are counted too** (Phase 2a review L1): a user's `phoneNumbers` and
   `roleOuList`, a custom setting's `customSettingsValues` and an audit payload's role locations, as `attribute.key`
   (`phoneNumbers.isPrimary`, `accountRoleLocationList.scope`), the attribute this version's name and Apple's key each
@@ -338,6 +348,34 @@ org editor's save).
     service's `lastConnectedDateTime` is (absent and null read as never, any other non-date as unreadable); whether
     `APPLE_CONFIGURATOR` and `APPLE_MDM` services ever set it (if not, they read as never connected for good and may
     need leaving out by `serverType`); and whether an `INACTIVE` service still connects (only `DELETED` is skipped).
+
+## Webhooks (Business 2.8)
+Read only here, with no screen (plan §8.0: the writes, and a screen, come later). A webhook's `url` is the operator's own
+and can carry the receiver's token; a delivery's `response.body` is the receiver's own words; the `secret` signs every
+delivery and is write-only at Apple. Phase 2a review M2's rule applies: a view whose resource holds a secret hands out a
+copy with it withheld and keeps what Apple sent at `package` (`asSent`), and prints, debug-prints and mirrors the copy.
+- **What a URL shows** (`WebhookURL.destination`): the scheme in lower case, the host (an international one in its `xn--`
+  form) and the port, then `/…` when anything else was there: a user or a password (even empty), a path past `/`, a
+  query, a fragment. An allowlist of the parts kept, not a parser of where a secret hides (RULE-FEEDBACK 2026-11-03):
+  anything that isn't `http` or `https` with a host of ASCII letters, digits, `-` and `.` (or an IPv6 address in
+  brackets), at most 253 bytes, is `WebhookURL.withheld` whole (a percent-encoded host, a blank, `;`, no `//`, no scheme).
+  Stricter than a package's location (`ContentWords.location`, which keeps the path): a webhook's path is often the
+  token itself. Not caught: a token in the host name.
+- **A webhook** (`Webhook`): `url` as its destination; every attribute it doesn't read (`fields` is
+  `Webhook.Attributes`), `secret` included, withheld as `Webhook.withheld` with its key kept, so the acceptance pass
+  counts `secret` as an unknown key and never prints it; an attribute Apple adds may be the secret by another name.
+- **A delivery** (`WebhookDelivery`): `request.url` as its destination; `response.body` withheld (`hasBody` says whether
+  the receiver said anything; Apple keeps a body only for an answer that isn't 2xx); every other key of `request` or
+  `response` withheld, `httpStatusCode` kept; a `request` or `response` that isn't an object withheld whole and named in
+  `misreadObjects`. `errorMessage` is Apple's words for a receiver that never answered and is kept as it comes: a screen
+  shows it through `ContentWords.addresses`, in case it quotes the URL (check live).
+- **An event** (`WebhookEvent`): public as it came. Its `payload` names a device by serial and a service by id, the
+  organization's own data as an audit event's is; `WebhookPayload` reads it, wrapped in `data` (the guide's examples, the
+  POST body) or not (the guide's prose). A field is read only where its type documents it (`WebhookPayloadType.fields`,
+  `.relationships`), the rest counted as `unreadKeys` (`payload.`, `attributes.`, `relationships.`); a payload that
+  isn't a string, or a string that isn't an event, is `payloadProblem`, never read as none.
+- Held by `WebhookTests` (canaries through each public value, `description`, `dump` and the mirror) and
+  `applesWebhookExamplesReadTyped`.
 
 ## Screens (Phase 2b)
 Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `App/Screens/`, its CSV columns in

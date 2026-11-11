@@ -1,0 +1,30 @@
+{
+  "data": {
+    "type": "webhooks",
+    "id": "webhook-new-123",
+    "attributes": {
+      "name": "Device change notifications",
+      "enabled": true,
+      "eventTypes": [
+        "ORG_DEVICE_ATTRIBUTE_CHANGED",
+        "ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED"
+      ],
+      "url": "https://example.com/webhooks/apple",
+      "createdDateTime": "2026-10-01T10:30:00Z",
+      "updatedDateTime": "2026-10-01T10:30:00Z"
+    },
+    "relationships": {
+      "deliveries": {
+        "links": {
+          "related": "https://api-business.apple.com/v1/webhooks/webhook-new-123/deliveries"
+        }
+      }
+    },
+    "links": {
+      "self": "https://api-business.apple.com/v1/webhooks/webhook-new-123"
+    }
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/webhooks/webhook-new-123"
+  }
+}

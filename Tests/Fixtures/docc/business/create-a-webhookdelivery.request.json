@@ -1,0 +1,13 @@
+{
+  "data": {
+    "type": "webhookDeliveries",
+    "relationships": {
+      "template": {
+        "data": {
+          "type": "webhookDeliveries",
+          "id": "delivery-67890"
+        }
+      }
+    }
+  }
+}

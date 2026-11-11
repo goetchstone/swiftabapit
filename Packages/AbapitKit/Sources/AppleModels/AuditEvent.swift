@@ -1,9 +1,14 @@
 import Foundation
 import JSONAPI
 
-/// `auditEvents`: one entry of the organization's audit log (Business 2.6). The common attributes are typed here; the
+/// `auditEvents`: one entry of the organization's audit log (Business 2.8). The common attributes are typed here; the
 /// payload sits under one more attribute, `eventData<Type>`, whose fields depend on the type (plan §2.1). Apple names
 /// that attribute in `eventDataPropertyKey`.
+///
+/// A webhook's events (2.8) carry its `url`, which can hold the receiver's token: `resource` shows every payload's URL as
+/// `WebhookURL.destination` does, so the Activity inspector, which shows each payload field, shows only where it goes
+/// (invariant 11; plan §8.0). No copy as Apple sent it is kept: the webhook itself can be read again, and nothing reads
+/// the URL from an event.
 public struct AuditEvent: ResourceView {
     public static let resourceType = "auditEvents"
     /// `AuditEventCommonAttributes`: every type's. The payload's key and fields are `AuditEventType.payload`'s.
@@ -11,7 +16,24 @@ public struct AuditEvent: ResourceView {
                                 "subjectName", "outcome", "groupId", "eventDataPropertyKey"]
 
     public let resource: Resource
-    public init(resource: Resource) { self.resource = resource }
+    public init(resource: Resource) { self.resource = Self.withholdingURLs(resource) }
+
+    /// `resource` with each URL inside an object at its top level (a payload) shown as `WebhookURL.destination` shows it,
+    /// whatever the event's type: a key that is `url`, or ends in it, in any case (`url`, `webhookUrl`). A value that isn't
+    /// a string is withheld whole; `null` stays. Errs toward hiding: a URL that holds no secret shows its host only.
+    static func withholdingURLs(_ resource: Resource) -> Resource {
+        var attributes = resource.attributes
+        for (key, value) in resource.attributes {
+            guard case .object(var payload) = value else { continue }
+            var changed = false
+            for (field, inner) in payload where WebhookURL.namesAURL(field) && inner != .null {
+                payload[field] = .string(inner.string.map(WebhookURL.destination) ?? WebhookURL.withheld)
+                changed = true
+            }
+            if changed { attributes[key] = .object(payload) }
+        }
+        return Resource(type: resource.type, id: resource.id, attributes: attributes, relationships: resource.relationships)
+    }
 
     public var type: OpenEnum<AuditEventType>? { attributes.open("type") }
     public var eventDate: ISODate? { attributes.date("eventDateTime") }
@@ -158,6 +180,12 @@ public struct AuditEventPayload: Sendable, Equatable {
     public var vendorName: OpenEnum<AuditEventIdpVendorName>? { value("vendorName")?.open() }
     public var settingsEnabled: [String]? { strings("settingsEnabled") }
     public var settingsDisabled: [String]? { strings("settingsDisabled") }
+
+    // Webhooks (2.8): a webhook created or updated, as it is after the change (`name` above is its name). Its `url` is
+    // already `WebhookURL.destination`'s (`AuditEvent.withholdingURLs`); its `enabled` is a string in Apple's docs and is
+    // shown as it comes.
+    /// What the webhook is subscribed to: a list of strings in Apple's docs, read as `WebhookEventType`.
+    public var webhookEventTypes: [OpenEnum<WebhookEventType>]? { value("eventTypes")?.list { $0.open() } }
 }
 
 /// `AuditEventAccountRoleLocation`: a role held in a location.
@@ -170,7 +198,7 @@ public struct AuditEventRoleLocation: ObjectView {
     public var locationID: String? { object.string("locationUniqueIdentifier") }
 }
 
-/// `AuditEventType`: the 50 types Business 2.6 documents.
+/// `AuditEventType`: the 53 types Business 2.8 documents (50 at 2.6; 2.8 added the three webhook types).
 public enum AuditEventType: String, KnownValues {
     case deviceAddedToOrg = "DEVICE_ADDED_TO_ORG", deviceRemovedFromOrg = "DEVICE_REMOVED_FROM_ORG",
          deviceAssignedToServer = "DEVICE_ASSIGNED_TO_SERVER",
@@ -201,7 +229,8 @@ public enum AuditEventType: String, KnownValues {
          idpCreated = "IDP_CREATED", idpUpdated = "IDP_UPDATED", idpDeleted = "IDP_DELETED",
          idpAccountSyncEnabled = "IDP_ACCOUNT_SYNC_ENABLED", idpAccountSyncDisabled = "IDP_ACCOUNT_SYNC_DISABLED",
          appleServicesSettingsUpdated = "APPLE_SERVICES_SETTINGS_UPDATED",
-         accountPasswordChanged = "ACCOUNT_PASSWORD_CHANGED"
+         accountPasswordChanged = "ACCOUNT_PASSWORD_CHANGED", webhookCreated = "WEBHOOK_CREATED", webhookUpdated = "WEBHOOK_UPDATED",
+         webhookDeleted = "WEBHOOK_DELETED"
 
     /// Where a type's payload is and what it holds: the attribute key, and the payload's fields.
     public struct PayloadSchema: Sendable, Equatable {
@@ -210,8 +239,9 @@ public enum AuditEventType: String, KnownValues {
     }
 
     /// Each type's payload, from Apple's `AuditEvent<Type>Attributes` (its one key) and `AuditEvent<Type>` (the
-    /// fields), written out here and held to the contract by `AuditEventTests`. Fourteen payloads have no fields in
-    /// Apple's docs (`fourteenPayloadsHaveNoFields`): what they hold live is unread, and the acceptance pass names it.
+    /// fields), written out here and held to the contract by `AuditEventTests`. Fifteen payloads have no fields in
+    /// Apple's docs (`fifteenPayloadsHaveNoFields`; `WEBHOOK_DELETED`'s is the fifteenth, 2.8): what they hold live is
+    /// unread, and the acceptance pass names it.
     public var payload: PayloadSchema {
         switch self {
         case .deviceAddedToOrg: PayloadSchema(key: "eventDataDeviceAddedToOrg", fields: ["purchaseSourceId", "purchaseSourceType", "serialNumber"])
@@ -264,6 +294,9 @@ public enum AuditEventType: String, KnownValues {
         case .idpAccountSyncDisabled: PayloadSchema(key: "eventDataIdpAccountSyncDisabled", fields: ["activityId", "vendorName"])
         case .appleServicesSettingsUpdated: PayloadSchema(key: "eventDataAppleServicesSettingsUpdated", fields: ["settingsDisabled", "settingsEnabled"])
         case .accountPasswordChanged: PayloadSchema(key: "eventDataAccountPasswordChanged", fields: ["activityId"])
+        case .webhookCreated: PayloadSchema(key: "eventDataWebhookCreated", fields: ["enabled", "eventTypes", "name", "url"])
+        case .webhookUpdated: PayloadSchema(key: "eventDataWebhookUpdated", fields: ["enabled", "eventTypes", "name", "url"])
+        case .webhookDeleted: PayloadSchema(key: "eventDataWebhookDeleted", fields: [])
         }
     }
 }

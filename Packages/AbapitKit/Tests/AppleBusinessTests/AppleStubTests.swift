@@ -10,7 +10,7 @@ import TestSupport
 @Suite("AppleStub against the contract", .serialized)
 struct AppleStubTests {
     static func manifest(_ scope: Scope) throws -> [String: Any] {
-        let url = Fixtures.contracts.appending(path: scope == .business ? "apple/business-2.6.json" : "apple/school-1.7.json")
+        let url = Fixtures.contracts.appending(path: scope == .business ? "apple/business-2.8.json" : "apple/school-1.8.json")
         return try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 

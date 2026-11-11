@@ -6,7 +6,7 @@ import TestSupport
 
 /// abapit's `reports.audit_digest` and its two type sets, held to `Tests/Fixtures/parity/reports.json`
 /// (invariant 6); the Access & Security set and the views' cover of Apple's types, held to
-/// `Contracts/apple/business-2.6.json`; and the dashboard's recent events.
+/// `Contracts/apple/business-2.8.json`; and the dashboard's recent events.
 @Suite("Audit digest")
 struct AuditDigestTests {
     static func ids(_ rows: [Resource]) -> [[UInt8]] { rows.map { Array($0.id.utf8) } }
@@ -84,16 +84,17 @@ struct AuditDigestTests {
 
     /// Apple's `AuditEventType`, read from the contract.
     static func contractTypes() throws -> [String] {
-        let data = try Data(contentsOf: Fixtures.contracts.appending(path: "apple/business-2.6.json"))
+        let data = try Data(contentsOf: Fixtures.contracts.appending(path: "apple/business-2.8.json"))
         let manifest = try #require(JSONValue.parse(String(decoding: data, as: UTF8.self)))
         return try #require(manifest["enums"]?["AuditEventType"]?["values"]?.array).compactMap(\.string)
     }
 
-    /// Every one of Apple's 50 types is in exactly one view's set or in `otherTypes`, and every listed type is
-    /// Apple's: a type Apple adds fails here until it is placed, so it can't vanish from every view unseen.
+    /// Every one of Apple's 53 types is in exactly one view's set or in `otherTypes`, and every listed type is
+    /// Apple's: a type Apple adds fails here until it is placed, so it can't vanish from every view unseen (2.8's three
+    /// webhook types did, until Access & Security took them).
     @Test func everyContractTypeIsPlacedOnce() throws {
         let contract = try Self.contractTypes()
-        #expect(contract.count == 50)
+        #expect(contract.count == 53)
         let lists = AuditView.allCases.map(\.types) + [AuditView.otherTypes]
         for type in contract {
             let places = lists.map { $0.filter { $0.utf8.elementsEqual(type.utf8) }.count }.reduce(0, +)
@@ -103,17 +104,17 @@ struct AuditDigestTests {
         for type in lists.joined() {
             #expect(known.contains(Array(type.utf8)), "\(type) isn't one of Apple's types")
         }
-        #expect(lists.map(\.count) == [7, 5, 29, 9])
+        #expect(lists.map(\.count) == [7, 5, 32, 9])
     }
 
     /// The new view's decisions: terms accepted and Apple-services settings are in (an administrator's account
-    /// binding the organization, and what its Managed Apple Accounts may sign in to); configurations, collections
-    /// and account pictures are out.
+    /// binding the organization, and what its Managed Apple Accounts may sign in to), and so are the webhooks (2.8: one
+    /// sends the fleet's changes off-site); configurations, collections and account pictures are out.
     @Test func accessAndSecurityHoldsTheDecidedTypes() {
         let access = Set(AuditView.accessAndSecurity.types)
         for type in ["TERMS_ACCEPTED", "APPLE_SERVICES_SETTINGS_UPDATED", "API_ACCOUNT_KEY_REVOKED", "ROLE_CREATED",
                      "DOMAIN_FEDERATION_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "BATCH_PASSWORD_RESET_INITIATED",
-                     "EXTERNAL_ACCOUNT_INVITED", "ACCOUNT_PASSWORD_CHANGED"] {
+                     "EXTERNAL_ACCOUNT_INVITED", "ACCOUNT_PASSWORD_CHANGED", "WEBHOOK_CREATED", "WEBHOOK_UPDATED", "WEBHOOK_DELETED"] {
             #expect(access.contains(type), "\(type)")
         }
         let other = Set(AuditView.otherTypes)

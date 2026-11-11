@@ -310,7 +310,7 @@ SwiftAbapit/                          (D1)
     Debug/Snapshots.swift             env-var screenshot harness (DEBUG only)
   Packages/AbapitKit/Package.swift    one local package; the app sits outside it (L9)
     Sources/JSONAPI/                  pure: Document, Resource, Linkage, OpenEnum, ErrorResponse, Paging
-    Sources/AppleModels/              pure: attribute structs + enums for Business 2.6 / School 1.7
+    Sources/AppleModels/              pure: attribute structs + enums for Business 2.8 / School 1.8
     Sources/MosyleModels/             pure: envelope, status codes, adapters (with field allowlist)
     Sources/Wire/                     pure: WireOperation, ReadRequest, Host (shared by Planners, HTTPCore, ChangeCore)
     Sources/Planners/                 pure: assign, migration, release, blueprint rel, config, mdm svc, lost mode
@@ -330,7 +330,7 @@ SwiftAbapit/                          (D1)
   Packages/AbapitApp/                 the screen models' package: AbapitKit's public API only, as the app sees it
     Sources/AppModels/                @MainActor screen models (orgs, devices, inspector)
     Tests/AppModelsTests/             invariant 8's screen-model tests
-  Contracts/apple/                    business-2.6.json, school-1.7.json (generated, committed; §3.10)
+  Contracts/apple/                    business-2.8.json, school-1.8.json (generated, committed; §3.10)
   Contracts/device-management/        profiles-27.0.json (generated from apple/device-management; masking test now, validation Phase 5)
   Tests/Fixtures/                     parity/ (golden from frozen abapit), docc/ (Apple examples),
                                       recorded/ (scrubbed live), demo/

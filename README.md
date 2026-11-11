@@ -6,8 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **abapit** as a native macOS app: a sandboxed SwiftUI front end for the
-[Apple Business API](https://developer.apple.com/documentation/applebusinessapi) (2.6), the
-[Apple School Manager API](https://developer.apple.com/documentation/appleschoolmanagerapi) (1.7) and
+[Apple Business API](https://developer.apple.com/documentation/applebusinessapi) (2.8), the
+[Apple School Manager API](https://developer.apple.com/documentation/appleschoolmanagerapi) (1.8) and
 Mosyle Business, for Mac admins. It replaces [abapit](https://github.com/goetchstone/abapit), the
 Python web tool, and its tests hold it to abapit's behaviour where abapit was right.
 

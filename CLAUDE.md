@@ -1,7 +1,7 @@
 # Working on swiftabapit
 
 **abapit as a native macOS app**: SwiftUI, macOS 27 only, App Sandbox on, for the **Apple Business API
-2.6**, the **Apple School Manager API 1.7** and **Mosyle Business**. On screen the app is **abapit**;
+2.8**, the **Apple School Manager API 1.8** and **Mosyle Business**. On screen the app is **abapit**;
 this repo is **swiftabapit**, the Xcode project `SwiftAbapit.xcodeproj`, the bundle ID
 `io.github.goetchstone.swiftabapit` (permanent: the Keychain items and the sandbox container bind to it).
 Public repo, MIT. The design and phases are in

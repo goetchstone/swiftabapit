@@ -137,7 +137,7 @@ public enum ActivityPane: String, CaseIterable, Identifiable, Sendable {
         case .audit: "Every event Apple logged in the range."
         case .subscriptions: "Apple has no subscription endpoint: these events are where it reports subscriptions and purchases."
         case .deviceLifecycle: "Devices added, removed, assigned, unassigned and erased: Apple's side, not whether the MDM enrolled them."
-        case .accessAndSecurity: "Who can get in, and with what: accounts, API keys, roles, domains, identity providers, passwords and terms."
+        case .accessAndSecurity: "Who can get in, and with what: accounts, API keys, roles, domains, identity providers, passwords, terms and webhooks."
         case .other: "Types no view shows (configurations, collections, account pictures) and types this version doesn't know."
         }
     }

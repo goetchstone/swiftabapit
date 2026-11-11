@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "webhooks",
+    "id": "webhook-12345",
+    "attributes": {
+      "enabled": false
+    }
+  }
+}

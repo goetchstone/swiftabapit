@@ -588,7 +588,12 @@ extension AppleClient {
         "limit[users]", "fields[activationLockStatus]", "fields[appleCareCoverage]", "fields[apps]", "fields[auditEvents]",
         "fields[blueprints]", "fields[configurations]", "fields[mdmDeviceDetails]", "fields[mdmDevices]", "fields[mdmServers]",
         "fields[orgDeviceActivities]", "fields[orgDevices]", "fields[organizationalUnits]", "fields[packages]", "fields[userGroups]",
-        "fields[users]", "filter[actorId]", "filter[endTimestamp]", "filter[startTimestamp]", "filter[subjectId]", "filter[type]",
+        "fields[users]", "fields[webhookDeliveries]", "fields[webhookEvents]", "fields[webhooks]", "filter[actorId]",
+        "filter[addedToOrgDateTime]", "filter[addedToOrgDateTime][GT]", "filter[addedToOrgDateTime][GTE]", "filter[addedToOrgDateTime][LT]",
+        "filter[addedToOrgDateTime][LTE]", "filter[createdDateTimeAtBefore]", "filter[createdDateTimeAtOrAfter]", "filter[deliveryState]",
+        "filter[endTimestamp]", "filter[orderDateTime]", "filter[orderDateTime][GT]", "filter[orderDateTime][GTE]", "filter[orderDateTime][LT]",
+        "filter[orderDateTime][LTE]", "filter[orderNumber]", "filter[productFamily]", "filter[purchaseSourceType]", "filter[serialNumber]",
+        "filter[startTimestamp]", "filter[status]", "filter[subjectId]", "filter[type]",
     ]
 
     private static let lowercase = Set("abcdefghijklmnopqrstuvwxyz".utf8), uppercase = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ".utf8)

@@ -467,7 +467,7 @@ public final class AppleStub: Transport, Sendable {
     /// that leaves the limit out sees its blueprints cut (check live).
     public static let includeLimit = 10
 
-    /// Every GET's query parameters, written out from Contracts/apple/business-2.6.json (School's are the same where it has
+    /// Every GET's query parameters, written out from Contracts/apple/business-2.8.json (School's are the same where it has
     /// the endpoint), never from the client: each name, and the values it allows when the contract lists them. `limit` and
     /// `limit[…]` take 1 to 1000 (the contract's `maximum`). `AppleStubTests` holds the table to both contracts.
     public static let parameters: [String: [String: [String]?]] = [
@@ -496,7 +496,7 @@ public final class AppleStub: Transport, Sendable {
                 "eventDataBatchPasswordResetInitiated", "eventDataExternalAccountInvited", "eventDataAccountImageSet",
                 "eventDataAccountImageReplaced", "eventDataAccountImageRemoved", "eventDataIdpCreated", "eventDataIdpUpdated", "eventDataIdpDeleted",
                 "eventDataIdpAccountSyncEnabled", "eventDataIdpAccountSyncDisabled", "eventDataAppleServicesSettingsUpdated",
-                "eventDataAccountPasswordChanged"
+                "eventDataAccountPasswordChanged", "eventDataWebhookCreated", "eventDataWebhookUpdated", "eventDataWebhookDeleted"
             ],
             "filter[actorId]": nil,
             "filter[endTimestamp]": nil,
@@ -513,7 +513,8 @@ public final class AppleStub: Transport, Sendable {
                 "API_ACCOUNT_KEY_GENERATED", "API_ACCOUNT_ROLE_LOCATION_CHANGED", "API_ACCOUNT_NAME_CHANGED", "ROLE_CREATED", "ROLE_UPDATED",
                 "TERMS_ACCEPTED", "DOMAIN_FEDERATION_ENABLED", "DOMAIN_FEDERATION_DISABLED", "BATCH_PASSWORD_RESET_INITIATED",
                 "EXTERNAL_ACCOUNT_INVITED", "ACCOUNT_IMAGE_SET", "ACCOUNT_IMAGE_REPLACED", "ACCOUNT_IMAGE_REMOVED", "IDP_CREATED", "IDP_UPDATED",
-                "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "APPLE_SERVICES_SETTINGS_UPDATED", "ACCOUNT_PASSWORD_CHANGED"
+                "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "APPLE_SERVICES_SETTINGS_UPDATED", "ACCOUNT_PASSWORD_CHANGED",
+                "WEBHOOK_CREATED", "WEBHOOK_UPDATED", "WEBHOOK_DELETED"
             ],
             "limit": nil,
         ],
@@ -600,11 +601,27 @@ public final class AppleStub: Transport, Sendable {
             "fields[orgDeviceActivities]": ["status", "subStatus", "createdDateTime", "completedDateTime", "downloadUrl"],
         ],
         "/v1/orgDevices": [
+            "cursor": nil,
             "fields[orgDevices]": [
                 "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
                 "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid", "purchaseSourceId",
                 "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "assignedServer", "appleCareCoverage"
             ],
+            "filter[addedToOrgDateTime]": nil,
+            "filter[addedToOrgDateTime][GT]": nil,
+            "filter[addedToOrgDateTime][GTE]": nil,
+            "filter[addedToOrgDateTime][LT]": nil,
+            "filter[addedToOrgDateTime][LTE]": nil,
+            "filter[orderDateTime]": nil,
+            "filter[orderDateTime][GT]": nil,
+            "filter[orderDateTime][GTE]": nil,
+            "filter[orderDateTime][LT]": nil,
+            "filter[orderDateTime][LTE]": nil,
+            "filter[orderNumber]": nil,
+            "filter[productFamily]": nil,
+            "filter[purchaseSourceType]": nil,
+            "filter[serialNumber]": nil,
+            "filter[status]": nil,
             "limit": nil,
         ],
         "/v1/orgDevices/{id}": [
@@ -668,16 +685,34 @@ public final class AppleStub: Transport, Sendable {
                 "costCenter", "division", "department", "jobTitle", "startDateTime", "createdDateTime", "updatedDateTime", "phoneNumbers"
             ],
         ],
+        "/v1/webhooks": [
+            "cursor": nil,
+            "fields[webhooks]": ["name", "enabled", "eventTypes", "url", "createdDateTime", "updatedDateTime", "deliveries"],
+            "limit": nil,
+        ],
+        "/v1/webhooks/{id}": [
+            "fields[webhooks]": ["name", "enabled", "eventTypes", "url", "createdDateTime", "updatedDateTime", "deliveries"],
+        ],
+        "/v1/webhooks/{id}/deliveries": [
+            "cursor": nil,
+            "fields[webhookDeliveries]": ["createdDateTime", "deliveryState", "errorMessage", "redelivery", "sentDateTime", "request", "response", "event"],
+            "fields[webhookEvents]": ["eventType", "payload", "isPingEvent", "createdDateTime"],
+            "filter[createdDateTimeAtBefore]": nil,
+            "filter[createdDateTimeAtOrAfter]": nil,
+            "filter[deliveryState]": ["SUCCEEDED", "FAILED", "PENDING"],
+            "include": ["event"],
+            "limit": nil,
+        ],
     ]
 
     /// The endpoints whose answer is a page (`PagedDocumentLinks`): they take the `cursor` Apple's own next link carries,
-    /// documented or not (only `auditEvents` documents it).
+    /// documented or not (`auditEvents`, `orgDevices` since 2.7, and the webhooks' two lists document it).
     public static let paged: Set = [
         "/v1/apps", "/v1/auditEvents", "/v1/blueprints", "/v1/blueprints/{id}/relationships/apps", "/v1/blueprints/{id}/relationships/configurations",
         "/v1/blueprints/{id}/relationships/orgDevices", "/v1/blueprints/{id}/relationships/packages", "/v1/blueprints/{id}/relationships/userGroups",
         "/v1/blueprints/{id}/relationships/users", "/v1/configurations", "/v1/mdmDevices", "/v1/mdmServers", "/v1/mdmServers/{id}/relationships/devices",
         "/v1/orgDevices", "/v1/orgDevices/{id}/appleCareCoverage", "/v1/organizationalUnits", "/v1/organizationalUnits/{id}/relationships/users",
-        "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users",
+        "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users", "/v1/webhooks", "/v1/webhooks/{id}/deliveries",
     ]
 
     /// A query Apple would refuse with 400: a parameter the endpoint doesn't document, a `limit` outside 1 to 1000, or a

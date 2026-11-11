@@ -13,7 +13,7 @@ tests (Phases 1–2); the weekly `Contracts drift` workflow (an issue with the d
 
 - `scripts/apple_contracts.py` — the crawler. Standard library only; fetches only `developer.apple.com`
   over HTTPS; every page is data (JSON-parsed, capped at 4 MiB, at most 1,500 pages per root).
-- `Contracts/apple/business-2.6.json`, `school-1.7.json` — endpoints (method, path, parameters with
+- `Contracts/apple/business-2.8.json`, `school-1.8.json` — endpoints (method, path, parameters with
   `allowedValues`/`maximum`, body, status codes, which examples exist), objects (properties) and enums
   (possible values). Sorted, no timestamps: a re-run that finds nothing new changes nothing.
 - `Tests/Fixtures/docc/<scope>/<slug>.{request,response}.json` — every JSON example Apple wrote.
@@ -54,10 +54,37 @@ Business 2.6: 57 endpoints, 272 objects, 27 enums. School 1.7: 11 endpoints, 51 
 Business and 11 School example files. The counts match the plan's research (§8 Phase 0). The crawl takes
 about two minutes.
 
+## Business 2.8 and School 1.8 (2026-11-11, drift issue #11)
+
+Business 2.8: 65 endpoints, 312 objects, 28 enums. School 1.8: 11 endpoints, 51 objects, 7 enums. 72 Business and 18
+School example files (61 and 17 before). The crawl took two and a half minutes. What moved:
+
+- **The device list's filters** (Business 2.7 and School 1.8, 2026-10-29): `GET orgDevices` documents `cursor` and 15
+  filters: `filter[serialNumber]`, `[status]`, `[productFamily]`, `[purchaseSourceType]`, `[orderNumber]`, and
+  `filter[addedToOrgDateTime]` and `filter[orderDateTime]`, each also as `[GT]`, `[GTE]`, `[LT]` and `[LTE]`. None has
+  `allowedValues`: the three enum filters list their values in their descriptions ("Possible values: …"), which
+  `ModelContractTests` reads, and `ProductFamily` gained `iPod` from that list. A second device-list example
+  (`get-org-devices.response.2.json`) is a filtered page whose next link carries the filters and the cursor.
+- **Webhooks** (Business 2.8, 2026-11-04): eight endpoints, three reads (`GET webhooks`, `webhooks/{id}`,
+  `webhooks/{id}/deliveries`) and five writes; `WebhookEventType` (4 values); the objects `Webhook`, `WebhookDelivery`
+  and `WebhookEvent`. Apple's deliveries example names its event and includes none.
+- **Audit values**: `AuditEventType` +3 (`WEBHOOK_CREATED`, `_UPDATED`, `_DELETED`), `AuditEventCategory` +2
+  (`ACCESS_MANAGEMENT`, `WEBHOOK_ACTIVITY`), `AuditEventSubjectType` +4 (`ROLE`, `IDP`, `INVITATION`, `WEBHOOK`), and the
+  webhook payload objects; `WEBHOOK_DELETED`'s payload has no object, the fifteenth with no fields.
+- **Examples fixed or lost**: the device examples now say `purchaseSourceId`, as the field list always did (the one
+  known gap is gone); the org unit's member list page was renamed (`get-all-user-ids-for-an-organizational-unit`) and
+  lost its example. Every page's `introducedAt` moved to the version.
+
 ## Gotchas / stub-lies traps
 
 - Apple's own enum lists are incomplete (`AuditEventCategory`, `AuditEventSubjectType`, plan §3.3): an
   enum's contract test allows the documented gaps, listed in the test, never silently.
+- **A value set can live in prose.** The device filters' values are only in their descriptions, so the enums are held to
+  the text ("Possible values: A, B, and C"); a rewording breaks that test before it lets a value through unseen.
+- **Apple's guides aren't crawled.** The webhook payloads' shape and types come from "Understanding webhook events"
+  (`/documentation/apple-school-and-business-manager-api/…`, another doc root), read through the crawler's `fetch` on
+  2026-11-11 and copied into `WebhookTests` as Apple's five examples. The drift job doesn't watch it: re-read it when
+  `WebhookEventType` moves.
 - Apple's Create-a-Configuration example sends `com.apple.airplay.security` with `PLATFORM_IOS`, which the
   device-management schema marks tvOS-only (plan §2.1): examples are inputs, not truths.
 - Some list endpoints have no example (`GET /v1/auditEvents`, `/v1/blueprints`, `/v1/configurations`,

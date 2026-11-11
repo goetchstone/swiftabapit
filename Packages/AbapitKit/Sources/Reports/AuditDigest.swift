@@ -3,10 +3,10 @@ import Foundation
 import JSONAPI
 
 /// The Activity views over Apple's audit log (plan Phase 2, "Audit"; Appendix B), each a fixed set of
-/// `AuditEventType` values. Apple documents 50 at Business 2.6 (`Contracts/apple/business-2.6.json`), and
+/// `AuditEventType` values. Apple documents 53 at Business 2.8 (`Contracts/apple/business-2.8.json`; 50 at 2.6), and
 /// `ReportsTests` holds each of them to exactly one view or to `otherTypes`, so a type Apple adds fails a test until
 /// it is placed rather than vanishing from every view. The sets name `AuditEventType`'s cases, so the compiler holds each
-/// to a type Apple documents and the 50 strings are written once (Phase 2a review L6: they were written here again);
+/// to a type Apple documents and the 53 strings are written once (Phase 2a review L6: they were written here again);
 /// `types` are their strings, matched byte for byte.
 public enum AuditView: String, CaseIterable, Sendable {
     /// abapit's `SUBSCRIPTION_EVENTS`: Apple has no subscription endpoint, so these events are the only place it
@@ -20,7 +20,8 @@ public enum AuditView: String, CaseIterable, Sendable {
     /// `TERMS_ACCEPTED` is an administrator's account agreeing to Apple's terms for the organization (`termsName`),
     /// an act that binds it and that an access review asks after; `APPLE_SERVICES_SETTINGS_UPDATED`
     /// (`settingsEnabled`, `settingsDisabled`) decides which Apple services the organization's accounts may sign in
-    /// to.
+    /// to. And the webhooks (2.8: `WEBHOOK_CREATED`, `_UPDATED`, `_DELETED`): a webhook sends the fleet's device changes,
+    /// serials included, to a URL off-site, so who added one, pointed it elsewhere or removed it is an access question.
     case accessAndSecurity
 
     /// The view's types, in abapit's order for its two sets (held to the golden).
@@ -40,7 +41,8 @@ public enum AuditView: String, CaseIterable, Sendable {
              .idpCreated, .idpUpdated, .idpDeleted, .idpAccountSyncEnabled, .idpAccountSyncDisabled,
              .accountPasswordChanged, .batchPasswordResetInitiated,
              .externalAccountAssociated, .externalAccountDisassociated, .externalAccountInvited,
-             .termsAccepted, .appleServicesSettingsUpdated]
+             .termsAccepted, .appleServicesSettingsUpdated,
+             .webhookCreated, .webhookUpdated, .webhookDeleted]
         }
     }
 

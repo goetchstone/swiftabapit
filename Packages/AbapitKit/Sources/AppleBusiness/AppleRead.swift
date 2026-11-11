@@ -78,7 +78,7 @@ public enum AppleRead {
                     template: "/v1/mdmServers/{id}/relationships/devices", query: [QueryItem("limit", String(pageLimit))])
     }
 
-    // MARK: Business only: people, content, Apple MDM and audit (plan §2.4: School has none of these endpoints)
+    // MARK: Business only: people, content, Apple MDM, audit and webhooks (plan §2.4: School has none of these endpoints)
 
     // These take no scope: they go to the Business host only, and `AppleClient` refuses them for a School org before
     // anything is built (`AppleAPIError.notInScope`). A School token sent here would also be refused by its broker.
@@ -139,6 +139,14 @@ public enum AppleRead {
         if let subject = query.subjectID { items.append(QueryItem("filter[subjectId]", subject)) }
         items.append(QueryItem("limit", String(pageLimit)))
         return ReadRequest(host: .appleBusiness, path: "/v1/auditEvents", query: items)
+    }
+
+    /// The webhooks (Business 2.8): where Apple sends the organization's device changes.
+    public static func webhooks() -> ReadRequest { list("/v1/webhooks") }
+    public static func webhook(id: String) -> ReadRequest? { single("/v1/webhooks/{id}", id) }
+    /// A webhook's deliveries over `query`, each with the event it sent (`include=event`), a cursor at a time: Apple filters.
+    public static func webhookDeliveries(id: String, _ query: WebhookDeliveryQuery = .all) -> ReadRequest? {
+        single("/v1/webhooks/{id}/deliveries", id, paged: true, query: query.items)
     }
 
     private static func list(_ path: String) -> ReadRequest {
@@ -231,6 +239,79 @@ public struct AuditQuery: Sendable, Equatable {
         format.formatOptions = [.withInternetDateTime]
         format.timeZone = TimeZone(identifier: "UTC")
         return format.string(from: date)
+    }
+}
+
+/// What a webhook's deliveries read asks Apple for (`GET webhooks/{id}/deliveries`, Business 2.8), checked when it is made,
+/// as `AuditQuery` is: the creation range's bounds whole seconds, 1970 to 9999, the start before the end; Apple's delivery
+/// states only, each once. The events always come with them (`include=event`): the deliveries are read for what they sent
+/// (plan §8.0, the change feed).
+public struct WebhookDeliveryQuery: Sendable, Equatable {
+    /// `filter[createdDateTimeAtOrAfter]`: deliveries created at or after this instant.
+    public let createdAtOrAfter: Date?
+    /// `filter[createdDateTimeAtBefore]`: deliveries created before this instant.
+    public let createdBefore: Date?
+    /// `filter[deliveryState]`, in the order given.
+    public let states: [WebhookDeliveryState]
+
+    /// Every delivery Apple keeps (check live how long that is).
+    public static let all = WebhookDeliveryQuery(checked: nil, nil, [])
+
+    public enum Invalid: Error, Equatable, Sendable {
+        /// A bound before 1970 or past 9999, or not a number.
+        case outOfRange
+        /// The range ends before it starts, or where it starts: no delivery could match.
+        case emptyRange
+        /// A state this version doesn't know: it never goes to Apple.
+        case unknownState(String)
+
+        public var message: String {
+            switch self {
+            case .outOfRange: "A date to read deliveries from or to is before 1970 or after 9999."
+            case .emptyRange: "The range of deliveries ends before it starts, so none could match."
+            case .unknownState: "This version doesn't know one of the delivery states asked for, so it can't filter on it."
+            }
+        }
+    }
+
+    public init(createdAtOrAfter: Date? = nil, createdBefore: Date? = nil, states: [OpenEnum<WebhookDeliveryState>] = []) throws(Invalid) {
+        var from: Date?, to: Date?
+        if let createdAtOrAfter { from = try Self.cut(createdAtOrAfter) }
+        if let createdBefore { to = try Self.cut(createdBefore) }
+        if let from, let to, from >= to { throw .emptyRange }
+        var known: [WebhookDeliveryState] = []
+        for state in states {
+            guard let value = state.known else { throw .unknownState(state.rawValue) }
+            if !known.contains(value) { known.append(value) }
+        }
+        self.init(checked: from, to, known)
+    }
+
+    private init(checked from: Date?, _ to: Date?, _ states: [WebhookDeliveryState]) {
+        createdAtOrAfter = from
+        createdBefore = to
+        self.states = states
+    }
+
+    /// The last `days` days up to `now`.
+    public static func last(days: Int, now: Date = Date(), states: [OpenEnum<WebhookDeliveryState>] = []) throws(Invalid) -> WebhookDeliveryQuery {
+        try WebhookDeliveryQuery(createdAtOrAfter: now.addingTimeInterval(-Double(days) * 86_400), states: states)
+    }
+
+    /// The date cut to whole seconds, as a timestamp says it, when it is one `AuditQuery.timestamp` can write.
+    private static func cut(_ date: Date) throws(Invalid) -> Date {
+        let seconds = date.timeIntervalSince1970.rounded(.down)
+        guard seconds.isFinite, seconds >= 0, seconds <= AuditQuery.latest else { throw .outOfRange }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    /// The query's parameters, in the contract's order, then the include.
+    var items: [QueryItem] {
+        var items: [QueryItem] = []
+        if let createdBefore { items.append(QueryItem("filter[createdDateTimeAtBefore]", AuditQuery.timestamp(createdBefore))) }
+        if let createdAtOrAfter { items.append(QueryItem("filter[createdDateTimeAtOrAfter]", AuditQuery.timestamp(createdAtOrAfter))) }
+        if !states.isEmpty { items.append(QueryItem("filter[deliveryState]", states.map(\.rawValue).joined(separator: ","))) }
+        return items + [QueryItem("include", "event")]
     }
 }
 

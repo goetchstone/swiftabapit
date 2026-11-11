@@ -1,7 +1,7 @@
 {
  "source": "https://developer.apple.com/documentation/appleschoolmanagerapi",
  "scope": "school",
- "version": "1.7",
+ "version": "1.8",
  "generator": "scripts/apple_contracts.py",
  "counts": {
   "endpoints": 11,
@@ -13,7 +13,7 @@
    "title": "Get Device Management Services",
    "slug": "get-device-management-services",
    "abstract": "Get a list of device management services in an organization.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/mdmServers",
@@ -111,7 +111,7 @@
    "title": "Get Device Management Service Information",
    "slug": "get-mdmserver-information",
    "abstract": "Get the information for a specific device management service.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/mdmServers/{id}",
@@ -217,7 +217,7 @@
   {
    "title": "Get All Device IDs for a Device Management Service",
    "slug": "get-all-device-ids-for-a-device-management-service",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/mdmServers/{id}/relationships/devices",
@@ -308,7 +308,7 @@
    "title": "Assign or Unassign Devices to a Device Management Service",
    "slug": "create-an-orgdeviceactivity",
    "abstract": "Assign or unassign devices to a device management service, or manage a device management service for devices.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "POST",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDeviceActivities",
@@ -410,7 +410,7 @@
    "title": "Get Organization Device Activity Information",
    "slug": "get-orgdeviceactivity-information",
    "abstract": "Get information for an organization device activity that a device management action, such as assigning or unassigning, creates.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDeviceActivities/{id}",
@@ -511,11 +511,20 @@
    "title": "Get Organization Devices",
    "slug": "get-org-devices",
    "abstract": "Get a list of devices in an organization that enroll using Automated Device Enrollment.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices",
    "parameters": [
+    {
+     "name": "cursor",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "A pagination cursor to retrieve the next page of results."
+    },
     {
      "name": "fields[orgDevices]",
      "in": "query",
@@ -548,7 +557,142 @@
       "assignedServer",
       "appleCareCoverage"
      ],
-     "description": "The fields to return for included related types."
+     "description": "The fields to include for each device in the response. This parameter doesn\u2019t filter devices. To filter devices, use the filter parameters."
+    },
+    {
+     "name": "filter[addedToOrgDateTime]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the date and time the device was added to the organization, such as 2025-01-01T00:00:00Z."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][GTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization at or after this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][GT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization after this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][LTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization at or before this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][LT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization before this date and time."
+    },
+    {
+     "name": "filter[orderDateTime]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the date and time the device was ordered, such as 2025-01-01T00:00:00Z."
+    },
+    {
+     "name": "filter[orderDateTime][GTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered at or after this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][GT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered after this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][LTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered at or before this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][LT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered before this date and time."
+    },
+    {
+     "name": "filter[orderNumber]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the order number of the device. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[productFamily]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the product family of the device. Possible values: Mac, iPhone, iPad, iPod, AppleTV, Watch, and Vision. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[purchaseSourceType]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the purchase source type of the device. Possible values: APPLE, RESELLER, and MANUALLY_ADDED. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[serialNumber]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the serial number of the device. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[status]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the assignment status of the device. Possible values: ASSIGNED and UNASSIGNED. Separate multiple values with commas."
     },
     {
      "name": "limit",
@@ -614,6 +758,7 @@
     }
    ],
    "examples": [
+    "response",
     "response"
    ]
   },
@@ -621,7 +766,7 @@
    "title": "Get Device Information",
    "slug": "get-orgdevice-information",
    "abstract": "Get information about a device in an organization.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices/{id}",
@@ -740,7 +885,7 @@
    "title": "Get the Activation Lock Status for a Device",
    "slug": "get-the-activation-lock-status-information-for-an-orgdevice",
    "abstract": "Get the Activation Lock status of an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices/{id}/activationLockStatus",
@@ -838,7 +983,7 @@
    "title": "Get AppleCare Coverage Information for a Device",
    "slug": "get-all-applecare-coverage-for-an-orgdevice",
    "abstract": "Get a list of AppleCare coverage resources for an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices/{id}/appleCareCoverage",
@@ -953,7 +1098,7 @@
    "title": "Get the Assigned Device Management Service Information for a Device",
    "slug": "get-the-assigned-device-management-service-information-for-an-orgdevice",
    "abstract": "Get the assigned device management service information for a device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices/{id}/assignedServer",
@@ -1054,7 +1199,7 @@
    "title": "Get the Assigned Device Management Service ID for a Device",
    "slug": "get-the-assigned-device-management-service-id-for-an-orgdevice",
    "abstract": "Get the assigned device management service ID information for a device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "method": "GET",
    "baseURL": "https://api-school.apple.com/",
    "path": "/v1/orgDevices/{id}/relationships/assignedServer",
@@ -1141,7 +1286,7 @@
    "title": "ActivationLockStatus",
    "slug": "activationlockstatus",
    "abstract": "The data structure that represents the Activation Lock status of an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -1176,7 +1321,7 @@
    "title": "ActivationLockStatus.Attributes",
    "slug": "activationlockstatus/attributes-data.dictionary",
    "abstract": "Attributes for an organization device\u2019s Activation Lock status.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "isLocked",
@@ -1201,7 +1346,7 @@
    "title": "ActivationLockStatusResponse",
    "slug": "activationlockstatusresponse",
    "abstract": "A response that contains the Activation Lock status of an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1229,7 +1374,7 @@
    "title": "ActivityTypeMetadata",
    "slug": "activitytypemetadata",
    "abstract": "Additional metadata for an organization device activity, used by device management service migration activity types.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "mdmMigrationDeadlineDateTime",
@@ -1244,7 +1389,7 @@
    "title": "AppleCareCoverage",
    "slug": "applecarecoverage",
    "abstract": "The data structure that represents an AppleCare coverage resource that belongs to an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -1279,7 +1424,7 @@
    "title": "AppleCareCoverage.Attributes",
    "slug": "applecarecoverage/attributes-data.dictionary",
    "abstract": "Attributes for an organization device\u2019s AppleCare coverage resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "agreementNumber",
@@ -1356,7 +1501,7 @@
    "title": "AppleCareCoverageResponse",
    "slug": "applecarecoverageresponse",
    "abstract": "A response that contains a list of AppleCare coverage resources that belongs to an organization device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1394,7 +1539,7 @@
    "title": "DocumentLinks",
    "slug": "documentlinks",
    "abstract": "Self-links to documents that can contain information for one or more resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "self",
@@ -1408,7 +1553,7 @@
   "ErrorLinks": {
    "title": "ErrorLinks",
    "slug": "errorlinks",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "about",
@@ -1436,7 +1581,7 @@
   "ErrorLinks.Associated": {
    "title": "ErrorLinks.Associated",
    "slug": "errorlinks/associated-data.dictionary",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "href",
@@ -1460,7 +1605,7 @@
   "ErrorLinks.Associated.Meta": {
    "title": "ErrorLinks.Associated.Meta",
    "slug": "errorlinks/associated-data.dictionary/meta-data.dictionary",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "source",
@@ -1475,7 +1620,7 @@
    "title": "ErrorResponse",
    "slug": "errorresponse",
    "abstract": "The error details that an API returns in the response body whenever the API request isn\u2019t successful.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "errors",
@@ -1493,7 +1638,7 @@
    "title": "ErrorResponse.Errors",
    "slug": "errorresponse/errors-data.dictionary",
    "abstract": "The details about an error that returns when an API request isn\u2019t successful.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "code",
@@ -1570,7 +1715,7 @@
   "ErrorResponse.Errors.Meta": {
    "title": "ErrorResponse.Errors.Meta",
    "slug": "errorresponse/errors-data.dictionary/meta-data.dictionary",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "Any Key",
@@ -1588,7 +1733,7 @@
    "title": "JsonPointer",
    "slug": "jsonpointer",
    "abstract": "An object that contains the JSON pointer that indicates the location of the error.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "pointer",
@@ -1603,7 +1748,7 @@
    "title": "MdmServer",
    "slug": "mdmserver",
    "abstract": "The data structure that represents device management services in organizations.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -1658,7 +1803,7 @@
    "title": "MdmServer.Attributes",
    "slug": "mdmserver/attributes-data.dictionary",
    "abstract": "Attributes that describe a device management service resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "createdDateTime",
@@ -1742,7 +1887,7 @@
    "title": "MdmServer.Relationships",
    "slug": "mdmserver/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "devices",
@@ -1760,7 +1905,7 @@
    "title": "MdmServer.Relationships.Devices",
    "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1798,7 +1943,7 @@
    "title": "MdmServer.Relationships.Devices.Data",
    "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "id",
@@ -1823,7 +1968,7 @@
    "title": "MdmServerDevicesLinkagesResponse",
    "slug": "mdmserverdeviceslinkagesresponse",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1861,7 +2006,7 @@
    "title": "MdmServerDevicesLinkagesResponse.Data",
    "slug": "mdmserverdeviceslinkagesresponse/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "id",
@@ -1886,7 +2031,7 @@
    "title": "MdmServerResponse",
    "slug": "mdmserverresponse",
    "abstract": "A response that contains a single device management service resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1924,7 +2069,7 @@
    "title": "MdmServersResponse",
    "slug": "mdmserversresponse",
    "abstract": "A response that contains a list of device management service resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -1972,7 +2117,7 @@
    "title": "OrgDevice",
    "slug": "orgdevice",
    "abstract": "The data structure that represents an organization device resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -2027,7 +2172,7 @@
    "title": "OrgDevice.Attributes",
    "slug": "orgdevice/attributes-data.dictionary",
    "abstract": "Attributes that describe an organization device resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "addedToOrgDateTime",
@@ -2206,7 +2351,7 @@
    "title": "OrgDevice.Relationships",
    "slug": "orgdevice/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "activationLockStatus",
@@ -2243,7 +2388,7 @@
   "OrgDevice.Relationships.ActivationLockStatus": {
    "title": "OrgDevice.Relationships.ActivationLockStatus",
    "slug": "orgdevice/relationships-data.dictionary/activationlockstatus-data.dictionary",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "links",
@@ -2260,7 +2405,7 @@
   "OrgDevice.Relationships.AppleCareCoverage": {
    "title": "OrgDevice.Relationships.AppleCareCoverage",
    "slug": "orgdevice/relationships-data.dictionary/applecarecoverage-data.dictionary",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "links",
@@ -2278,7 +2423,7 @@
    "title": "OrgDevice.Relationships.AssignedServer",
    "slug": "orgdevice/relationships-data.dictionary/assignedserver-data.dictionary",
    "abstract": "The links that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "links",
@@ -2296,7 +2441,7 @@
    "title": "OrgDeviceActivity",
    "slug": "orgdeviceactivity",
    "abstract": "The data structure that represents an organization device activity resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -2341,7 +2486,7 @@
    "title": "OrgDeviceActivity.Attributes",
    "slug": "orgdeviceactivity/attributes-data.dictionary",
    "abstract": "Attributes that describe an organization device activity resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "completedDateTime",
@@ -2384,7 +2529,7 @@
    "title": "OrgDeviceActivityCreateRequest",
    "slug": "orgdeviceactivitycreaterequest",
    "abstract": "The request body you use to update the device management service for a device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2402,7 +2547,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary",
    "abstract": "The data element of the request body.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "attributes",
@@ -2440,7 +2585,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Attributes",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/attributes-data.dictionary",
    "abstract": "Attributes with values that you\u2019re changing as part of the create request.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "activityType",
@@ -2468,7 +2613,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "devices",
@@ -2496,7 +2641,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary",
    "abstract": "The data that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2514,7 +2659,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "id",
@@ -2539,7 +2684,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary",
    "abstract": "The data that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2557,7 +2702,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "id",
@@ -2582,7 +2727,7 @@
    "title": "OrgDeviceActivityResponse",
    "slug": "orgdeviceactivityresponse",
    "abstract": "A response that contains a single organization device activity resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2610,7 +2755,7 @@
    "title": "OrgDeviceAssignedServerLinkageResponse",
    "slug": "orgdeviceassignedserverlinkageresponse",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2638,7 +2783,7 @@
    "title": "OrgDeviceAssignedServerLinkageResponse.Data",
    "slug": "orgdeviceassignedserverlinkageresponse/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "id",
@@ -2663,7 +2808,7 @@
    "title": "OrgDeviceResponse",
    "slug": "orgdeviceresponse",
    "abstract": "A response that contains a single organization device resource.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2691,7 +2836,7 @@
    "title": "OrgDevicesResponse",
    "slug": "orgdevicesresponse",
    "abstract": "A response that contains a list of organization device resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "data",
@@ -2729,7 +2874,7 @@
    "title": "PagedDocumentLinks",
    "slug": "pageddocumentlinks",
    "abstract": "Links related to the response document, including paging links.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "first",
@@ -2758,7 +2903,7 @@
    "title": "PagingInformation",
    "slug": "paginginformation",
    "abstract": "Paging information for data responses.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "paging",
@@ -2776,7 +2921,7 @@
    "title": "PagingInformation.Paging",
    "slug": "paginginformation/paging-data.dictionary",
    "abstract": "Paging details, such as the total number of resources and the per-page limit.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "limit",
@@ -2805,7 +2950,7 @@
    "title": "Parameter",
    "slug": "parameter",
    "abstract": "An object that contains the query parameter that produces the error.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "parameter",
@@ -2820,7 +2965,7 @@
    "title": "RelationshipLinks",
    "slug": "relationshiplinks",
    "abstract": "Links related to the response document, including self-links.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "include",
@@ -2849,7 +2994,7 @@
    "title": "ResourceLinks",
    "slug": "resourcelinks",
    "abstract": "Self-links to requested resources.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "properties": [
     {
      "name": "self",
@@ -2866,7 +3011,7 @@
    "title": "ActivationLockType",
    "slug": "activationlocktype",
    "abstract": "Strings that represent the type of Activation Lock on a device.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "MDM",
     "USER",
@@ -2877,7 +3022,7 @@
    "title": "AppleCareCoveragePaymentType",
    "slug": "applecarecoveragepaymenttype",
    "abstract": "Strings that represent AppleCare coverage payment types.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "ABE_SUBSCRIPTION",
     "PAID_UP_FRONT",
@@ -2889,7 +3034,7 @@
    "title": "AppleCareCoverageStatus",
    "slug": "applecarecoveragestatus",
    "abstract": "Strings that represent AppleCare coverage status.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "ACTIVE",
     "INACTIVE"
@@ -2899,7 +3044,7 @@
    "title": "MdmMigrationStatus",
    "slug": "mdmmigrationstatus",
    "abstract": "Strings that represent the state of a device\u2019s device management service migration.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "REQUESTED",
     "STARTED",
@@ -2911,7 +3056,7 @@
    "title": "MdmServerProductFamily",
    "slug": "mdmserverproductfamily",
    "abstract": "Strings that represent a product family that can be assigned as a default to a device management service.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "APPLE_TV",
     "IPAD",
@@ -2926,7 +3071,7 @@
    "title": "MdmServerStatus",
    "slug": "mdmserverstatus",
    "abstract": "Strings that represent the operational status of a device management service.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "ACTIVE",
     "DELETED",
@@ -2937,7 +3082,7 @@
    "title": "OrgDeviceActivityType",
    "slug": "orgdeviceactivitytype",
    "abstract": "Strings that represent organization device activities.",
-   "introducedAt": "1.7",
+   "introducedAt": "1.8",
    "values": [
     "ASSIGN_DEVICES",
     "UNASSIGN_DEVICES",

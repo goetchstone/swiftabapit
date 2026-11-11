@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "webhookPings",
+    "id": "ping-13579"
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/webhookPings/ping-13579"
+  }
+}
