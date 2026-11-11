@@ -229,9 +229,7 @@ public enum Python {
         guard let first = scalars.firstIndex(where: { !isWhitespace($0) }), let last = scalars.lastIndex(where: { !isWhitespace($0) }) else {
             return ""
         }
-        var out = ""
-        out.unicodeScalars.append(contentsOf: scalars[first...last])
-        return out
+        return String(String.UnicodeScalarView(scalars[first...last]))
     }
 
     /// `text.upper()`: each known character's full uppercase mapping (`ß` is `SS`); a character abapit's Python doesn't

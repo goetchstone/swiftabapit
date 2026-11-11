@@ -98,6 +98,56 @@ public enum MosyleAdapter {
         return Resource(type: "mosyleUsers", id: firstTruthy(raw, "iduser", "id", "identifier"), attributes: attributes)
     }
 
+    /// One field this app reads from a record no source shows (a custom device attribute, an admin-log entry): the name it
+    /// is shown under and the raw names it may come under, the first truthy one taken. Each raw name is a guess, listed in
+    /// docs/domains/mosyle.md to check live; every other field is dropped at the door (invariant 11) and only its name is
+    /// kept, so a screen can say what it didn't show.
+    public typealias Guessed = (name: String, sources: [String])
+
+    /// A custom device attribute's fields. The capitalised names are those a third-party client of Mosyle Manager reads
+    /// (`Name`, `UniqueID`, `Value`, `Source`, `LastUpdate`, `IsDeleted`); the lower-case ones are Mosyle Business's usual
+    /// spelling.
+    public static let attributeFields: [Guessed] = [
+        ("name", ["name", "Name", "attribute_name"]), ("identifier", ["UniqueID", "uniqueid", "idattribute", "id"]),
+        ("value", ["Value", "value", "default_value"]), ("source", ["Source", "source"]), ("updated", ["LastUpdate", "last_update"]),
+        ("deleted", ["IsDeleted", "is_deleted"]),
+    ]
+
+    /// An admin-log entry's fields: who did what, and when.
+    public static let adminLogFields: [Guessed] = [
+        ("when", ["date", "timestamp", "Timestamp", "created_at", "date_created"]),
+        ("admin", ["user", "username", "UserName", "user_name", "email", "useremail", "E-mail", "admin"]),
+        ("action", ["action", "Action", "event", "description", "activity"]),
+        ("ip", ["ip", "ip_address", "IP"]),
+    ]
+
+    /// `raw` cut to `fields`, and the names of the raw fields it held that no field reads (sorted, by code points).
+    public static func guessed(_ raw: JSONObject, _ fields: [Guessed]) -> (attributes: JSONObject, unread: [String]) {
+        var attributes = JSONObject()
+        for (name, sources) in fields {
+            if let value = sources.lazy.compactMap({ raw[$0] }).first(where: Python.truthy) { attributes[name] = value }
+        }
+        let read = Set(fields.flatMap(\.sources).map { Array($0.utf8) })
+        let unread = raw.keys.filter { !read.contains(Array($0.utf8)) }.sorted(by: Python.precedes)
+        return (attributes, unread)
+    }
+
+    /// A custom device attribute of the platform `os` (the one it was asked for, which its row may not repeat).
+    public static func customAttribute(_ raw: JSONObject, os: String) -> (Resource, unread: [String]) {
+        var (attributes, unread) = guessed(raw, attributeFields)
+        attributes["os"] = .string(os)
+        let found: JSONValue? = attributes["identifier"] ?? attributes["name"]
+        let key: String = found.map { Python.str($0) } ?? ""
+        return (Resource(type: "customDeviceAttributes", id: key.isEmpty ? "" : os + "/" + key, attributes: attributes), unread)
+    }
+
+    /// An admin-log entry, its date as ISO when it is an epoch or a date string Mosyle's device dates use.
+    public static func adminLog(_ raw: JSONObject) -> (Resource, unread: [String]) {
+        var (attributes, unread) = guessed(raw, adminLogFields)
+        if let when = attributes["when"], let iso = MosyleTime.iso(when) { attributes["when"] = .string(iso) }
+        return (Resource(type: "adminLogs", id: "", attributes: attributes), unread)
+    }
+
     /// abapit's `adapt_group`, for user groups (`userGroups`) and device groups (`deviceGroups`), cut to
     /// `groupAttributes`.
     public static func group(_ raw: JSONObject, kind: String) -> Resource {

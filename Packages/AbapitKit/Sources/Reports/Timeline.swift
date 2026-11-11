@@ -46,8 +46,7 @@ public enum DeviceTimeline {
     /// truthy.
     static func label(type: JSONValue?, outcome: JSONValue?) -> String {
         // By code points: `replacingOccurrences` compares Characters, and `_` + U+0301 is one that isn't `_`.
-        var spaced = ""
-        spaced.unicodeScalars.append(contentsOf: Python.str(type ?? .string("event")).unicodeScalars.map { $0 == "_" ? " " : $0 })
+        let spaced = String(String.UnicodeScalarView(Python.str(type ?? .string("event")).unicodeScalars.map { $0 == "_" ? " " : $0 }))
         let name = Python.title(spaced)
         guard Python.truthy(outcome) else { return name }
         let joined = Array("\(name) \u{B7} \(Python.str(outcome))".unicodeScalars)
@@ -55,8 +54,6 @@ public enum DeviceTimeline {
         guard let first = joined.firstIndex(where: { !edge.contains($0) }), let last = joined.lastIndex(where: { !edge.contains($0) }) else {
             return ""
         }
-        var out = ""
-        out.unicodeScalars.append(contentsOf: joined[first...last])
-        return out
+        return String(String.UnicodeScalarView(joined[first...last]))
     }
 }

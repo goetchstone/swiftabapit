@@ -79,6 +79,9 @@ public final class MosyleStub: Transport, Sendable {
         var users: [JSONObject] = []
         var userGroups: [JSONObject] = []
         var deviceGroups: [String: [JSONObject]] = [:]
+        var groupMembers: [String: [(udid: String, compliant: Bool)]] = [:]
+        var customAttributes: [String: [JSONObject]] = [:]
+        var adminLogs: [JSONObject] = []
         var queued: [Queued] = []
         var envelopeFailures: [(path: String, status: String)] = []
         var endOfList: [String: String] = [:]
@@ -118,6 +121,13 @@ public final class MosyleStub: Transport, Sendable {
     public func add(users: [JSONObject]) { state.withLock { $0.users += users } }
     public func add(userGroups: [JSONObject]) { state.withLock { $0.userGroups += userGroups } }
     public func add(deviceGroups: [JSONObject], os: String) { state.withLock { $0.deviceGroups[os, default: []] += deviceGroups } }
+    /// A device group's members (`get_info`), by the group's id as Mosyle lists it, each compliant or not.
+    public func add(members: [(udid: String, compliant: Bool)], toGroup id: String) { state.withLock { $0.groupMembers[id, default: []] += members } }
+    /// Custom device attributes for one platform, as Mosyle keeps them (the stub's guess at their shape: docs/domains/mosyle.md).
+    public func add(customAttributes: [JSONObject], os: String) { state.withLock { $0.customAttributes[os, default: []] += customAttributes } }
+    /// Admin-log entries, each with a `date` whose first ten characters are its day (`YYYY-MM-DD`): the filter's dates are
+    /// compared with them.
+    public func add(adminLogs: [JSONObject]) { state.withLock { $0.adminLogs += adminLogs } }
     /// The next request to `path` (on `host`, for page `page`, when given) answers `status`, with `body` (by default
     /// what Mosyle sends for that status: `INVALID_METHOD` for 405, `{"error": …}` otherwise) and `headers`. It
     /// answers before any credential check, the login included: a 429 with `Retry-After`, a 500, a 403, a login
@@ -328,9 +338,54 @@ public final class MosyleStub: Transport, Sendable {
             let entry: JSONObject = rows.isEmpty && end != nil ? ["status": .string(end!), "info": .string("No device groups found")]
                 : ["devicegroups": .array(rows.map(JSONValue.object))]
             return (200, [:], Self.json(["status": .string("OK"), "response": .object(entry)]))
+        case ("/v1/devicegroups", "get_info"): return try groupInfo(options)
+        case ("/v1/devices", "list_custom_device_attributes"):
+            // `os` beside the operation (plan §2.2); in `options` it is no `os` at all.
+            guard let os = object["os"]?.string, !os.isEmpty else { return (200, [:], Self.entry(Self.missing("os"))) }
+            let rows = state.withLock { $0.customAttributes[os] ?? [] }
+            return (200, [:], Self.entry(["custom_device_attributes": .array(rows.map(JSONValue.object))]))
+        case ("/v1/adminlogs", nil): return try adminLogs(object)
         default:
             throw StubFailure.unhandled("\(path) \(object["operation"]?.string ?? "")")
         }
+    }
+
+    /// `get_info`: the group's name and its members' UDIDs, as an object (`response.devicegroup`, Mosyle's Postman
+    /// collection), the compliant or non-compliant ones only when `security_compliance_status` asks. A group this Mosyle
+    /// doesn't have answers a status of its own (`DEVICEGROUP_NOTFOUND`, the stub's guess); a filter value other than the
+    /// two known is unhandled, so a test that sends one fails.
+    private func groupInfo(_ options: JSONObject) throws -> (Int, [String: String], Data) {
+        guard let id = options["iddevicegroup"]?.string, !id.isEmpty else { return (200, [:], Self.entry(Self.missing("iddevicegroup"))) }
+        let filter = options["security_compliance_status"]
+        guard filter == nil || ["compliant", "noncompliant"].contains(filter?.string ?? "") else {
+            throw StubFailure.unhandled("security_compliance_status \(JSONValue.dumps(filter ?? .null))")
+        }
+        let (groups, members) = state.withLock { ($0.deviceGroups.values.flatMap { $0 }, $0.groupMembers[id] ?? []) }
+        // The id as the list gave it, a number included: Python's `str()` of it, by code points.
+        guard let group = groups.first(where: { group in
+            [group["iddevicegroup"], group["id"]].lazy.compactMap { $0 }.first(where: Python.truthy).map { Array(Python.str($0).utf8) } == Array(id.utf8)
+        }) else {
+            return (200, [:], Self.json(["status": .string("OK"), "response": .object(["status": .string("DEVICEGROUP_NOTFOUND"),
+                                                                                        "info": .string("Device group not found")])]))
+        }
+        let kept = members.filter { filter == nil || $0.compliant == (filter?.string == "compliant") }
+        let entry: JSONObject = ["devicegroup": .object(["name": group["name"] ?? .string(""), "udids": .array(kept.map { .string($0.udid) })])]
+        return (200, [:], Self.json(["status": .string("OK"), "response": .object(entry)]))
+    }
+
+    /// `/adminlogs`: the entries whose day falls within `filter_options`' `start_date` and `end_date` (`YYYY-MM-DD`, both
+    /// included), under `logs` with `rows` (the stub's guesses at the answer's shape). A filter without both dates, or with
+    /// another format, is unhandled: no source says what Mosyle does with one.
+    private func adminLogs(_ object: JSONObject) throws -> (Int, [String: String], Data) {
+        guard case .object(let filter)? = object["filter_options"], let start = filter["start_date"]?.string, let end = filter["end_date"]?.string,
+              [start, end].allSatisfy({ $0.count == 10 && $0.unicodeScalars.allSatisfy { ("0"..."9").contains($0) || $0 == "-" } }) else {
+            throw StubFailure.unhandled("/v1/adminlogs \(JSONValue.dumps(.object(object)))")
+        }
+        let rows = state.withLock { $0.adminLogs }.filter { row in
+            let day = String((row["date"]?.string ?? "").prefix(10))
+            return day >= start && day <= end
+        }
+        return (200, [:], Self.entry(["logs": .array(rows.map(JSONValue.object)), "rows": .number(String(rows.count))]))
     }
 
     private func devices(_ options: JSONObject) -> (Int, [String: String], Data) {
