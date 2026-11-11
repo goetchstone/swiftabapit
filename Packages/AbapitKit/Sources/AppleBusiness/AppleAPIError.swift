@@ -27,6 +27,10 @@ public enum AppleAPIError: Error, Equatable, Sendable {
     /// A Business-only read asked of a School org: School has no people, content, Apple MDM or audit endpoints (plan
     /// §2.4). Thrown before anything is built or sent.
     case notInScope(AppleSection)
+    /// The webhooks (Business 2.8) asked of a School org: thrown before anything is built or sent, in `.notInScope`'s words.
+    /// Not an `AppleSection` yet: a section is a screen's read with a probe (`NavigationTests` holds every section to a
+    /// screen), and the webhooks get a screen with their writes (plan §8.0). That phase makes them a section, and this goes.
+    case webhooksNotInScope
 
     /// A non-2xx response as an error.
     init(_ response: HTTPResponse) {
@@ -64,6 +68,7 @@ public enum AppleAPIError: Error, Equatable, Sendable {
         case .vault(let guidance): guidance
         case .wrongHost(let host): "A request for \(host) was refused: it isn't this organization's API."
         case .notInScope(let section): "Apple School Manager's API has no \(section.displayName.lowercased()) to read."
+        case .webhooksNotInScope: "Apple School Manager's API has no webhooks to read."
         }
     }
 }

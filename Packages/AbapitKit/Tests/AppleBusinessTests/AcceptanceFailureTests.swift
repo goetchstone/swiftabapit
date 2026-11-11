@@ -133,6 +133,7 @@ struct AcceptanceFailureTests {
             // test green.
             (AppleAPIError.notInScope(.users), .skipped("not in Apple School Manager's API"), nil),
             (AppleAPIError.notInScope(.auditEvents), .skipped("not in Apple School Manager's API"), nil),
+            (AppleAPIError.webhooksNotInScope, .skipped("not in Apple School Manager's API"), nil),
             (CancellationError(), .error("error cancelled"), nil),
             (AppleStub.StubFailure.unhandled("GET /v1/x"), .error("error StubFailure"), nil),
         ]

@@ -33,7 +33,8 @@ org editor's save).
   `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; member lists as linkage streams; read
   probes; `BlueprintRead`, a blueprint with its `members`, read or refused), `AppleAPIError` (status +
   Apple `code`, never prose; `.notInScope(section)` for a Business-only read asked of a School org), `AcceptancePass`
-  (the DEBUG pass, plan §7: Phase 1's eight lines, then 25 for the Business-only reads, then the probes).
+  (the DEBUG pass, plan §7: Phase 1's eight lines, then 28 for the Business-only reads, the webhooks' three among them,
+  then the probes).
 - `Packages/AbapitApp/Sources/AppModels/` — the screen models the app's views sit on (`@MainActor`), in their own
   package so the compiler gives them AbapitKit's public API only, as it gives the app:
   `OrgsModel` (orgs, the active client, `onSwitch`, `save(_:key:editing:)`), `DevicesModel` (devices and
@@ -165,7 +166,8 @@ org editor's save).
   last read readable, so a lock on the last read passed). The locked screen's sentence is `SidebarItem.lockedNote`, a
   locked Overview's naming its three reads (it read "can't read overview.", written in the view before the Overview could
   lock).
-- **School has no people, content, Apple MDM or audit endpoints** (plan §2.4): `AppleSection.businessOnly`. Their
+- **School has no people, content, Apple MDM, audit or webhook endpoints** (plan §2.4): `AppleSection.businessOnly`, and
+  for the webhooks, which are no section yet, `AppleAPIError.webhooksNotInScope` in the same words. Their
   builders take no scope and build for the Business host only; `AppleClient` throws `.notInScope(section)` before
   anything is built, so a School org sends nothing, not even a token request (and its broker would refuse the
   Business host anyway: `.wrongHost`). The stub fails a School request for them as unhandled, and
@@ -409,6 +411,45 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
   isn't a string, or a string that isn't an event, is `payloadProblem`, never read as none.
 - Held by `WebhookTests` (canaries through each public value, `description`, `dump` and the mirror) and
   `applesWebhookExamplesReadTyped`.
+- **The reads** (`AppleClient.webhooks()`, `webhook(_:)`, `webhookDeliveries(_:_:)`; `WebhookReadTests`): the list pages as
+  every list does; a webhook's deliveries page by cursor, as the device list and the audit log do, so
+  `WebhookDeliveryQuery`'s filters go with every page. That query is checked when made: `filter[createdDateTimeAtOrAfter]`
+  and `filter[createdDateTimeAtBefore]` whole seconds, 1970 to 9999, the start before the end after the cut (else
+  `.emptyRange`, in words); `filter[deliveryState]` Apple's three states, each once. `include=event` always goes: each
+  delivery's `event` is the included `webhookEvents` resource its linkage names, by bytes; an included resource of another
+  type is `.malformed("included of type webhookEvents")`; an event named and not included leaves `event` nil with
+  `eventID` set, never another event. An id that can't go in a path is never sent (`.notFound`, as every read's).
+- **What each state says** (no screen yet; these are what the client and the pass say): a School org, `.webhooksNotInScope`
+  ("Apple School Manager's API has no webhooks to read."), nothing sent, and the pass's three lines
+  `skipped: not in Apple School Manager's API`; a role that can't read them, `.forbidden` and `webhooks: forbidden`, the two
+  that need a webhook `skipped: no webhook to read (webhooks forbidden)`; none, `webhooks: ok, 0 items` and the two
+  `skipped: no webhook to read (webhooks has none)`; a list cut at the page cap, `truncated`; a deliveries walk that fails
+  part-way, its status with the count read. The deliveries line reads the first webhook's last day and says, each with a
+  count, an event not included, a delivery naming none, a request or response that isn't an object, and a payload that
+  isn't a string or an event; it reports unknown keys of a delivery (`request.`, `response.`), its event (`event.`) and the
+  payload (`payload.`, `attributes.`, `relationships.`) and unknown `deliveryState`, `eventType` and `payloadType` values.
+- **Never printed or logged** (invariant 11; `noURLBodyOrPayloadReachesThePassOrTheLog`): a webhook's URL and name, its
+  secret, a delivery's request URL, headers, response body and error message, an event's payload. The pass prints only
+  words of Apple's vocabulary (a key's name, an enum value) and counts, so `secret` shows as an unknown key, never its value;
+  `HTTPClient` logs the method, the host, the path's template and the status, and the test reads this process's log back
+  (`OSLogStore`), finding the deliveries' line and no canary.
+- **No probe for the webhooks yet.** A probe is per `AppleSection`, and `NavigationTests` holds every section to a sidebar
+  screen that shows it; the webhooks have none until their writes (plan §8.0). The pass's `webhooks` line says `forbidden`
+  for a role that can't read them. The phase that gives them a screen makes them a section with a probe, and drops
+  `.webhooksNotInScope`.
+- **Check live (webhooks, 2.8):**
+  - How long Apple keeps deliveries (the client asks `.all` or the last day; nothing pages back further).
+  - Whether a failed delivery still records its event, and whether `include=event` includes it.
+  - What Apple does when a URL keeps failing: retries (`redelivery`?), disables the webhook (`enabled` false?), or
+    stops recording deliveries.
+  - Whether the deliveries' filters combine as AND, a state list as OR, and `createdDateTimeAtBefore` is strictly before
+    (the stub's choices); what a value outside the states, or a bound given two dates, gets (the stub: 400).
+  - Whether `payload` holds the event wrapped in `data` (the guide's examples) or bare (its prose); both are read.
+  - Whether the payload's `id` is the `webhookEvents` id, and what `eventType` a ping's event carries.
+  - Whether `errorMessage` quotes the URL, its token and all.
+  - Whether Apple ever sends `secret` (documented write-only), and whether `include=event` repeats an event several
+    deliveries share (the stub includes each once).
+  - The webhook audit payloads' `enabled`: a string in Apple's docs, the webhook's own a boolean.
 
 ## Screens (Phase 2b)
 Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `App/Screens/`, its CSV columns in

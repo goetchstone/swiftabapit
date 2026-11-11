@@ -297,10 +297,59 @@ public actor AppleClient {
         isBusiness ? pages(AppleRead.auditEvents(query), cursorPaging: true).map(AuditEvent.init) : Self.failed(.notInScope(.auditEvents))
     }
 
+    // MARK: webhooks (Business only, 2.8)
+
+    /// The webhooks: where Apple sends the organization's device changes. Each shows its URL as `WebhookURL.destination`
+    /// does and withholds what it doesn't read (`Webhook`).
+    public nonisolated func webhooks() -> AsyncThrowingStream<Page<Webhook>, any Error> {
+        isBusiness ? pages(AppleRead.webhooks()).map(Webhook.init) : Self.failed(.webhooksNotInScope)
+    }
+
+    public func webhook(_ id: String) async throws -> Webhook {
+        guard isBusiness else { throw AppleAPIError.webhooksNotInScope }
+        guard let read = AppleRead.webhook(id: id) else { throw AppleAPIError.notFound }
+        return try await Webhook(resource: one(read))
+    }
+
+    /// A webhook's deliveries over `query`, Apple filtering, a cursor at a time so the filters go with every page; each
+    /// with the event it sent, from the page's `included` (`include=event`), matched by id. An included resource that
+    /// isn't a `webhookEvents` one is malformed; an event a delivery names and Apple didn't include leaves its `event` nil,
+    /// with `eventID` saying which (plan §8.0: the deliveries as a change feed).
+    public nonisolated func webhookDeliveries(_ id: String, _ query: WebhookDeliveryQuery = .all) -> AsyncThrowingStream<Page<WebhookDelivery>, any Error> {
+        guard isBusiness else { return Self.failed(.webhooksNotInScope) }
+        guard let read = AppleRead.webhookDeliveries(id: id, query) else { return Self.failed(.notFound) }
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await self.walk(read, cursorPaging: true, linkagesOf: nil) { page, included in
+                        continuation.yield(Page(items: try Self.deliveries(page.items, included: included), number: page.number,
+                                                truncated: page.truncated, total: page.total))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// A page's deliveries, each with the event it names among `included`, compared by bytes.
+    static func deliveries(_ items: [Resource], included: [Resource]) throws -> [WebhookDelivery] {
+        guard included.allSatisfy({ $0.type.utf8.elementsEqual(WebhookEvent.resourceType.utf8) && !$0.id.isEmpty }) else {
+            throw AppleAPIError.malformed("included of type \(WebhookEvent.resourceType)")
+        }
+        return items.map { item in
+            let named = WebhookDelivery(resource: item).eventID
+            let event = named.flatMap { id in included.first { $0.id.utf8.elementsEqual(id.utf8) } }
+            return WebhookDelivery(resource: item, event: event.map(WebhookEvent.init))
+        }
+    }
+
     // MARK: Business only
 
-    /// School has no people, content, Apple MDM or audit endpoints (plan §2.4): asked of a School org, those reads throw
-    /// `.notInScope` before anything is built, so nothing is sent.
+    /// School has no people, content, Apple MDM, audit or webhook endpoints (plan §2.4): asked of a School org, those reads
+    /// throw `.notInScope` (`.webhooksNotInScope`) before anything is built, so nothing is sent.
     nonisolated var isBusiness: Bool { account.scope == .business }
 
     private func businessOnly(_ section: AppleSection) throws {
@@ -417,7 +466,7 @@ public actor AppleClient {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await self.walk(first, cursorPaging: cursorPaging, linkagesOf: type) { continuation.yield($0) }
+                    try await self.walk(first, cursorPaging: cursorPaging, linkagesOf: type) { page, _ in continuation.yield(page) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -427,7 +476,8 @@ public actor AppleClient {
         }
     }
 
-    private func walk(_ first: ReadRequest, cursorPaging: Bool, linkagesOf type: String?, _ yield: (Page<Resource>) -> Void) async throws {
+    /// `yield` is handed each page and the resources Apple included with it.
+    private func walk(_ first: ReadRequest, cursorPaging: Bool, linkagesOf type: String?, _ yield: (Page<Resource>, [Resource]) throws -> Void) async throws {
         var response = try await http.read(first, authorizer: broker)
         var number = 1
         // Every next page asked so far: one Apple gives again would walk the same pages to the cap.
@@ -441,7 +491,7 @@ public actor AppleClient {
             }
             let more = document.next != nil || document.nextCursor != nil
             let capped = more && number >= pageCap
-            yield(Page(items: items, number: number, truncated: capped, total: document.total))
+            try yield(Page(items: items, number: number, truncated: capped, total: document.total), document.included)
             guard more, !capped else { return }
             number += 1
             let repeated = AppleAPIError.malformed("a repeated cursor on \(first.template)")

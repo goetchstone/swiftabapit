@@ -76,6 +76,9 @@ struct AcceptancePassTests {
             mdmDevices: ok, 1 item · unknown values productFamily=Glasses
             mdmDevices/{id}/details: ok, 1 item · unknown keys batteryHealth · unknown values lostModeStatus=PENDING
             auditEvents: ok, 2 items · unknown keys eventDataFutureType · unknown values type=FUTURE_TYPE · unknown payload keys newField · the last day
+            webhooks: ok, 1 item · unknown values eventTypes=ORG_DEVICE_EXPLODED
+            webhooks/{id}: ok, 1 item · unknown values eventTypes=ORG_DEVICE_EXPLODED
+            webhooks/{id}/deliveries: ok, 1 item · unknown keys response.headers · unknown values deliveryState=RETRYING · unknown payload keys attributes.colour · the last day
             probe devices: ok
             probe mdm_servers: ok
             probe mdm_enrolled: ok
@@ -90,7 +93,7 @@ struct AcceptancePassTests {
             """, "\(report.text)")
         #expect(report.lines.allSatisfy { $0.status == .ok }, "\(report.text)")
         for data in ["secret-ish", "TESTD", "TESTNEW", "SVC", "Mosyle", "Jamf", "John", "UG123456", "OU789012", "361309726", "pkg-12345", "BP1",
-                     "Marketing", "config-12345", "MD1", "TESTMD", "E1", "A1"] {
+                     "Marketing", "config-12345", "MD1", "TESTMD", "E1", "A1", "WH1", "WD1", "p1", "hooks.example", "Device changes", "500"] {
             #expect(!report.text.contains(data), "\(data)")
         }
         // The configuration read alone is the custom setting, though a built-in one comes first.
@@ -98,8 +101,8 @@ struct AcceptancePassTests {
         #expect(harness.reads.contains { $0.contains("/v1/blueprints/BP1?include=apps%2Cpackages%2Cconfigurations%2CorgDevices%2Cusers%2CuserGroups") })
     }
 
-    /// The Phase 2 reads' lines in a pass, between Phase 1's eight and the probes.
-    static let businessLines = 25
+    /// The Business-only reads' lines in a pass, between Phase 1's eight and the probes: Phase 2's 25 and the webhooks' 3.
+    static let businessLines = 28
 
     /// One of everything Business-only, mostly Apple's own examples, each list with something this version doesn't know:
     /// a user's status, key and phone type, a group's type, an app's platform, a blueprint's status, a configuration's
@@ -142,6 +145,21 @@ struct AcceptancePassTests {
                 "eventDateTime": .string(recent), "type": .string("FUTURE_TYPE"), "eventDataPropertyKey": .string("eventDataFutureType"),
                 "eventDataFutureType": .object(["anything": .string("secret-ish")])]),
         ])
+        // A webhook subscribed to a type this version doesn't know; its delivery in a state it doesn't know, the receiver's
+        // answer with a key it doesn't read, the event's payload with an attribute its type doesn't document. The URL, the
+        // body and the payload hold the canary too.
+        stub.add([Resource(type: "webhooks", id: "WH1", attributes: [
+            "name": .string("Device changes"), "enabled": .bool(true), "url": .string("https://hooks.example.com/T0/secret-ish"),
+            "eventTypes": .array([.string("ORG_DEVICE_ATTRIBUTE_CHANGED"), .string("ORG_DEVICE_EXPLODED")])])])
+        stub.add([Resource(type: "webhookDeliveries", id: "WD1", attributes: [
+            "createdDateTime": .string(recent), "deliveryState": .string("RETRYING"), "redelivery": .bool(false),
+            "request": .object(["url": .string("https://hooks.example.com/T0/secret-ish")]),
+            "response": .object(["httpStatusCode": .number("500"), "body": .string("secret-ish"), "headers": .string("secret-ish")])],
+            relationships: ["event": .object(["data": .object(["type": .string("webhookEvents"), "id": .string("WE1")])])])])
+        stub.add([Resource(type: "webhookEvents", id: "WE1", attributes: [
+            "createdDateTime": .string(recent), "eventType": .string("ORG_DEVICE_ATTRIBUTE_CHANGED"), "isPingEvent": .bool(false),
+            "payload": .string(#"{"data":{"type":"orgDeviceAttributeChanged","id":"p1","version":1,"attributes":{"orgDeviceSerialNumber":"TESTD0000000","colour":"secret-ish"}}}"#)])])
+        stub.relate("webhooks", "WH1", "deliveries", to: ["WD1"])
     }
 
     /// Every unknown attribute name and enum value the pass looks for is reported (plan §7's purpose), the single
