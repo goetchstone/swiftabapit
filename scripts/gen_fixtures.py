@@ -520,6 +520,70 @@ def audit_edges() -> list[tuple[str, list[dict]]]:
             ("DEVICE_LIFECYCLE_EVENTS", events(one_stamp))]
 
 
+def mosyle_edges() -> dict:
+    """Hand-written, drawing nothing (so the drawn cases after them don't move): what the drawn fleets of the Mosyle reports
+    never reach. Reconciliation: serials joined after Python's strip() and upper() (an ideographic space, `ß` to `SS`, a
+    dotless i), a later device with the same key replacing an earlier one, NFC and NFD spellings as two serials, a
+    whitespace-only serial as none, Apple's falsy family or model giving way to Mosyle's, a null and a numeric status kept as
+    they came, code-point order, and rates that need Python's round (1/8, 3/16, 1/3, 2/3). Posture: a version spelled
+    Unknown, ties ordered by code points (`10.0` before `9.0`), NFC and NFD versions, an empty fleet, a 3/16 share. Stale:
+    exactly the threshold, a microsecond short of it, an offset, a naive date, a check-in ahead of now, unreadable dates
+    and equal ages in their input order. Timeline: equal dates in their input order, a missing type, falsy outcomes, and
+    title() over digits, `ß`, accents and a combining mark."""
+    def dev(serial, **attrs):
+        return {"type": "orgDevices", "id": serial, "attributes": attrs}
+    reconcile = [
+        ([dev("  c02abc\u3000", status="ASSIGNED", productFamily="", deviceModel=None, addedToOrgDateTime="2024-01-02"),
+          dev("C02ABC", status="UNASSIGNED", productFamily="", deviceModel="", addedToOrgDateTime="2025-01-02"),
+          dev("stra\u00dfe1", status=None), dev("C02\u00c9X", status="ASSIGNED", productFamily="Mac"), dev("\t"),
+          dev("Zeta"), dev("alpha"), dev("\u00e9clair"), dev("\u0131d", status="ASSIGNED")],
+         [dev("c02abc", status="enrolled", productFamily="Mac", deviceModel="Mac mini (M4)", osVersion="27.0",
+              lastCheckIn="2026-10-01", currentUser="kai@example.com"),
+          dev("STRASSE1", status="pending", productFamily="iPhone"), dev("C02E\u0301X", status=2), dev(""),
+          dev("ID", status="enrolled"), dev("id ", status="pending", osVersion=None), dev("beta"), dev("Beta")]),
+        ([], []),
+        ([dev(f"TIE{n:02}") for n in range(1, 11)], [dev(f"TIE{n:02}") for n in range(1, 4)] + [dev(f"TIEM{n:02}") for n in range(1, 7)]),
+        ([dev("ONE")], [dev("ONE")] + [dev(f"M{n}") for n in range(7)]),
+        ([dev("A1"), dev("A2")], [dev("A1")]),
+        ([dev("A1")], [dev("A1"), dev("A2")]),
+    ]
+    def mdev(serial, version=..., **attrs):
+        if version is not ...:
+            attrs["osVersion"] = version
+        return dev(serial, **attrs)
+    posture = [
+        [mdev("A", "Unknown"), mdev("B"), mdev("C", ""), mdev("D", "10.0"), mdev("E", "9.0"), mdev("F", "10.0"), mdev("G", "9.0"),
+         mdev("H", "Caf\u00e9"), mdev("I", "Cafe\u0301"), mdev("J", None)],
+        [],
+        [mdev(f"S{n}", "27.0" if n < 3 else "26.0") for n in range(16)],
+        [mdev("A", "1"), mdev("B", "2"), mdev("C", "3"), mdev("D", "4"), mdev("E", "5"), mdev("F", "6"), mdev("G", "7"), mdev("H", "7")],
+    ]
+    stale = [(
+        [dev("EDGE", lastCheckIn="2026-09-16T12:00:00Z"), dev("SHORT", lastCheckIn="2026-09-16T12:00:00.000001Z"),
+         dev("OFFSET", lastCheckIn="2026-09-16T17:30:00+05:30"), dev("NAIVE", lastCheckIn="2026-09-16"),
+         dev("AHEAD", lastCheckIn="2026-10-17T00:00:00Z"), dev("NEVER1"), dev("NEVER2", lastCheckIn=""),
+         dev("BAD", lastCheckIn="not a date"), dev("OLD1", lastCheckIn="2026-01-01T00:00:00Z"),
+         dev("OLD2", lastCheckIn="2026-01-01T06:00:00Z"), dev("NULL", lastCheckIn=None)], days)
+        for days in (0, 1, 30, 31)]
+    def event(type_=..., when=None, outcome=...):
+        attrs = {"eventDateTime": when}
+        if type_ is not ...:
+            attrs["type"] = type_
+        if outcome is not ...:
+            attrs["outcome"] = outcome
+        return {"type": "auditEvents", "id": f"evt-{when}", "attributes": attrs}
+    timeline = [
+        ({"orderDateTime": "2026-01-01", "addedToOrgDateTime": "2026-01-01"},
+         {"enrolledAt": "2026-01-01", "lastMdmCheckIn": "", "lastPush": None, "lastCheckIn": "2026-01-02"},
+         [event(when="2026-01-01"), event("DEVICE_ADDED_TO_ORG", "2026-01-01", None), event("IPHONE1X_ADDED", "2026-01-03", 0),
+          event("device_added", "2026-01-04", "  \u00b7 x \u00b7"), event("\u00c9V\u00c9NEMENT_\u00df", "2026-01-05", "SUCCESS"),
+          event("A_\u0301B", "2026-01-06", "FAILURE"), event("X", "2026-01-07", "\u00b7")]),
+        (None, None, None),
+        ({}, {}, []),
+    ]
+    return {"reconcile": reconcile, "posture": posture, "stale": stale, "timeline": timeline}
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
@@ -600,18 +664,29 @@ def gen_reports(m: dict) -> None:
             abm.append({"type": "orgDevices", "id": "", "attributes": {}})
         add("reconcile_enrollments", {"abm_devices": abm, "mosyle_devices": mosyle},
             lambda: reports.reconcile_enrollments(abm, mosyle))
+    for abm, mosyle in mosyle_edges()["reconcile"]:
+        add("reconcile_enrollments", {"abm_devices": abm, "mosyle_devices": mosyle},
+            lambda: reports.reconcile_enrollments(abm, mosyle))
     for _ in range(20):
         abm = device(rng)["attributes"] if rng.random() < 0.8 else None
         mosyle = mosyle_like(rng)["attributes"] if rng.random() < 0.8 else None
         events = audit_events(rng, rng.randint(0, 5)) if rng.random() < 0.7 else None
         add("device_timeline", {"abm_attrs": abm, "mosyle_attrs": mosyle, "audit_events": events},
             lambda: reports.device_timeline(abm, mosyle, events))
+    for abm, mosyle, events in mosyle_edges()["timeline"]:
+        add("device_timeline", {"abm_attrs": abm, "mosyle_attrs": mosyle, "audit_events": events},
+            lambda: reports.device_timeline(abm, mosyle, events))
     for _ in range(15):
         devices = [mosyle_like(rng) for _ in range(rng.randint(0, 30))]
+        add("mosyle_os_breakdown", {"devices": devices}, lambda: reports.mosyle_os_breakdown(devices))
+    for devices in mosyle_edges()["posture"]:
         add("mosyle_os_breakdown", {"devices": devices}, lambda: reports.mosyle_os_breakdown(devices))
     for _ in range(15):
         devices = [mosyle_like(rng) for _ in range(rng.randint(0, 25))]
         days = rng.choice([0, 7, 30, 90])
+        add("mosyle_stale_devices", {"devices": devices, "days": days},
+            lambda: reports.mosyle_stale_devices(devices, days, now=FIXED_NOW))
+    for devices, days in mosyle_edges()["stale"]:
         add("mosyle_stale_devices", {"devices": devices, "days": days},
             lambda: reports.mosyle_stale_devices(devices, days, now=FIXED_NOW))
     for value in ["2024-03-01T10:00:00Z", "2024-03-01T10:00:00.123Z", "2024-03-01T10:00:00+00:00",
