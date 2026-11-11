@@ -52,6 +52,9 @@ The draft's Google Workspace phases are **dropped**, because SwiftGamGui owns Wo
 
 ### 0.1 Locked (do not revisit without the operator)
 
+Proposed by the plan's author and accepted with the plan as a whole, not asked one by one; §0.2 holds what the
+operator answered. The operator can overrule any of them. L8 confirmed by the operator for now (2026-11-07).
+
 | # | Decision | Why |
 |---|---|---|
 | L1 | Native SwiftUI app, **macOS 27.0 only**, Swift 6 language mode, Xcode 27 | macOS only; no `#available` branches |
@@ -250,9 +253,9 @@ These rows follow D4. The full matrix is in Appendix C.
 ### 2.4 Not offered by the APIs (don't build; watch for these)
 
 - **Apple**:
-  - no webhooks or notifications;
+  - no webhooks or notifications before Business 2.8 (2026-11-04; §8.0);
   - no `sort`;
-  - no filters on lists other than audit;
+  - no filters on lists other than audit before Business 2.7 and School 1.8 (2026-10-29), which added them to the device list;
   - **no user or group writes** (WWDC26 session 206 announced them, but the docs at 2.6 are read-only);
   - no subscription or AppleCare+ plan management (only audit events and `paymentType`);
   - app subscription licensing is "coming later";
@@ -935,6 +938,45 @@ Sizes are changed lines, excluding generated fixtures and contract JSON. Calibra
 | 10 | Docs, distribution prep, abapit retirement | 200–400 | all |
 | **Total** | | **~13k–18k** | |
 
+### 8.0 Build order (operator, 2026-11-07)
+
+This order replaces the numeric one; the phase numbers stay as names. Most of what this app is for reads data, so
+reads, and what they reveal, come before writes.
+
+1. **The live checks** (S1's team build, the operator): nothing has yet read a real tenant.
+2. **Contract update to Business 2.8 and School 1.8**: the device list's `cursor` and filters, the three webhook reads,
+   the new audit values.
+3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.
+4. **Phase 3, plus Needs attention** (below).
+5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
+6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9, and the webhook writes. Phase 4 still stops for the operator's
+   answers in the write-path design.
+7. **Phase 10.**
+
+**Needs attention** (new): work that should have been done and hasn't.
+
+- Deterministic rules in `Reports`, tested like every report. A model never decides what's overdue: it can be
+  unavailable, and a wrong "nothing's overdue" fails silently (invariant 8). It explains and summarises what the rules found.
+- Rules over what's read: assigned to an MDM service but missing from that MDM; in the MDM but not in Apple; AppleCare
+  expiring; no check-in for N days; FileVault or the firewall off; Activation Lock blocking a redeploy; a quiet service;
+  a migration deadline near. A rule that needs Mosyle says so for an org without it, and is skipped.
+- Stored: only what can't be read again, which is when a finding first appeared and whether it was dismissed or snoozed.
+- Notifications are opt-in and run through D5's unattended read-only key. They carry counts, never serials or names.
+- Thresholds are local settings.
+
+**Webhooks** (Business 2.8): L2 stands, so the app doesn't receive them.
+
+- Proposed: poll `GET /v1/webhooks/{id}/deliveries?include=event` as a change feed, and re-read only the devices named.
+- Live check: how long Apple keeps deliveries, and what it does when a URL keeps failing.
+- The URL is the operator's own and lives only in local settings. Events carry serials, so never a third party's URL.
+- `secret` is write-only at Apple, and the app doesn't keep it. A URL is masked as a package's location is.
+- Writes go with Phase 5, through the preview, which shows the destination.
+
+**Other tools**: Google stays its own tool (SwiftGamGui). A total picture later joins on serial and email through
+read-only exports, and no tool holds another's keys.
+
+**Public repos**: no business info. No org names, tenant data or org-specific rules; anything org-specific is a local setting.
+
 ### 8.1 Parallel tracks and file ownership
 
 After Phase 1 merges, three tracks can run, each in its own `git worktree`:
@@ -942,7 +984,7 @@ After Phase 1 merges, three tracks can run, each in its own `git worktree`:
 - **Track A** (Apple reads): 2 → 3 → 6.
 - **Track B** (writes): 4 → 5 (after 2) → 8 (after 7).
 - **Track C** (Mosyle): 7.
-- Phase 9 waits for 2, 4 and 7.
+- Phase 9's read-only part waits for 2 and 7; its write-shaped drafts wait for 4.
 
 Shared files are **serialized**: `App/AbapitApp.swift` (sidebar, routing), `AppModels/Navigation.swift` (the
 `SidebarItem` enum, since Phase 2b: there `swift test` holds its scope rule), `App/AppServices.swift`,
