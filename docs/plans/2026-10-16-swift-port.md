@@ -963,10 +963,11 @@ reads, and what they reveal, come before writes.
    (custom attributes and the admin log's answers have none, so they are read loudly and named fields not read are said);
    `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
    reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
-   half, a per-org pair and the Mosyle org editor in Settings; the demo's Mosyle org. Decisions the session proposed, not
-   the operator's (in the PR): the pair is chosen on the Apple org and only the active org's pair is read; a Mosyle org's
-   sidebar is Mosyle and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only
-   over lists read whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
+   half and the demo's paired Mosyle org. Reachable only in the demo until the next PR: the Mosyle org editor and the pair
+   picker in Settings (split off by the parent session, for a credential review of its own). Decisions the session
+   proposed, not the operator's (in the PR): only the active Apple org's pair is read; a Mosyle org's sidebar is Mosyle
+   and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
+   whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
 4. **Phase 3, plus Needs attention** (below).
 5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
 6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9, and the webhook writes. Phase 4 still stops for the operator's

@@ -27,7 +27,7 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   `mosyle_os_breakdown`, `mosyle_stale_devices` and `device_timeline` (`MergedTimeline`), held to the reports golden; the
   Mosyle and reconciliation CSV columns.
 - `Packages/AbapitApp/Sources/AppModels/{MosyleModel,ReconciliationModel}.swift`, `DeviceDetailModel.mosyleSide`,
-  `OrgsModel` (`mosyleOrg`, `mosyleClient`, `pair`, `saveMosyle`); `App/Screens/{MosyleView,ReconciliationView,MosyleOrgEditor}.swift`;
+  `OrgsModel` (`mosyleOrg`, `mosyleUnavailable`, `mosyleClient`); `App/Screens/{MosyleView,ReconciliationView}.swift`;
   `TestSupport/DemoMosyle.swift`.
 - Tests: `MosyleModelsTests` (parity); `MosyleTests`: `MosyleClientTests` and `MosyleSessionTests` (the happy paths),
   `MosyleFailureTests` (every failure the client handles), `MosyleLoginTests` (the login's failures, single flight, the
@@ -109,10 +109,12 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
 
 ## Screens (step 3)
 - **Which Mosyle org**: `OrgsModel.mosyleOrg`, the active org when it is a Mosyle org, else the org the active Apple org is
-  paired with (defect 17: chosen in Settings, never the first one found). An Apple org with no pair, a pair that is gone or
-  one that isn't Mosyle says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle list, the reconciliation and
-  Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`). A new pair for the
-  active org, or removing the paired org, is an org switch: every screen reads again. A Mosyle org's sidebar is Mosyle and
+  paired with (defect 17: chosen by the operator, never the first one found; the profile's `paired_org`). An Apple org with no
+  pair, a pair that is gone or one that isn't Mosyle says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle
+  list, the reconciliation and Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`).
+  Removing the paired org is an org switch: every screen reads again. **Reachable only in the demo** until the Mosyle org
+  editor and the pair picker land (the next PR, a split the parent session chose for review focus): this version can't add
+  a Mosyle org or choose a pair in Settings. A Mosyle org's sidebar is Mosyle and
   Settings (`SidebarItem.mosyleSections`); Apple's screens say they don't read it.
 - **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows; the devices first,
   since the device groups' members, the OS versions, the stale devices, the reconciliation and Device 360 all count that
@@ -126,9 +128,8 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
 - **Device 360** (`DeviceDetailModel.mosyleSide`): the shown serial found in the Mosyle read as abapit's `_find_serial`
   found it (stripped, upper-cased), else "not enrolled there", or "not among the N read" when the list was cut; the
   dates from both sources (`bothTimeline`).
-- **Settings**: Add › Mosyle Business, the editor's credentials stored as one set (`saveMosyle`, checked before any Keychain
-  write, an Add's id reserved and never one the Keychain still holds); an edit keeps them unless all are given again, an
-  empty Logs Stream token then clearing a stored one (defect 14). A pair is chosen on the Apple org.
+- **Settings** (the next PR): adding and editing a Mosyle Business org, its credentials one Keychain set under the Apple
+  key's rules (L4, defect 10), and the pair picker. Here Settings only names a Mosyle org's provider in its list.
 - **Not done here**: the Logs Stream drain and `LogsStore` (Phase 3's store), the snapshot collectors (defect 6), the
   server-side device filters (`serial_numbers[]` and the rest: Device 360 reads the one device list instead).
 

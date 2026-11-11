@@ -53,7 +53,7 @@ struct MosyleScreenTests {
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         try await world.orgs.remove("m", deleteSecrets: true)
-        #expect(world.orgs.mosyleUnavailable?.why == Self.notPaired && world.orgs.pairable(with: "a").isEmpty)
+        #expect(world.orgs.mosyleUnavailable?.why == Self.notPaired && world.orgs.store["a"]?.pairedOrg == "")
         #expect(world.mosyle.devices.rows.isEmpty && world.mosyle.devices.state == .notInScope(Self.notPaired))
         // A pair naming an org that isn't there (a profile written elsewhere), or one that isn't Mosyle.
         var dangling = World.profile("a")
@@ -109,28 +109,25 @@ struct MosyleScreenTests {
         #expect(world.reconciliation.note == "Reconciliation runs from an Apple organization paired with a Mosyle Business one.")
     }
 
-    /// An org switch, or a new pair for the active org, drops everything the old Mosyle org read, selections included, and
-    /// reads again if the screen was showing.
-    @Test func aSwitchOrANewPairClearsMosyleAndReadsAgain() async throws {
+    /// An org switch drops everything the old Mosyle org read, selections included, and reads again if the screen was
+    /// showing: the new org's Mosyle, or its sentence. (Choosing a pair in Settings, which is an org switch too, arrives
+    /// with the Mosyle org editor.)
+    @Test func anOrgSwitchClearsMosyleAndReadsAgain() async throws {
         let world = try await World.make(mosyle: true)
         world.mosyleStub.add(devices: [Self.device("MAC1")], os: "mac")
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         world.mosyle.selectedDevice = "MAC1"
-        try world.orgs.pair("a", with: nil)
-        #expect(world.mosyle.devices.rows.isEmpty && world.mosyle.selectedDevice == nil)
-        #expect(world.mosyle.devices.state == .notInScope(Self.notPaired))
-        try world.orgs.pair("a", with: "m")
-        #expect(world.mosyle.devices.state.isLoading)
-        await eventually("devices again") { Self.loaded(world.mosyle.devices.state) }
+        world.mosyle.tab = .users
+        await eventually("users") { Self.loaded(world.mosyle.users.state) }
         world.orgs.select("b")
-        #expect(world.mosyle.devices.rows.isEmpty)
+        #expect(world.mosyle.devices.rows.isEmpty && world.mosyle.selectedDevice == nil && world.mosyle.users.rows.isEmpty)
         #expect(world.mosyle.devices.state == .notInScope(Self.notPaired.replacingOccurrences(of: "Org a", with: "Org b")))
-        // Only an org of the other provider is a pair.
-        #expect(throws: OrgsModel.SaveFailure.refused("Org a can be paired only with an organization of the other provider.")) {
-            try world.orgs.pair("a", with: "b")
-        }
-        #expect(world.orgs.pairable(with: "a").map(\.id) == ["m"] && world.orgs.pairable(with: "m").map(\.id) == ["a", "b"])
+        #expect(world.mosyle.users.state == .notInScope(Self.notPaired.replacingOccurrences(of: "Org a", with: "Org b")))
+        world.orgs.select("a")
+        #expect(world.mosyle.devices.state.isLoading && world.mosyle.users.state.isLoading)
+        await eventually("devices again") { Self.loaded(world.mosyle.devices.state) && Self.loaded(world.mosyle.users.state) }
+        #expect(world.mosyle.devices.rows.map(\.serial) == ["MAC1"])
     }
 
     /// A read a Refresh superseded writes nothing, its held page included.
