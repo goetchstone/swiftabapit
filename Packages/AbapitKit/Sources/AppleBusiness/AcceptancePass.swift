@@ -3,7 +3,7 @@ import Foundation
 import HTTPCore
 import JSONAPI
 
-/// The read-only acceptance pass (plan §7): every read this phase makes, against the org, reporting per
+/// The read-only acceptance pass (plan §7): every read this app makes, against the org, reporting per
 /// resource whether it ran and fully succeeded, how many items, and which attribute names and enum values this
 /// version doesn't know. It reports Apple's field names and enum values (each only when it is a word), statuses, counts,
 /// error codes (only when code-shaped) and documented parameter names, and this app's own words, never an item's data
@@ -206,8 +206,9 @@ extension AppleClient {
     /// Each Business-only list, whole, with what this version doesn't know of its items; then the first item of each read
     /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint with every
     /// relationship included, and each relationship's own list; a configuration, a custom setting when there is one; an
-    /// Apple-managed device's details), and the last day's audit events, cursor by cursor. A School org has none of these:
-    /// each line says so, and nothing is sent.
+    /// Apple-managed device's details), the last day's audit events, cursor by cursor, and the webhooks, the first read
+    /// alone with its last day's deliveries and their events. A School org has none of these: each line says so, and
+    /// nothing is sent.
     private func businessChecks(now: Date) async -> [AcceptanceReport.Line] {
         let school = isBusiness ? nil : "not in Apple School Manager's API"
         var lines: [AcceptanceReport.Line] = []
@@ -304,7 +305,49 @@ extension AppleClient {
             }
             found.note = (problems + ["the last day"]).joined(separator: " · ")
         })
+        let webhooks = await listCheck("webhooks", unless: school, { self.webhooks() }) { webhook, found in
+            for type in webhook.eventTypes ?? [] { found.unknown("eventTypes", type) }
+        }
+        lines.append(webhooks.line)
+        lines.append(await detailCheck("webhooks/{id}", webhooks, "webhook", unless: school, { try await self.webhook($0) }) { webhook, found in
+            for type in webhook.eventTypes ?? [] { found.unknown("eventTypes", type) }
+        })
+        lines.append(await deliveryCheck(webhooks, unless: school, now: now))
         return lines
+    }
+
+    /// The first webhook's deliveries over the last day, each with the event it sent, cursor by cursor: what this version
+    /// doesn't know of a delivery, its request and response (`request.`, `response.`), its event (`event.`) and the
+    /// event's payload (`payload.`, `attributes.`, `relationships.`), and what didn't come, each with a count (an event
+    /// named and not included, a delivery naming none, a request or response that isn't an object, a payload that can't be
+    /// read). Never a URL, a body, an error message or a payload: only their vocabulary, as words.
+    private func deliveryCheck(_ list: (line: AcceptanceReport.Line, items: [Webhook]), unless skip: String?, now: Date) async -> AcceptanceReport.Line {
+        await Self.check("webhooks/{id}/deliveries", unless: skip ?? (list.items.isEmpty ? Self.none("webhook to read", list.line) : nil)) { found in
+            var deliveries: [WebhookDelivery] = []
+            for try await page in self.webhookDeliveries(try Self.sendable(list.items[0].id), try WebhookDeliveryQuery.last(days: 1, now: now)) {
+                deliveries += try Self.typed(page.items)
+                found.count = deliveries.count
+                found.cut(page)
+            }
+            let events = try Self.typed(deliveries.compactMap(\.event))
+            found.keys = Set(deliveries.flatMap(\.unreadAttributes))
+            found.unread(deliveries.flatMap(\.unreadNested) + events.flatMap { $0.unreadAttributes.map { NestedKey(attribute: "event", key: $0) } })
+            found.unread(events.compactMap(\.payload).flatMap(\.unreadKeys), payload: true)
+            for delivery in deliveries { found.unknown("deliveryState", delivery.state) }
+            for event in events {
+                found.unknown("eventType", event.eventType)
+                found.unknown("payloadType", event.payload?.type)
+            }
+            func counted(_ what: String, _ count: Int, _ noun: (one: String, many: String)) -> String? {
+                count == 0 ? nil : "\(what) in \(count) \(count == 1 ? noun.one : noun.many)"
+            }
+            let delivery = ("delivery", "deliveries"), event = ("event", "events")
+            let said = [counted("event not included", deliveries.count { $0.eventID != nil && $0.event == nil }, delivery),
+                        counted("no event named", deliveries.count { $0.eventID == nil }, delivery)]
+                + ["request", "response"].map { field in counted("\(field) not an object", deliveries.count { $0.misreadObjects.contains(field) }, delivery) }
+                + WebhookEvent.PayloadProblem.allCases.map { problem in counted(problem.rawValue, events.count { $0.payloadProblem == problem }, event) }
+            found.note = (said.compactMap { $0 } + ["the last day"]).joined(separator: " · ")
+        }
     }
 
     /// A list's line and its items: every page, each item of `View`'s type, what the page cap cut, and the attribute names
@@ -542,7 +585,7 @@ extension AppleClient {
         case AppleAPIError.vault(let guidance): (.error("error keychain"), guidance)
         case AppleAPIError.wrongHost: (.error("error wrong host"), nil)
         // Never sent: the read isn't in the org's API.
-        case AppleAPIError.notInScope: (.skipped("not in Apple School Manager's API"), nil)
+        case AppleAPIError.notInScope, AppleAPIError.webhooksNotInScope: (.skipped("not in Apple School Manager's API"), nil)
         case let error as AppleAPIError: (.error(probeStatus(error)), nil)
         case is CancellationError: (.error("error cancelled"), nil)
         default: (.error("error \(type(of: error))"), nil)
@@ -588,7 +631,12 @@ extension AppleClient {
         "limit[users]", "fields[activationLockStatus]", "fields[appleCareCoverage]", "fields[apps]", "fields[auditEvents]",
         "fields[blueprints]", "fields[configurations]", "fields[mdmDeviceDetails]", "fields[mdmDevices]", "fields[mdmServers]",
         "fields[orgDeviceActivities]", "fields[orgDevices]", "fields[organizationalUnits]", "fields[packages]", "fields[userGroups]",
-        "fields[users]", "filter[actorId]", "filter[endTimestamp]", "filter[startTimestamp]", "filter[subjectId]", "filter[type]",
+        "fields[users]", "fields[webhookDeliveries]", "fields[webhookEvents]", "fields[webhooks]", "filter[actorId]",
+        "filter[addedToOrgDateTime]", "filter[addedToOrgDateTime][GT]", "filter[addedToOrgDateTime][GTE]", "filter[addedToOrgDateTime][LT]",
+        "filter[addedToOrgDateTime][LTE]", "filter[createdDateTimeAtBefore]", "filter[createdDateTimeAtOrAfter]", "filter[deliveryState]",
+        "filter[endTimestamp]", "filter[orderDateTime]", "filter[orderDateTime][GT]", "filter[orderDateTime][GTE]", "filter[orderDateTime][LT]",
+        "filter[orderDateTime][LTE]", "filter[orderNumber]", "filter[productFamily]", "filter[purchaseSourceType]", "filter[serialNumber]",
+        "filter[startTimestamp]", "filter[status]", "filter[subjectId]", "filter[type]",
     ]
 
     private static let lowercase = Set("abcdefghijklmnopqrstuvwxyz".utf8), uppercase = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ".utf8)

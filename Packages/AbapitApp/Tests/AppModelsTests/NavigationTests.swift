@@ -187,6 +187,8 @@ struct ScaffoldTests {
     @Test func aReadsErrorBecomesItsState() {
         #expect(LoadState(after: AppleAPIError.forbidden(code: nil)) == .forbidden)
         #expect(LoadState(after: AppleAPIError.notInScope(.users)) == .notInScope("Apple School Manager's API has no users to read."))
+        // The webhooks, no section yet, say it in the same words (the contract-2.8 review's L4: they read as failed).
+        #expect(LoadState(after: AppleAPIError.webhooksNotInScope) == .notInScope("Apple School Manager's API has no webhooks to read."))
         #expect(LoadState(after: AppleAPIError.server(status: 503)) == .failed("Apple's service failed (HTTP 503). Try again later."))
         #expect(!LoadState.notInScope("x").isLoading)
     }

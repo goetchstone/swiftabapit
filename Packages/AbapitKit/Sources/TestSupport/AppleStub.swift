@@ -26,8 +26,11 @@ import Wire
 ///   `mdmDevices/{id}`) and any School read of a Business-only collection are unhandled.
 /// - The Business-only reads serve what `add(_:)`, `relate(_:_:_:to:)` and `setDetails(_:_:)` hold: the configuration
 ///   list sends a custom setting's profile as null, a blueprint lists the members it was asked to include up to
-///   `limit[<name>]` and includes their resources, and the audit log requires its range and really filters by it, the
-///   types, the actor and the subject.
+///   `limit[<name>]` and includes their resources, the audit log requires its range and really filters by it, the
+///   types, the actor and the subject, and a webhook's deliveries are the `webhookDeliveries` that `relate("webhooks",
+///   id, "deliveries", to:)` names, filtered by creation and state, each page's `webhookEvents` included once.
+/// - The device list really filters by its fifteen filters (2.7), and refuses a value outside a filter's described list or
+///   a date that isn't ISO 8601 (`described`, `dateFilters`, written out from the contract's text).
 /// - Failures can be queued: 401 once, 403 for a section, 429 with or without `Retry-After`, any status or body for a
 ///   path (`queue`, which may go on into the query: `/v1/blueprints/B1?include=` fails only the read that includes);
 ///   a blueprint read whose include names a forbidden collection is refused (`refuseIncludes(with:)`, 400 by default,
@@ -263,11 +266,12 @@ public final class AppleStub: Transport, Sendable {
         // The endpoint Apple documents for this path, or none: `mdmDevices/{id}` (abapit's read) is unhandled.
         let template = "/v1/" + ([segments[1]] + (segments.count > 2 ? ["{id}"] + segments.dropFirst(3) : [])).joined(separator: "/")
         guard Self.parameters[template] != nil else { throw StubFailure.unhandled("GET \(path)") }
-        if let bad = Self.check(query, template: template) { return bad }
+        if let bad = Self.check(query, template: template) ?? Self.checkDescribed(query, template: template) { return bad }
         let id = segments.count > 2 ? segments[2] : ""
         switch template {
         case "/v1/orgDevices":
-            return page(state.withLock { $0.devices }, url: url, query: query, host: host)
+            // Apple filters (2.7): the stub really does, then pages what is left by cursor.
+            return page(state.withLock { $0.devices }.filter { Self.matches($0, query) }, url: url, query: query, host: host)
         case "/v1/orgDevices/{id}":
             guard let device = state.withLock({ $0.devices.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": device.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
@@ -329,6 +333,19 @@ public final class AppleStub: Transport, Sendable {
             guard collection(segments[1]).contains(where: { $0.id == id }) else { return Self.notFound(path) }
             let ids = state.withLock { $0.members["\(segments[1])/\(id)/\(segments[4])"] ?? [] }
             return page(ids.map { Resource(type: segments[4], id: $0) }, url: url, query: query, host: host, linkagesOnly: true)
+        case "/v1/webhooks/{id}/deliveries":
+            // A webhook's deliveries (2.8): those `relate("webhooks", id, "deliveries", to:)` names, in that order, filtered by
+            // creation and state as Apple filters, paged by cursor, each page's events included when `include=event`.
+            guard collection("webhooks").contains(where: { $0.id == id }) else { return Self.notFound(path) }
+            let named = state.withLock { $0.members["webhooks/\(id)/deliveries"] ?? [] }
+            let held = collection("webhookDeliveries"), events = collection("webhookEvents")
+            let deliveries = named.compactMap { delivery in held.first { $0.id == delivery } }.filter { Self.delivered($0, query) }
+            return page(deliveries.map(Self.withRelationships), url: url, query: query, host: host) { slice in
+                // Each event once, in the order the page first names it.
+                var named: [String] = []
+                for event in slice.compactMap({ $0["relationships"]?["event"]?["data"]?["id"]?.string }) where !named.contains(event) { named.append(event) }
+                return named.compactMap { event in events.first { $0.id == event } }
+            }
         case "/v1/mdmDevices/{id}/details":
             // Assumed: a device with no details on record answers 404 (check live).
             guard let details = state.withLock({ $0.details[id] }) else { return Self.notFound(path) }
@@ -413,6 +430,60 @@ public final class AppleStub: Transport, Sendable {
         return page(events, url: url, query: query, host: host)
     }
 
+    /// Whether `device` passes every device filter `query` holds: each a list of values one of which it must have (by
+    /// bytes), each date filter its instants and bounds. Every filter narrows the others (assumed: check live). A device
+    /// without the attribute a filter names passes none of it.
+    private static func matches(_ device: Resource, _ query: [String: String]) -> Bool {
+        let attributes = device.attributes
+        func value(_ attribute: String) -> String? { attributes[attribute]?.string ?? (attribute == "serialNumber" ? device.id : nil) }
+        func listed(_ attribute: String) -> Bool {
+            guard let asked = query["filter[\(attribute)]"] else { return true }
+            guard let value = value(attribute) else { return false }
+            return asked.split(separator: ",", omittingEmptySubsequences: false).contains { $0.utf8.elementsEqual(value.utf8) }
+        }
+        func dated(_ attribute: String) -> Bool {
+            let name = "filter[\(attribute)]"
+            let asked = [name, name + "[GT]", name + "[GTE]", name + "[LT]", name + "[LTE]"].filter { query[$0] != nil }
+            guard !asked.isEmpty else { return true }
+            guard let when = instant(value(attribute)) else { return false }
+            for parameter in asked {
+                let dates = (query[parameter] ?? "").split(separator: ",").compactMap { instant(String($0)) }
+                let holds = switch parameter.dropFirst(name.count) {
+                case "[GT]": dates.allSatisfy { when > $0 }
+                case "[GTE]": dates.allSatisfy { when >= $0 }
+                case "[LT]": dates.allSatisfy { when < $0 }
+                case "[LTE]": dates.allSatisfy { when <= $0 }
+                default: dates.contains(when)
+                }
+                if !holds { return false }
+            }
+            return true
+        }
+        return ["serialNumber", "status", "productFamily", "purchaseSourceType", "orderNumber"].allSatisfy(listed)
+            && ["addedToOrgDateTime", "orderDateTime"].allSatisfy(dated)
+    }
+
+    /// Whether `delivery` passes the deliveries' filters: created at or after `filter[createdDateTimeAtOrAfter]`, before
+    /// `filter[createdDateTimeAtBefore]`, in one of `filter[deliveryState]`'s states. A delivery with no creation time
+    /// passes no date filter.
+    private static func delivered(_ delivery: Resource, _ query: [String: String]) -> Bool {
+        let created = instant(delivery.attributes["createdDateTime"]?.string)
+        if let from = instant(query["filter[createdDateTimeAtOrAfter]"]), !(created.map { $0 >= from } ?? false) { return false }
+        if let to = instant(query["filter[createdDateTimeAtBefore]"]), !(created.map { $0 < to } ?? false) { return false }
+        if let states = query["filter[deliveryState]"] {
+            guard let state = delivery.attributes["deliveryState"]?.string else { return false }
+            return states.split(separator: ",").contains { $0.utf8.elementsEqual(state.utf8) }
+        }
+        return true
+    }
+
+    /// A resource as Apple sends one in a list, its relationships with it (`Resource.asJSON`, abapit's item, has none).
+    private static func withRelationships(_ resource: Resource) -> JSONValue {
+        guard case .object(var object) = resource.asJSON else { return resource.asJSON }
+        if !resource.relationships.isEmpty { object["relationships"] = .object(resource.relationships) }
+        return .object(object)
+    }
+
     private static func instant(_ text: String?) -> Date? {
         guard let text else { return nil }
         let format = ISO8601DateFormatter()
@@ -429,7 +500,8 @@ public final class AppleStub: Transport, Sendable {
              host: host)
     }
 
-    private func page(_ items: [JSONValue], url: URL, query: [String: String], host: APIHost, included: [Resource]? = nil) -> (Int, [String: String], Data) {
+    private func page(_ items: [JSONValue], url: URL, query: [String: String], host: APIHost, included: [Resource]? = nil,
+                      including: ((ArraySlice<JSONValue>) -> [Resource])? = nil) -> (Int, [String: String], Data) {
         let limit = query["limit"].flatMap(Int.init) ?? 100
         let start: Int
         if let cursor = query["cursor"] {
@@ -456,6 +528,8 @@ public final class AppleStub: Transport, Sendable {
         if state.withLock({ $0.reportsTotal }) { paging["total"] = .number(String(items.count)) }
         var body: JSONObject = ["data": .array(Array(slice)), "links": .object(links), "meta": .object(["paging": .object(paging)])]
         if let included, query["include"] != nil { body["included"] = .array(included.map(\.asJSON)) }
+        // What this page's items name, when the read asks for it.
+        if let including, query["include"] != nil { body["included"] = .array(including(slice).map(\.asJSON)) }
         return (200, [:], Self.json(body))
     }
 
@@ -467,7 +541,7 @@ public final class AppleStub: Transport, Sendable {
     /// that leaves the limit out sees its blueprints cut (check live).
     public static let includeLimit = 10
 
-    /// Every GET's query parameters, written out from Contracts/apple/business-2.6.json (School's are the same where it has
+    /// Every GET's query parameters, written out from Contracts/apple/business-2.8.json (School's are the same where it has
     /// the endpoint), never from the client: each name, and the values it allows when the contract lists them. `limit` and
     /// `limit[…]` take 1 to 1000 (the contract's `maximum`). `AppleStubTests` holds the table to both contracts.
     public static let parameters: [String: [String: [String]?]] = [
@@ -496,7 +570,7 @@ public final class AppleStub: Transport, Sendable {
                 "eventDataBatchPasswordResetInitiated", "eventDataExternalAccountInvited", "eventDataAccountImageSet",
                 "eventDataAccountImageReplaced", "eventDataAccountImageRemoved", "eventDataIdpCreated", "eventDataIdpUpdated", "eventDataIdpDeleted",
                 "eventDataIdpAccountSyncEnabled", "eventDataIdpAccountSyncDisabled", "eventDataAppleServicesSettingsUpdated",
-                "eventDataAccountPasswordChanged"
+                "eventDataAccountPasswordChanged", "eventDataWebhookCreated", "eventDataWebhookUpdated", "eventDataWebhookDeleted"
             ],
             "filter[actorId]": nil,
             "filter[endTimestamp]": nil,
@@ -513,7 +587,8 @@ public final class AppleStub: Transport, Sendable {
                 "API_ACCOUNT_KEY_GENERATED", "API_ACCOUNT_ROLE_LOCATION_CHANGED", "API_ACCOUNT_NAME_CHANGED", "ROLE_CREATED", "ROLE_UPDATED",
                 "TERMS_ACCEPTED", "DOMAIN_FEDERATION_ENABLED", "DOMAIN_FEDERATION_DISABLED", "BATCH_PASSWORD_RESET_INITIATED",
                 "EXTERNAL_ACCOUNT_INVITED", "ACCOUNT_IMAGE_SET", "ACCOUNT_IMAGE_REPLACED", "ACCOUNT_IMAGE_REMOVED", "IDP_CREATED", "IDP_UPDATED",
-                "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "APPLE_SERVICES_SETTINGS_UPDATED", "ACCOUNT_PASSWORD_CHANGED"
+                "IDP_DELETED", "IDP_ACCOUNT_SYNC_ENABLED", "IDP_ACCOUNT_SYNC_DISABLED", "APPLE_SERVICES_SETTINGS_UPDATED", "ACCOUNT_PASSWORD_CHANGED",
+                "WEBHOOK_CREATED", "WEBHOOK_UPDATED", "WEBHOOK_DELETED"
             ],
             "limit": nil,
         ],
@@ -600,11 +675,27 @@ public final class AppleStub: Transport, Sendable {
             "fields[orgDeviceActivities]": ["status", "subStatus", "createdDateTime", "completedDateTime", "downloadUrl"],
         ],
         "/v1/orgDevices": [
+            "cursor": nil,
             "fields[orgDevices]": [
                 "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
                 "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid", "purchaseSourceId",
                 "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "assignedServer", "appleCareCoverage"
             ],
+            "filter[addedToOrgDateTime]": nil,
+            "filter[addedToOrgDateTime][GT]": nil,
+            "filter[addedToOrgDateTime][GTE]": nil,
+            "filter[addedToOrgDateTime][LT]": nil,
+            "filter[addedToOrgDateTime][LTE]": nil,
+            "filter[orderDateTime]": nil,
+            "filter[orderDateTime][GT]": nil,
+            "filter[orderDateTime][GTE]": nil,
+            "filter[orderDateTime][LT]": nil,
+            "filter[orderDateTime][LTE]": nil,
+            "filter[orderNumber]": nil,
+            "filter[productFamily]": nil,
+            "filter[purchaseSourceType]": nil,
+            "filter[serialNumber]": nil,
+            "filter[status]": nil,
             "limit": nil,
         ],
         "/v1/orgDevices/{id}": [
@@ -668,17 +759,76 @@ public final class AppleStub: Transport, Sendable {
                 "costCenter", "division", "department", "jobTitle", "startDateTime", "createdDateTime", "updatedDateTime", "phoneNumbers"
             ],
         ],
+        "/v1/webhooks": [
+            "cursor": nil,
+            "fields[webhooks]": ["name", "enabled", "eventTypes", "url", "createdDateTime", "updatedDateTime", "deliveries"],
+            "limit": nil,
+        ],
+        "/v1/webhooks/{id}": [
+            "fields[webhooks]": ["name", "enabled", "eventTypes", "url", "createdDateTime", "updatedDateTime", "deliveries"],
+        ],
+        "/v1/webhooks/{id}/deliveries": [
+            "cursor": nil,
+            "fields[webhookDeliveries]": ["createdDateTime", "deliveryState", "errorMessage", "redelivery", "sentDateTime", "request", "response", "event"],
+            "fields[webhookEvents]": ["eventType", "payload", "isPingEvent", "createdDateTime"],
+            "filter[createdDateTimeAtBefore]": nil,
+            "filter[createdDateTimeAtOrAfter]": nil,
+            "filter[deliveryState]": ["SUCCEEDED", "FAILED", "PENDING"],
+            "include": ["event"],
+            "limit": nil,
+        ],
     ]
 
     /// The endpoints whose answer is a page (`PagedDocumentLinks`): they take the `cursor` Apple's own next link carries,
-    /// documented or not (only `auditEvents` documents it).
+    /// documented or not (`auditEvents`, `orgDevices` since 2.7, and the webhooks' two lists document it).
     public static let paged: Set = [
         "/v1/apps", "/v1/auditEvents", "/v1/blueprints", "/v1/blueprints/{id}/relationships/apps", "/v1/blueprints/{id}/relationships/configurations",
         "/v1/blueprints/{id}/relationships/orgDevices", "/v1/blueprints/{id}/relationships/packages", "/v1/blueprints/{id}/relationships/userGroups",
         "/v1/blueprints/{id}/relationships/users", "/v1/configurations", "/v1/mdmDevices", "/v1/mdmServers", "/v1/mdmServers/{id}/relationships/devices",
         "/v1/orgDevices", "/v1/orgDevices/{id}/appleCareCoverage", "/v1/organizationalUnits", "/v1/organizationalUnits/{id}/relationships/users",
-        "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users",
+        "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users", "/v1/webhooks", "/v1/webhooks/{id}/deliveries",
     ]
+
+    /// The values the device filters' descriptions list ("Possible values: …", Business 2.7 and School 1.8), written out
+    /// from the contract's text, which gives them no `allowedValues`; `AppleStubTests` holds them to it. A value outside
+    /// them is refused with a 400, as a value outside an `allowedValues` list is (assumed: check live).
+    public static let described: [String: [String: [String]]] = [
+        "/v1/orgDevices": [
+            "filter[status]": ["ASSIGNED", "UNASSIGNED"],
+            "filter[productFamily]": ["Mac", "iPhone", "iPad", "iPod", "AppleTV", "Watch", "Vision"],
+            "filter[purchaseSourceType]": ["APPLE", "RESELLER", "MANUALLY_ADDED"],
+        ],
+    ]
+
+    /// The filters whose descriptions say "date and time": each value an ISO 8601 instant (`2025-01-01T00:00:00Z`, as the
+    /// device filters' descriptions show), else a 400 (assumed: check live). An exact device date (`filter[addedToOrgDateTime]`)
+    /// may list several; a bound takes one.
+    public static let dateFilters: [String: Set<String>] = [
+        "/v1/orgDevices": [
+            "filter[addedToOrgDateTime]", "filter[addedToOrgDateTime][GT]", "filter[addedToOrgDateTime][GTE]", "filter[addedToOrgDateTime][LT]",
+            "filter[addedToOrgDateTime][LTE]", "filter[orderDateTime]", "filter[orderDateTime][GT]", "filter[orderDateTime][GTE]",
+            "filter[orderDateTime][LT]", "filter[orderDateTime][LTE]",
+        ],
+        "/v1/webhooks/{id}/deliveries": ["filter[createdDateTimeAtBefore]", "filter[createdDateTimeAtOrAfter]"],
+    ]
+
+    /// A query Apple would refuse with 400 that its contract says only in prose: a value outside a filter's described list,
+    /// a date filter's value that isn't an instant, or a bound given two.
+    private static func checkDescribed(_ query: [String: String], template: String) -> (Int, [String: String], Data)? {
+        for (name, given) in query.sorted(by: { $0.key < $1.key }) {
+            let values = given.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            if let listed = described[template]?[name], let bad = values.first(where: { !listed.contains($0) }) {
+                return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(bad) isn't allowed in \(name).", parameter: name)
+            }
+            if dateFilters[template]?.contains(name) == true {
+                let bound = name.contains("][") || name.hasPrefix("filter[createdDateTime")
+                guard !values.contains(where: { instant($0) == nil }), !(bound && values.count > 1) else {
+                    return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(name) isn't an ISO 8601 date and time.", parameter: name)
+                }
+            }
+        }
+        return nil
+    }
 
     /// A query Apple would refuse with 400: a parameter the endpoint doesn't document, a `limit` outside 1 to 1000, or a
     /// value outside a listed set (an empty one included: `include=` and `apps,,users` aren't lists of names).

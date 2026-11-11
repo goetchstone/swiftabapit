@@ -1,20 +1,27 @@
 import Foundation
 import JSONAPI
 
-// Apple's value sets, each checked against Contracts/apple/business-2.6.json by AppleModelsTests. Fields the
-// contract types as plain strings (productFamily, status, purchaseSourceType, serverType) take their values
-// from the plan's Appendix A and Apple's examples; they are open enums all the same.
+// Apple's value sets, each checked against Contracts/apple/business-2.8.json by AppleModelsTests. Fields the
+// contract types as plain strings (productFamily, status, purchaseSourceType, serverType) are open enums all the
+// same: the device list's filters (Business 2.7, School 1.8) name the first three's values in their descriptions, which
+// `ModelContractTests` holds them to; `serverType` takes its values from the plan's Appendix A and Apple's examples.
 
+/// `OrgDevice`'s `productFamily`: the values `filter[productFamily]` lists ("Mac, iPhone, iPad, iPod, AppleTV, Watch,
+/// and Vision"). `iPod` came with that list (2.7): the plan's Appendix A, written from Apple's examples, lacked it. Also
+/// `MDMDevice.productFamily`'s type, whose values Apple doesn't document, so `iPod` reaches it too; `MdmServerProductFamily`
+/// (`ServiceProductFamily`) lists `IPOD`, which backs it.
 public enum ProductFamily: String, KnownValues {
-    case iPhone, iPad, mac = "Mac", appleTV = "AppleTV", watch = "Watch", vision = "Vision"
+    case iPhone, iPad, iPod, mac = "Mac", appleTV = "AppleTV", watch = "Watch", vision = "Vision"
 }
 
+/// `OrgDevice`'s `status`: the values `filter[status]` lists.
 public enum DeviceStatus: String, KnownValues {
     case assigned = "ASSIGNED", unassigned = "UNASSIGNED"
 }
 
-/// Where a device came from: `OrgDevice`'s `purchaseSourceType` (a plain string in Apple's docs, these values in its
-/// examples and Appendix A) and the device-added audit payload's (`AuditEventPurchaseSourceType`, the same three).
+/// Where a device came from: `OrgDevice`'s `purchaseSourceType` (a plain string in Apple's docs, these values in
+/// `filter[purchaseSourceType]`'s description, its examples and Appendix A) and the device-added audit payload's
+/// (`AuditEventPurchaseSourceType`, the same three).
 public enum PurchaseSourceType: String, KnownValues {
     case apple = "APPLE", reseller = "RESELLER", manuallyAdded = "MANUALLY_ADDED"
 }
@@ -125,10 +132,12 @@ public enum AuditEventActorType: String, KnownValues {
     case user = "USER", apiUser = "API_USER", system = "SYSTEM"
 }
 
-/// `AuditEventCategory`. Apple says its list is incomplete (plan §3.3): a new value survives raw.
+/// `AuditEventCategory`. Apple says its list is incomplete (plan §3.3): a new value survives raw. 2.8 added
+/// `ACCESS_MANAGEMENT` and `WEBHOOK_ACTIVITY`.
 public enum AuditEventCategory: String, KnownValues {
     case organization = "ORGANIZATION", accountActivity = "ACCOUNT_ACTIVITY", deviceInventory = "DEVICE_INVENTORY",
-         purchasing = "PURCHASING", deviceManagement = "DEVICE_MANAGEMENT"
+         purchasing = "PURCHASING", deviceManagement = "DEVICE_MANAGEMENT", accessManagement = "ACCESS_MANAGEMENT",
+         webhookActivity = "WEBHOOK_ACTIVITY"
 }
 
 /// `AuditEventOutcome`.
@@ -136,10 +145,12 @@ public enum AuditEventOutcome: String, KnownValues {
     case success = "SUCCESS", failure = "FAILURE"
 }
 
-/// `AuditEventSubjectType`: what it was done to. Apple says its list is incomplete (plan §3.3).
+/// `AuditEventSubjectType`: what it was done to. Apple says its list is incomplete (plan §3.3). 2.8 added `ROLE`, `IDP`,
+/// `INVITATION` and `WEBHOOK`.
 public enum AuditEventSubjectType: String, KnownValues {
     case organization = "ORGANIZATION", user = "USER", location = "LOCATION", device = "DEVICE", collection = "COLLECTION",
-         deviceManagementSetting = "DEVICE_MANAGEMENT_SETTING", subscription = "SUBSCRIPTION", domain = "DOMAIN", apiUser = "API_USER"
+         deviceManagementSetting = "DEVICE_MANAGEMENT_SETTING", subscription = "SUBSCRIPTION", domain = "DOMAIN", apiUser = "API_USER",
+         role = "ROLE", idp = "IDP", invitation = "INVITATION", webhook = "WEBHOOK"
 }
 
 /// `AuditEventReleaseEntityType`: who released a device from the organization.
@@ -155,4 +166,19 @@ public enum AuditEventIdpProtocol: String, KnownValues {
 /// `AuditEventIdpVendorName`.
 public enum AuditEventIdpVendorName: String, KnownValues {
     case google = "GOOGLE", microsoft = "MICROSOFT", microsoftOIDC = "MICROSOFT_OIDC", genericIdP = "GENERIC_IDP"
+}
+
+/// `WebhookEventType` (Business 2.8): what a webhook can subscribe to, each a change to an organization device. A ping
+/// isn't one: Apple sends it on request and no webhook subscribes to it.
+public enum WebhookEventType: String, KnownValues {
+    case orgDeviceAttributeChanged = "ORG_DEVICE_ATTRIBUTE_CHANGED",
+         orgDeviceAttributeMigrationDetailsChanged = "ORG_DEVICE_ATTRIBUTE_MIGRATION_DETAILS_CHANGED",
+         orgDeviceRelationshipAssignedServerChanged = "ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED",
+         orgDeviceRelationshipWarrantyChanged = "ORG_DEVICE_RELATIONSHIP_WARRANTY_CHANGED"
+}
+
+/// A webhook delivery's `deliveryState` (Business 2.8): the contract lists the values on the attribute and on
+/// `filter[deliveryState]`, with no enum page of their own.
+public enum WebhookDeliveryState: String, KnownValues {
+    case succeeded = "SUCCEEDED", failed = "FAILED", pending = "PENDING"
 }

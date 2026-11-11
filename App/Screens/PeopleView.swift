@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// window). Each list is a sortable, searchable table that fills as pages arrive, with its own banner (loading, cut at the
 /// page cap, refused, failed, partial) and its own CSV export, off while it loads or is partial; a School org or an org
 /// that can't be read gets the sentence instead of an empty table. The inspector shows the selected user's every
-/// attribute, or the selected group's or org unit's members. Read-only: Apple's people are read-only at 2.6 (plan §2.4).
+/// attribute, or the selected group's or org unit's members. Read-only: Apple's people are read-only at 2.8 (plan §2.4).
 struct PeopleView: View {
     @Bindable var model: PeopleModel
     @State private var exporting = false

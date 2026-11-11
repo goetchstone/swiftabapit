@@ -1,17 +1,100 @@
 import Foundation
 import JSONAPI
 
-/// `auditEvents`: one entry of the organization's audit log (Business 2.6). The common attributes are typed here; the
+/// `auditEvents`: one entry of the organization's audit log (Business 2.8). The common attributes are typed here; the
 /// payload sits under one more attribute, `eventData<Type>`, whose fields depend on the type (plan §2.1). Apple names
 /// that attribute in `eventDataPropertyKey`.
+///
+/// A webhook's events (2.8) carry its `url`, which can hold the receiver's token, and the Activity inspector shows every
+/// payload field and common attribute, its CSV the common attributes: `resource` shows each URL as `WebhookURL.shown`
+/// does, its destination and tag, so a repointed webhook shows as another tag on the same host (`withholding`; invariant
+/// 11; plan §8.0). No copy as Apple sent it is kept: the webhook itself can be read again, and nothing reads the URL from
+/// an event.
 public struct AuditEvent: ResourceView {
     public static let resourceType = "auditEvents"
     /// `AuditEventCommonAttributes`: every type's. The payload's key and fields are `AuditEventType.payload`'s.
     public static let fields = ["eventDateTime", "type", "category", "actorType", "actorId", "actorName", "subjectType", "subjectId",
                                 "subjectName", "outcome", "groupId", "eventDataPropertyKey"]
 
+    /// `ExportPolicy.sensitiveStems` (Reports, which this module can't import), mirrored: a payload value under a key holding
+    /// one, read folded as the CSV denylist reads a key, is withheld. `ExportPolicyTests` holds the two lists equal.
+    public static let sensitiveStems = ["bypass", "token", "password", "passwd", "passcode", "pwd", "secret", "assertion",
+                                        "credential", "privatekey", "apikey", "recoverykey", "escrow", "jwt", "bearer", "unlockpin"]
+    /// What stands where a payload value is withheld: under a key holding a stem, or past `maskDepth`.
+    public static let withheld = "(withheld: it may hold a secret)"
+    /// How deep the payload mask walks, each object, list and JSON text inside a string a level: past it a value is
+    /// withheld whole. Apple's payloads are two or three levels deep.
+    public static let maskDepth = 32
+
     public let resource: Resource
-    public init(resource: Resource) { self.resource = resource }
+    public init(resource: Resource) { self.resource = Self.withholding(resource) }
+
+    /// `resource` with every URL masked, whatever the event's type (the contract-2.8 review's M2, M4 and L1). Of the common
+    /// attributes, `subjectName` and `actorName` have every URL in them shown as `WebhookURL.maskingURLs` shows one (a
+    /// webhook's event may name it by its URL: check live); the rest are Apple's words and ids, left as they came. Every
+    /// other attribute (a payload, an unknown one) is walked by `masked`. Errs toward hiding: a URL that holds no secret
+    /// shows its host only.
+    static func withholding(_ resource: Resource) -> Resource {
+        var attributes = resource.attributes
+        for (key, value) in resource.attributes {
+            if fields.contains(where: { $0.utf8.elementsEqual(key.utf8) }) {
+                if key.utf8.elementsEqual("subjectName".utf8) || key.utf8.elementsEqual("actorName".utf8), let text = value.string {
+                    attributes[key] = .string(WebhookURL.maskingURLs(in: text))
+                }
+            } else {
+                attributes[key] = masked(value, under: key, depth: 0)
+            }
+        }
+        return Resource(type: resource.type, id: resource.id, attributes: attributes, relationships: resource.relationships)
+    }
+
+    /// `value` under `key` (nil in a list), `depth` levels into an attribute: every object and list walked; a value under
+    /// a key holding a `sensitiveStem` withheld (but for an attribute that is one of Apple's payload keys, two of which hold
+    /// one: `eventDataAccountPasswordChanged` is a payload, walked, whether it came as an object or as JSON text); a value
+    /// under a key that names a URL (`url`, `webhookUrl`, any case) shown as `WebhookURL.shown` shows it, withheld whole
+    /// when it isn't a string; any other string through `masked(_:depth:)`. `null` stays.
+    static func masked(_ value: JSONValue, under key: String?, depth: Int) -> JSONValue {
+        guard value != .null else { return value }
+        if let key, holdsASensitiveStem(key), depth > 0 || !payloadKeys.contains(where: { $0.utf8.elementsEqual(key.utf8) }) {
+            return .string(withheld)
+        }
+        if let key, WebhookURL.namesAURL(key) { return .string(value.string.map(WebhookURL.shown) ?? WebhookURL.withheld) }
+        guard depth < maskDepth else { return .string(withheld) }
+        switch value {
+        case .string(let text):
+            return .string(masked(text, depth: depth))
+        case .array(let items):
+            return .array(items.map { masked($0, under: nil, depth: depth + 1) })
+        case .object(let object):
+            var walked = JSONObject()
+            for (field, inner) in object { walked[field] = masked(inner, under: field, depth: depth + 1) }
+            return .object(walked)
+        case .null, .bool, .number:
+            return value
+        }
+    }
+
+    /// A string: JSON text of an object or a list (a payload Apple sent as a string) read and walked as one, and written
+    /// back as JSON text when the walk changed it; else every URL in it shown as `WebhookURL.maskingURLs` shows one.
+    static func masked(_ text: String, depth: Int) -> String {
+        if let first = text.utf8.first(where: { !jsonBlanks.contains($0) }), first == UInt8(ascii: "{") || first == UInt8(ascii: "["),
+           let parsed = JSONValue.parse(text), parsed.object != nil || parsed.array != nil {
+            let walked = masked(parsed, under: nil, depth: depth + 1)
+            if walked != parsed { return walked.jsonText }
+        }
+        return WebhookURL.maskingURLs(in: text)
+    }
+
+    /// Whether `key`, folded as the CSV denylist folds one (`ProfileSecrets.fold`), holds one of `sensitiveStems`, by bytes.
+    static func holdsASensitiveStem(_ key: String) -> Bool {
+        let folded = Array(ProfileSecrets.fold(key).utf8)
+        return sensitiveStems.contains { folded.firstRange(of: Array($0.utf8)) != nil }
+    }
+
+    /// Apple's payload keys, one per type (`AuditEventType.payload`): attributes the stems never withhold whole.
+    static let payloadKeys = AuditEventType.allCases.map(\.payload.key)
+
+    private static let jsonBlanks: Set<UInt8> = [0x20, 0x09, 0x0A, 0x0D]
 
     public var type: OpenEnum<AuditEventType>? { attributes.open("type") }
     public var eventDate: ISODate? { attributes.date("eventDateTime") }
@@ -158,6 +241,12 @@ public struct AuditEventPayload: Sendable, Equatable {
     public var vendorName: OpenEnum<AuditEventIdpVendorName>? { value("vendorName")?.open() }
     public var settingsEnabled: [String]? { strings("settingsEnabled") }
     public var settingsDisabled: [String]? { strings("settingsDisabled") }
+
+    // Webhooks (2.8): a webhook created or updated, as it is after the change (`name` above is its name). Its `url` is
+    // already `WebhookURL.shown`'s (`AuditEvent.withholding`); its `enabled` is a string in Apple's docs and is
+    // shown as it comes.
+    /// What the webhook is subscribed to: a list of strings in Apple's docs, read as `WebhookEventType`.
+    public var webhookEventTypes: [OpenEnum<WebhookEventType>]? { value("eventTypes")?.list { $0.open() } }
 }
 
 /// `AuditEventAccountRoleLocation`: a role held in a location.
@@ -170,7 +259,7 @@ public struct AuditEventRoleLocation: ObjectView {
     public var locationID: String? { object.string("locationUniqueIdentifier") }
 }
 
-/// `AuditEventType`: the 50 types Business 2.6 documents.
+/// `AuditEventType`: the 53 types Business 2.8 documents (50 at 2.6; 2.8 added the three webhook types).
 public enum AuditEventType: String, KnownValues {
     case deviceAddedToOrg = "DEVICE_ADDED_TO_ORG", deviceRemovedFromOrg = "DEVICE_REMOVED_FROM_ORG",
          deviceAssignedToServer = "DEVICE_ASSIGNED_TO_SERVER",
@@ -201,7 +290,8 @@ public enum AuditEventType: String, KnownValues {
          idpCreated = "IDP_CREATED", idpUpdated = "IDP_UPDATED", idpDeleted = "IDP_DELETED",
          idpAccountSyncEnabled = "IDP_ACCOUNT_SYNC_ENABLED", idpAccountSyncDisabled = "IDP_ACCOUNT_SYNC_DISABLED",
          appleServicesSettingsUpdated = "APPLE_SERVICES_SETTINGS_UPDATED",
-         accountPasswordChanged = "ACCOUNT_PASSWORD_CHANGED"
+         accountPasswordChanged = "ACCOUNT_PASSWORD_CHANGED", webhookCreated = "WEBHOOK_CREATED", webhookUpdated = "WEBHOOK_UPDATED",
+         webhookDeleted = "WEBHOOK_DELETED"
 
     /// Where a type's payload is and what it holds: the attribute key, and the payload's fields.
     public struct PayloadSchema: Sendable, Equatable {
@@ -210,8 +300,9 @@ public enum AuditEventType: String, KnownValues {
     }
 
     /// Each type's payload, from Apple's `AuditEvent<Type>Attributes` (its one key) and `AuditEvent<Type>` (the
-    /// fields), written out here and held to the contract by `AuditEventTests`. Fourteen payloads have no fields in
-    /// Apple's docs (`fourteenPayloadsHaveNoFields`): what they hold live is unread, and the acceptance pass names it.
+    /// fields), written out here and held to the contract by `AuditEventTests`. Fifteen payloads have no fields in
+    /// Apple's docs (`fifteenPayloadsHaveNoFields`; `WEBHOOK_DELETED`'s is the fifteenth, 2.8): what they hold live is
+    /// unread, and the acceptance pass names it.
     public var payload: PayloadSchema {
         switch self {
         case .deviceAddedToOrg: PayloadSchema(key: "eventDataDeviceAddedToOrg", fields: ["purchaseSourceId", "purchaseSourceType", "serialNumber"])
@@ -264,6 +355,9 @@ public enum AuditEventType: String, KnownValues {
         case .idpAccountSyncDisabled: PayloadSchema(key: "eventDataIdpAccountSyncDisabled", fields: ["activityId", "vendorName"])
         case .appleServicesSettingsUpdated: PayloadSchema(key: "eventDataAppleServicesSettingsUpdated", fields: ["settingsDisabled", "settingsEnabled"])
         case .accountPasswordChanged: PayloadSchema(key: "eventDataAccountPasswordChanged", fields: ["activityId"])
+        case .webhookCreated: PayloadSchema(key: "eventDataWebhookCreated", fields: ["enabled", "eventTypes", "name", "url"])
+        case .webhookUpdated: PayloadSchema(key: "eventDataWebhookUpdated", fields: ["enabled", "eventTypes", "name", "url"])
+        case .webhookDeleted: PayloadSchema(key: "eventDataWebhookDeleted", fields: [])
         }
     }
 }

@@ -16,9 +16,9 @@ struct ContractManifestTests {
         try #require(manifest["endpoints"] as? [[String: Any]])
     }
 
-    /// Apple Business API 2.6 has 57 endpoints and Apple School Manager API 1.7 has 11 (plan §8, Phase 0).
-    /// A version bump renames the file; the drift job says so first.
-    @Test(arguments: [("business-2.6", "2.6", 57), ("school-1.7", "1.7", 11)])
+    /// Apple Business API 2.8 has 65 endpoints and Apple School Manager API 1.8 has 11 (plan §8.0, step 2; 2.6 had 57,
+    /// and 2.8 added the webhooks' eight). A version bump renames the file; the drift job says so first.
+    @Test(arguments: [("business-2.8", "2.8", 65), ("school-1.8", "1.8", 11)])
     func theManifestHasEveryEndpoint(name: String, version: String, count: Int) throws {
         let manifest = try Self.manifest(name)
         #expect(manifest["version"] as? String == version)
@@ -39,14 +39,14 @@ struct ContractManifestTests {
         func paths(_ name: String) throws -> Set<String> {
             Set(try Self.endpoints(Self.manifest(name)).map { "\($0["method"] ?? "") \($0["path"] ?? "")" })
         }
-        let school = try paths("school-1.7"), business = try paths("business-2.6")
+        let school = try paths("school-1.8"), business = try paths("business-2.8")
         #expect(school.isSubset(of: business), "\(school.subtracting(business))")
-        #expect(!school.contains { $0.contains("/users") || $0.contains("/blueprints") || $0.contains("/auditEvents") })
+        #expect(!school.contains { $0.contains("/users") || $0.contains("/blueprints") || $0.contains("/auditEvents") || $0.contains("/webhook") })
     }
 
     /// Every activity type the plan builds is one Apple lists (plan Appendix A).
     @Test func theActivityTypesAreApples() throws {
-        let enums = try #require(try Self.manifest("business-2.6")["enums"] as? [String: Any])
+        let enums = try #require(try Self.manifest("business-2.8")["enums"] as? [String: Any])
         let activity = try #require(enums["OrgDeviceActivityType"] as? [String: Any])
         #expect(activity["values"] as? [String] == ["ASSIGN_DEVICES", "UNASSIGN_DEVICES", "ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE",
                                                     "UPDATE_MDM_MIGRATION_DEADLINE", "CANCEL_MDM_MIGRATION", "RELEASE_DEVICES"])

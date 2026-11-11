@@ -9,7 +9,7 @@ import TestSupport
 @Suite("Apple models against the contract")
 struct ModelContractTests {
     static var manifest: [String: Any] {
-        let url = Fixtures.contracts.appending(path: "apple/business-2.6.json")
+        let url = Fixtures.contracts.appending(path: "apple/business-2.8.json")
         return (try? JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]) ?? [:]
     }
 
@@ -44,6 +44,9 @@ struct ModelContractTests {
         ("ConfigurationCommon+ConfigurationCustomSetting", Configuration.fields), ("CustomSettingsValues", CustomSettingsValues.fields),
         ("MdmDevice.Attributes", MDMDevice.fields), ("MdmDeviceDetail.Attributes", MDMDeviceDetail.fields),
         ("AuditEventCommonAttributes", AuditEvent.fields), ("AuditEventAccountRoleLocation", AuditEventRoleLocation.fields),
+        ("Webhook.Attributes", Webhook.fields), ("WebhookDelivery.Attributes", WebhookDelivery.fields),
+        ("WebhookDelivery.Attributes.Request", WebhookDeliveryRequest.fields), ("WebhookDelivery.Attributes.Response", WebhookDeliveryResponse.fields),
+        ("WebhookEvent.Attributes", WebhookEvent.fields),
     ])
     func aViewReadsApplesAttributes(object: String, fields: [String]) {
         let documented = object.split(separator: "+").flatMap { Self.properties(String($0)) }
@@ -59,6 +62,8 @@ struct ModelContractTests {
         ("UserGroup", UserGroup.resourceType), ("OrganizationalUnit", OrganizationalUnit.resourceType), ("App", ContentApp.resourceType),
         ("Package", ContentPackage.resourceType), ("Blueprint", Blueprint.resourceType), ("Configuration", Configuration.resourceType),
         ("MdmDevice", MDMDevice.resourceType), ("MdmDeviceDetail", MDMDeviceDetail.resourceType), ("AuditEvent", AuditEvent.resourceType),
+        ("Webhook", Webhook.resourceType), ("WebhookDelivery", WebhookDelivery.resourceType), ("WebhookEvent", WebhookEvent.resourceType),
+        ("WebhookDelivery.Relationships.Event.Data", WebhookEvent.resourceType),
     ])
     func aViewReadsApplesType(object: String, type: String) {
         #expect(Self.resourceType(object) == [type], "\(object)")
@@ -90,7 +95,7 @@ struct ModelContractTests {
         ("AuditEventCategory", raw(AuditEventCategory.self)), ("AuditEventOutcome", raw(AuditEventOutcome.self)),
         ("AuditEventSubjectType", raw(AuditEventSubjectType.self)), ("AuditEventPurchaseSourceType", raw(PurchaseSourceType.self)),
         ("AuditEventReleaseEntityType", raw(AuditEventReleaseEntityType.self)), ("AuditEventIdpProtocol", raw(AuditEventIdpProtocol.self)),
-        ("AuditEventIdpVendorName", raw(AuditEventIdpVendorName.self)),
+        ("AuditEventIdpVendorName", raw(AuditEventIdpVendorName.self)), ("WebhookEventType", raw(WebhookEventType.self)),
     ])
     func namedEnumsHaveApplesValues(name: String, known: [String]) {
         let documented = Self.values(name)
@@ -108,9 +113,48 @@ struct ModelContractTests {
                          "BlueprintStatus", "ConfigurationType", "ConfigurationPlatform", "DeviceEraseStatus", "DeviceLockStatus",
                          "LostModeStatus", "AuditEventType", "AuditEventActorType", "AuditEventCategory", "AuditEventOutcome",
                          "AuditEventSubjectType", "AuditEventPurchaseSourceType", "AuditEventReleaseEntityType", "AuditEventIdpProtocol",
-                         "AuditEventIdpVendorName"]
+                         "AuditEventIdpVendorName", "WebhookEventType"]
         #expect(enums.subtracting(held) == ["OrgDeviceActivityType"])
         #expect(held.isSubset(of: enums))
+    }
+
+    /// The values a parameter's description lists after "Possible values:", as Apple writes them ("ASSIGNED and
+    /// UNASSIGNED", "Mac, iPhone, … and Vision"): the device filters (2.7) name the device attributes' values only there.
+    static func describedValues(_ path: String, _ name: String, in manifest: [String: Any] = Self.manifest) -> [String] {
+        let endpoints = manifest["endpoints"] as? [[String: Any]] ?? []
+        let endpoint = endpoints.first { $0["path"] as? String == path && $0["method"] as? String == "GET" }
+        let parameter = (endpoint?["parameters"] as? [[String: Any]] ?? []).first { $0["name"] as? String == name }
+        guard let description = parameter?["description"] as? String, let start = description.range(of: "Possible values: ") else { return [] }
+        let list = description[start.upperBound...].prefix { $0 != "." }
+        return list.replacingOccurrences(of: ", and ", with: ", ").replacingOccurrences(of: " and ", with: ", ")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// The device attributes the contract types as plain strings have exactly the values its filters list (2.7), in both
+    /// scopes: `ProductFamily` gained `iPod` there. The device filter (`DeviceFilter`) takes these enums, so it sends
+    /// Apple's values only.
+    @Test(arguments: [("filter[status]", raw(DeviceStatus.self)), ("filter[productFamily]", raw(ProductFamily.self)),
+                      ("filter[purchaseSourceType]", raw(PurchaseSourceType.self))])
+    func theDeviceAttributesHaveTheValuesTheirFiltersList(filter: String, known: [String]) throws {
+        let school = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: Fixtures.contracts.appending(path: "apple/school-1.8.json")))
+                                  as? [String: Any])
+        for manifest in [Self.manifest, school] {
+            let listed = Self.describedValues("/v1/orgDevices", filter, in: manifest)
+            #expect(listed.count >= 2 && Set(listed) == Set(known), "\(filter): Apple lists \(listed), the enum has \(known)")
+        }
+        #expect(Self.describedValues("/v1/orgDevices", "filter[productFamily]") == ["Mac", "iPhone", "iPad", "iPod", "AppleTV", "Watch", "Vision"])
+    }
+
+    /// A delivery's states are the attribute's allowed values and `filter[deliveryState]`'s, which Apple lists twice and
+    /// gives no enum page.
+    @Test func aDeliverysStatesAreApples() throws {
+        let attribute = (Self.objects["WebhookDelivery.Attributes"] as? [String: Any])?["properties"] as? [[String: Any]] ?? []
+        let state = try #require(attribute.first { $0["name"] as? String == "deliveryState" }?["allowedValues"] as? [String])
+        let endpoints = Self.manifest["endpoints"] as? [[String: Any]] ?? []
+        let deliveries = try #require(endpoints.first { $0["path"] as? String == "/v1/webhooks/{id}/deliveries" && $0["method"] as? String == "GET" })
+        let filter = try #require((deliveries["parameters"] as? [[String: Any]] ?? []).first { $0["name"] as? String == "filter[deliveryState]" })
+        #expect(Set(state) == Set(Self.raw(WebhookDeliveryState.self)) && state.count == WebhookDeliveryState.allCases.count)
+        #expect(filter["allowedValues"] as? [String] == state)
     }
 
     static func example(_ name: String, scope: String = "business") throws -> Document {
@@ -121,21 +165,20 @@ struct ModelContractTests {
     static let views: [String: any ResourceView.Type] = Dictionary(uniqueKeysWithValues: ([
         OrgDevice.self, AppleCareCoverage.self, ActivationLockStatus.self, MDMService.self, User.self, UserGroup.self,
         OrganizationalUnit.self, ContentApp.self, ContentPackage.self, Blueprint.self, Configuration.self, MDMDevice.self,
-        MDMDeviceDetail.self, AuditEvent.self,
+        MDMDeviceDetail.self, AuditEvent.self, Webhook.self, WebhookDelivery.self, WebhookEvent.self,
     ] as [any ResourceView.Type]).map { ($0.resourceType, $0) })
 
-    /// Types Apple's examples hold that have no view yet: an activity is a write's answer (Phase 4).
-    static let noView: Set = ["orgDeviceActivities"]
+    /// Types Apple's examples hold that have no view yet: an activity and a ping are writes' answers (Phase 4, and the
+    /// webhook writes).
+    static let noView: Set = ["orgDeviceActivities", "webhookPings"]
 
-    /// Attributes Apple's examples send that the views don't read, by example (both scopes), each with why. Apple's own
-    /// device examples say `purchaseSourceUid` where its field list says `purchaseSourceId` (2.6): the view reads the
-    /// documented name and lets the example's survive raw.
-    static let knownUnread: [String: Set<String>] = ["get-org-devices.response.json": ["purchaseSourceUid"],
-                                                     "get-orgdevice-information.response.json": ["purchaseSourceUid"]]
+    /// Attributes Apple's examples send that the views don't read, by example (both scopes), each with why. None at 2.8:
+    /// Apple's device examples said `purchaseSourceUid` where its field list says `purchaseSourceId` until 2.7 fixed them.
+    static let knownUnread: [String: Set<String>] = [:]
 
     /// Types Apple gave no example for: their views are held to the field lists alone, and to their own tests
-    /// (`ViewTests`, `AuditEventTests`).
-    static let noExample: Set = ["mdmDevices", "mdmDeviceDetails", "auditEvents"]
+    /// (`ViewTests`, `AuditEventTests`, `WebhookTests`). Apple's deliveries example names its event and includes none.
+    static let noExample: Set = ["mdmDevices", "mdmDeviceDetails", "auditEvents", "webhookEvents"]
 
     /// Every response example Apple wrote, both scopes, decodes into its type's view with nothing unread but the listed
     /// gap, its data and anything included alike; and every view but those Apple gave no example for is reached.
@@ -170,7 +213,11 @@ struct ModelContractTests {
         #expect(device.productFamily == .known(.mac))
         #expect(device.status == .known(.unassigned))
         #expect(device.imei?.count == 2)
-        #expect(device.attributes["purchaseSourceUid"] != nil)
+        #expect(device.purchaseSourceID == "-2085650007946880" && device.purchaseSourceType == .known(.apple))
+        // The filtered list's example (2.7): a device its filters (`UNASSIGNED`, `Mac,iPad`) let through, in Apple's values.
+        let filtered = try Document.parse(Data(contentsOf: Fixtures.docc.appending(path: "business/get-org-devices.response.2.json")))
+        let unassigned = try #require(filtered.resources.map(OrgDevice.init).first)
+        #expect(unassigned.status == .known(.unassigned) && unassigned.productFamily == .known(.mac))
 
         let coverage = try Self.example("get-all-applecare-coverage-for-an-orgdevice").resources.map(AppleCareCoverage.init)
         #expect(coverage.contains { $0.paymentType == .known(.abeSubscription) })
@@ -232,6 +279,26 @@ struct ModelContractTests {
         #expect(configuration.customSettings?.configurationProfile?.hasPrefix("<?xml") == true)
         // Apple's example profile is cut short ("..."), so it isn't a property list: said, never shown.
         #expect(configuration.customSettings?.profileText == .notShown(ProfileText.unreadable))
+    }
+
+    /// Apple's webhook examples read typed: the URL shown only as where it goes, with its tag, the receiver's body withheld,
+    /// the event named by its linkage, which the example doesn't include.
+    @Test func applesWebhookExamplesReadTyped() throws {
+        let shown = "https://example.com/… (tag \(WebhookURL.tag("https://example.com/webhooks/apple")))"
+        let listed = try Self.example("get-webhooks").resources.map(Webhook.init)
+        let webhook = try Webhook(resource: #require(Self.example("get-webhook-information").resource))
+        #expect(listed.first?.id == webhook.id && webhook.id == "webhook-12345")
+        #expect(webhook.name == "Device change notifications" && webhook.isEnabled == true)
+        #expect(webhook.eventTypes == [.known(.orgDeviceAttributeChanged), .known(.orgDeviceRelationshipAssignedServerChanged)])
+        #expect(webhook.destination == shown && webhook.created == ISODate.parse("2026-10-01T10:30:00Z") && webhook.updated != nil)
+        #expect(webhook.asSent.attributes.string("url") == "https://example.com/webhooks/apple")
+
+        let delivery = try #require(Self.example("get-all-deliveries-for-a-webhook").resources.map(WebhookDelivery.init).first)
+        #expect(delivery.id == "delivery-67890" && delivery.state == .known(.succeeded) && delivery.isRedelivery == false)
+        #expect(delivery.created == ISODate.parse("2026-10-02T08:15:00Z") && delivery.sent == ISODate.parse("2026-10-02T08:15:01Z"))
+        #expect(delivery.request?.destination == shown && delivery.response?.statusCode == 200 && delivery.response?.hasBody == true)
+        #expect(delivery.response?.object["body"] == .string(WebhookDelivery.withheld) && delivery.errorMessage == nil)
+        #expect(delivery.eventID == "event-24680" && delivery.event == nil && delivery.unreadNested.isEmpty && delivery.misreadObjects.isEmpty)
     }
 
     @Test func anUnknownValueSurvivesRaw() {

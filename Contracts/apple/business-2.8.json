@@ -1,19 +1,19 @@
 {
  "source": "https://developer.apple.com/documentation/applebusinessapi",
  "scope": "business",
- "version": "2.6",
+ "version": "2.8",
  "generator": "scripts/apple_contracts.py",
  "counts": {
-  "endpoints": 57,
-  "objects": 272,
-  "enums": 27
+  "endpoints": 65,
+  "objects": 312,
+  "enums": 28
  },
  "endpoints": [
   {
    "title": "Get Apps",
    "slug": "get-apps",
    "abstract": "Get a list of apps for an organization using the built-in device management in Apple Business.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/apps",
@@ -107,7 +107,7 @@
    "title": "Get App Information",
    "slug": "get-app-information",
    "abstract": "Get information about a specific app for an organization using the built-in device management in Apple Business.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/apps/{id}",
@@ -210,7 +210,7 @@
    "title": "Get Audit Events",
    "slug": "get-audit-events",
    "abstract": "Get a list of audit events in an organization that satisfies the query criteria.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/auditEvents",
@@ -276,6 +276,9 @@
       "eventDataApiAccountKeyRevoked",
       "eventDataApiAccountNameChanged",
       "eventDataApiAccountRoleLocationChanged",
+      "eventDataWebhookCreated",
+      "eventDataWebhookUpdated",
+      "eventDataWebhookDeleted",
       "eventDataRoleCreated",
       "eventDataRoleUpdated",
       "eventDataTermsAccepted",
@@ -372,6 +375,9 @@
       "API_ACCOUNT_KEY_GENERATED",
       "API_ACCOUNT_ROLE_LOCATION_CHANGED",
       "API_ACCOUNT_NAME_CHANGED",
+      "WEBHOOK_CREATED",
+      "WEBHOOK_UPDATED",
+      "WEBHOOK_DELETED",
       "ROLE_CREATED",
       "ROLE_UPDATED",
       "TERMS_ACCEPTED",
@@ -461,7 +467,7 @@
    "title": "Get Blueprints",
    "slug": "get-blueprints",
    "abstract": "Get a list of Blueprints in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints",
@@ -635,7 +641,7 @@
    "title": "Create a Blueprint",
    "slug": "create-a-blueprint",
    "abstract": "Create a new Blueprint in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints",
@@ -730,7 +736,7 @@
    "title": "Delete a Blueprint",
    "slug": "delete-a-blueprint",
    "abstract": "Delete a Blueprint from an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}",
@@ -820,7 +826,7 @@
    "title": "Get Blueprint Information",
    "slug": "get-blueprint-information",
    "abstract": "Get information about a specific Blueprint in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}",
@@ -1003,7 +1009,7 @@
    "title": "Update a Blueprint",
    "slug": "update-a-blueprint",
    "abstract": "Update an existing Blueprint in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "PATCH",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}",
@@ -1118,7 +1124,7 @@
    "title": "Remove Apps from a Blueprint",
    "slug": "remove-apps-from-a-blueprint",
    "abstract": "Remove apps from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/apps",
@@ -1220,7 +1226,7 @@
    "title": "Get App IDs for a Blueprint",
    "slug": "get-all-app-ids-for-a-blueprint",
    "abstract": "Get a list of app IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/apps",
@@ -1315,7 +1321,7 @@
    "title": "Add Apps to a Blueprint",
    "slug": "add-apps-to-a-blueprint",
    "abstract": "Add apps to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/apps",
@@ -1417,7 +1423,7 @@
    "title": "Remove Configurations from a Blueprint",
    "slug": "remove-configurations-from-a-blueprint",
    "abstract": "Remove Configurations from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/configurations",
@@ -1519,7 +1525,7 @@
    "title": "Get Configuration IDs for a Blueprint",
    "slug": "get-all-configuration-ids-for-a-blueprint",
    "abstract": "Get a list of Configuration IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/configurations",
@@ -1614,7 +1620,7 @@
    "title": "Add Configurations to a Blueprint",
    "slug": "add-configurations-to-a-blueprint",
    "abstract": "Add Configurations to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/configurations",
@@ -1716,7 +1722,7 @@
    "title": "Remove Devices from a Blueprint",
    "slug": "remove-org-devices-from-a-blueprint",
    "abstract": "Remove devices from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/orgDevices",
@@ -1818,7 +1824,7 @@
    "title": "Get Device IDs for a Blueprint",
    "slug": "get-all-orgdevice-ids-for-a-blueprint",
    "abstract": "Get a list of device IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/orgDevices",
@@ -1913,7 +1919,7 @@
    "title": "Add Devices to a Blueprint",
    "slug": "add-org-devices-to-a-blueprint",
    "abstract": "Add devices to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/orgDevices",
@@ -2015,7 +2021,7 @@
    "title": "Remove Packages from a Blueprint",
    "slug": "remove-packages-from-a-blueprint",
    "abstract": "Remove packages from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/packages",
@@ -2117,7 +2123,7 @@
    "title": "Get Package IDs for a Blueprint",
    "slug": "get-all-package-ids-for-a-blueprint",
    "abstract": "Get a list of package IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/packages",
@@ -2212,7 +2218,7 @@
    "title": "Add Packages to a Blueprint",
    "slug": "add-packages-to-a-blueprint",
    "abstract": "Add packages to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/packages",
@@ -2314,7 +2320,7 @@
    "title": "Remove User Groups from a Blueprint",
    "slug": "remove-user-groups-from-a-blueprint",
    "abstract": "Remove user groups from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/userGroups",
@@ -2416,7 +2422,7 @@
    "title": "Get User Group IDs for a Blueprint",
    "slug": "get-all-user-group-ids-for-a-blueprint",
    "abstract": "Get a list of user group IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/userGroups",
@@ -2511,7 +2517,7 @@
    "title": "Add User Groups to a Blueprint",
    "slug": "add-user-groups-to-a-blueprint",
    "abstract": "Add user groups to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/userGroups",
@@ -2613,7 +2619,7 @@
    "title": "Remove Users from a Blueprint",
    "slug": "remove-users-from-a-blueprint",
    "abstract": "Remove users from a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/users",
@@ -2715,7 +2721,7 @@
    "title": "Get User IDs for a Blueprint",
    "slug": "get-all-user-ids-for-a-blueprint",
    "abstract": "Get a list of user IDs associated with a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/users",
@@ -2810,7 +2816,7 @@
    "title": "Add Users to a Blueprint",
    "slug": "add-users-to-a-blueprint",
    "abstract": "Add users to a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/blueprints/{id}/relationships/users",
@@ -2912,7 +2918,7 @@
    "title": "Get Configurations",
    "slug": "get-configurations",
    "abstract": "Get a list of Configurations in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/configurations",
@@ -3003,7 +3009,7 @@
    "title": "Create a Configuration",
    "slug": "create-a-configuration",
    "abstract": "Create a new custom Configuration in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/configurations",
@@ -3099,7 +3105,7 @@
    "title": "Delete a Configuration",
    "slug": "delete-a-configuration",
    "abstract": "Delete a Configuration from an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/configurations/{id}",
@@ -3189,7 +3195,7 @@
    "title": "Get Configuration Information",
    "slug": "get-configuration-information",
    "abstract": "Get information about a specific Configuration in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/configurations/{id}",
@@ -3291,7 +3297,7 @@
    "title": "Update a Configuration",
    "slug": "update-a-configuration",
    "abstract": "Update an existing custom Configuration in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "PATCH",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/configurations/{id}",
@@ -3407,7 +3413,7 @@
    "title": "Get Devices Enrolled in Apple Device Management Service",
    "slug": "get-apple-mdm-enrolled-devices",
    "abstract": "Get a list of devices enrolled in Apple Device Management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmDevices",
@@ -3497,7 +3503,7 @@
    "title": "Get Details for a Device Enrolled in Apple Device Management Service",
    "slug": "get-the-details-for-apple-mdm-enrolled-device",
    "abstract": "Get detailed information about a device enrolled in Apple Device Management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmDevices/{id}/details",
@@ -3609,7 +3615,7 @@
    "title": "Get Device Management Services",
    "slug": "get-mdm-servers",
    "abstract": "Get a list of device management services in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers",
@@ -3707,7 +3713,7 @@
    "title": "Create a Device Management Service",
    "slug": "create-an-mdmserver",
    "abstract": "Create a new device management service in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers",
@@ -3803,7 +3809,7 @@
    "title": "Delete a Device Management Service",
    "slug": "delete-an-mdmserver",
    "abstract": "Delete a device management service from an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "DELETE",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers/{id}",
@@ -3883,7 +3889,7 @@
    "title": "Get Device Management Service Information",
    "slug": "get-mdmserver-information",
    "abstract": "Get the information for a specific device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers/{id}",
@@ -3990,7 +3996,7 @@
    "title": "Update a Device Management Service",
    "slug": "update-an-mdmserver",
    "abstract": "Update an existing device management service in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "PATCH",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers/{id}",
@@ -4106,7 +4112,7 @@
    "title": "Get the Device Serial Numbers for a Device Management Service",
    "slug": "get-all-device-ids-for-an-mdmserver",
    "abstract": "Get a list of device serial numbers assigned to a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/mdmServers/{id}/relationships/devices",
@@ -4201,7 +4207,7 @@
    "title": "Assign or Unassign Devices to a Device Management Service or Release Devices",
    "slug": "create-an-orgdeviceactivity",
    "abstract": "Assign or unassign devices to a device management service, manage a device management service migration for devices, or release devices from an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "POST",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDeviceActivities",
@@ -4305,7 +4311,7 @@
    "title": "Get Organization Device Activity Information",
    "slug": "get-orgdeviceactivity-information",
    "abstract": "Get information for an organization device activity that a device management action, such as assign or unassign, creates.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDeviceActivities/{id}",
@@ -4406,11 +4412,20 @@
    "title": "Get Organization Devices",
    "slug": "get-org-devices",
    "abstract": "Get a list of devices in an organization that enroll using Automated Device Enrollment.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices",
    "parameters": [
+    {
+     "name": "cursor",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "A pagination cursor to retrieve the next page of results."
+    },
     {
      "name": "fields[orgDevices]",
      "in": "query",
@@ -4443,7 +4458,142 @@
       "assignedServer",
       "appleCareCoverage"
      ],
-     "description": "The fields to return for included related types."
+     "description": "The fields to include for each device in the response. This parameter doesn\u2019t filter devices. To filter devices, use the filter parameters."
+    },
+    {
+     "name": "filter[addedToOrgDateTime]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the date and time the device was added to the organization, such as 2025-01-01T00:00:00Z."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][GTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization at or after this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][GT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization after this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][LTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization at or before this date and time."
+    },
+    {
+     "name": "filter[addedToOrgDateTime][LT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices added to the organization before this date and time."
+    },
+    {
+     "name": "filter[orderDateTime]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the date and time the device was ordered, such as 2025-01-01T00:00:00Z."
+    },
+    {
+     "name": "filter[orderDateTime][GTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered at or after this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][GT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered after this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][LTE]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered at or before this date and time."
+    },
+    {
+     "name": "filter[orderDateTime][LT]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "Filter for devices ordered before this date and time."
+    },
+    {
+     "name": "filter[orderNumber]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the order number of the device. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[productFamily]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the product family of the device. Possible values: Mac, iPhone, iPad, iPod, AppleTV, Watch, and Vision. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[purchaseSourceType]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the purchase source type of the device. Possible values: APPLE, RESELLER, and MANUALLY_ADDED. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[serialNumber]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the serial number of the device. Separate multiple values with commas."
+    },
+    {
+     "name": "filter[status]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Filter by the assignment status of the device. Possible values: ASSIGNED and UNASSIGNED. Separate multiple values with commas."
     },
     {
      "name": "limit",
@@ -4509,6 +4659,7 @@
     }
    ],
    "examples": [
+    "response",
     "response"
    ]
   },
@@ -4516,7 +4667,7 @@
    "title": "Get Device Information",
    "slug": "get-orgdevice-information",
    "abstract": "Get information about a device in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices/{id}",
@@ -4635,7 +4786,7 @@
    "title": "Get the Activation Lock Status for a Device",
    "slug": "get-the-activation-lock-status-information-for-an-orgdevice",
    "abstract": "Get the Activation Lock status of an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices/{id}/activationLockStatus",
@@ -4733,7 +4884,7 @@
    "title": "Get AppleCare coverage Information for a Device",
    "slug": "get-all-applecare-coverage-for-an-orgdevice",
    "abstract": "Get a list of AppleCare coverage resources for an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices/{id}/appleCareCoverage",
@@ -4848,7 +4999,7 @@
    "title": "Get the Assigned Device Management Service Information for a Device",
    "slug": "get-the-assigned-server-information-for-an-orgdevice",
    "abstract": "Get the assigned device management service information for a device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices/{id}/assignedServer",
@@ -4949,7 +5100,7 @@
    "title": "Get the Assigned Device Management Service ID for a Device",
    "slug": "get-the-assigned-server-id-for-an-orgdevice",
    "abstract": "Get the assigned device management service ID information for a device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/orgDevices/{id}/relationships/assignedServer",
@@ -5034,7 +5185,7 @@
    "title": "Get Organizational Units",
    "slug": "get-organizational-units",
    "abstract": "Get a list of organizational units in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/organizationalUnits",
@@ -5126,7 +5277,7 @@
    "title": "Get Organizational Unit Information",
    "slug": "get-organizationalunit-information",
    "abstract": "Get information about a specific organizational unit in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/organizationalUnits/{id}",
@@ -5224,10 +5375,9 @@
    ]
   },
   {
-   "title": "Get User IDs for an Organizational Unit",
-   "slug": "get-all-user-ids-for-an-organizationalunit",
-   "abstract": "Get a list of user IDs for an organizational unit in an organization.",
-   "introducedAt": "2.6",
+   "title": "Get All User IDs for an Organizational Unit",
+   "slug": "get-all-user-ids-for-an-organizational-unit",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/organizationalUnits/{id}/relationships/users",
@@ -5238,8 +5388,7 @@
      "required": true,
      "type": {
       "text": "string"
-     },
-     "description": "The unique identifier for the resource."
+     }
     },
     {
      "name": "limit",
@@ -5248,8 +5397,7 @@
      "type": {
       "text": "integer"
      },
-     "maximum": "1000",
-     "description": "The number of included related resources to return."
+     "maximum": "1000"
     }
    ],
    "responses": [
@@ -5314,15 +5462,13 @@
      }
     }
    ],
-   "examples": [
-    "response"
-   ]
+   "examples": []
   },
   {
    "title": "Get Packages",
    "slug": "get-packages",
    "abstract": "Get a list of packages for an organization using Apple Business\u2019s built-in device management.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/packages",
@@ -5417,7 +5563,7 @@
    "title": "Get Package Information",
    "slug": "get-package-information",
    "abstract": "Get information about a specific package for an organization using Apple Business\u2019s built-in device management.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/packages/{id}",
@@ -5521,7 +5667,7 @@
    "title": "Get User Groups",
    "slug": "get-user-groups",
    "abstract": "Get a list of user groups in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/userGroups",
@@ -5616,7 +5762,7 @@
    "title": "Get User Group Information",
    "slug": "get-usergroup-information",
    "abstract": "Get information about a specific user group in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/userGroups/{id}",
@@ -5720,7 +5866,7 @@
    "title": "Get User IDs for a User Group",
    "slug": "get-all-user-ids-for-a-user-group",
    "abstract": "Get a list of user IDs for a user group in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/userGroups/{id}/relationships/users",
@@ -5815,7 +5961,7 @@
    "title": "Get Users",
    "slug": "get-users",
    "abstract": "Get a list of users in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/users",
@@ -5919,7 +6065,7 @@
    "title": "Get User Information",
    "slug": "get-user-information",
    "abstract": "Get information about a specific user in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "method": "GET",
    "baseURL": "https://api-business.apple.com/",
    "path": "/v1/users/{id}",
@@ -6027,6 +6173,878 @@
    "examples": [
     "response"
    ]
+  },
+  {
+   "title": "Create a WebhookDelivery",
+   "slug": "create-a-webhookdelivery",
+   "abstract": "Create a new webhook delivery based on an existing delivery.",
+   "introducedAt": "2.8",
+   "method": "POST",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhookDeliveries",
+   "parameters": [],
+   "body": {
+    "mimeType": "application/json",
+    "type": {
+     "text": "WebhookDeliveryCreateRequest",
+     "types": [
+      "WebhookDeliveryCreateRequest"
+     ]
+    },
+    "parameters": []
+   },
+   "responses": [
+    {
+     "status": 201,
+     "reason": "Created",
+     "type": {
+      "text": "WebhookDeliveryResponse",
+      "types": [
+       "WebhookDeliveryResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 409,
+     "reason": "Conflict",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 422,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "request",
+    "response"
+   ]
+  },
+  {
+   "title": "Create a WebhookPing",
+   "slug": "create-a-webhookping",
+   "abstract": "Send a ping event to a webhook to test that it receives notifications.",
+   "introducedAt": "2.8",
+   "method": "POST",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhookPings",
+   "parameters": [],
+   "body": {
+    "mimeType": "application/json",
+    "type": {
+     "text": "WebhookPingCreateRequest",
+     "types": [
+      "WebhookPingCreateRequest"
+     ]
+    },
+    "parameters": []
+   },
+   "responses": [
+    {
+     "status": 201,
+     "reason": "Created",
+     "type": {
+      "text": "WebhookPingResponse",
+      "types": [
+       "WebhookPingResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 409,
+     "reason": "Conflict",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 422,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "request",
+    "response"
+   ]
+  },
+  {
+   "title": "Get Webhooks",
+   "slug": "get-webhooks",
+   "abstract": "Get a list of webhooks in an organization.",
+   "introducedAt": "2.8",
+   "method": "GET",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks",
+   "parameters": [
+    {
+     "name": "cursor",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "An opaque cursor value that you use to retrieve the next page of results."
+    },
+    {
+     "name": "fields[webhooks]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "name",
+      "enabled",
+      "eventTypes",
+      "url",
+      "createdDateTime",
+      "updatedDateTime",
+      "deliveries"
+     ],
+     "description": "The fields to return for included related types."
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000",
+     "description": "The number of resources to return."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "WebhooksResponse",
+      "types": [
+       "WebhooksResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Create a Webhook",
+   "slug": "create-a-webhook",
+   "abstract": "Create a new webhook in an organization.",
+   "introducedAt": "2.8",
+   "method": "POST",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks",
+   "parameters": [],
+   "body": {
+    "mimeType": "application/json",
+    "type": {
+     "text": "WebhookCreateRequest",
+     "types": [
+      "WebhookCreateRequest"
+     ]
+    },
+    "parameters": []
+   },
+   "responses": [
+    {
+     "status": 201,
+     "reason": "Created",
+     "type": {
+      "text": "WebhookResponse",
+      "types": [
+       "WebhookResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 409,
+     "reason": "Conflict",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 422,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "request",
+    "response"
+   ]
+  },
+  {
+   "title": "Delete a Webhook",
+   "slug": "delete-a-webhook",
+   "abstract": "Delete a webhook from an organization.",
+   "introducedAt": "2.8",
+   "method": "DELETE",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    }
+   ],
+   "responses": [
+    {
+     "status": 204,
+     "reason": "No Content",
+     "type": {
+      "text": ""
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": []
+  },
+  {
+   "title": "Get Webhook Information",
+   "slug": "get-webhook-information",
+   "abstract": "Get information about a specific webhook in an organization.",
+   "introducedAt": "2.8",
+   "method": "GET",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "fields[webhooks]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "name",
+      "enabled",
+      "eventTypes",
+      "url",
+      "createdDateTime",
+      "updatedDateTime",
+      "deliveries"
+     ],
+     "description": "The fields to return for included related types."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "WebhookResponse",
+      "types": [
+       "WebhookResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
+  },
+  {
+   "title": "Update a Webhook",
+   "slug": "update-a-webhook",
+   "abstract": "Update an existing webhook in an organization.",
+   "introducedAt": "2.8",
+   "method": "PATCH",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks/{id}",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    }
+   ],
+   "body": {
+    "mimeType": "application/json",
+    "type": {
+     "text": "WebhookUpdateRequest",
+     "types": [
+      "WebhookUpdateRequest"
+     ]
+    },
+    "parameters": []
+   },
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "WebhookResponse",
+      "types": [
+       "WebhookResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 409,
+     "reason": "Conflict",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 422,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "request",
+    "response"
+   ]
+  },
+  {
+   "title": "Get All Deliveries for a Webhook",
+   "slug": "get-all-deliveries-for-a-webhook",
+   "abstract": "Get a list of deliveries for a webhook.",
+   "introducedAt": "2.8",
+   "method": "GET",
+   "baseURL": "https://api-business.apple.com/",
+   "path": "/v1/webhooks/{id}/deliveries",
+   "parameters": [
+    {
+     "name": "id",
+     "in": "path",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "description": "The unique identifier for the resource."
+    },
+    {
+     "name": "cursor",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "description": "An opaque cursor value that you use to retrieve the next page of results."
+    },
+    {
+     "name": "fields[webhookDeliveries]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "createdDateTime",
+      "deliveryState",
+      "errorMessage",
+      "redelivery",
+      "sentDateTime",
+      "request",
+      "response",
+      "event"
+     ],
+     "description": "The fields to return for webhook deliveries."
+    },
+    {
+     "name": "fields[webhookEvents]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "eventType",
+      "payload",
+      "isPingEvent",
+      "createdDateTime"
+     ],
+     "description": "The fields to return for included webhook events."
+    },
+    {
+     "name": "filter[createdDateTimeAtBefore]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Return only deliveries created before this date and time."
+    },
+    {
+     "name": "filter[createdDateTimeAtOrAfter]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "description": "Return only deliveries created at or after this date and time."
+    },
+    {
+     "name": "filter[deliveryState]",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "SUCCEEDED",
+      "FAILED",
+      "PENDING"
+     ],
+     "description": "Filter the deliveries by delivery state. Possible values: SUCCEEDED, FAILED, PENDING."
+    },
+    {
+     "name": "include",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     },
+     "allowedValues": [
+      "event"
+     ],
+     "description": "Related resources to include in the response. Possible value: event."
+    },
+    {
+     "name": "limit",
+     "in": "query",
+     "required": false,
+     "type": {
+      "text": "integer"
+     },
+     "maximum": "1000",
+     "description": "The number of resources to return."
+    }
+   ],
+   "responses": [
+    {
+     "status": 200,
+     "reason": "OK",
+     "type": {
+      "text": "WebhookDeliveriesResponse",
+      "types": [
+       "WebhookDeliveriesResponse"
+      ]
+     }
+    },
+    {
+     "status": 400,
+     "reason": "Bad Request",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 401,
+     "reason": "Unauthorized",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 403,
+     "reason": "Forbidden",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 404,
+     "reason": "Not Found",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    },
+    {
+     "status": 429,
+     "reason": "",
+     "type": {
+      "text": "ErrorResponse",
+      "types": [
+       "ErrorResponse"
+      ]
+     }
+    }
+   ],
+   "examples": [
+    "response"
+   ]
   }
  ],
  "objects": {
@@ -6034,7 +7052,7 @@
    "title": "ActivationLockStatus",
    "slug": "activationlockstatus",
    "abstract": "The data structure that represents the Activation Lock status of an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -6069,7 +7087,7 @@
    "title": "ActivationLockStatus.Attributes",
    "slug": "activationlockstatus/attributes-data.dictionary",
    "abstract": "Attributes for an organization device\u2019s Activation Lock status.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "isLocked",
@@ -6094,7 +7112,7 @@
    "title": "ActivationLockStatusResponse",
    "slug": "activationlockstatusresponse",
    "abstract": "A response that contains the Activation Lock status of an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -6122,7 +7140,7 @@
    "title": "ActivityTypeMetadata",
    "slug": "activitytypemetadata",
    "abstract": "Additional metadata for an organization device activity, used by device management service migration activity types.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "mdmMigrationDeadlineDateTime",
@@ -6137,7 +7155,7 @@
    "title": "App",
    "slug": "app",
    "abstract": "The data structure that represents an app resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -6182,7 +7200,7 @@
    "title": "App.Attributes",
    "slug": "app/attributes-data.dictionary",
    "abstract": "Attributes that describe an app resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "appStoreUrl",
@@ -6242,7 +7260,7 @@
    "title": "AppResponse",
    "slug": "appresponse",
    "abstract": "A response that contains information about an app resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -6270,7 +7288,7 @@
    "title": "AppleCareCoverage",
    "slug": "applecarecoverage",
    "abstract": "The data structure that represents an AppleCare coverage resource that belongs to an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -6305,7 +7323,7 @@
    "title": "AppleCareCoverage.Attributes",
    "slug": "applecarecoverage/attributes-data.dictionary",
    "abstract": "Attributes for an organization device\u2019s AppleCare coverage resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "agreementNumber",
@@ -6382,7 +7400,7 @@
    "title": "AppleCareCoverageResponse",
    "slug": "applecarecoverageresponse",
    "abstract": "A response that contains a list of AppleCare coverage resources that belongs to an organization device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -6420,7 +7438,7 @@
    "title": "AppsResponse",
    "slug": "appsresponse",
    "abstract": "A response that contains a list of app resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -6458,13 +7476,13 @@
    "title": "AuditEvent",
    "slug": "auditevent",
    "abstract": "The data structure that represents an audit event resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
      "required": false,
      "type": {
-      "text": "(AuditEventDeviceAddedToOrgAttributes | AuditEventDeviceRemovedFromOrgAttributes | AuditEventDeviceAssignedToServerAttributes | AuditEventDeviceUnassignedFromServerAttributes | AuditEventSubjectHasIcloudStoragePurchaseAddedAttributes | AuditEventSubjectHasIcloudStoragePurchaseRemovedAttributes | AuditEventSubjectHasApplecarePurchaseAddedAttributes | AuditEventSubjectHasApplecarePurchaseRemovedAttributes | AuditEventDeviceIsErasedAttributes | AuditEventConfigSettingsCreatedAttributes | AuditEventConfigSettingsUpdatedAttributes | AuditEventConfigSettingsDeletedAttributes | AuditEventCollectionCreatedAttributes | AuditEventCollectionUpdatedAttributes | AuditEventCollectionDeletedAttributes | AuditEventSubscriptionCreatedAttributes | AuditEventSubscriptionUpdatedAttributes | AuditEventSubscriptionDeletedAttributes | AuditEventAccountRoleLocationChangedAttributes | AuditEventAccountAddedAttributes | AuditEventAccountDeletedAttributes | AuditEventExternalAccountAssociatedAttributes | AuditEventExternalAccountDisassociatedAttributes | AuditEventDomainAddedAttributes | AuditEventDomainRemovedAttributes | AuditEventDomainVerifiedAttributes | AuditEventApiAccountCreatedWithKeyAttributes | AuditEventApiAccountCreatedWithoutKeyAttributes | AuditEventApiAccountDeletedAttributes | AuditEventApiAccountKeyRevokedAttributes | AuditEventApiAccountKeyGeneratedAttributes | AuditEventApiAccountRoleLocationChangedAttributes | AuditEventApiAccountNameChangedAttributes | AuditEventRoleCreatedAttributes | AuditEventRoleUpdatedAttributes | AuditEventTermsAcceptedAttributes | AuditEventDomainFederationEnabledAttributes | AuditEventDomainFederationDisabledAttributes | AuditEventBatchPasswordResetInitiatedAttributes | AuditEventExternalAccountInvitedAttributes | AuditEventAccountImageSetAttributes | AuditEventAccountImageReplacedAttributes | AuditEventAccountImageRemovedAttributes | AuditEventIdpCreatedAttributes | AuditEventIdpUpdatedAttributes | AuditEventIdpDeletedAttributes | AuditEventIdpAccountSyncEnabledAttributes | AuditEventIdpAccountSyncDisabledAttributes | AuditEventAppleServicesSettingsUpdatedAttributes | AuditEventAccountPasswordChangedAttributes)",
+      "text": "(AuditEventDeviceAddedToOrgAttributes | AuditEventDeviceRemovedFromOrgAttributes | AuditEventDeviceAssignedToServerAttributes | AuditEventDeviceUnassignedFromServerAttributes | AuditEventSubjectHasIcloudStoragePurchaseAddedAttributes | AuditEventSubjectHasIcloudStoragePurchaseRemovedAttributes | AuditEventSubjectHasApplecarePurchaseAddedAttributes | AuditEventSubjectHasApplecarePurchaseRemovedAttributes | AuditEventDeviceIsErasedAttributes | AuditEventConfigSettingsCreatedAttributes | AuditEventConfigSettingsUpdatedAttributes | AuditEventConfigSettingsDeletedAttributes | AuditEventCollectionCreatedAttributes | AuditEventCollectionUpdatedAttributes | AuditEventCollectionDeletedAttributes | AuditEventSubscriptionCreatedAttributes | AuditEventSubscriptionUpdatedAttributes | AuditEventSubscriptionDeletedAttributes | AuditEventAccountRoleLocationChangedAttributes | AuditEventAccountAddedAttributes | AuditEventAccountDeletedAttributes | AuditEventExternalAccountAssociatedAttributes | AuditEventExternalAccountDisassociatedAttributes | AuditEventDomainAddedAttributes | AuditEventDomainRemovedAttributes | AuditEventDomainVerifiedAttributes | AuditEventApiAccountCreatedWithKeyAttributes | AuditEventApiAccountCreatedWithoutKeyAttributes | AuditEventApiAccountDeletedAttributes | AuditEventApiAccountKeyRevokedAttributes | AuditEventApiAccountKeyGeneratedAttributes | AuditEventApiAccountRoleLocationChangedAttributes | AuditEventApiAccountNameChangedAttributes | AuditEventWebhookCreatedAttributes | AuditEventWebhookUpdatedAttributes | AuditEventWebhookDeletedAttributes | AuditEventRoleCreatedAttributes | AuditEventRoleUpdatedAttributes | AuditEventTermsAcceptedAttributes | AuditEventDomainFederationEnabledAttributes | AuditEventDomainFederationDisabledAttributes | AuditEventBatchPasswordResetInitiatedAttributes | AuditEventExternalAccountInvitedAttributes | AuditEventAccountImageSetAttributes | AuditEventAccountImageReplacedAttributes | AuditEventAccountImageRemovedAttributes | AuditEventIdpCreatedAttributes | AuditEventIdpUpdatedAttributes | AuditEventIdpDeletedAttributes | AuditEventIdpAccountSyncEnabledAttributes | AuditEventIdpAccountSyncDisabledAttributes | AuditEventAppleServicesSettingsUpdatedAttributes | AuditEventAccountPasswordChangedAttributes)",
       "types": [
        "AuditEventDeviceAddedToOrgAttributes",
        "AuditEventDeviceRemovedFromOrgAttributes",
@@ -6499,6 +7517,9 @@
        "AuditEventApiAccountKeyGeneratedAttributes",
        "AuditEventApiAccountRoleLocationChangedAttributes",
        "AuditEventApiAccountNameChangedAttributes",
+       "AuditEventWebhookCreatedAttributes",
+       "AuditEventWebhookUpdatedAttributes",
+       "AuditEventWebhookDeletedAttributes",
        "AuditEventRoleCreatedAttributes",
        "AuditEventRoleUpdatedAttributes",
        "AuditEventTermsAcceptedAttributes",
@@ -6552,6 +7573,9 @@
       "AuditEventApiAccountKeyGeneratedAttributes",
       "AuditEventApiAccountRoleLocationChangedAttributes",
       "AuditEventApiAccountNameChangedAttributes",
+      "AuditEventWebhookCreatedAttributes",
+      "AuditEventWebhookUpdatedAttributes",
+      "AuditEventWebhookDeletedAttributes",
       "AuditEventRoleCreatedAttributes",
       "AuditEventRoleUpdatedAttributes",
       "AuditEventTermsAcceptedAttributes",
@@ -6594,7 +7618,7 @@
    "title": "AuditEventAccountAddedAttributes",
    "slug": "auditeventaccountaddedattributes",
    "abstract": "The attributes for an account added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountAdded",
@@ -6612,7 +7636,7 @@
    "title": "AuditEventAccountDeletedAttributes",
    "slug": "auditeventaccountdeletedattributes",
    "abstract": "The attributes for an account deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountDeleted",
@@ -6630,7 +7654,7 @@
    "title": "AuditEventAccountImageRemovedAttributes",
    "slug": "auditeventaccountimageremovedattributes",
    "abstract": "The attributes for an account image removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountImageRemoved",
@@ -6648,7 +7672,7 @@
    "title": "AuditEventAccountImageReplacedAttributes",
    "slug": "auditeventaccountimagereplacedattributes",
    "abstract": "The attributes for an account image replaced audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountImageReplaced",
@@ -6666,7 +7690,7 @@
    "title": "AuditEventAccountImageSetAttributes",
    "slug": "auditeventaccountimagesetattributes",
    "abstract": "The attributes for an account image set audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountImageSet",
@@ -6684,7 +7708,7 @@
    "title": "AuditEventAccountPasswordChanged",
    "slug": "auditeventaccountpasswordchanged",
    "abstract": "The data structure that represents the event data for an account password changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -6699,7 +7723,7 @@
    "title": "AuditEventAccountPasswordChangedAttributes",
    "slug": "auditeventaccountpasswordchangedattributes",
    "abstract": "The attributes for an account password changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountPasswordChanged",
@@ -6717,7 +7741,7 @@
    "title": "AuditEventAccountRoleLocation",
    "slug": "auditeventaccountrolelocation",
    "abstract": "The data structure that represents a role and location assignment.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "locationUniqueIdentifier",
@@ -6739,7 +7763,7 @@
    "title": "AuditEventAccountRoleLocationChanged",
    "slug": "auditeventaccountrolelocationchanged",
    "abstract": "The data structure that represents the event data for an account role location changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "accountRoleLocationList",
@@ -6757,7 +7781,7 @@
    "title": "AuditEventAccountRoleLocationChangedAttributes",
    "slug": "auditeventaccountrolelocationchangedattributes",
    "abstract": "The attributes for an account role location changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAccountRoleLocationChanged",
@@ -6775,7 +7799,7 @@
    "title": "AuditEventApiAccountCreatedWithKey",
    "slug": "auditeventapiaccountcreatedwithkey",
    "abstract": "The data structure that represents the event data for an API account created with key audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "keyId",
@@ -6790,7 +7814,7 @@
    "title": "AuditEventApiAccountCreatedWithKeyAttributes",
    "slug": "auditeventapiaccountcreatedwithkeyattributes",
    "abstract": "The attributes for an API account created with key audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountCreatedWithKey",
@@ -6808,7 +7832,7 @@
    "title": "AuditEventApiAccountCreatedWithoutKeyAttributes",
    "slug": "auditeventapiaccountcreatedwithoutkeyattributes",
    "abstract": "The attributes for an API account created without key audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountCreatedWithoutKey",
@@ -6826,7 +7850,7 @@
    "title": "AuditEventApiAccountDeletedAttributes",
    "slug": "auditeventapiaccountdeletedattributes",
    "abstract": "The attributes for an API account deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountDeleted",
@@ -6844,7 +7868,7 @@
    "title": "AuditEventApiAccountKeyGenerated",
    "slug": "auditeventapiaccountkeygenerated",
    "abstract": "The data structure that represents the event data for an API account key generated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "keyId",
@@ -6859,7 +7883,7 @@
    "title": "AuditEventApiAccountKeyGeneratedAttributes",
    "slug": "auditeventapiaccountkeygeneratedattributes",
    "abstract": "The attributes for an API account key generated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountKeyGenerated",
@@ -6877,7 +7901,7 @@
    "title": "AuditEventApiAccountKeyRevoked",
    "slug": "auditeventapiaccountkeyrevoked",
    "abstract": "The data structure that represents the event data for an API account key revoked audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "keyId",
@@ -6892,7 +7916,7 @@
    "title": "AuditEventApiAccountKeyRevokedAttributes",
    "slug": "auditeventapiaccountkeyrevokedattributes",
    "abstract": "The attributes for an API account key revoked audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountKeyRevoked",
@@ -6910,7 +7934,7 @@
    "title": "AuditEventApiAccountNameChanged",
    "slug": "auditeventapiaccountnamechanged",
    "abstract": "The data structure that represents the event data for an API account name changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "newName",
@@ -6925,7 +7949,7 @@
    "title": "AuditEventApiAccountNameChangedAttributes",
    "slug": "auditeventapiaccountnamechangedattributes",
    "abstract": "The attributes for an API account name changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountNameChanged",
@@ -6943,7 +7967,7 @@
    "title": "AuditEventApiAccountRoleLocationChanged",
    "slug": "auditeventapiaccountrolelocationchanged",
    "abstract": "The data structure that represents the event data for an API account role location changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "apiAccountRoleLocationList",
@@ -6961,7 +7985,7 @@
    "title": "AuditEventApiAccountRoleLocationChangedAttributes",
    "slug": "auditeventapiaccountrolelocationchangedattributes",
    "abstract": "The attributes for an API account role location changed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataApiAccountRoleLocationChanged",
@@ -6979,7 +8003,7 @@
    "title": "AuditEventAppleServicesSettingsUpdated",
    "slug": "auditeventappleservicessettingsupdated",
    "abstract": "The data structure that represents the event data for an Apple services settings updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "settingsDisabled",
@@ -7001,7 +8025,7 @@
    "title": "AuditEventAppleServicesSettingsUpdatedAttributes",
    "slug": "auditeventappleservicessettingsupdatedattributes",
    "abstract": "The attributes for an Apple services settings updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataAppleServicesSettingsUpdated",
@@ -7019,7 +8043,7 @@
    "title": "AuditEventBatchPasswordResetInitiated",
    "slug": "auditeventbatchpasswordresetinitiated",
    "abstract": "The data structure that represents the event data for a batch password reset initiated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -7034,7 +8058,7 @@
    "title": "AuditEventBatchPasswordResetInitiatedAttributes",
    "slug": "auditeventbatchpasswordresetinitiatedattributes",
    "abstract": "The attributes for a batch password reset initiated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataBatchPasswordResetInitiated",
@@ -7052,7 +8076,7 @@
    "title": "AuditEventCollectionCreated",
    "slug": "auditeventcollectioncreated",
    "abstract": "The data structure that represents the event data for a collection created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "description",
@@ -7074,7 +8098,7 @@
    "title": "AuditEventCollectionCreatedAttributes",
    "slug": "auditeventcollectioncreatedattributes",
    "abstract": "The attributes for a collection created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataCollectionCreated",
@@ -7092,7 +8116,7 @@
    "title": "AuditEventCollectionDeleted",
    "slug": "auditeventcollectiondeleted",
    "abstract": "The data structure that represents the event data for a collection deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "description",
@@ -7114,7 +8138,7 @@
    "title": "AuditEventCollectionDeletedAttributes",
    "slug": "auditeventcollectiondeletedattributes",
    "abstract": "The attributes for a collection deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataCollectionDeleted",
@@ -7132,7 +8156,7 @@
    "title": "AuditEventCollectionUpdated",
    "slug": "auditeventcollectionupdated",
    "abstract": "The data structure that represents the event data for a collection updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "description",
@@ -7154,7 +8178,7 @@
    "title": "AuditEventCollectionUpdatedAttributes",
    "slug": "auditeventcollectionupdatedattributes",
    "abstract": "The attributes for a collection updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataCollectionUpdated",
@@ -7172,7 +8196,7 @@
    "title": "AuditEventCommonAttributes",
    "slug": "auditeventcommonattributes",
    "abstract": "The common attributes for all audit events.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "actorId",
@@ -7279,7 +8303,7 @@
    "title": "AuditEventConfigSettingsCreated",
    "slug": "auditeventconfigsettingscreated",
    "abstract": "The data structure that represents the event data for a config settings created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configId",
@@ -7308,7 +8332,7 @@
    "title": "AuditEventConfigSettingsCreatedAttributes",
    "slug": "auditeventconfigsettingscreatedattributes",
    "abstract": "The attributes for a configuration settings created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataConfigSettingsCreated",
@@ -7326,7 +8350,7 @@
    "title": "AuditEventConfigSettingsDeleted",
    "slug": "auditeventconfigsettingsdeleted",
    "abstract": "The data structure that represents the event data for a config settings deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configId",
@@ -7355,7 +8379,7 @@
    "title": "AuditEventConfigSettingsDeletedAttributes",
    "slug": "auditeventconfigsettingsdeletedattributes",
    "abstract": "The attributes for a configuration settings deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataConfigSettingsDeleted",
@@ -7373,7 +8397,7 @@
    "title": "AuditEventConfigSettingsUpdated",
    "slug": "auditeventconfigsettingsupdated",
    "abstract": "The data structure that represents the event data for a config settings updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configId",
@@ -7402,7 +8426,7 @@
    "title": "AuditEventConfigSettingsUpdatedAttributes",
    "slug": "auditeventconfigsettingsupdatedattributes",
    "abstract": "The attributes for a configuration settings updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataConfigSettingsUpdated",
@@ -7420,7 +8444,7 @@
    "title": "AuditEventDeviceAddedToOrg",
    "slug": "auditeventdeviceaddedtoorg",
    "abstract": "The data structure that represents the event data for a device added to organization audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "purchaseSourceId",
@@ -7452,7 +8476,7 @@
    "title": "AuditEventDeviceAddedToOrgAttributes",
    "slug": "auditeventdeviceaddedtoorgattributes",
    "abstract": "The attributes for a device added to organization audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDeviceAddedToOrg",
@@ -7470,7 +8494,7 @@
    "title": "AuditEventDeviceAssignedToServer",
    "slug": "auditeventdeviceassignedtoserver",
    "abstract": "The data structure that represents the event data for a device assigned to server audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "serialNumber",
@@ -7492,7 +8516,7 @@
    "title": "AuditEventDeviceAssignedToServerAttributes",
    "slug": "auditeventdeviceassignedtoserverattributes",
    "abstract": "The attributes for a device assigned to server audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDeviceAssignedToServer",
@@ -7510,7 +8534,7 @@
    "title": "AuditEventDeviceIsErasedAttributes",
    "slug": "auditeventdeviceiserasedattributes",
    "abstract": "The attributes for a device is erased audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDeviceIsErased",
@@ -7528,7 +8552,7 @@
    "title": "AuditEventDeviceRemovedFromOrg",
    "slug": "auditeventdeviceremovedfromorg",
    "abstract": "The data structure that represents the event data for a device removed from organization audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "releaseEntityId",
@@ -7560,7 +8584,7 @@
    "title": "AuditEventDeviceRemovedFromOrgAttributes",
    "slug": "auditeventdeviceremovedfromorgattributes",
    "abstract": "The attributes for a device removed from organization audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDeviceRemovedFromOrg",
@@ -7578,7 +8602,7 @@
    "title": "AuditEventDeviceUnassignedFromServer",
    "slug": "auditeventdeviceunassignedfromserver",
    "abstract": "The data structure that represents the event data for a device unassigned from server audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "serialNumber",
@@ -7593,7 +8617,7 @@
    "title": "AuditEventDeviceUnassignedFromServerAttributes",
    "slug": "auditeventdeviceunassignedfromserverattributes",
    "abstract": "The attributes for a device unassigned from server audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDeviceUnassignedFromServer",
@@ -7611,7 +8635,7 @@
    "title": "AuditEventDomainAddedAttributes",
    "slug": "auditeventdomainaddedattributes",
    "abstract": "The attributes for a domain added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDomainAdded",
@@ -7629,7 +8653,7 @@
    "title": "AuditEventDomainFederationDisabled",
    "slug": "auditeventdomainfederationdisabled",
    "abstract": "The data structure that represents the event data for a domain federation disabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -7644,7 +8668,7 @@
    "title": "AuditEventDomainFederationDisabledAttributes",
    "slug": "auditeventdomainfederationdisabledattributes",
    "abstract": "The attributes for a domain federation disabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDomainFederationDisabled",
@@ -7662,7 +8686,7 @@
    "title": "AuditEventDomainFederationEnabled",
    "slug": "auditeventdomainfederationenabled",
    "abstract": "The data structure that represents the event data for a domain federation enabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -7684,7 +8708,7 @@
    "title": "AuditEventDomainFederationEnabledAttributes",
    "slug": "auditeventdomainfederationenabledattributes",
    "abstract": "The attributes for a domain federation enabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDomainFederationEnabled",
@@ -7702,7 +8726,7 @@
    "title": "AuditEventDomainRemovedAttributes",
    "slug": "auditeventdomainremovedattributes",
    "abstract": "The attributes for a domain removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDomainRemoved",
@@ -7720,7 +8744,7 @@
    "title": "AuditEventDomainVerifiedAttributes",
    "slug": "auditeventdomainverifiedattributes",
    "abstract": "The attributes for a domain verified audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataDomainVerified",
@@ -7738,7 +8762,7 @@
    "title": "AuditEventExternalAccountAssociatedAttributes",
    "slug": "auditeventexternalaccountassociatedattributes",
    "abstract": "The attributes for an external account associated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataExternalAccountAssociated",
@@ -7756,7 +8780,7 @@
    "title": "AuditEventExternalAccountDisassociatedAttributes",
    "slug": "auditeventexternalaccountdisassociatedattributes",
    "abstract": "The attributes for an external account disassociated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataExternalAccountDisassociated",
@@ -7774,7 +8798,7 @@
    "title": "AuditEventExternalAccountInvitedAttributes",
    "slug": "auditeventexternalaccountinvitedattributes",
    "abstract": "The attributes for an external account invited audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataExternalAccountInvited",
@@ -7792,7 +8816,7 @@
    "title": "AuditEventIdpAccountSyncDisabled",
    "slug": "auditeventidpaccountsyncdisabled",
    "abstract": "The data structure that represents the event data for an identity provider account sync disabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -7817,7 +8841,7 @@
    "title": "AuditEventIdpAccountSyncDisabledAttributes",
    "slug": "auditeventidpaccountsyncdisabledattributes",
    "abstract": "The attributes for an identity provider account sync disabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataIdpAccountSyncDisabled",
@@ -7835,7 +8859,7 @@
    "title": "AuditEventIdpAccountSyncEnabled",
    "slug": "auditeventidpaccountsyncenabled",
    "abstract": "The data structure that represents the event data for an identity provider account sync enabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityId",
@@ -7860,7 +8884,7 @@
    "title": "AuditEventIdpAccountSyncEnabledAttributes",
    "slug": "auditeventidpaccountsyncenabledattributes",
    "abstract": "The attributes for an identity provider account sync enabled audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataIdpAccountSyncEnabled",
@@ -7878,7 +8902,7 @@
    "title": "AuditEventIdpCreated",
    "slug": "auditeventidpcreated",
    "abstract": "The data structure that represents the event data for an identity provider created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "protocol",
@@ -7906,7 +8930,7 @@
    "title": "AuditEventIdpCreatedAttributes",
    "slug": "auditeventidpcreatedattributes",
    "abstract": "The attributes for an identity provider created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataIdpCreated",
@@ -7924,7 +8948,7 @@
    "title": "AuditEventIdpDeleted",
    "slug": "auditeventidpdeleted",
    "abstract": "The data structure that represents the event data for an identity provider deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "vendorName",
@@ -7942,7 +8966,7 @@
    "title": "AuditEventIdpDeletedAttributes",
    "slug": "auditeventidpdeletedattributes",
    "abstract": "The attributes for an identity provider deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataIdpDeleted",
@@ -7960,7 +8984,7 @@
    "title": "AuditEventIdpUpdated",
    "slug": "auditeventidpupdated",
    "abstract": "The data structure that represents the event data for an identity provider updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "vendorName",
@@ -7978,7 +9002,7 @@
    "title": "AuditEventIdpUpdatedAttributes",
    "slug": "auditeventidpupdatedattributes",
    "abstract": "The attributes for an identity provider updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataIdpUpdated",
@@ -7996,7 +9020,7 @@
    "title": "AuditEventRoleCreated",
    "slug": "auditeventrolecreated",
    "abstract": "The data structure that represents the event data for a role created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "privileges",
@@ -8011,7 +9035,7 @@
    "title": "AuditEventRoleCreatedAttributes",
    "slug": "auditeventrolecreatedattributes",
    "abstract": "The attributes for a role created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataRoleCreated",
@@ -8029,7 +9053,7 @@
    "title": "AuditEventRoleUpdated",
    "slug": "auditeventroleupdated",
    "abstract": "The data structure that represents the event data for a role updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "privilegesAdded",
@@ -8051,7 +9075,7 @@
    "title": "AuditEventRoleUpdatedAttributes",
    "slug": "auditeventroleupdatedattributes",
    "abstract": "The attributes for a role updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataRoleUpdated",
@@ -8069,7 +9093,7 @@
    "title": "AuditEventSubjectHasAppleCarePurchaseAdded",
    "slug": "auditeventsubjecthasapplecarepurchaseadded",
    "abstract": "The data structure that represents the event data for a subject has AppleCare purchase added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "subscriptionId",
@@ -8084,7 +9108,7 @@
    "title": "AuditEventSubjectHasAppleCarePurchaseRemoved",
    "slug": "auditeventsubjecthasapplecarepurchaseremoved",
    "abstract": "The data structure that represents the event data for a subject has AppleCare purchase removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "subscriptionId",
@@ -8099,7 +9123,7 @@
    "title": "AuditEventSubjectHasApplecarePurchaseAddedAttributes",
    "slug": "auditeventsubjecthasapplecarepurchaseaddedattributes",
    "abstract": "The attributes for a subject has AppleCare purchase added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubjectHasAppleCarePurchaseAdded",
@@ -8117,7 +9141,7 @@
    "title": "AuditEventSubjectHasApplecarePurchaseRemovedAttributes",
    "slug": "auditeventsubjecthasapplecarepurchaseremovedattributes",
    "abstract": "The attributes for a subject has AppleCare purchase removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubjectHasAppleCarePurchaseRemoved",
@@ -8135,7 +9159,7 @@
    "title": "AuditEventSubjectHasICloudStoragePurchaseAdded",
    "slug": "auditeventsubjecthasicloudstoragepurchaseadded",
    "abstract": "The data structure that represents the event data for a subject has iCloud storage purchase added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "subscriptionId",
@@ -8150,7 +9174,7 @@
    "title": "AuditEventSubjectHasICloudStoragePurchaseRemoved",
    "slug": "auditeventsubjecthasicloudstoragepurchaseremoved",
    "abstract": "The data structure that represents the event data for a subject has iCloud storage purchase removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "subscriptionId",
@@ -8165,7 +9189,7 @@
    "title": "AuditEventSubjectHasIcloudStoragePurchaseAddedAttributes",
    "slug": "auditeventsubjecthasicloudstoragepurchaseaddedattributes",
    "abstract": "The attributes for a subject has iCloud storage purchase added audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubjectHasICloudStoragePurchaseAdded",
@@ -8183,7 +9207,7 @@
    "title": "AuditEventSubjectHasIcloudStoragePurchaseRemovedAttributes",
    "slug": "auditeventsubjecthasicloudstoragepurchaseremovedattributes",
    "abstract": "The attributes for a subject has iCloud storage purchase removed audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubjectHasICloudStoragePurchaseRemoved",
@@ -8201,7 +9225,7 @@
    "title": "AuditEventSubscriptionCreated",
    "slug": "auditeventsubscriptioncreated",
    "abstract": "The data structure that represents the event data for a subscription created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "planCaption",
@@ -8216,7 +9240,7 @@
    "title": "AuditEventSubscriptionCreatedAttributes",
    "slug": "auditeventsubscriptioncreatedattributes",
    "abstract": "The attributes for a subscription created audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubscriptionCreated",
@@ -8234,7 +9258,7 @@
    "title": "AuditEventSubscriptionDeleted",
    "slug": "auditeventsubscriptiondeleted",
    "abstract": "The data structure that represents the event data for a subscription deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "planCaption",
@@ -8249,7 +9273,7 @@
    "title": "AuditEventSubscriptionDeletedAttributes",
    "slug": "auditeventsubscriptiondeletedattributes",
    "abstract": "The attributes for a subscription deleted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubscriptionDeleted",
@@ -8267,7 +9291,7 @@
    "title": "AuditEventSubscriptionUpdated",
    "slug": "auditeventsubscriptionupdated",
    "abstract": "The data structure that represents the event data for a subscription updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "planCaption",
@@ -8282,7 +9306,7 @@
    "title": "AuditEventSubscriptionUpdatedAttributes",
    "slug": "auditeventsubscriptionupdatedattributes",
    "abstract": "The attributes for a subscription updated audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataSubscriptionUpdated",
@@ -8300,7 +9324,7 @@
    "title": "AuditEventTermsAccepted",
    "slug": "auditeventtermsaccepted",
    "abstract": "The data structure that represents the event data for a terms accepted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "termsName",
@@ -8315,7 +9339,7 @@
    "title": "AuditEventTermsAcceptedAttributes",
    "slug": "auditeventtermsacceptedattributes",
    "abstract": "The attributes for a terms accepted audit event.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "eventDataTermsAccepted",
@@ -8329,11 +9353,137 @@
     }
    ]
   },
+  "AuditEventWebhookCreated": {
+   "title": "AuditEventWebhookCreated",
+   "slug": "auditeventwebhookcreated",
+   "abstract": "The data structure that represents the event data for a webhook created audit event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "enabled",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "eventTypes",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     }
+    },
+    {
+     "name": "name",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "url",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "AuditEventWebhookCreatedAttributes": {
+   "title": "AuditEventWebhookCreatedAttributes",
+   "slug": "auditeventwebhookcreatedattributes",
+   "abstract": "The attributes for a webhook created audit event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "eventDataWebhookCreated",
+     "required": false,
+     "type": {
+      "text": "AuditEventWebhookCreated",
+      "types": [
+       "AuditEventWebhookCreated"
+      ]
+     }
+    }
+   ]
+  },
+  "AuditEventWebhookDeletedAttributes": {
+   "title": "AuditEventWebhookDeletedAttributes",
+   "slug": "auditeventwebhookdeletedattributes",
+   "abstract": "The attributes for a webhook deleted audit event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "eventDataWebhookDeleted",
+     "required": false,
+     "type": {
+      "text": "AuditEventWebhookDeleted",
+      "types": [
+       "AuditEventWebhookDeleted"
+      ]
+     }
+    }
+   ]
+  },
+  "AuditEventWebhookUpdated": {
+   "title": "AuditEventWebhookUpdated",
+   "slug": "auditeventwebhookupdated",
+   "abstract": "The data structure that represents the event data for a webhook updated audit event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "enabled",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "eventTypes",
+     "required": false,
+     "type": {
+      "text": "[string]"
+     }
+    },
+    {
+     "name": "name",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "url",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "AuditEventWebhookUpdatedAttributes": {
+   "title": "AuditEventWebhookUpdatedAttributes",
+   "slug": "auditeventwebhookupdatedattributes",
+   "abstract": "The attributes for a webhook updated audit event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "eventDataWebhookUpdated",
+     "required": false,
+     "type": {
+      "text": "AuditEventWebhookUpdated",
+      "types": [
+       "AuditEventWebhookUpdated"
+      ]
+     }
+    }
+   ]
+  },
   "AuditEventsResponse": {
    "title": "AuditEventsResponse",
    "slug": "auditeventsresponse",
    "abstract": "The response containing a list of audit events.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8371,7 +9521,7 @@
    "title": "Blueprint",
    "slug": "blueprint",
    "abstract": "The data structure that represents a Blueprint resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -8426,7 +9576,7 @@
    "title": "Blueprint.Attributes",
    "slug": "blueprint/attributes-data.dictionary",
    "abstract": "Attributes that describe a Blueprint resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "appLicenseDeficient",
@@ -8479,7 +9629,7 @@
    "title": "Blueprint.Relationships",
    "slug": "blueprint/relationships-data.dictionary",
    "abstract": "Relationships that link a Blueprint to related resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "apps",
@@ -8546,7 +9696,7 @@
   "Blueprint.Relationships.Apps": {
    "title": "Blueprint.Relationships.Apps",
    "slug": "blueprint/relationships-data.dictionary/apps-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8583,7 +9733,7 @@
   "Blueprint.Relationships.Apps.Data": {
    "title": "Blueprint.Relationships.Apps.Data",
    "slug": "blueprint/relationships-data.dictionary/apps-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8607,7 +9757,7 @@
   "Blueprint.Relationships.Configurations": {
    "title": "Blueprint.Relationships.Configurations",
    "slug": "blueprint/relationships-data.dictionary/configurations-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8644,7 +9794,7 @@
   "Blueprint.Relationships.Configurations.Data": {
    "title": "Blueprint.Relationships.Configurations.Data",
    "slug": "blueprint/relationships-data.dictionary/configurations-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8668,7 +9818,7 @@
   "Blueprint.Relationships.OrgDevices": {
    "title": "Blueprint.Relationships.OrgDevices",
    "slug": "blueprint/relationships-data.dictionary/orgdevices-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8705,7 +9855,7 @@
   "Blueprint.Relationships.OrgDevices.Data": {
    "title": "Blueprint.Relationships.OrgDevices.Data",
    "slug": "blueprint/relationships-data.dictionary/orgdevices-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8729,7 +9879,7 @@
   "Blueprint.Relationships.Packages": {
    "title": "Blueprint.Relationships.Packages",
    "slug": "blueprint/relationships-data.dictionary/packages-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8766,7 +9916,7 @@
   "Blueprint.Relationships.Packages.Data": {
    "title": "Blueprint.Relationships.Packages.Data",
    "slug": "blueprint/relationships-data.dictionary/packages-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8790,7 +9940,7 @@
   "Blueprint.Relationships.UserGroups": {
    "title": "Blueprint.Relationships.UserGroups",
    "slug": "blueprint/relationships-data.dictionary/usergroups-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8827,7 +9977,7 @@
   "Blueprint.Relationships.UserGroups.Data": {
    "title": "Blueprint.Relationships.UserGroups.Data",
    "slug": "blueprint/relationships-data.dictionary/usergroups-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8851,7 +10001,7 @@
   "Blueprint.Relationships.Users": {
    "title": "Blueprint.Relationships.Users",
    "slug": "blueprint/relationships-data.dictionary/users-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8888,7 +10038,7 @@
   "Blueprint.Relationships.Users.Data": {
    "title": "Blueprint.Relationships.Users.Data",
    "slug": "blueprint/relationships-data.dictionary/users-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8913,7 +10063,7 @@
    "title": "BlueprintAppsLinkagesRequest",
    "slug": "blueprintappslinkagesrequest",
    "abstract": "A request to get a list of app resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8930,7 +10080,7 @@
   "BlueprintAppsLinkagesRequest.Data": {
    "title": "BlueprintAppsLinkagesRequest.Data",
    "slug": "blueprintappslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -8955,7 +10105,7 @@
    "title": "BlueprintAppsLinkagesResponse",
    "slug": "blueprintappslinkagesresponse",
    "abstract": "A response that contains a list of app resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -8992,7 +10142,7 @@
   "BlueprintAppsLinkagesResponse.Data": {
    "title": "BlueprintAppsLinkagesResponse.Data",
    "slug": "blueprintappslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9017,7 +10167,7 @@
    "title": "BlueprintConfigurationsLinkagesRequest",
    "slug": "blueprintconfigurationslinkagesrequest",
    "abstract": "A request to get a list of Configuration resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9034,7 +10184,7 @@
   "BlueprintConfigurationsLinkagesRequest.Data": {
    "title": "BlueprintConfigurationsLinkagesRequest.Data",
    "slug": "blueprintconfigurationslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9059,7 +10209,7 @@
    "title": "BlueprintConfigurationsLinkagesResponse",
    "slug": "blueprintconfigurationslinkagesresponse",
    "abstract": "A response that contains a list of Configuration resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9096,7 +10246,7 @@
   "BlueprintConfigurationsLinkagesResponse.Data": {
    "title": "BlueprintConfigurationsLinkagesResponse.Data",
    "slug": "blueprintconfigurationslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9121,7 +10271,7 @@
    "title": "BlueprintCreateRequest",
    "slug": "blueprintcreaterequest",
    "abstract": "A request to create a new Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9138,7 +10288,7 @@
   "BlueprintCreateRequest.Data": {
    "title": "BlueprintCreateRequest.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -9175,7 +10325,7 @@
   "BlueprintCreateRequest.Data.Attributes": {
    "title": "BlueprintCreateRequest.Data.Attributes",
    "slug": "blueprintcreaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "description",
@@ -9196,7 +10346,7 @@
   "BlueprintCreateRequest.Data.Relationships": {
    "title": "BlueprintCreateRequest.Data.Relationships",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "apps",
@@ -9263,7 +10413,7 @@
   "BlueprintCreateRequest.Data.Relationships.Apps": {
    "title": "BlueprintCreateRequest.Data.Relationships.Apps",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/apps-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9280,7 +10430,7 @@
   "BlueprintCreateRequest.Data.Relationships.Apps.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.Apps.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/apps-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9304,7 +10454,7 @@
   "BlueprintCreateRequest.Data.Relationships.Configurations": {
    "title": "BlueprintCreateRequest.Data.Relationships.Configurations",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/configurations-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9321,7 +10471,7 @@
   "BlueprintCreateRequest.Data.Relationships.Configurations.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.Configurations.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/configurations-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9345,7 +10495,7 @@
   "BlueprintCreateRequest.Data.Relationships.OrgDevices": {
    "title": "BlueprintCreateRequest.Data.Relationships.OrgDevices",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/orgdevices-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9362,7 +10512,7 @@
   "BlueprintCreateRequest.Data.Relationships.OrgDevices.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.OrgDevices.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/orgdevices-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9386,7 +10536,7 @@
   "BlueprintCreateRequest.Data.Relationships.Packages": {
    "title": "BlueprintCreateRequest.Data.Relationships.Packages",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/packages-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9403,7 +10553,7 @@
   "BlueprintCreateRequest.Data.Relationships.Packages.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.Packages.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/packages-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9427,7 +10577,7 @@
   "BlueprintCreateRequest.Data.Relationships.UserGroups": {
    "title": "BlueprintCreateRequest.Data.Relationships.UserGroups",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/usergroups-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9444,7 +10594,7 @@
   "BlueprintCreateRequest.Data.Relationships.UserGroups.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.UserGroups.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/usergroups-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9468,7 +10618,7 @@
   "BlueprintCreateRequest.Data.Relationships.Users": {
    "title": "BlueprintCreateRequest.Data.Relationships.Users",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/users-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9485,7 +10635,7 @@
   "BlueprintCreateRequest.Data.Relationships.Users.Data": {
    "title": "BlueprintCreateRequest.Data.Relationships.Users.Data",
    "slug": "blueprintcreaterequest/data-data.dictionary/relationships-data.dictionary/users-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9510,7 +10660,7 @@
    "title": "BlueprintOrgDevicesLinkagesRequest",
    "slug": "blueprintorgdeviceslinkagesrequest",
    "abstract": "A request to get a list of device resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9527,7 +10677,7 @@
   "BlueprintOrgDevicesLinkagesRequest.Data": {
    "title": "BlueprintOrgDevicesLinkagesRequest.Data",
    "slug": "blueprintorgdeviceslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9552,7 +10702,7 @@
    "title": "BlueprintOrgDevicesLinkagesResponse",
    "slug": "blueprintorgdeviceslinkagesresponse",
    "abstract": "A response that contains a list of device resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9589,7 +10739,7 @@
   "BlueprintOrgDevicesLinkagesResponse.Data": {
    "title": "BlueprintOrgDevicesLinkagesResponse.Data",
    "slug": "blueprintorgdeviceslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9614,7 +10764,7 @@
    "title": "BlueprintPackagesLinkagesRequest",
    "slug": "blueprintpackageslinkagesrequest",
    "abstract": "A request to get a list of package resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9631,7 +10781,7 @@
   "BlueprintPackagesLinkagesRequest.Data": {
    "title": "BlueprintPackagesLinkagesRequest.Data",
    "slug": "blueprintpackageslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9656,7 +10806,7 @@
    "title": "BlueprintPackagesLinkagesResponse",
    "slug": "blueprintpackageslinkagesresponse",
    "abstract": "A response that contains a list of package resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9693,7 +10843,7 @@
   "BlueprintPackagesLinkagesResponse.Data": {
    "title": "BlueprintPackagesLinkagesResponse.Data",
    "slug": "blueprintpackageslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9718,7 +10868,7 @@
    "title": "BlueprintResponse",
    "slug": "blueprintresponse",
    "abstract": "A response that contains information about a Blueprint resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9761,7 +10911,7 @@
    "title": "BlueprintUpdateRequest",
    "slug": "blueprintupdaterequest",
    "abstract": "A request to update an existing Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9778,7 +10928,7 @@
   "BlueprintUpdateRequest.Data": {
    "title": "BlueprintUpdateRequest.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -9822,7 +10972,7 @@
   "BlueprintUpdateRequest.Data.Attributes": {
    "title": "BlueprintUpdateRequest.Data.Attributes",
    "slug": "blueprintupdaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "description",
@@ -9843,7 +10993,7 @@
   "BlueprintUpdateRequest.Data.Relationships": {
    "title": "BlueprintUpdateRequest.Data.Relationships",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "apps",
@@ -9910,7 +11060,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Apps": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Apps",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/apps-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9927,7 +11077,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Apps.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Apps.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/apps-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9951,7 +11101,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Configurations": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Configurations",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/configurations-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -9968,7 +11118,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Configurations.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Configurations.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/configurations-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -9992,7 +11142,7 @@
   "BlueprintUpdateRequest.Data.Relationships.OrgDevices": {
    "title": "BlueprintUpdateRequest.Data.Relationships.OrgDevices",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/orgdevices-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10009,7 +11159,7 @@
   "BlueprintUpdateRequest.Data.Relationships.OrgDevices.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.OrgDevices.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/orgdevices-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10033,7 +11183,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Packages": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Packages",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/packages-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10050,7 +11200,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Packages.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Packages.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/packages-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10074,7 +11224,7 @@
   "BlueprintUpdateRequest.Data.Relationships.UserGroups": {
    "title": "BlueprintUpdateRequest.Data.Relationships.UserGroups",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/usergroups-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10091,7 +11241,7 @@
   "BlueprintUpdateRequest.Data.Relationships.UserGroups.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.UserGroups.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/usergroups-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10115,7 +11265,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Users": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Users",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/users-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10132,7 +11282,7 @@
   "BlueprintUpdateRequest.Data.Relationships.Users.Data": {
    "title": "BlueprintUpdateRequest.Data.Relationships.Users.Data",
    "slug": "blueprintupdaterequest/data-data.dictionary/relationships-data.dictionary/users-data.dictionary/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10157,7 +11307,7 @@
    "title": "BlueprintUserGroupsLinkagesRequest",
    "slug": "blueprintusergroupslinkagesrequest",
    "abstract": "A request to get a list of user group resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10174,7 +11324,7 @@
   "BlueprintUserGroupsLinkagesRequest.Data": {
    "title": "BlueprintUserGroupsLinkagesRequest.Data",
    "slug": "blueprintusergroupslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10199,7 +11349,7 @@
    "title": "BlueprintUserGroupsLinkagesResponse",
    "slug": "blueprintusergroupslinkagesresponse",
    "abstract": "A response that contains a list of user group resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10236,7 +11386,7 @@
   "BlueprintUserGroupsLinkagesResponse.Data": {
    "title": "BlueprintUserGroupsLinkagesResponse.Data",
    "slug": "blueprintusergroupslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10261,7 +11411,7 @@
    "title": "BlueprintUsersLinkagesRequest",
    "slug": "blueprintuserslinkagesrequest",
    "abstract": "A request to get a list of user resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10278,7 +11428,7 @@
   "BlueprintUsersLinkagesRequest.Data": {
    "title": "BlueprintUsersLinkagesRequest.Data",
    "slug": "blueprintuserslinkagesrequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10303,7 +11453,7 @@
    "title": "BlueprintUsersLinkagesResponse",
    "slug": "blueprintuserslinkagesresponse",
    "abstract": "A response that contains a list of user resource linkages for a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10340,7 +11490,7 @@
   "BlueprintUsersLinkagesResponse.Data": {
    "title": "BlueprintUsersLinkagesResponse.Data",
    "slug": "blueprintuserslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -10365,7 +11515,7 @@
    "title": "BlueprintsResponse",
    "slug": "blueprintsresponse",
    "abstract": "A response that contains a list of Blueprint resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10418,7 +11568,7 @@
    "title": "Configuration",
    "slug": "configuration",
    "abstract": "The data structure that represents a Configuration resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -10472,7 +11622,7 @@
   "ConfigurationCommon": {
    "title": "ConfigurationCommon",
    "slug": "configurationcommon",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configuredForPlatforms",
@@ -10521,7 +11671,7 @@
    "title": "ConfigurationCreateRequest",
    "slug": "configurationcreaterequest",
    "abstract": "A request to create a new Configuration.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10538,7 +11688,7 @@
   "ConfigurationCreateRequest.Data": {
    "title": "ConfigurationCreateRequest.Data",
    "slug": "configurationcreaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -10565,7 +11715,7 @@
   "ConfigurationCreateRequest.Data.Attributes": {
    "title": "ConfigurationCreateRequest.Data.Attributes",
    "slug": "configurationcreaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configuredForPlatforms",
@@ -10609,7 +11759,7 @@
   "ConfigurationCustomSetting": {
    "title": "ConfigurationCustomSetting",
    "slug": "configurationcustomsetting",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "customSettingsValues",
@@ -10627,7 +11777,7 @@
    "title": "ConfigurationResponse",
    "slug": "configurationresponse",
    "abstract": "A response that contains information about a Configuration resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10655,7 +11805,7 @@
    "title": "ConfigurationUpdateRequest",
    "slug": "configurationupdaterequest",
    "abstract": "A request to update an existing Configuration.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10672,7 +11822,7 @@
   "ConfigurationUpdateRequest.Data": {
    "title": "ConfigurationUpdateRequest.Data",
    "slug": "configurationupdaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -10706,7 +11856,7 @@
   "ConfigurationUpdateRequest.Data.Attributes": {
    "title": "ConfigurationUpdateRequest.Data.Attributes",
    "slug": "configurationupdaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configuredForPlatforms",
@@ -10741,7 +11891,7 @@
    "title": "ConfigurationsResponse",
    "slug": "configurationsresponse",
    "abstract": "A response that contains a list of Configuration resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -10779,7 +11929,7 @@
    "title": "CustomSettingsValues",
    "slug": "customsettingsvalues",
    "abstract": "The custom settings payload for a Configuration of type CUSTOM_SETTING.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "configurationProfile",
@@ -10801,7 +11951,7 @@
    "title": "DocumentLinks",
    "slug": "documentlinks",
    "abstract": "Self-links to documents that can contain information for one or more resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "self",
@@ -10815,7 +11965,7 @@
   "ErrorLinks": {
    "title": "ErrorLinks",
    "slug": "errorlinks",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "about",
@@ -10843,7 +11993,7 @@
   "ErrorLinks.Associated": {
    "title": "ErrorLinks.Associated",
    "slug": "errorlinks/associated-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "href",
@@ -10867,7 +12017,7 @@
   "ErrorLinks.Associated.Meta": {
    "title": "ErrorLinks.Associated.Meta",
    "slug": "errorlinks/associated-data.dictionary/meta-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "source",
@@ -10882,7 +12032,7 @@
    "title": "ErrorResponse",
    "slug": "errorresponse",
    "abstract": "The error details that an API returns in the response body whenever the API request isn\u2019t successful.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "errors",
@@ -10900,7 +12050,7 @@
    "title": "ErrorResponse.Errors",
    "slug": "errorresponse/errors-data.dictionary",
    "abstract": "The details about an error that returns when an API request isn\u2019t successful.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "code",
@@ -10977,7 +12127,7 @@
   "ErrorResponse.Errors.Meta": {
    "title": "ErrorResponse.Errors.Meta",
    "slug": "errorresponse/errors-data.dictionary/meta-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "Any Key",
@@ -10995,7 +12145,7 @@
    "title": "JsonPointer",
    "slug": "jsonpointer",
    "abstract": "An object that contains the JSON pointer that indicates the location of the error.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "pointer",
@@ -11010,7 +12160,7 @@
    "title": "MdmDevice",
    "slug": "mdmdevice",
    "abstract": "The data structure that represents a device management service enrolled device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -11065,7 +12215,7 @@
    "title": "MdmDevice.Attributes",
    "slug": "mdmdevice/attributes-data.dictionary",
    "abstract": "The attributes for a device management service enrolled device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "deviceName",
@@ -11100,7 +12250,7 @@
   "MdmDevice.Relationships": {
    "title": "MdmDevice.Relationships",
    "slug": "mdmdevice/relationships-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "details",
@@ -11117,7 +12267,7 @@
   "MdmDevice.Relationships.Details": {
    "title": "MdmDevice.Relationships.Details",
    "slug": "mdmdevice/relationships-data.dictionary/details-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -11135,7 +12285,7 @@
    "title": "MdmDeviceDetail",
    "slug": "mdmdevicedetail",
    "abstract": "The data structure that represents the detailed information for a device management service enrolled device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -11180,7 +12330,7 @@
    "title": "MdmDeviceDetail.Attributes",
    "slug": "mdmdevicedetail/attributes-data.dictionary",
    "abstract": "The attributes for a device management service enrolled device detail resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "bluetoothMacAddress",
@@ -11323,7 +12473,7 @@
    "title": "MdmDeviceDetailResponse",
    "slug": "mdmdevicedetailresponse",
    "abstract": "A response that contains the detailed information for an Apple device enrolled in a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11351,7 +12501,7 @@
    "title": "MdmDeviceResponse",
    "slug": "mdmdeviceresponse",
    "abstract": "A response that contains a list of Apple devices enrolled in a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11379,7 +12529,7 @@
    "title": "MdmDevicesResponse",
    "slug": "mdmdevicesresponse",
    "abstract": "A response that contains a list of Apple devices enrolled in a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11417,7 +12567,7 @@
    "title": "MdmServer",
    "slug": "mdmserver",
    "abstract": "The data structure that represents a device management service resource in an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -11472,7 +12622,7 @@
    "title": "MdmServer.Attributes",
    "slug": "mdmserver/attributes-data.dictionary",
    "abstract": "Attributes that describe a device management service resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "createdDateTime",
@@ -11556,7 +12706,7 @@
    "title": "MdmServer.Relationships",
    "slug": "mdmserver/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "devices",
@@ -11574,7 +12724,7 @@
    "title": "MdmServer.Relationships.Devices",
    "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11612,7 +12762,7 @@
    "title": "MdmServer.Relationships.Devices.Data",
    "slug": "mdmserver/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -11637,7 +12787,7 @@
    "title": "MdmServerCertificate",
    "slug": "mdmservercertificate",
    "abstract": "The X.509 certificate to associate with a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11659,7 +12809,7 @@
    "title": "MdmServerCreateRequest",
    "slug": "mdmservercreaterequest",
    "abstract": "A request to create a new device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11676,7 +12826,7 @@
   "MdmServerCreateRequest.Data": {
    "title": "MdmServerCreateRequest.Data",
    "slug": "mdmservercreaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -11703,7 +12853,7 @@
   "MdmServerCreateRequest.Data.Attributes": {
    "title": "MdmServerCreateRequest.Data.Attributes",
    "slug": "mdmservercreaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "enableMdmDisownFlag",
@@ -11735,7 +12885,7 @@
    "title": "MdmServerDevicesLinkagesResponse",
    "slug": "mdmserverdeviceslinkagesresponse",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11773,7 +12923,7 @@
    "title": "MdmServerDevicesLinkagesResponse.Data",
    "slug": "mdmserverdeviceslinkagesresponse/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -11798,7 +12948,7 @@
    "title": "MdmServerResponse",
    "slug": "mdmserverresponse",
    "abstract": "A response that contains a single device management service resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11836,7 +12986,7 @@
    "title": "MdmServerUpdateRequest",
    "slug": "mdmserverupdaterequest",
    "abstract": "A request to update an existing device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11853,7 +13003,7 @@
   "MdmServerUpdateRequest.Data": {
    "title": "MdmServerUpdateRequest.Data",
    "slug": "mdmserverupdaterequest/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -11887,7 +13037,7 @@
   "MdmServerUpdateRequest.Data.Attributes": {
    "title": "MdmServerUpdateRequest.Data.Attributes",
    "slug": "mdmserverupdaterequest/data-data.dictionary/attributes-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "defaultProductFamilies",
@@ -11929,7 +13079,7 @@
    "title": "MdmServersResponse",
    "slug": "mdmserversresponse",
    "abstract": "A response that contains a list of device management service resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -11977,7 +13127,7 @@
    "title": "OrgDevice",
    "slug": "orgdevice",
    "abstract": "The data structure that represents an organization device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -12032,7 +13182,7 @@
    "title": "OrgDevice.Attributes",
    "slug": "orgdevice/attributes-data.dictionary",
    "abstract": "Attributes that describe an organization device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "addedToOrgDateTime",
@@ -12211,7 +13361,7 @@
    "title": "OrgDevice.Relationships",
    "slug": "orgdevice/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activationLockStatus",
@@ -12248,7 +13398,7 @@
   "OrgDevice.Relationships.ActivationLockStatus": {
    "title": "OrgDevice.Relationships.ActivationLockStatus",
    "slug": "orgdevice/relationships-data.dictionary/activationlockstatus-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -12265,7 +13415,7 @@
   "OrgDevice.Relationships.AppleCareCoverage": {
    "title": "OrgDevice.Relationships.AppleCareCoverage",
    "slug": "orgdevice/relationships-data.dictionary/applecarecoverage-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -12283,7 +13433,7 @@
    "title": "OrgDevice.Relationships.AssignedServer",
    "slug": "orgdevice/relationships-data.dictionary/assignedserver-data.dictionary",
    "abstract": "The links that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -12301,7 +13451,7 @@
    "title": "OrgDeviceActivity",
    "slug": "orgdeviceactivity",
    "abstract": "The data structure that represents an organization device activity resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -12346,7 +13496,7 @@
    "title": "OrgDeviceActivity.Attributes",
    "slug": "orgdeviceactivity/attributes-data.dictionary",
    "abstract": "Attributes that describe an organization device activity resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "completedDateTime",
@@ -12389,7 +13539,7 @@
    "title": "OrgDeviceActivityCreateRequest",
    "slug": "orgdeviceactivitycreaterequest",
    "abstract": "The request body you use to update the device management service for a device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12407,7 +13557,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary",
    "abstract": "The data element of the request body.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -12445,7 +13595,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Attributes",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/attributes-data.dictionary",
    "abstract": "Attributes with values that you\u2019re changing as part of the create request.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "activityType",
@@ -12473,7 +13623,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "devices",
@@ -12501,7 +13651,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary",
    "abstract": "The data that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12519,7 +13669,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.Devices.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/devices-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -12544,7 +13694,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary",
    "abstract": "The data that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12562,7 +13712,7 @@
    "title": "OrgDeviceActivityCreateRequest.Data.Relationships.MdmServer.Data",
    "slug": "orgdeviceactivitycreaterequest/data-data.dictionary/relationships-data.dictionary/mdmserver-data.dictionary/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -12587,7 +13737,7 @@
    "title": "OrgDeviceActivityResponse",
    "slug": "orgdeviceactivityresponse",
    "abstract": "A response that contains a single organization device activity resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12615,7 +13765,7 @@
    "title": "OrgDeviceAssignedServerLinkageResponse",
    "slug": "orgdeviceassignedserverlinkageresponse",
    "abstract": "The data and links that describe the relationship between the resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12643,7 +13793,7 @@
    "title": "OrgDeviceAssignedServerLinkageResponse.Data",
    "slug": "orgdeviceassignedserverlinkageresponse/data-data.dictionary",
    "abstract": "The type and ID of a related resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -12668,7 +13818,7 @@
    "title": "OrgDeviceResponse",
    "slug": "orgdeviceresponse",
    "abstract": "A response that contains a single organization device resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12696,7 +13846,7 @@
    "title": "OrgDevicesResponse",
    "slug": "orgdevicesresponse",
    "abstract": "A response that contains a list of organization device resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12734,7 +13884,7 @@
    "title": "OrganizationalUnit",
    "slug": "organizationalunit",
    "abstract": "The data structure that represents an organizational unit resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -12789,7 +13939,7 @@
    "title": "OrganizationalUnit.Attributes",
    "slug": "organizationalunit/attributes-data.dictionary",
    "abstract": "Attributes that describe an organizational unit resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "createdDateTime",
@@ -12825,7 +13975,7 @@
    "title": "OrganizationalUnit.Relationships",
    "slug": "organizationalunit/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "users",
@@ -12842,7 +13992,7 @@
   "OrganizationalUnit.Relationships.Users": {
    "title": "OrganizationalUnit.Relationships.Users",
    "slug": "organizationalunit/relationships-data.dictionary/users-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -12860,7 +14010,7 @@
    "title": "OrganizationalUnitResponse",
    "slug": "organizationalunitresponse",
    "abstract": "A response that contains a single organizational unit resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12888,7 +14038,7 @@
    "title": "OrganizationalUnitUsersLinkagesResponse",
    "slug": "organizationalunituserslinkagesresponse",
    "abstract": "A response that contains a list of user IDs for an organizational unit.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12925,7 +14075,7 @@
   "OrganizationalUnitUsersLinkagesResponse.Data": {
    "title": "OrganizationalUnitUsersLinkagesResponse.Data",
    "slug": "organizationalunituserslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -12950,7 +14100,7 @@
    "title": "OrganizationalUnitsResponse",
    "slug": "organizationalunitsresponse",
    "abstract": "A response that contains a list of organizational unit resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -12988,7 +14138,7 @@
    "title": "Package",
    "slug": "package",
    "abstract": "The data structure that represents a package resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -13033,7 +14183,7 @@
    "title": "Package.Attributes",
    "slug": "package/attributes-data.dictionary",
    "abstract": "Attributes that describe a package resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "bundleIds",
@@ -13097,7 +14247,7 @@
    "title": "PackageResponse",
    "slug": "packageresponse",
    "abstract": "A response that contains information about a package resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13125,7 +14275,7 @@
    "title": "PackagesResponse",
    "slug": "packagesresponse",
    "abstract": "A response that contains a list of package resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13163,7 +14313,7 @@
    "title": "PagedDocumentLinks",
    "slug": "pageddocumentlinks",
    "abstract": "Links related to the response document, including paging links.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "first",
@@ -13192,7 +14342,7 @@
    "title": "PagingInformation",
    "slug": "paginginformation",
    "abstract": "Paging information for data responses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "paging",
@@ -13210,7 +14360,7 @@
    "title": "PagingInformation.Paging",
    "slug": "paginginformation/paging-data.dictionary",
    "abstract": "Paging details, such as the total number of resources and the per-page limit.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "limit",
@@ -13239,7 +14389,7 @@
    "title": "Parameter",
    "slug": "parameter",
    "abstract": "An object that contains the query parameter that produces the error.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "parameter",
@@ -13254,7 +14404,7 @@
    "title": "RelationshipLinks",
    "slug": "relationshiplinks",
    "abstract": "Links related to the response document, including self-links.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "include",
@@ -13283,7 +14433,7 @@
    "title": "ResourceLinks",
    "slug": "resourcelinks",
    "abstract": "Self-links to requested resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "self",
@@ -13298,7 +14448,7 @@
    "title": "User",
    "slug": "user",
    "abstract": "The data structure that represents a user resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -13343,7 +14493,7 @@
    "title": "User.Attributes",
    "slug": "user/attributes-data.dictionary",
    "abstract": "Attributes that describe a user resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "costCenter",
@@ -13479,7 +14629,7 @@
    "title": "UserGroup",
    "slug": "usergroup",
    "abstract": "The data structure that represents a user group resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "attributes",
@@ -13534,7 +14684,7 @@
    "title": "UserGroup.Attributes",
    "slug": "usergroup/attributes-data.dictionary",
    "abstract": "Attributes that describe a user group resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "createdDateTime",
@@ -13597,7 +14747,7 @@
    "title": "UserGroup.Relationships",
    "slug": "usergroup/relationships-data.dictionary",
    "abstract": "The relationships you include in the request, and those that you can operate on.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "users",
@@ -13614,7 +14764,7 @@
   "UserGroup.Relationships.Users": {
    "title": "UserGroup.Relationships.Users",
    "slug": "usergroup/relationships-data.dictionary/users-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "links",
@@ -13632,7 +14782,7 @@
    "title": "UserGroupResponse",
    "slug": "usergroupresponse",
    "abstract": "A response that contains a single user group resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13660,7 +14810,7 @@
    "title": "UserGroupUsersLinkagesResponse",
    "slug": "usergroupuserslinkagesresponse",
    "abstract": "A response that contains a list of user IDs for a user group.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13697,7 +14847,7 @@
   "UserGroupUsersLinkagesResponse.Data": {
    "title": "UserGroupUsersLinkagesResponse.Data",
    "slug": "usergroupuserslinkagesresponse/data-data.dictionary",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "id",
@@ -13722,7 +14872,7 @@
    "title": "UserGroupsResponse",
    "slug": "usergroupsresponse",
    "abstract": "A response that contains a list of user group resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13760,7 +14910,7 @@
    "title": "UserPhoneNumber",
    "slug": "userphonenumber",
    "abstract": "The data structure that represents a user\u2019s phone number.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "phoneNumber",
@@ -13785,7 +14935,7 @@
    "title": "UserResponse",
    "slug": "userresponse",
    "abstract": "A response that contains a single user resource.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13813,7 +14963,7 @@
    "title": "UserRoleOuMapping",
    "slug": "userroleoumapping",
    "abstract": "The data structure that represents a user\u2019s role and organizational unit mapping.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "ouId",
@@ -13835,7 +14985,7 @@
    "title": "UsersResponse",
    "slug": "usersresponse",
    "abstract": "A response that contains a list of user resources.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "properties": [
     {
      "name": "data",
@@ -13868,6 +15018,1055 @@
      }
     }
    ]
+  },
+  "Webhook": {
+   "title": "Webhook",
+   "slug": "webhook",
+   "abstract": "The data structure that represents a webhook resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "Webhook.Attributes",
+      "types": [
+       "Webhook.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "ResourceLinks",
+      "types": [
+       "ResourceLinks"
+      ]
+     }
+    },
+    {
+     "name": "relationships",
+     "required": false,
+     "type": {
+      "text": "Webhook.Relationships",
+      "types": [
+       "Webhook.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhooks"
+     ]
+    }
+   ]
+  },
+  "Webhook.Attributes": {
+   "title": "Webhook.Attributes",
+   "slug": "webhook/attributes-data.dictionary",
+   "abstract": "Attributes that describe a webhook resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "createdDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "enabled",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "eventTypes",
+     "required": false,
+     "type": {
+      "text": "[WebhookEventType]",
+      "types": [
+       "WebhookEventType"
+      ]
+     }
+    },
+    {
+     "name": "name",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "updatedDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "url",
+     "required": false,
+     "type": {
+      "text": "uri"
+     }
+    }
+   ]
+  },
+  "Webhook.Relationships": {
+   "title": "Webhook.Relationships",
+   "slug": "webhook/relationships-data.dictionary",
+   "abstract": "Relationships that link a webhook to related resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "deliveries",
+     "required": false,
+     "type": {
+      "text": "Webhook.Relationships.Deliveries",
+      "types": [
+       "Webhook.Relationships.Deliveries"
+      ]
+     }
+    }
+   ]
+  },
+  "Webhook.Relationships.Deliveries": {
+   "title": "Webhook.Relationships.Deliveries",
+   "slug": "webhook/relationships-data.dictionary/deliveries-data.dictionary",
+   "abstract": "The relationship between a webhook and its deliveries.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookCreateRequest": {
+   "title": "WebhookCreateRequest",
+   "slug": "webhookcreaterequest",
+   "abstract": "A request to create a new webhook.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookCreateRequest.Data",
+      "types": [
+       "WebhookCreateRequest.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookCreateRequest.Data": {
+   "title": "WebhookCreateRequest.Data",
+   "slug": "webhookcreaterequest/data-data.dictionary",
+   "abstract": "The data element of the request body.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": true,
+     "type": {
+      "text": "WebhookCreateRequest.Data.Attributes",
+      "types": [
+       "WebhookCreateRequest.Data.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhooks"
+     ]
+    }
+   ]
+  },
+  "WebhookCreateRequest.Data.Attributes": {
+   "title": "WebhookCreateRequest.Data.Attributes",
+   "slug": "webhookcreaterequest/data-data.dictionary/attributes-data.dictionary",
+   "abstract": "Attributes that describe the webhook you\u2019re creating.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "enabled",
+     "required": true,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "eventTypes",
+     "required": true,
+     "type": {
+      "text": "[WebhookEventType]",
+      "types": [
+       "WebhookEventType"
+      ]
+     }
+    },
+    {
+     "name": "name",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "secret",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "url",
+     "required": true,
+     "type": {
+      "text": "uri"
+     }
+    }
+   ]
+  },
+  "WebhookDeliveriesResponse": {
+   "title": "WebhookDeliveriesResponse",
+   "slug": "webhookdeliveriesresponse",
+   "abstract": "A response that contains a list of webhook delivery resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[WebhookDelivery]",
+      "types": [
+       "WebhookDelivery"
+      ]
+     }
+    },
+    {
+     "name": "included",
+     "required": false,
+     "type": {
+      "text": "[WebhookEvent]",
+      "types": [
+       "WebhookEvent"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDelivery": {
+   "title": "WebhookDelivery",
+   "slug": "webhookdelivery",
+   "abstract": "The data structure that represents a webhook delivery resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Attributes",
+      "types": [
+       "WebhookDelivery.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "relationships",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Relationships",
+      "types": [
+       "WebhookDelivery.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookDeliveries"
+     ]
+    }
+   ]
+  },
+  "WebhookDelivery.Attributes": {
+   "title": "WebhookDelivery.Attributes",
+   "slug": "webhookdelivery/attributes-data.dictionary",
+   "abstract": "Attributes that describe a webhook delivery resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "createdDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "deliveryState",
+     "required": false,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "SUCCEEDED",
+      "FAILED",
+      "PENDING"
+     ]
+    },
+    {
+     "name": "errorMessage",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "redelivery",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "request",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Attributes.Request",
+      "types": [
+       "WebhookDelivery.Attributes.Request"
+      ]
+     }
+    },
+    {
+     "name": "response",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Attributes.Response",
+      "types": [
+       "WebhookDelivery.Attributes.Response"
+      ]
+     }
+    },
+    {
+     "name": "sentDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    }
+   ]
+  },
+  "WebhookDelivery.Attributes.Request": {
+   "title": "WebhookDelivery.Attributes.Request",
+   "slug": "webhookdelivery/attributes-data.dictionary/request-data.dictionary",
+   "abstract": "Information about the request that was sent to the webhook URL.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "url",
+     "required": false,
+     "type": {
+      "text": "uri"
+     }
+    }
+   ]
+  },
+  "WebhookDelivery.Attributes.Response": {
+   "title": "WebhookDelivery.Attributes.Response",
+   "slug": "webhookdelivery/attributes-data.dictionary/response-data.dictionary",
+   "abstract": "Information about the response that the webhook URL returned.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "body",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "httpStatusCode",
+     "required": false,
+     "type": {
+      "text": "integer"
+     }
+    }
+   ]
+  },
+  "WebhookDelivery.Relationships": {
+   "title": "WebhookDelivery.Relationships",
+   "slug": "webhookdelivery/relationships-data.dictionary",
+   "abstract": "Relationships that link a webhook delivery to related resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "event",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Relationships.Event",
+      "types": [
+       "WebhookDelivery.Relationships.Event"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDelivery.Relationships.Event": {
+   "title": "WebhookDelivery.Relationships.Event",
+   "slug": "webhookdelivery/relationships-data.dictionary/event-data.dictionary",
+   "abstract": "The relationship between a webhook delivery and its event.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": false,
+     "type": {
+      "text": "WebhookDelivery.Relationships.Event.Data",
+      "types": [
+       "WebhookDelivery.Relationships.Event.Data"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": false,
+     "type": {
+      "text": "RelationshipLinks",
+      "types": [
+       "RelationshipLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDelivery.Relationships.Event.Data": {
+   "title": "WebhookDelivery.Relationships.Event.Data",
+   "slug": "webhookdelivery/relationships-data.dictionary/event-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookEvents"
+     ]
+    }
+   ]
+  },
+  "WebhookDeliveryCreateRequest": {
+   "title": "WebhookDeliveryCreateRequest",
+   "slug": "webhookdeliverycreaterequest",
+   "abstract": "A request to create a new webhook delivery.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookDeliveryCreateRequest.Data",
+      "types": [
+       "WebhookDeliveryCreateRequest.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDeliveryCreateRequest.Data": {
+   "title": "WebhookDeliveryCreateRequest.Data",
+   "slug": "webhookdeliverycreaterequest/data-data.dictionary",
+   "abstract": "The data element of the request body.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "relationships",
+     "required": true,
+     "type": {
+      "text": "WebhookDeliveryCreateRequest.Data.Relationships",
+      "types": [
+       "WebhookDeliveryCreateRequest.Data.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookDeliveries"
+     ]
+    }
+   ]
+  },
+  "WebhookDeliveryCreateRequest.Data.Relationships": {
+   "title": "WebhookDeliveryCreateRequest.Data.Relationships",
+   "slug": "webhookdeliverycreaterequest/data-data.dictionary/relationships-data.dictionary",
+   "abstract": "The relationships you include in the request.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "template",
+     "required": true,
+     "type": {
+      "text": "WebhookDeliveryCreateRequest.Data.Relationships.Template",
+      "types": [
+       "WebhookDeliveryCreateRequest.Data.Relationships.Template"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDeliveryCreateRequest.Data.Relationships.Template": {
+   "title": "WebhookDeliveryCreateRequest.Data.Relationships.Template",
+   "slug": "webhookdeliverycreaterequest/data-data.dictionary/relationships-data.dictionary/template-data.dictionary",
+   "abstract": "The data that describe the relationship between the resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookDeliveryCreateRequest.Data.Relationships.Template.Data",
+      "types": [
+       "WebhookDeliveryCreateRequest.Data.Relationships.Template.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookDeliveryCreateRequest.Data.Relationships.Template.Data": {
+   "title": "WebhookDeliveryCreateRequest.Data.Relationships.Template.Data",
+   "slug": "webhookdeliverycreaterequest/data-data.dictionary/relationships-data.dictionary/template-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookDeliveries"
+     ]
+    }
+   ]
+  },
+  "WebhookDeliveryResponse": {
+   "title": "WebhookDeliveryResponse",
+   "slug": "webhookdeliveryresponse",
+   "abstract": "A response that contains information about a webhook delivery resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookDelivery",
+      "types": [
+       "WebhookDelivery"
+      ]
+     }
+    },
+    {
+     "name": "included",
+     "required": false,
+     "type": {
+      "text": "[WebhookEvent]",
+      "types": [
+       "WebhookEvent"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookEvent": {
+   "title": "WebhookEvent",
+   "slug": "webhookevent",
+   "abstract": "The data structure that represents a webhook event resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "WebhookEvent.Attributes",
+      "types": [
+       "WebhookEvent.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookEvents"
+     ]
+    }
+   ]
+  },
+  "WebhookEvent.Attributes": {
+   "title": "WebhookEvent.Attributes",
+   "slug": "webhookevent/attributes-data.dictionary",
+   "abstract": "Attributes that describe a webhook event resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "createdDateTime",
+     "required": false,
+     "type": {
+      "text": "date-time"
+     }
+    },
+    {
+     "name": "eventType",
+     "required": false,
+     "type": {
+      "text": "WebhookEventType",
+      "types": [
+       "WebhookEventType"
+      ]
+     }
+    },
+    {
+     "name": "isPingEvent",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "payload",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    }
+   ]
+  },
+  "WebhookPing": {
+   "title": "WebhookPing",
+   "slug": "webhookping",
+   "abstract": "The data structure that represents a webhook ping resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookPings"
+     ]
+    }
+   ]
+  },
+  "WebhookPingCreateRequest": {
+   "title": "WebhookPingCreateRequest",
+   "slug": "webhookpingcreaterequest",
+   "abstract": "A request to create a new webhook ping.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookPingCreateRequest.Data",
+      "types": [
+       "WebhookPingCreateRequest.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookPingCreateRequest.Data": {
+   "title": "WebhookPingCreateRequest.Data",
+   "slug": "webhookpingcreaterequest/data-data.dictionary",
+   "abstract": "The data element of the request body.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "relationships",
+     "required": true,
+     "type": {
+      "text": "WebhookPingCreateRequest.Data.Relationships",
+      "types": [
+       "WebhookPingCreateRequest.Data.Relationships"
+      ]
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhookPings"
+     ]
+    }
+   ]
+  },
+  "WebhookPingCreateRequest.Data.Relationships": {
+   "title": "WebhookPingCreateRequest.Data.Relationships",
+   "slug": "webhookpingcreaterequest/data-data.dictionary/relationships-data.dictionary",
+   "abstract": "The relationships you include in the request.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "webhook",
+     "required": true,
+     "type": {
+      "text": "WebhookPingCreateRequest.Data.Relationships.Webhook",
+      "types": [
+       "WebhookPingCreateRequest.Data.Relationships.Webhook"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookPingCreateRequest.Data.Relationships.Webhook": {
+   "title": "WebhookPingCreateRequest.Data.Relationships.Webhook",
+   "slug": "webhookpingcreaterequest/data-data.dictionary/relationships-data.dictionary/webhook-data.dictionary",
+   "abstract": "The data that describe the relationship between the resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookPingCreateRequest.Data.Relationships.Webhook.Data",
+      "types": [
+       "WebhookPingCreateRequest.Data.Relationships.Webhook.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookPingCreateRequest.Data.Relationships.Webhook.Data": {
+   "title": "WebhookPingCreateRequest.Data.Relationships.Webhook.Data",
+   "slug": "webhookpingcreaterequest/data-data.dictionary/relationships-data.dictionary/webhook-data.dictionary/data-data.dictionary",
+   "abstract": "The type and ID of a related resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhooks"
+     ]
+    }
+   ]
+  },
+  "WebhookPingResponse": {
+   "title": "WebhookPingResponse",
+   "slug": "webhookpingresponse",
+   "abstract": "A response that contains information about a webhook ping resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookPing",
+      "types": [
+       "WebhookPing"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookResponse": {
+   "title": "WebhookResponse",
+   "slug": "webhookresponse",
+   "abstract": "A response that contains information about a webhook resource.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "Webhook",
+      "types": [
+       "Webhook"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "DocumentLinks",
+      "types": [
+       "DocumentLinks"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookUpdateRequest": {
+   "title": "WebhookUpdateRequest",
+   "slug": "webhookupdaterequest",
+   "abstract": "A request to update an existing webhook.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "WebhookUpdateRequest.Data",
+      "types": [
+       "WebhookUpdateRequest.Data"
+      ]
+     }
+    }
+   ]
+  },
+  "WebhookUpdateRequest.Data": {
+   "title": "WebhookUpdateRequest.Data",
+   "slug": "webhookupdaterequest/data-data.dictionary",
+   "abstract": "The data element of the request body.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "attributes",
+     "required": false,
+     "type": {
+      "text": "WebhookUpdateRequest.Data.Attributes",
+      "types": [
+       "WebhookUpdateRequest.Data.Attributes"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "required": true,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "type",
+     "required": true,
+     "type": {
+      "text": "string"
+     },
+     "allowedValues": [
+      "webhooks"
+     ]
+    }
+   ]
+  },
+  "WebhookUpdateRequest.Data.Attributes": {
+   "title": "WebhookUpdateRequest.Data.Attributes",
+   "slug": "webhookupdaterequest/data-data.dictionary/attributes-data.dictionary",
+   "abstract": "Attributes with values that you\u2019re changing as part of the update request.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "enabled",
+     "required": false,
+     "type": {
+      "text": "boolean"
+     }
+    },
+    {
+     "name": "eventTypes",
+     "required": false,
+     "type": {
+      "text": "[WebhookEventType]",
+      "types": [
+       "WebhookEventType"
+      ]
+     }
+    },
+    {
+     "name": "name",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "secret",
+     "required": false,
+     "type": {
+      "text": "string"
+     }
+    },
+    {
+     "name": "url",
+     "required": false,
+     "type": {
+      "text": "uri"
+     }
+    }
+   ]
+  },
+  "WebhooksResponse": {
+   "title": "WebhooksResponse",
+   "slug": "webhooksresponse",
+   "abstract": "A response that contains a list of webhook resources.",
+   "introducedAt": "2.8",
+   "properties": [
+    {
+     "name": "data",
+     "required": true,
+     "type": {
+      "text": "[Webhook]",
+      "types": [
+       "Webhook"
+      ]
+     }
+    },
+    {
+     "name": "links",
+     "required": true,
+     "type": {
+      "text": "PagedDocumentLinks",
+      "types": [
+       "PagedDocumentLinks"
+      ]
+     }
+    },
+    {
+     "name": "meta",
+     "required": false,
+     "type": {
+      "text": "PagingInformation",
+      "types": [
+       "PagingInformation"
+      ]
+     }
+    }
+   ]
   }
  },
  "enums": {
@@ -13875,7 +16074,7 @@
    "title": "ActivationLockType",
    "slug": "activationlocktype",
    "abstract": "Strings that represent the type of Activation Lock on a device.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "MDM",
     "USER",
@@ -13886,7 +16085,7 @@
    "title": "AppleCareCoveragePaymentType",
    "slug": "applecarecoveragepaymenttype",
    "abstract": "Strings that represent AppleCare coverage payment types.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ABE_SUBSCRIPTION",
     "PAID_UP_FRONT",
@@ -13898,7 +16097,7 @@
    "title": "AppleCareCoverageStatus",
    "slug": "applecarecoveragestatus",
    "abstract": "Strings that represent AppleCare coverage status.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ACTIVE",
     "INACTIVE"
@@ -13908,7 +16107,7 @@
    "title": "AuditEventActorType",
    "slug": "auditeventactortype",
    "abstract": "Strings that represent the type of entity that performed an action.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "USER",
     "API_USER",
@@ -13919,20 +16118,22 @@
    "title": "AuditEventCategory",
    "slug": "auditeventcategory",
    "abstract": "Strings that represent audit event categories.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ORGANIZATION",
     "ACCOUNT_ACTIVITY",
     "DEVICE_INVENTORY",
     "PURCHASING",
-    "DEVICE_MANAGEMENT"
+    "DEVICE_MANAGEMENT",
+    "ACCESS_MANAGEMENT",
+    "WEBHOOK_ACTIVITY"
    ]
   },
   "AuditEventIdpProtocol": {
    "title": "AuditEventIdpProtocol",
    "slug": "auditeventidpprotocol",
    "abstract": "Strings that represent the federation protocol used by an identity provider.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "OIDC",
     "SAML"
@@ -13942,7 +16143,7 @@
    "title": "AuditEventIdpVendorName",
    "slug": "auditeventidpvendorname",
    "abstract": "Strings that represent the identity provider vendor.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "GOOGLE",
     "MICROSOFT",
@@ -13954,7 +16155,7 @@
    "title": "AuditEventOutcome",
    "slug": "auditeventoutcome",
    "abstract": "Strings that represent the result of an action.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "SUCCESS",
     "FAILURE"
@@ -13964,7 +16165,7 @@
    "title": "AuditEventPurchaseSourceType",
    "slug": "auditeventpurchasesourcetype",
    "abstract": "Strings that represent how a device was added to an organization.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "APPLE",
     "MANUALLY_ADDED",
@@ -13975,7 +16176,7 @@
    "title": "AuditEventReleaseEntityType",
    "slug": "auditeventreleaseentitytype",
    "abstract": "Strings that represent the type of entity that conducted the release operation.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "USER",
     "MDM",
@@ -13988,7 +16189,7 @@
    "title": "AuditEventSubjectType",
    "slug": "auditeventsubjecttype",
    "abstract": "Strings that represent the type of entity that was affected by an action.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ORGANIZATION",
     "USER",
@@ -13998,14 +16199,18 @@
     "DEVICE_MANAGEMENT_SETTING",
     "SUBSCRIPTION",
     "DOMAIN",
-    "API_USER"
+    "API_USER",
+    "ROLE",
+    "IDP",
+    "INVITATION",
+    "WEBHOOK"
    ]
   },
   "AuditEventType": {
    "title": "AuditEventType",
    "slug": "auditeventtype",
    "abstract": "Strings that represent audit event types.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "DEVICE_ADDED_TO_ORG",
     "DEVICE_REMOVED_FROM_ORG",
@@ -14040,6 +16245,9 @@
     "API_ACCOUNT_KEY_GENERATED",
     "API_ACCOUNT_ROLE_LOCATION_CHANGED",
     "API_ACCOUNT_NAME_CHANGED",
+    "WEBHOOK_CREATED",
+    "WEBHOOK_UPDATED",
+    "WEBHOOK_DELETED",
     "ROLE_CREATED",
     "ROLE_UPDATED",
     "TERMS_ACCEPTED",
@@ -14063,7 +16271,7 @@
    "title": "BlueprintStatus",
    "slug": "blueprintstatus",
    "abstract": "The status of a Blueprint.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ACTIVE",
     "TO_BE_DELETED"
@@ -14073,7 +16281,7 @@
    "title": "ConfigurationPlatform",
    "slug": "configurationplatform",
    "abstract": "The platform that a Configuration targets.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "PLATFORM_MACOS",
     "PLATFORM_IOS",
@@ -14085,7 +16293,7 @@
    "title": "ConfigurationType",
    "slug": "configurationtype",
    "abstract": "The type of Configuration profile.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "AIR_DROP",
     "AIR_PRINT",
@@ -14116,7 +16324,7 @@
    "title": "DeviceEraseStatus",
    "slug": "deviceerasestatus",
    "abstract": "Strings that represent device erase statuses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "NOT_ERASED",
     "ERASED"
@@ -14126,7 +16334,7 @@
    "title": "DeviceLockStatus",
    "slug": "devicelockstatus",
    "abstract": "Strings that represent device lock statuses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "LOCKED",
     "UNLOCKED"
@@ -14136,7 +16344,7 @@
    "title": "LostModeStatus",
    "slug": "lostmodestatus",
    "abstract": "Strings that represent lost mode statuses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ENABLED",
     "DISABLED"
@@ -14146,7 +16354,7 @@
    "title": "MdmMigrationStatus",
    "slug": "mdmmigrationstatus",
    "abstract": "Strings that represent the state of a device\u2019s device management service migration.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "REQUESTED",
     "STARTED",
@@ -14158,7 +16366,7 @@
    "title": "MdmServerProductFamily",
    "slug": "mdmserverproductfamily",
    "abstract": "Strings that represent a product family that can be assigned as a default to a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "APPLE_TV",
     "IPAD",
@@ -14173,7 +16381,7 @@
    "title": "MdmServerStatus",
    "slug": "mdmserverstatus",
    "abstract": "Strings that represent the operational status of a device management service.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ACTIVE",
     "DELETED",
@@ -14184,7 +16392,7 @@
    "title": "OrgDeviceActivityType",
    "slug": "orgdeviceactivitytype",
    "abstract": "Strings that represent organization device activities.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ASSIGN_DEVICES",
     "UNASSIGN_DEVICES",
@@ -14198,7 +16406,7 @@
    "title": "SupportedOS",
    "slug": "supportedos",
    "abstract": "The supported operating systems for an app.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "SUPPORTED_OS_UNSPECIFIED",
     "SUPPORTED_OS_IPADOS",
@@ -14213,7 +16421,7 @@
    "title": "UserGroupStatus",
    "slug": "usergroupstatus",
    "abstract": "Strings that represent user group statuses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "ACTIVE"
    ]
@@ -14222,7 +16430,7 @@
    "title": "UserGroupType",
    "slug": "usergrouptype",
    "abstract": "Strings that represent user group types.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "STANDARD",
     "SMART"
@@ -14232,7 +16440,7 @@
    "title": "UserPhoneNumberType",
    "slug": "userphonenumbertype",
    "abstract": "Strings that represent phone number types.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "WORK",
     "HOME",
@@ -14243,7 +16451,7 @@
    "title": "UserStatus",
    "slug": "userstatus",
    "abstract": "Strings that represent user statuses.",
-   "introducedAt": "2.6",
+   "introducedAt": "2.8",
    "values": [
     "NEW",
     "RELEASED",
@@ -14251,6 +16459,18 @@
     "DEACTIVATED",
     "LOCKED",
     "LOCKED_FOR_SHARED_IPAD"
+   ]
+  },
+  "WebhookEventType": {
+   "title": "WebhookEventType",
+   "slug": "webhookeventtype",
+   "abstract": "Strings that represent the types of events a webhook can subscribe to.",
+   "introducedAt": "2.8",
+   "values": [
+    "ORG_DEVICE_ATTRIBUTE_CHANGED",
+    "ORG_DEVICE_ATTRIBUTE_MIGRATION_DETAILS_CHANGED",
+    "ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED",
+    "ORG_DEVICE_RELATIONSHIP_WARRANTY_CHANGED"
    ]
   }
  }

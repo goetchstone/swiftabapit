@@ -1,0 +1,13 @@
+{
+  "data": {
+    "type": "webhookPings",
+    "relationships": {
+      "webhook": {
+        "data": {
+          "type": "webhooks",
+          "id": "webhook-12345"
+        }
+      }
+    }
+  }
+}

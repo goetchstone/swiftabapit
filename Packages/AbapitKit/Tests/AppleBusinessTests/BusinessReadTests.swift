@@ -240,6 +240,7 @@ struct BusinessReadTests {
             { _ = try await harness.client.mdmDeviceDetails(id) }, { _ = try await Harness.all(harness.client.userGroupMemberIDs(id)) },
             { _ = try await Harness.all(harness.client.organizationalUnitMemberIDs(id)) },
             { _ = try await Harness.all(harness.client.blueprintMemberIDs(id, .orgDevices)) },
+            { _ = try await harness.client.webhook(id) }, { _ = try await Harness.all(harness.client.webhookDeliveries(id)) },
         ]
         for read in reads { await #expect(throws: AppleAPIError.notFound) { try await read() } }
         #expect(harness.stub.requests.isEmpty)
@@ -264,8 +265,13 @@ struct BusinessReadTests {
             (.mdmEnrolled, { _ = try await Harness.all(client.mdmDevices()) }), (.mdmEnrolled, { _ = try await client.mdmDeviceDetails("D1") }),
         ]
         for (section, read) in reads { await #expect(throws: AppleAPIError.notInScope(section)) { try await read() } }
+        // The webhooks (2.8) are no section yet, and say so in the same words.
+        let webhooks: [() async throws -> Void] = [{ _ = try await Harness.all(client.webhooks()) }, { _ = try await client.webhook("W1") },
+                                                  { _ = try await Harness.all(client.webhookDeliveries("W1")) }]
+        for read in webhooks { await #expect(throws: AppleAPIError.webhooksNotInScope) { try await read() } }
         #expect(harness.stub.requests.isEmpty, "\(harness.stub.requests)")
         #expect(AppleAPIError.notInScope(.users).message == "Apple School Manager's API has no users to read.")
+        #expect(AppleAPIError.webhooksNotInScope.message == "Apple School Manager's API has no webhooks to read.")
         let sections = reads.map { $0.0 }
         #expect(sections.allSatisfy { $0.businessOnly })
     }

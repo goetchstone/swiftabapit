@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "webhooks",
+    "attributes": {
+      "name": "Device change notifications",
+      "enabled": true,
+      "eventTypes": [
+        "ORG_DEVICE_ATTRIBUTE_CHANGED",
+        "ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED"
+      ],
+      "secret": "${WEBHOOK_SECRET}",
+      "url": "https://example.com/webhooks/apple"
+    }
+  }
+}

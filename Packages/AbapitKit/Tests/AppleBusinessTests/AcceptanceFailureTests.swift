@@ -133,6 +133,7 @@ struct AcceptanceFailureTests {
             // test green.
             (AppleAPIError.notInScope(.users), .skipped("not in Apple School Manager's API"), nil),
             (AppleAPIError.notInScope(.auditEvents), .skipped("not in Apple School Manager's API"), nil),
+            (AppleAPIError.webhooksNotInScope, .skipped("not in Apple School Manager's API"), nil),
             (CancellationError(), .error("error cancelled"), nil),
             (AppleStub.StubFailure.unhandled("GET /v1/x"), .error("error StubFailure"), nil),
         ]
@@ -180,7 +181,8 @@ struct AcceptanceFailureTests {
     @Test func aLaterPageThatIsntAListIsMalformedWithWhatCameBefore() async throws {
         let harness = try await Harness(devices: 1_500)
         for serial in AcceptancePassTests.firstSerials(5) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
-        harness.stub.queue(200, for: "/v1/orgDevices?cursor=", body: "{}")
+        // The device list pages by cursor (2.7): a later page is the first read again, its cursor after the limit.
+        harness.stub.queue(200, for: "/v1/orgDevices?limit=1000&cursor=", body: "{}")
         let report = await harness.client.acceptancePass()
         #expect(report.text.hasPrefix("orgDevices: error malformed, 1000 items · a page of /v1/orgDevices\n"), "\(report.text)")
         #expect(harness.stub.requests.filter { $0.hasPrefix("GET api-business.apple.com/v1/orgDevices?") }.count == 2 + 1, "two pages and the probe")

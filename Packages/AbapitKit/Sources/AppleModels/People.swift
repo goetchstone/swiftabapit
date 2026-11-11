@@ -1,7 +1,7 @@
 import Foundation
 import JSONAPI
 
-/// `users`: a person in the organization (Business only). Apple's people are read-only at 2.6 (plan §2.4).
+/// `users`: a person in the organization (Business only). Apple's people are read-only at 2.8 (plan §2.4).
 public struct User: ResourceView {
     public static let resourceType = "users"
     public static let fields = [

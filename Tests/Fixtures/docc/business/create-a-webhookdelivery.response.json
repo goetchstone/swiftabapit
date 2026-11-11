@@ -1,0 +1,33 @@
+{
+  "data": {
+    "type": "webhookDeliveries",
+    "id": "delivery-new-123",
+    "attributes": {
+      "createdDateTime": "2026-10-02T08:15:00Z",
+      "deliveryState": "SUCCEEDED",
+      "redelivery": true,
+      "sentDateTime": "2026-10-02T08:15:01Z",
+      "request": {
+        "url": "https://example.com/webhooks/apple"
+      },
+      "response": {
+        "httpStatusCode": 200,
+        "body": "OK"
+      }
+    },
+    "relationships": {
+      "event": {
+        "links": {
+          "related": "https://api-business.apple.com/v1/webhookDeliveries/delivery-new-123/event"
+        },
+        "data": {
+          "type": "webhookEvents",
+          "id": "event-24680"
+        }
+      }
+    }
+  },
+  "links": {
+    "self": "https://api-business.apple.com/v1/webhookDeliveries/delivery-new-123"
+  }
+}

@@ -1,4 +1,6 @@
+import AppleModels
 import Foundation
+import JSONAPI
 import Testing
 import TestSupport
 
@@ -122,6 +124,51 @@ struct BoundaryTests {
             guard SourceScan.names(SourceScan.File(path: file.path, text: String(code)), names) else { return nil }
             return "\(file.path): " + shown.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         }
+    }
+
+    /// A webhook's and a delivery's resource as Apple sent it (`asSent`, Business 2.8: the URL whole, the receiver's body, a
+    /// secret should Apple ever send one) is held as the raw profile is: each declaration `package` and only that, read by
+    /// the listed lines alone, and named nowhere on the app side; every public value is the withheld copy (invariant 11).
+    @Test func whatAppleSentOfAWebhookStaysPackage() throws {
+        for directory in [Self.directory, "App"] {
+            #expect(try SourceScan.files(in: directory, naming: ["asSent"]).isEmpty, "\(directory)")
+        }
+        let declaration = try Regex(#"^\s*(.*?)\b(?:let|var)\s+asSent\b"#)
+        let files = try SourceScan.swiftFiles(in: "Packages/AbapitKit/Sources")
+        let modifiers = files.flatMap { file in
+            SourceScan.code(file.text, strings: false).split(separator: "\n").compactMap { line in
+                (try? declaration.firstMatch(in: String(line))).flatMap { $0 }.map { ($0.output[1].substring ?? "").trimmingCharacters(in: .whitespaces) }
+            }
+        }
+        #expect(modifiers == ["package", "package"], "\(modifiers)")
+        #expect(files.flatMap { Self.lines(of: $0, naming: ["asSent"]) } == [
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: package let asSent: Resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: asSent = resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: package let asSent: Resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: asSent = resource",
+        ])
+        // The scan reads what a widening would write, and not a comment.
+        #expect(SourceScan.names(SourceScan.File(path: "x.swift", text: "let url = webhook.asSent.attributes"), ["asSent"]))
+        #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// asSent\nlet shown = webhook.destination"), ["asSent"]))
+    }
+
+    /// What the app can read of a delivery through AbapitKit's public API holds no token, signature or header: its
+    /// `errorMessage` quoting the URL, its description, its attributes, an attribute this version doesn't read (the
+    /// contract-2.8 review's M1: only `request` and `response` were withheld, the rest handed out as Apple sent it).
+    @Test func aDeliveryHandsTheAppNoTokenOrHeader() {
+        let delivery = WebhookDelivery(resource: Resource(type: "webhookDeliveries", id: "D1", attributes: [
+            "errorMessage": .string("POST https://hooks.example.com/T0/CANARYTOKEN?sig=CANARYSIG failed"),
+            "requestHeaders": .object(["x-apple-signature": .string("CANARYSIG")]),
+            "request": .object(["url": .string("https://hooks.example.com/T0/CANARYTOKEN")]),
+        ]))
+        var dumped = ""
+        dump(delivery, to: &dumped)
+        for text in [delivery.errorMessage ?? "", "\(delivery)", String(reflecting: delivery), JSONValue.object(delivery.attributes).jsonText,
+                     delivery.request?.destination ?? "", dumped, "\(Mirror(reflecting: delivery).children.map(\.value))"] {
+            #expect(!text.contains("CANARY"), "\(text)")
+        }
+        #expect(delivery.errorMessage?.hasPrefix("POST https://hooks.example.com/… (tag ") == true && delivery.errorMessage?.hasSuffix(") failed") == true)
+        #expect(delivery.unreadAttributes == ["requestHeaders"])
     }
 
     @Test func onlyTheListedLinesReadTheRawProfile() throws {

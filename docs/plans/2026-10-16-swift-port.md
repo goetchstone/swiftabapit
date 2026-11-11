@@ -310,7 +310,7 @@ SwiftAbapit/                          (D1)
     Debug/Snapshots.swift             env-var screenshot harness (DEBUG only)
   Packages/AbapitKit/Package.swift    one local package; the app sits outside it (L9)
     Sources/JSONAPI/                  pure: Document, Resource, Linkage, OpenEnum, ErrorResponse, Paging
-    Sources/AppleModels/              pure: attribute structs + enums for Business 2.6 / School 1.7
+    Sources/AppleModels/              pure: attribute structs + enums for Business 2.8 / School 1.8
     Sources/MosyleModels/             pure: envelope, status codes, adapters (with field allowlist)
     Sources/Wire/                     pure: WireOperation, ReadRequest, Host (shared by Planners, HTTPCore, ChangeCore)
     Sources/Planners/                 pure: assign, migration, release, blueprint rel, config, mdm svc, lost mode
@@ -330,7 +330,7 @@ SwiftAbapit/                          (D1)
   Packages/AbapitApp/                 the screen models' package: AbapitKit's public API only, as the app sees it
     Sources/AppModels/                @MainActor screen models (orgs, devices, inspector)
     Tests/AppModelsTests/             invariant 8's screen-model tests
-  Contracts/apple/                    business-2.6.json, school-1.7.json (generated, committed; §3.10)
+  Contracts/apple/                    business-2.8.json, school-1.8.json (generated, committed; §3.10)
   Contracts/device-management/        profiles-27.0.json (generated from apple/device-management; masking test now, validation Phase 5)
   Tests/Fixtures/                     parity/ (golden from frozen abapit), docc/ (Apple examples),
                                       recorded/ (scrubbed live), demo/
@@ -490,7 +490,11 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
 - A second API account per org whose Apple role has only View permissions. Apple allows up to 50 API
   accounts with per-category permissions [A].
 - Accepted only when Phase 4's write probes return **403 for every write category**: assign,
-  migration, release, blueprints, configurations, MDM services.
+  migration, release, blueprints, configurations, MDM services, and **webhooks** (Business 2.8: `POST /v1/webhooks`,
+  `PATCH` and `DELETE /v1/webhooks/{id}`, `POST /v1/webhookPings` and `POST /v1/webhookDeliveries`). A key that can
+  create a webhook can stream every device change, serials included, to any URL, with nothing written to a device: it
+  is no read-only key (contract-2.8 review M3; check live whether Apple's roles separate webhook management, apple-reads
+  runbook, "Webhooks").
 - Stored `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` **without** user presence.
 - Wrapped in `ReadOnlyAppleClient`, a type with no path to `HTTPCore.send(_:ticket:)`. A source-scan
   test enforces this.
@@ -945,7 +949,15 @@ reads, and what they reveal, come before writes.
 
 1. **The live checks** (S1's team build, the operator): nothing has yet read a real tenant.
 2. **Contract update to Business 2.8 and School 1.8**: the device list's `cursor` and filters, the three webhook reads,
-   the new audit values.
+   the new audit values. **Status:** built on branch `contract-2.8` (2026-11-11; drift issue #11): the contracts at
+   Business 2.8 (65 endpoints) and School 1.8 (11); the new audit values, the three webhook types placed in Access &
+   Security; `DeviceFilter`, checked when made, and the device list paged by cursor; the three webhook reads with their
+   models (URLs shown only as scheme and host, the receiver's body and any secret withheld), the strict stub and three
+   acceptance-pass lines. No screen, and no webhooks probe until one (apple-reads runbook, "Webhooks"). Live checks wait
+   for S1's team build. The phase's adversarial review (2026-11-11) found a delivery withholding only the keys it knew
+   and a masked URL hiding the change it was masked to show; fixed on the branch (failure-log 2026-11-11): a delivery
+   withholds every attribute it doesn't read and masks the URLs in its error message, every masked URL carries a per-run
+   tag, the audit mask walks every payload and both names, and §3.4.4's write probes include the webhooks.
 3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.
 4. **Phase 3, plus Needs attention** (below).
 5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
@@ -964,7 +976,8 @@ reads, and what they reveal, come before writes.
 - Notifications are opt-in and run through D5's unattended read-only key. They carry counts, never serials or names.
 - Thresholds are local settings.
 
-**Webhooks** (Business 2.8): L2 stands, so the app doesn't receive them.
+**Webhooks** (Business 2.8): L2 stands, so the app doesn't receive them. The reads are built (step 2); the writes are
+Phase 5's.
 
 - Proposed: poll `GET /v1/webhooks/{id}/deliveries?include=event` as a change feed, and re-read only the devices named.
 - Live check: how long Apple keeps deliveries, and what it does when a URL keeps failing.
@@ -1139,7 +1152,8 @@ mutants (five of them Apple MDM's pause and resume) and a fix for an older flaky
 backslash or none, a path segment's user and password, a blank inside a Location's query, fragment or parameter, a
 second address's password, a scheme-less location's query before a glued scheme, and a blueprint's package names
 masked. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
-team build.
+team build. Since §8.0's step 2 (`contract-2.8`): 53 audit types, the three webhook ones in Access & Security; the device
+list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' three among them.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
 `App/Screens/{People,Content,AppleMDM,Audit,Dashboard}`.
@@ -1247,7 +1261,9 @@ Guard shapes before implementing** (SwiftGamGui unattended-workflow rule).
   - a bounded activity tracker (status/subStatus);
   - `downloadUrl` opens in the browser.
 - **Write probes** in one exemption file. They run only on a Permissions click, and a test guards
-  that.
+  that. One per write category of §3.4.4, the webhooks' among them (Business 2.8): `POST /v1/webhooks` with a body Apple
+  must refuse (no `url`), or `PATCH /v1/webhooks/{zero UUID}`, so a key that may manage webhooks is never taken for a
+  read-only one (contract-2.8 review M3).
 - **Source-scan tests** (§6.4).
 
 **Done when**:
@@ -1268,7 +1284,8 @@ Guard shapes before implementing** (SwiftGamGui unattended-workflow rule).
 
 ### Phase 5: blueprint, configuration, MDM-service writes; profile validation
 
-**Status:** not started.
+**Status:** not started. The webhook writes join it (§8.0): create, update, delete, ping and redeliver, each through the
+preview, which shows the destination; the reads, `Webhook.asSent` and the URL mask are step 2's.
 
 **Owns:** `Planners/{blueprint,configuration,mdmService}`, `ProfileSchema/`,
 `Contracts/device-management/`, `App/Screens/{BlueprintEdit,ConfigurationEdit,MDMServiceEdit}`.
@@ -1475,6 +1492,10 @@ Business = `https://api-business.apple.com/v1/`, School = `https://api-school.ap
 | GET configurations; GET configurations/{id} | ✓ | — | used | 2 |
 | POST configurations; PATCH/DELETE configurations/{id} (CUSTOM_SETTING only) | ✓ | — | used | 5 |
 | GET auditEvents (filter[startTimestamp], filter[endTimestamp] required; filter[type], filter[actorId], filter[subjectId], cursor) | ✓ | — | used (type only) | 2 |
+| GET orgDevices filters (Business 2.7, School 1.8): cursor; filter[serialNumber], [status], [productFamily], [purchaseSourceType], [orderNumber]; filter[addedToOrgDateTime] and filter[orderDateTime], each also [GT], [GTE], [LT], [LTE] | ✓ | ✓ | — (newer) | 8.0 step 2 (`DeviceFilter`, cursor paging); used by Needs attention and 3 |
+| GET webhooks; GET webhooks/{id} (2.8) | ✓ | — | — (newer) | 8.0 step 2 |
+| GET webhooks/{id}/deliveries (cursor, filter[createdDateTimeAtBefore], filter[createdDateTimeAtOrAfter], filter[deliveryState], include=event) | ✓ | — | — (newer) | 8.0 step 2; the change feed later |
+| POST webhooks; PATCH/DELETE webhooks/{id}; POST webhookPings; POST webhookDeliveries (redeliver) | ✓ | — | — (newer) | 5 |
 | POST account.apple.com/auth/oauth2/token | ✓ | ✓ | used | 1 |
 
 ### Status codes
@@ -1496,7 +1517,7 @@ The full set is in `Contracts/apple/*.json`.
 | Enum | Values |
 |---|---|
 | OrgDevice `status` | ASSIGNED, UNASSIGNED |
-| `productFamily` | iPhone, iPad, Mac, AppleTV, Watch, Vision |
+| `productFamily` | iPhone, iPad, iPod, Mac, AppleTV, Watch, Vision (`filter[productFamily]`'s list, 2.7) |
 | `purchaseSourceType` | APPLE, RESELLER, MANUALLY_ADDED |
 | Activity status | COMPLETED, IN_PROGRESS, STOPPED, FAILED |
 | Activity subStatus | SUBMITTED, PRE_PROCESSING, PENDING, PROCESSING, POST_PROCESSING, STOPPING, COMPLETED_WITH_SUCCESS, COMPLETED_WITH_ERROR, COMPLETED_WITH_FAILURE, COMPLETED_POST_PROCESSING_FAILED |
@@ -1512,6 +1533,8 @@ The full set is in `Contracts/apple/*.json`.
 | SupportedOS | SUPPORTED_OS_{UNSPECIFIED, IOS, IPADOS, MACOS, TVOS, WATCHOS, VISIONOS} |
 | AuditEventActorType | USER, API_USER, SYSTEM |
 | Audit `outcome` | SUCCESS, FAILURE |
+| WebhookEventType (2.8) | ORG_DEVICE_ATTRIBUTE_CHANGED, ORG_DEVICE_ATTRIBUTE_MIGRATION_DETAILS_CHANGED, ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED, ORG_DEVICE_RELATIONSHIP_WARRANTY_CHANGED |
+| Webhook delivery `deliveryState` (2.8) | SUCCEEDED, FAILED, PENDING |
 | ConfigurationType (23) | AIR_DROP, AIR_PRINT, APP_ACCESS, APPLE_INTELLIGENCE_SIRI, APPLICATION_LAYER_FIREWALL, AUTHENTICATION_SCREEN_LOCK, CERTIFICATE, CONFERENCE_ROOM_DISPLAY, CONTENT_CACHING, CUSTOM_PROFILE, CUSTOM_SETTING, DATA_MANAGEMENT, ENERGY_SAVER, FILE_VAULT, GATE_KEEPER, ICLOUD, LOGIN_WINDOW, MEDIA_MANAGEMENT, SOFTWARE_UPDATE, VPN, WEB_CLIP, WEB_FILTER, WIFI |
 
 ## Appendix B. abapit parity checklist
