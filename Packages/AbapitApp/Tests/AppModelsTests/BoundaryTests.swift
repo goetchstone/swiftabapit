@@ -124,6 +124,32 @@ struct BoundaryTests {
         }
     }
 
+    /// A webhook's and a delivery's resource as Apple sent it (`asSent`, Business 2.8: the URL whole, the receiver's body, a
+    /// secret should Apple ever send one) is held as the raw profile is: each declaration `package` and only that, read by
+    /// the listed lines alone, and named nowhere on the app side; every public value is the withheld copy (invariant 11).
+    @Test func whatAppleSentOfAWebhookStaysPackage() throws {
+        for directory in [Self.directory, "App"] {
+            #expect(try SourceScan.files(in: directory, naming: ["asSent"]).isEmpty, "\(directory)")
+        }
+        let declaration = try Regex(#"^\s*(.*?)\b(?:let|var)\s+asSent\b"#)
+        let files = try SourceScan.swiftFiles(in: "Packages/AbapitKit/Sources")
+        let modifiers = files.flatMap { file in
+            SourceScan.code(file.text, strings: false).split(separator: "\n").compactMap { line in
+                (try? declaration.firstMatch(in: String(line))).flatMap { $0 }.map { ($0.output[1].substring ?? "").trimmingCharacters(in: .whitespaces) }
+            }
+        }
+        #expect(modifiers == ["package", "package"], "\(modifiers)")
+        #expect(files.flatMap { Self.lines(of: $0, naming: ["asSent"]) } == [
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: package let asSent: Resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: asSent = resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: package let asSent: Resource",
+            "Packages/AbapitKit/Sources/AppleModels/Webhooks.swift: asSent = resource",
+        ])
+        // The scan reads what a widening would write, and not a comment.
+        #expect(SourceScan.names(SourceScan.File(path: "x.swift", text: "let url = webhook.asSent.attributes"), ["asSent"]))
+        #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// asSent\nlet shown = webhook.destination"), ["asSent"]))
+    }
+
     @Test func onlyTheListedLinesReadTheRawProfile() throws {
         let files = try SourceScan.swiftFiles(in: "Packages/AbapitKit/Sources")
         #expect(files.count >= 50 && files.contains { $0.path.hasSuffix("/AppleBusiness/AppleClient.swift") }, "the scan sees AbapitKit")

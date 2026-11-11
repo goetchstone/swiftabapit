@@ -147,7 +147,7 @@ public struct WebhookDelivery: ResourceView, CustomStringConvertible, CustomDebu
     /// `request` or `response` sent, not as `null`, in a shape this version can't read: withheld whole, and said by the
     /// acceptance pass, never read as no request (invariant 8).
     public var misreadObjects: [String] {
-        ["request", "response"].filter { key in asSent.attributes[key].map { $0 != .null && $0.object == nil } ?? false }
+        ["request", "response"].filter { key in attributes[key].map { $0 != .null && $0.object == nil } ?? false }
     }
 
     /// `resource` with `request.url` as its destination, `response.body` and every unread key of either withheld, and

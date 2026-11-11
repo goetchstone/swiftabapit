@@ -81,6 +81,14 @@ struct WebhookReadTests {
         #expect(deliveries[0].event?.eventType == .known(.orgDeviceAttributeChanged) && deliveries[0].state == .known(.succeeded))
         #expect(deliveries[0].request?.destination == "https://hooks.example.com/…" && deliveries[0].response?.statusCode == 200)
         #expect(try await Harness.all(harness.client.webhookDeliveries("W2")).map { $0.event?.id } == ["E1"])
+        // JSON:API includes a resource once however many name it (the stub too): W1's page names E1 and E2, and E9, which
+        // isn't held, so it isn't included.
+        harness.stub.relate("webhooks", "W2", "deliveries", to: ["D5", "D1", "D4", "D5"])
+        let raw = try await harness.raw("/v1/webhooks/W2/deliveries", [("include", "event")])
+        #expect(raw.body?["included"]?.array?.compactMap { $0["id"]?.string } == ["E1", "E2"])
+        let page = try await harness.raw("/v1/webhooks/W1/deliveries", [("include", "event")])
+        #expect(page.body?["included"]?.array?.compactMap { $0["id"]?.string } == ["E1", "E2"])
+        #expect(try await harness.raw("/v1/webhooks/W1/deliveries").body?["included"] == nil, "only when asked")
         #expect(harness.reads.first == "GET api-business.apple.com/v1/webhooks/W1/deliveries?include=event&limit=1000")
         await #expect(throws: AppleAPIError.notFound) { _ = try await Harness.all(harness.client.webhookDeliveries("W9")) }
     }

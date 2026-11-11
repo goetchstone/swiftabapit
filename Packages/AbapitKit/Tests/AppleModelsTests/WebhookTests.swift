@@ -77,6 +77,22 @@ struct WebhookTests {
         #expect(Self.webhook(["eventTypes": .null]).misreadLists.isEmpty)
     }
 
+    /// A webhook stores its withheld resource and the one Apple sent, and nothing else; a delivery those and its event. A
+    /// stored property added beside them is a new holder of the URL, the body or a secret, which no scan of `asSent` sees
+    /// (`let original = resource`): it fails here until someone decides what it holds (as `Configuration`'s, Phase 2a
+    /// verifier round 2).
+    @Test func whatAWebhookAndADeliveryStoreIsTheTwoCopies() {
+        #expect(MemoryLayout<Webhook>.size == MemoryLayout<(Resource, Resource)>.size)
+        #expect(MemoryLayout<WebhookDelivery>.size == MemoryLayout<(Resource, Resource, WebhookEvent?)>.size)
+    }
+
+    /// Neither is `Equatable`: the `==` Swift writes would compare `asSent`, an oracle for a guessed token or body (Phase 2a
+    /// verifier round 3, `Configuration`'s). One that is needed compares the withheld copy, and this test changes with it.
+    @Test func neitherComparesWhatAppleSent() {
+        #expect(!(Webhook.self is any Equatable.Type) && !(WebhookDelivery.self is any Equatable.Type))
+        #expect(!(Webhook.self is any Hashable.Type) && !(WebhookDelivery.self is any Hashable.Type))
+    }
+
     static func delivery(_ attributes: JSONObject, event: JSONValue? = nil) -> WebhookDelivery {
         WebhookDelivery(resource: Resource(type: "webhookDeliveries", id: "D1", attributes: attributes,
                                            relationships: event.map { ["event": .object(["data": $0])] } ?? [:]))

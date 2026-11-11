@@ -27,6 +27,20 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-11 — A read with no screen had no place for its probe
+- **What happened:** Business 2.8's webhook reads are Business-only and refusable by role, so by the pattern they want a
+  read probe and `.notInScope`. Both hang on `AppleSection`, and `NavigationTests` holds every section to a sidebar screen
+  that shows it ("none is left without a screen"). The phase builds the reads with no screen (plan §8.0), so the webhooks
+  got their own `AppleAPIError.webhooksNotInScope` and no probe; the pass's `webhooks` line says `forbidden` instead.
+- **Invariant in force:** #8 ("a section a probe found forbidden says 'your role can't read this'").
+- **Why it didn't hold cleanly:** not a failure; a strain. `AppleSection` is three things at once (a navigation
+  section, a probe, the School gate's name), and a read that is only the third has nowhere to go. The tripwire did its job:
+  it stopped a section with no screen.
+- **Would a rule have caught it?** no rule was broken. If more reads arrive ahead of their screens (the Mosyle ones, the
+  change feed), the School gate could take a read's own name and the probe list follow the reads rather than the sidebar.
+- **Enforcement home if changed:** the `NavigationTests` tripwire stays; a split would move `notInScope`'s argument off
+  `AppleSection` (one edit in AbapitKit, one in `LoadState(after:)`), for the operator to decide with the webhook screen.
+
 ## 2026-11-03 — The screens were reviewed before they were ever drawn
 - **What happened:** Phase 2b's five screens went through one review and three verifier rounds, all on `swift test` and
   builds. CI's snapshot run, the only thing that renders App/, first ran when PR 12 opened. It found:

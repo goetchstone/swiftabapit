@@ -8,8 +8,10 @@ and checked against Apple's DocC contract (plan §3.3, Appendix A).
 **Enforcement home:** `ModelContractTests` (each view reads exactly Apple's attributes; enums are Apple's
 values; Apple's examples decode), `ReadContractTests` (every read is a documented endpoint, parameter and
 `fields` value, for both scopes; the Business-only reads are exactly what School's contract lacks), `AppleClientTests`,
-`BusinessReadTests`, `BlueprintTests` and `AuditTests` against the strict `AppleStub`, `AppleStubTests` (the stub's own
-parameter table is the contract's, and it names nothing of the client's), and `AppModelsTests`
+`BusinessReadTests`, `BlueprintTests`, `AuditTests`, `DeviceFilterTests` and `WebhookReadTests` against the strict
+`AppleStub`, `WebhookTests` (what a webhook, a delivery and an event show and withhold), `AppleStubTests` (the stub's own
+parameter table, and what the contract says only in prose, are the contract's, and it names nothing of the client's), and
+`AppModelsTests`
 (invariant 8's screen-model tests: org switches, superseded loads, panels, partial and unusable states, the
 org editor's save).
 
@@ -409,8 +411,12 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
   POST body) or not (the guide's prose). A field is read only where its type documents it (`WebhookPayloadType.fields`,
   `.relationships`), the rest counted as `unreadKeys` (`payload.`, `attributes.`, `relationships.`); a payload that
   isn't a string, or a string that isn't an event, is `payloadProblem`, never read as none.
-- Held by `WebhookTests` (canaries through each public value, `description`, `dump` and the mirror) and
-  `applesWebhookExamplesReadTyped`.
+- Held by `WebhookTests` (canaries through each public value, `description`, `dump` and the mirror; the stored layout,
+  `whatAWebhookAndADeliveryStoreIsTheTwoCopies`; neither type `Equatable`, whose synthesized `==` would compare `asSent`),
+  `applesWebhookExamplesReadTyped`, and `BoundaryTests.whatAppleSentOfAWebhookStaysPackage`: `asSent` is `package` and only
+  that, named nowhere on the app side, and read in AbapitKit by its two declarations and two initializers alone (a public
+  accessor of another name fails there, as for the raw profile). Raw memory reads inside AbapitKit are review's, as for
+  `Secret`'s bytes.
 - **The reads** (`AppleClient.webhooks()`, `webhook(_:)`, `webhookDeliveries(_:_:)`; `WebhookReadTests`): the list pages as
   every list does; a webhook's deliveries page by cursor, as the device list and the audit log do, so
   `WebhookDeliveryQuery`'s filters go with every page. That query is checked when made: `filter[createdDateTimeAtOrAfter]`
