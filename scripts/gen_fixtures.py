@@ -546,6 +546,10 @@ def mosyle_edges() -> dict:
         ([dev("ONE")], [dev("ONE")] + [dev(f"M{n}") for n in range(7)]),
         ([dev("A1"), dev("A2")], [dev("A1")]),
         ([dev("A1")], [dev("A1"), dev("A2")]),
+        # The author's mutants: Python's upper() is Unicode 15's, so a Garay letter (16.0) has no capital there and its two
+        # spellings stay two serials; and NFC and NFD spellings in one bucket sort by code point (`C02E` + U+0301 before
+        # `C02F` before `C02` + U+00C9), where Swift's `String <` holds the two spellings equal.
+        ([dev("G\U00010D70X"), dev("C02\u00c9X"), dev("C02FX"), dev("C02E\u0301X")], [dev("G\U00010D50X")]),
     ]
     def mdev(serial, version=..., **attrs):
         if version is not ...:
@@ -577,7 +581,9 @@ def mosyle_edges() -> dict:
          {"enrolledAt": "2026-01-01", "lastMdmCheckIn": "", "lastPush": None, "lastCheckIn": "2026-01-02"},
          [event(when="2026-01-01"), event("DEVICE_ADDED_TO_ORG", "2026-01-01", None), event("IPHONE1X_ADDED", "2026-01-03", 0),
           event("device_added", "2026-01-04", "  \u00b7 x \u00b7"), event("\u00c9V\u00c9NEMENT_\u00df", "2026-01-05", "SUCCESS"),
-          event("A_\u0301B", "2026-01-06", "FAILURE"), event("X", "2026-01-07", "\u00b7")]),
+          event("A_\u0301B", "2026-01-06", "FAILURE"), event("X", "2026-01-07", "\u00b7"),
+          # An uncased letter before a capital: title() keeps the capital (Hebrew alef is alphabetic, not cased).
+          event("\u05d0B_C", "2026-01-08", "SUCCESS")]),
         (None, None, None),
         ({}, {}, []),
     ]

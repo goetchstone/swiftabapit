@@ -17,10 +17,11 @@ struct MosyleReportsParityTests {
 
     /// 20 drawn org pairs, then six hand-written (`mosyle_edges`): serials joined after Python's `strip()` and `upper()`, a
     /// later duplicate replacing an earlier one, NFC and NFD as two serials, falsy Apple values giving way to Mosyle's, null
-    /// and numeric statuses, code-point order, and the rates that need Python's `round`.
+    /// and numeric statuses, code-point order, and the rates that need Python's `round`. Then the author's mutants': a Garay
+    /// letter Python's Unicode 15 has no capital for, and NFC and NFD spellings sorted by code point in one bucket.
     @Test func reconciliationMatchesTheGolden() throws {
         let cases = try Self.cases("reconcile_enrollments")
-        #expect(cases.count == 26)
+        #expect(cases.count == 27)
         #expect(cases.allSatisfy { $0["abapit"] == nil })
         for (index, item) in cases.enumerated() {
             let input = try #require(item["input"])
@@ -39,7 +40,7 @@ struct MosyleReportsParityTests {
             #expect(report.enrollmentRate == summary["enrollment_rate"]?.double, "case \(index)")
         }
         // The hand-written pairs reach what the drawn ones don't: 3 of 16 is 18.75, which Python rounds to 18.8.
-        let rates = cases.suffix(6).compactMap { $0["expected"]?["ok"]?["summary"]?["enrollment_rate"]?.double }
+        let rates = cases.suffix(7).compactMap { $0["expected"]?["ok"]?["summary"]?["enrollment_rate"]?.double }
         #expect(rates.contains(18.8) && rates.contains(12.5) && rates.contains(0))
     }
 

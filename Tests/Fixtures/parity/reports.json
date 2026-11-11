@@ -44743,6 +44743,118 @@
    }
   },
   {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "G\ud803\udd70X",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02\u00c9X",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02FX",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02E\u0301X",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "G\ud803\udd50X",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [
+      {
+       "serial": "C02E\u0301X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "C02FX",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "C02\u00c9X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "G\ud803\udd70X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "mosyle_only": [
+      {
+       "serial": "G\ud803\udd50X",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [],
+     "summary": {
+      "total_abm": 4,
+      "total_mosyle": 1,
+      "total_unique": 5,
+      "both_count": 0,
+      "abm_only_count": 4,
+      "mosyle_only_count": 1,
+      "enrollment_rate": 0.0
+     }
+    }
+   }
+  },
+  {
    "function": "device_timeline",
    "input": {
     "abm_attrs": null,
@@ -46372,11 +46484,26 @@
        "type": "X",
        "outcome": "\u00b7"
       }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-08",
+      "attributes": {
+       "eventDateTime": "2026-01-08",
+       "type": "\u05d0B_C",
+       "outcome": "SUCCESS"
+      }
      }
     ]
    },
    "expected": {
     "ok": [
+     {
+      "when": "2026-01-08",
+      "kind": "audit",
+      "label": "\u05d0B C \u00b7 SUCCESS",
+      "source": "ABM"
+     },
      {
       "when": "2026-01-07",
       "kind": "audit",
