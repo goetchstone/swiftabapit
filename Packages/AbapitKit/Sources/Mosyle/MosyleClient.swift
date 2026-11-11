@@ -61,6 +61,11 @@ public actor MosyleClient {
         self.pageCap = pageCap
     }
 
+    /// The app's client: Mosyle over `URLSession`.
+    public init(org: String, vault: Vault) {
+        self.init(org: org, vault: vault, transport: URLSessionTransport())
+    }
+
     public var logins: Int { get async { await session.logins } }
 
     /// Every device on every platform, adapted through the allowlist, deduplicated by serial (else UDID).

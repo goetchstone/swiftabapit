@@ -1,6 +1,7 @@
 import AppleBusiness
 import AppleModels
 import Foundation
+import JSONAPI
 import Observation
 import Reports
 
@@ -60,8 +61,12 @@ public final class DeviceDetailModel {
     public private(set) var timeline: Panel<DeviceTimeline> = .loading
     /// The query the timeline was asked with; nil until it is. `package`: only the tests read it (Phase 2b review L10).
     package private(set) var timelineQuery: AuditQuery?
+    /// The timeline's audit events as Apple sent them, for the timeline from both sources.
+    private var auditEvents: [Resource] = []
 
     private let orgs: OrgsModel
+    /// Device 360's Mosyle half reads the Mosyle screen's device list: one read for both.
+    private let mosyle: MosyleModel?
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     /// The current request's token: a read for a device shown before, even the same serial, never lands.
     @ObservationIgnored private var token = 0
@@ -71,9 +76,46 @@ public final class DeviceDetailModel {
     /// Timeline reads that have returned, counted apart so the four panels' count stays theirs.
     @ObservationIgnored package private(set) var timelineReadsFinished = 0
 
-    public init(orgs: OrgsModel) {
+    public init(orgs: OrgsModel, mosyle: MosyleModel? = nil) {
         self.orgs = orgs
+        self.mosyle = mosyle
         orgs.onSwitch { [weak self] in self?.show(nil) }
+    }
+
+    /// Device 360's Mosyle half (plan Phase 7, defect 17): the device as the Mosyle org in view lists it.
+    public enum MosyleSide: Sendable {
+        /// No Mosyle org is paired with this one, or none can be read: why, in words.
+        case notInScope(String)
+        case reading
+        case found(MosyleModel.DeviceRow)
+        /// Mosyle's list doesn't hold the serial, in words: whole, or cut at the page cap.
+        case notFound(String)
+        case failed(String)
+    }
+
+    /// The shown device in Mosyle, found by serial as abapit's `_find_serial` found it (stripped and upper-cased, so
+    /// Mosyle's casing doesn't matter) in the Mosyle screen's device list, which it asks for when the device is shown.
+    public var mosyleSide: MosyleSide {
+        guard let mosyle, let serial else { return .reading }
+        guard orgs.mosyleOrg != nil else { return .notInScope(orgs.mosyleUnavailable?.why ?? "No Mosyle Business organization is paired with this one.") }
+        let key = Reconciliation.key(serial)
+        if !key.isEmpty, let row = mosyle.devices.rows.first(where: { Reconciliation.key($0.device.id) == key }) { return .found(row) }
+        switch mosyle.devices.state {
+        case .idle, .loading: return .reading
+        case .loaded where mosyle.devices.truncated:
+            return .notFound("Not among the \(mosyle.devices.rows.count.formatted()) devices read before Mosyle's list stopped at the page limit.")
+        case .loaded: return .notFound("Mosyle Business doesn't list this serial: it isn't enrolled there.")
+        case .forbidden: return .failed("Mosyle refused the device list.")
+        case .failed(let why), .notInScope(let why), .unusable(let why): return .failed(why)
+        }
+    }
+
+    /// The device's dates from both sources, newest first (abapit's `device_timeline`): Apple's order and arrival, its audit
+    /// events once read, and Mosyle's enrolment and check-ins once found. Each source adds what it has read so far.
+    public var bothTimeline: [MergedTimeline.Item] {
+        let apple: JSONObject? = if case .loaded(let device) = device { device.resource.attributes } else { nil }
+        let found: JSONObject? = if case .found(let row) = mosyleSide { row.device.attributes } else { nil }
+        return MergedTimeline.items(apple: apple, mosyle: found, audit: auditEvents)
     }
 
     public func show(_ serial: String?) {
@@ -83,7 +125,9 @@ public final class DeviceDetailModel {
         self.serial = serial
         (device, coverage, lock, service, timeline) = (.loading, .loading, .loading, .loading, .loading)
         timelineQuery = nil
+        auditEvents = []
         guard let serial else { return }
+        if orgs.mosyleOrg != nil { mosyle?.loadDevices() }
         guard let client = orgs.appleClient else {
             // Never a spinner that can't end: why, in words (invariant 8).
             let why = ScreenWords.unusable(orgs)
@@ -139,13 +183,15 @@ public final class DeviceDetailModel {
         tasks.append(Task { [weak self] in
             defer { self?.timelineReadsFinished += 1 }
             let result: Panel<DeviceTimeline>
+            var read: [Resource] = []
             do {
                 var events: [AuditEvent] = [], cut = false
                 for try await page in client.auditEvents(query) {
                     events += page.items
                     cut = page.truncated
                 }
-                let rows = AuditDigest.newestFirst(events.map(\.resource)).enumerated().map { ActivityRow(AuditEvent(resource: $0.element), id: $0.offset) }
+                read = events.map(\.resource)
+                let rows = AuditDigest.newestFirst(read).enumerated().map { ActivityRow(AuditEvent(resource: $0.element), id: $0.offset) }
                 result = .loaded(.read(rows: rows, truncated: cut))
             } catch is CancellationError {
                 return
@@ -158,6 +204,7 @@ public final class DeviceDetailModel {
             }
             guard let self, self.token == token, !Task.isCancelled else { return }
             timeline = result
+            if case .loaded(.read) = result { auditEvents = read }
         })
     }
 }

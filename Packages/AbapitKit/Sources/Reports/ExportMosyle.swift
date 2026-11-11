@@ -48,7 +48,7 @@ extension Reconciliation {
 }
 
 extension OSBreakdown {
-    public var csv: String {
+    public static func csv(_ rows: [Row]) -> String {
         CSV.text(rows.map { row in
             CSV.Item(id: row.version, attributes: ["osVersion": .string(row.version), "count": .number(String(row.count)),
                                                    "percent": .number(String(row.percent))])

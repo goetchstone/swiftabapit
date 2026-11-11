@@ -30,11 +30,13 @@ let package = Package(
         .target(name: "AppModels", dependencies: [
             .product(name: "AppleBusiness", package: kit), .product(name: "AppleModels", package: kit),
             .product(name: "Orgs", package: kit), .product(name: "Vault", package: kit), .product(name: "Reports", package: kit),
+            .product(name: "Mosyle", package: kit), .product(name: "MosyleModels", package: kit), .product(name: "JSONAPI", package: kit),
         ], swiftSettings: settings),
         .testTarget(name: "AppModelsTests", dependencies: [
             "AppModels",
             .product(name: "AppleBusiness", package: kit), .product(name: "AppleModels", package: kit),
             .product(name: "Orgs", package: kit), .product(name: "Vault", package: kit), .product(name: "Reports", package: kit),
+            .product(name: "Mosyle", package: kit), .product(name: "MosyleModels", package: kit),
             .product(name: "JSONAPI", package: kit), .product(name: "HTTPCore", package: kit), .product(name: "TestSupport", package: kit),
         ], swiftSettings: settings),
     ]

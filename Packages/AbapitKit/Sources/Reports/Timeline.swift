@@ -4,7 +4,7 @@ import MosyleModels
 
 /// abapit's `reports.device_timeline` (held to `Tests/Fixtures/parity/reports.json`): one device's dates from both sources,
 /// newest first, the "what happened" neither Apple Business nor Mosyle gives alone (Device 360).
-public enum DeviceTimeline {
+public enum MergedTimeline {
     public struct Item: Sendable, Equatable {
         /// The date as its source wrote it: the list sorts on this text, by code points, as abapit did.
         public let when: String

@@ -94,7 +94,7 @@ struct MosyleReportsParityTests {
         #expect(cases.count == 23)
         for (index, item) in cases.enumerated() {
             let input = try #require(item["input"])
-            let items = DeviceTimeline.items(apple: input["abm_attrs"]?.object, mosyle: input["mosyle_attrs"]?.object,
+            let items = MergedTimeline.items(apple: input["abm_attrs"]?.object, mosyle: input["mosyle_attrs"]?.object,
                                              audit: input["audit_events"]?.array.map { $0.compactMap(Resource.init) })
             let shown: [JSONValue] = items.map {
                 .object(["when": .string($0.when), "kind": .string($0.kind), "label": .string($0.label), "source": .string($0.source)])

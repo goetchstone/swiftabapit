@@ -347,7 +347,7 @@ job (§6.6).
 
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
-AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports}   the screen models, in Packages/AbapitApp (AbapitKit's
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, Mosyle, MosyleModels, JSONAPI}   the screen models, in Packages/AbapitApp (AbapitKit's
                                                                products: its public API only); never HTTPCore, Wire or ChangeCore
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
