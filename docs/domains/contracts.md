@@ -63,8 +63,11 @@ School example files (61 and 17 before). The crawl took two and a half minutes. 
   filters: `filter[serialNumber]`, `[status]`, `[productFamily]`, `[purchaseSourceType]`, `[orderNumber]`, and
   `filter[addedToOrgDateTime]` and `filter[orderDateTime]`, each also as `[GT]`, `[GTE]`, `[LT]` and `[LTE]`. None has
   `allowedValues`: the three enum filters list their values in their descriptions ("Possible values: …"), which
-  `ModelContractTests` reads, and `ProductFamily` gained `iPod` from that list. A second device-list example
-  (`get-org-devices.response.2.json`) is a filtered page whose next link carries the filters and the cursor.
+  `ModelContractTests` reads, and `ProductFamily` gained `iPod` from that list. `ProductFamily` is also
+  `MDMDevice.productFamily`'s type, whose values Apple documents nowhere, so `iPod` reaches it too, unchecked there;
+  `ServiceProductFamily` (`MdmServerProductFamily`, a documented enum) lists `IPOD`, which backs it. A second
+  device-list example (`get-org-devices.response.2.json`) is a filtered page whose next link carries the filters and
+  the cursor.
 - **Webhooks** (Business 2.8, 2026-11-04): eight endpoints, three reads (`GET webhooks`, `webhooks/{id}`,
   `webhooks/{id}/deliveries`) and five writes; `WebhookEventType` (4 values); the objects `Webhook`, `WebhookDelivery`
   and `WebhookEvent`. Apple's deliveries example names its event and includes none.

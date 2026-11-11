@@ -490,7 +490,11 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
 - A second API account per org whose Apple role has only View permissions. Apple allows up to 50 API
   accounts with per-category permissions [A].
 - Accepted only when Phase 4's write probes return **403 for every write category**: assign,
-  migration, release, blueprints, configurations, MDM services.
+  migration, release, blueprints, configurations, MDM services, and **webhooks** (Business 2.8: `POST /v1/webhooks`,
+  `PATCH` and `DELETE /v1/webhooks/{id}`, `POST /v1/webhookPings` and `POST /v1/webhookDeliveries`). A key that can
+  create a webhook can stream every device change, serials included, to any URL, with nothing written to a device: it
+  is no read-only key (contract-2.8 review M3; check live whether Apple's roles separate webhook management, apple-reads
+  runbook, "Webhooks").
 - Stored `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` **without** user presence.
 - Wrapped in `ReadOnlyAppleClient`, a type with no path to `HTTPCore.send(_:ticket:)`. A source-scan
   test enforces this.
@@ -950,7 +954,10 @@ reads, and what they reveal, come before writes.
    Security; `DeviceFilter`, checked when made, and the device list paged by cursor; the three webhook reads with their
    models (URLs shown only as scheme and host, the receiver's body and any secret withheld), the strict stub and three
    acceptance-pass lines. No screen, and no webhooks probe until one (apple-reads runbook, "Webhooks"). Live checks wait
-   for S1's team build.
+   for S1's team build. The phase's adversarial review (2026-11-11) found a delivery withholding only the keys it knew
+   and a masked URL hiding the change it was masked to show; fixed on the branch (failure-log 2026-11-11): a delivery
+   withholds every attribute it doesn't read and masks the URLs in its error message, every masked URL carries a per-run
+   tag, the audit mask walks every payload and both names, and §3.4.4's write probes include the webhooks.
 3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.
 4. **Phase 3, plus Needs attention** (below).
 5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
@@ -1254,7 +1261,9 @@ Guard shapes before implementing** (SwiftGamGui unattended-workflow rule).
   - a bounded activity tracker (status/subStatus);
   - `downloadUrl` opens in the browser.
 - **Write probes** in one exemption file. They run only on a Permissions click, and a test guards
-  that.
+  that. One per write category of §3.4.4, the webhooks' among them (Business 2.8): `POST /v1/webhooks` with a body Apple
+  must refuse (no `url`), or `PATCH /v1/webhooks/{zero UUID}`, so a key that may manage webhooks is never taken for a
+  read-only one (contract-2.8 review M3).
 - **Source-scan tests** (§6.4).
 
 **Done when**:

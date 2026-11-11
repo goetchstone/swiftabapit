@@ -7,7 +7,9 @@ import JSONAPI
 // `ModelContractTests` holds them to; `serverType` takes its values from the plan's Appendix A and Apple's examples.
 
 /// `OrgDevice`'s `productFamily`: the values `filter[productFamily]` lists ("Mac, iPhone, iPad, iPod, AppleTV, Watch,
-/// and Vision"). `iPod` came with that list (2.7): the plan's Appendix A, written from Apple's examples, lacked it.
+/// and Vision"). `iPod` came with that list (2.7): the plan's Appendix A, written from Apple's examples, lacked it. Also
+/// `MDMDevice.productFamily`'s type, whose values Apple doesn't document, so `iPod` reaches it too; `MdmServerProductFamily`
+/// (`ServiceProductFamily`) lists `IPOD`, which backs it.
 public enum ProductFamily: String, KnownValues {
     case iPhone, iPad, iPod, mac = "Mac", appleTV = "AppleTV", watch = "Watch", vision = "Vision"
 }
