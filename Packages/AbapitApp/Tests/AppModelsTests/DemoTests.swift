@@ -108,3 +108,35 @@ struct DemoTests {
         #expect(world.appleMDM.devices.allSatisfy { serials.contains($0.id) && $0.serialNumber == $0.id })
     }
 }
+
+/// The demo's Mosyle org agrees with the demo's Apple org (Phase 7's demo fleet): reconciled through the screen models over
+/// both strict stubs, every bucket holds devices, a lower-case serial joins its Apple device, each device group names devices
+/// the list holds (and the one retired member by UDID), and every tab reads.
+@MainActor
+@Suite("The demo's Mosyle org")
+struct DemoMosyleTests {
+    @Test func theDemoReconcilesIntoEveryBucketAndEveryTabReads() async throws {
+        let world = try await World.make(devices: ["a": 0, "b": 0], mosyle: true)
+        let fleet = DemoFleet.make()
+        world.stubs["a"]!.load(fleet)
+        DemoMosyle.load(into: world.mosyleStub, fleet: fleet, now: Date())
+        world.reconciliation.load()
+        await eventually("both reads") { world.devices.devicesReadWhole && world.mosyle.devices.isWhole }
+        let report = try #require(world.reconciliation.report)
+        #expect(!report.appleOnly.isEmpty && report.both.count > 40 && report.mosyleOnly.map(\.serial) == ["DEMOM0000001", "DEMOM0000002",
+                                                                                                           "DEMOM0000003", "DEMOM0000004"])
+        #expect(world.mosyle.devices.rows.contains { $0.serial != $0.serial.uppercased() }, "one serial in lower case")
+        for tab in MosyleModel.Tab.allCases {
+            world.mosyle.tab = tab
+            await eventually("\(tab)") { !world.mosyle.devices.state.isLoading && ![world.mosyle.users.state, world.mosyle.userGroups.state,
+                world.mosyle.deviceGroups.state, world.mosyle.attributes.state, world.mosyle.adminLog.state].contains { $0.isLoading } }
+            #expect(world.mosyle.exportBlocked(tab) == nil, "\(tab): \(world.mosyle.exportBlocked(tab) ?? "")")
+            #expect(world.mosyle.note(tab) == nil, "\(tab): \(world.mosyle.note(tab) ?? "")")
+        }
+        #expect(world.mosyle.shownStale().count >= 1)
+        world.mosyle.tab = .deviceGroups
+        world.mosyle.selectedGroup = "DEMODG02"
+        await eventually("members") { world.mosyle.members.readsFinished >= 1 }
+        #expect(world.mosyle.memberRows.filter { $0.device == nil }.map(\.udid) == ["DEMO-UDID-RETIRED01"])
+    }
+}

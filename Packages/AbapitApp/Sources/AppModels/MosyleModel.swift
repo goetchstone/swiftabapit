@@ -449,16 +449,11 @@ public final class MosyleModel {
         }
     }
 
-    /// What the tab's list says beside its rows: cut at the page cap, partial, Mosyle's count above the rows sent, the
-    /// fields Mosyle sent that nothing shows, the device columns Mosyle refused. Nil when there is nothing to say.
+    /// What the tab's list says beside its rows and its banner (which says a cut at the page cap and a partial read): Mosyle's
+    /// count above the rows sent, the fields Mosyle sent that nothing shows, the device columns Mosyle refused, why a report
+    /// over the devices has nothing yet. Nil when there is nothing to say.
     public func note(_ tab: Tab) -> String? {
         var lines: [String] = []
-        func cut(_ truncated: Bool, _ count: Int) {
-            if truncated { lines.append("Showing the first \(count.formatted()) \(tab.noun): the list stopped at the page limit.") }
-        }
-        func partial(_ count: Int?) {
-            if let count { lines.append("Partial: \(count.formatted()) \(tab.noun) were read before the error.") }
-        }
         func unread(_ names: [String]) {
             if !names.isEmpty {
                 lines.append("Mosyle sent fields this version doesn't read, so they aren't shown or exported: \(names.joined(separator: ", ")).")
@@ -466,16 +461,12 @@ public final class MosyleModel {
         }
         switch tab {
         case .devices:
-            cut(devices.truncated, devices.rows.count)
-            partial(devices.partialCount)
             switch columnFallback {
             case .without(let columns)?: lines.append("Mosyle refused the columns \(columns.joined(separator: ", ")), so they were left out of the request.")
             case .everyColumn?: lines.append("Mosyle refused a requested column, so every column was asked for; only the fields this app keeps are shown.")
             case nil: break
             }
-        case .users: cut(users.truncated, users.rows.count)
-        case .userGroups: cut(userGroups.truncated, userGroups.rows.count)
-        case .deviceGroups: cut(deviceGroups.truncated, deviceGroups.rows.count)
+        case .users, .userGroups, .deviceGroups: break
         case .attributes: unread(attributes.unread)
         case .adminLog:
             if let total = adminLog.total, total > adminLog.rows.count {

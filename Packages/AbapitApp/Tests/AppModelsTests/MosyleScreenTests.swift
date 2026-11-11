@@ -153,7 +153,7 @@ struct MosyleScreenTests {
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         #expect(world.mosyle.devices.rows.count == 50 && world.mosyle.devices.truncated)
-        #expect(world.mosyle.note(.devices) == "Showing the first 50 devices: the list stopped at the page limit.")
+        #expect(world.mosyle.note(.devices) == nil, "the banner says the cut")
         #expect(world.mosyle.osBreakdown == nil && world.mosyle.stale() == nil)
         #expect(world.mosyle.note(.osVersions)?.hasPrefix("Mosyle's device list stopped at the page limit (50 devices read)") == true)
         #expect(world.mosyle.exportBlocked(.devices) == nil, "a cut list exports, as its note says it was cut")
@@ -169,7 +169,7 @@ struct MosyleScreenTests {
         #expect(world.mosyle.devices.state == .failed("Mosyle's service failed (HTTP 500). Try again later."))
         #expect(world.mosyle.devices.partialCount == 50)
         #expect(world.mosyle.exportBlocked(.devices) == "The list is partial: 50 devices were read before the error. Refresh, then export.")
-        #expect(world.mosyle.note(.devices) == "Partial: 50 devices were read before the error.")
+        #expect(world.mosyle.note(.devices) == nil, "the banner says the partial read")
     }
 
     @Test func aRefusedColumnIsSaidBesideTheDevices() async throws {
@@ -359,6 +359,8 @@ struct Device360MosyleTests {
         await eventually("the Apple panels") { world.detail.readsFinished >= 4 && world.detail.timelineReadsFinished >= 1 }
         let kinds = world.detail.bothTimeline.map(\.kind)
         #expect(kinds.contains("beat") && kinds.contains("added"), "\(kinds)")
+        // Found as soon as its page arrived; "not enrolled" only once every platform was read: until then it is "reading".
+        await eventually("the whole Mosyle list") { world.mosyle.devices.isWhole }
         world.detail.show("ADEV0000002")
         if case .notFound(let why) = world.detail.mosyleSide { #expect(why == "Mosyle Business doesn't list this serial: it isn't enrolled there.") }
         else { Issue.record("\(world.detail.mosyleSide)") }

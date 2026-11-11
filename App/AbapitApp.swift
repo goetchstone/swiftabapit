@@ -65,6 +65,8 @@ extension SidebarItem {
         case .people: "person.2"
         case .content: "square.stack.3d.up"
         case .activity: "list.bullet.clipboard"
+        case .mosyle: "iphone.gen3.radiowaves.left.and.right"
+        case .reconciliation: "arrow.triangle.2.circlepath"
         case .reports: "chart.bar.doc.horizontal"
         case .settings: "key"
         }
@@ -128,7 +130,7 @@ struct ContentView: View {
             }
             ToolbarItem {
                 Button("Refresh", systemImage: "arrow.clockwise", action: refresh)
-                    .help("Read this section again from Apple (⌘R)")
+                    .help(shown == .mosyle ? "Read this section again from Mosyle (⌘R)" : "Read this section again (⌘R)")
                     .disabled(orgs.active == nil)
                     .accessibilityIdentifier("toolbar.refresh")
             }
@@ -169,6 +171,8 @@ struct ContentView: View {
             case .people: PeopleView(model: services.people)
             case .content: ContentScreen(model: services.content)
             case .activity: ActivityView(model: services.activity)
+            case .mosyle: MosyleView(model: services.screens.mosyle)
+            case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
             case .settings: SettingsView(orgs: orgs, isDemo: services.isDemo)
             case .reports:
                 ContentUnavailableView {

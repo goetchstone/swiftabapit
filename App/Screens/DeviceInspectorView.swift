@@ -3,8 +3,9 @@ import AppModels
 import JSONAPI
 import SwiftUI
 
-/// The Device inspector, ABM half (plan §4; Device 360's Mosyle half arrives in Phase 7): the device's
-/// attributes, its AppleCare, its Activation Lock, its assigned service and its audit timeline, each panel loaded on its own.
+/// The Device inspector, Device 360 (plan §4): the device's attributes, its AppleCare, its Activation Lock, its assigned
+/// service and its audit timeline, each panel loaded on its own; then its Mosyle half (Phase 7), the device as the paired
+/// Mosyle org lists it, and its dates from both sources once Mosyle has it.
 struct DeviceInspectorView: View {
     let model: DeviceDetailModel
 
@@ -69,6 +70,30 @@ struct DeviceInspectorView: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
+            }
+            // Device 360's Mosyle half: the paired Mosyle org's record of this serial, from the Mosyle screen's one device read.
+            Section("Mosyle") {
+                switch model.mosyleSide {
+                case .notInScope(let why): Label(why, systemImage: "building.columns").foregroundStyle(.secondary)
+                case .reading: ProgressView().controlSize(.small).accessibilityLabel("Reading Mosyle's devices")
+                case .notFound(let why): Label(why, systemImage: "questionmark.circle")
+                case .failed(let why): Label(why, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
+                case .found(let row):
+                    ForEach(MosyleModel.fields(of: row).filter { ["Name", "OS version", "User", "Status", "Supervised", "Lost mode"].contains($0.label) },
+                            id: \.label) { field in
+                        LabeledContent(field.label, value: field.value)
+                    }
+                    LabeledContent("Last check-in", value: row.lastCheckIn.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never")
+                }
+            }
+            .accessibilityIdentifier("inspector.mosyle")
+            if case .found = model.mosyleSide {
+                Section("Dates from both") {
+                    ForEach(Array(model.bothTimeline.enumerated()), id: \.offset) { _, item in
+                        LabeledContent("\(item.label) (\(item.source == "ABM" ? "Apple" : item.source))", value: item.when)
+                    }
+                }
+                .accessibilityIdentifier("inspector.bothTimeline")
             }
             // Device 360's ABM timeline: the device's audit events, by Apple's subject filter. A role that can't read the
             // audit log is told so here, and only here.

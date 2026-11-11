@@ -68,10 +68,12 @@ struct RouteTests {
     /// Only the client builds the transport (and hands it to `HTTPClient`), and only `HTTPClient` sends through one.
     /// `send(_:limit:)` takes any `URLRequest`, so a send from anywhere else goes past HTTPCore's host allowlist and the
     /// Executor. The name was excused package-wide, and `URLSessionTransport().send(…)` in AppleClient passed every scan
-    /// (Phase 1b gates verifier round 1). Mosyle's client joins in Phase 7, as a reviewed change here.
+    /// (Phase 1b gates verifier round 1). Mosyle's client joined in Phase 7 (its app initializer, `MosyleClient(org:vault:)`),
+    /// as a reviewed change here.
     @Test func onlyTheClientBuildsTheTransportAndOnlyHTTPClientSends() throws {
         let found = try SourceScan.files(in: Self.sources, matching: Self.allowedTransport)
-        #expect(found == ["\(Self.sources)/AppleBusiness/AppleClient.swift", "\(Self.sources)/HTTPCore/Transport.swift"], "\(found)")
+        #expect(found == ["\(Self.sources)/AppleBusiness/AppleClient.swift", "\(Self.sources)/HTTPCore/Transport.swift",
+                          "\(Self.sources)/Mosyle/MosyleClient.swift"], "\(found)")
         #expect(try SourceScan.files(in: Self.sources, matching: Self.sends) == ["\(Self.sources)/HTTPCore/HTTPClient.swift"])
         for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.sends).isEmpty, "\(root)") }
         // The name: `Transport` declares it, `URLSessionTransport` implements it, `HTTPClient` calls it, and the stubs.

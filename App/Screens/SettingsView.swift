@@ -14,6 +14,8 @@ struct SettingsView: View {
     let isDemo: Bool
     @State private var selected: String?
     @State private var editing: OrgEditor.Mode?
+    /// The Mosyle org being edited, or `.add`.
+    @State private var editingMosyle: OrgEditor.Mode?
     @State private var removing: OrgProfile?
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
@@ -31,7 +33,8 @@ struct SettingsView: View {
                             Text(org.name.isEmpty ? org.id : org.name)
                             if org.id == orgs.active?.id { Text("Active").font(.caption).foregroundStyle(.secondary) }
                         }
-                        Text([org.scope.known?.displayName ?? org.provider.rawValue, org.role].filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text([org.provider == .known(.mosyle) ? "Mosyle Business" : org.scope.known?.displayName ?? org.provider.rawValue, org.role]
+                                .filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .tag(org.id)
@@ -39,8 +42,13 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.orgs")
                 HStack {
-                    Button("Add Apple Organization…", systemImage: "plus") { editing = .add }
-                        .accessibilityIdentifier("settings.add")
+                    Menu("Add", systemImage: "plus") {
+                        Button("Apple Business or Apple School Manager…") { editing = .add }
+                            .accessibilityIdentifier("settings.add")
+                        Button("Mosyle Business…") { editingMosyle = .add }
+                            .accessibilityIdentifier("settings.addMosyle")
+                    }
+                    .accessibilityIdentifier("settings.addMenu")
                     Spacer()
                 }
                 .padding([.horizontal, .bottom], 8)
@@ -54,7 +62,9 @@ struct SettingsView: View {
                 if isDemo {
                     Label("Demo: this organization lives in memory and its \"Apple\" is the test stub. Nothing is saved.", systemImage: "theatermasks")
                 }
-                if let profile {
+                if let profile, profile.provider == .known(.mosyle) {
+                    mosyle(profile)
+                } else if let profile {
                     Section(profile.name) {
                         LabeledContent("Scope", value: profile.scope.known?.displayName ?? profile.scope.rawValue)
                         LabeledContent("Client ID", value: profile.clientID).textSelection(.enabled)
@@ -79,6 +89,7 @@ struct SettingsView: View {
                             .help("Every read this version makes; reports counts and unknown field names, never data (plan §7)")
                         #endif
                     }
+                    pairing(profile)
                     // What the profile holds, never a copy kept here: an edit to another account clears it there, and a
                     // check of the old account is never recorded (verifier round 2: this view kept its own results).
                     let found = Self.stored(profile)
@@ -104,6 +115,9 @@ struct SettingsView: View {
             .frame(minWidth: 380)
         }
         .sheet(item: $editing) { mode in OrgEditor(mode: mode, orgs: orgs) }
+        .sheet(item: $editingMosyle) { mode in
+            MosyleOrgEditor(editing: { if case .edit(let profile) = mode { profile } else { nil } }(), orgs: orgs)
+        }
         .sheet(isPresented: Binding(get: { acceptance != nil }, set: { if !$0 { acceptance = nil } })) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Acceptance pass").font(.headline)
@@ -119,10 +133,78 @@ struct SettingsView: View {
         }
         .confirmationDialog("Remove \(removing?.name ?? "this organization")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { profile in
-            Button("Remove and Delete Its Key", role: .destructive) { remove(profile) }
+            Button(profile.provider == .known(.mosyle) ? "Remove and Delete Its Credentials" : "Remove and Delete Its Key", role: .destructive) {
+                remove(profile)
+            }
             Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
+        } message: { profile in
+            Text(profile.provider == .known(.mosyle)
+                 ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it."
+                 : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
+        }
+    }
+
+    /// A Mosyle Business org: its name, Test (a login and one page of Macs), its pair, Edit and Remove. Its credentials are
+    /// in the Keychain and never shown.
+    @ViewBuilder private func mosyle(_ profile: OrgProfile) -> some View {
+        Section(profile.name) {
+            LabeledContent("Provider", value: "Mosyle Business")
+            LabeledContent("Credentials", value: "In this Mac's Keychain")
+            HStack {
+                if profile.id != orgs.active?.id { Button("Make Active") { orgs.select(profile.id) } }
+                Button("Test") { testMosyle(profile) }.disabled(working != nil)
+                    .help("Logs in and reads one page of Macs: proves the token, the admin account and the network")
+                Spacer()
+                Button("Edit…") { editingMosyle = .edit(profile) }
+                Button("Remove…", role: .destructive) { removing = profile }
+            }
+            if working == profile.id { ProgressView().controlSize(.small) }
+            if let result = testResult[profile.id] { Text(result) }
+            // A pair is chosen on the Apple org, whose screens read it: here it is only said.
+            let pairs = orgs.store.orgs.filter { $0.provider == .known(.apple) && $0.pairedOrg == profile.id }
+            LabeledContent("Paired with", value: pairs.isEmpty ? "No Apple organization: pair it from one's settings."
+                           : pairs.map { $0.name.isEmpty ? $0.id : $0.name }.joined(separator: ", "))
+        }
+    }
+
+    /// The org of the other provider this one is paired with (defect 17): an Apple org's Mosyle screens, reconciliation and
+    /// Device 360 read it.
+    @ViewBuilder private func pairing(_ profile: OrgProfile) -> some View {
+        let candidates = orgs.pairable(with: profile.id)
+        Section("Paired organization") {
+            Picker("Paired with", selection: Binding(get: { profile.pairedOrg }, set: { pick in
+                do {
+                    try orgs.pair(profile.id, with: pick.isEmpty ? nil : pick)
+                    problem = nil
+                } catch {
+                    problem = OrgsModel.message(error)
+                }
+            })) {
+                Text("None").tag("")
+                ForEach(candidates) { Text($0.name.isEmpty ? $0.id : $0.name).tag($0.id) }
+                if !profile.pairedOrg.isEmpty, !candidates.contains(where: { $0.id == profile.pairedOrg }) {
+                    Text("\(profile.pairedOrg) (not found)").tag(profile.pairedOrg)
+                }
+            }
+            .accessibilityIdentifier("settings.pair")
+            Text("The Mosyle screens, the reconciliation and Device 360 read the Mosyle Business organization paired here.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func testMosyle(_ profile: OrgProfile) {
+        guard let client = orgs.mosyleClient(for: profile) else { return }
+        working = profile.id
+        Task {
+            defer { working = nil }
+            do {
+                try await client.ping()
+                testResult[profile.id] = "Connected: the token, the admin account and the network work."
+            } catch {
+                testResult[profile.id] = OrgsModel.message(error)
+            }
         }
     }
 

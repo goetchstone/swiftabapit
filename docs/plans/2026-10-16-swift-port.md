@@ -959,6 +959,14 @@ reads, and what they reveal, come before writes.
    withholds every attribute it doesn't read and masks the URLs in its error message, every masked URL carries a per-run
    tag, the audit mask walks every payload and both names, and §3.4.4's write probes include the webhooks.
 3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.
+   **Status:** built on branch `mosyle-screens` (2026-11-11): the three reads 7a lacked, each request from its source
+   (custom attributes and the admin log's answers have none, so they are read loudly and named fields not read are said);
+   `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
+   reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
+   half, a per-org pair and the Mosyle org editor in Settings; the demo's Mosyle org. Decisions the session proposed, not
+   the operator's (in the PR): the pair is chosen on the Apple org and only the active org's pair is read; a Mosyle org's
+   sidebar is Mosyle and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only
+   over lists read whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
 4. **Phase 3, plus Needs attention** (below).
 5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
 6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9, and the webhook writes. Phase 4 still stops for the operator's
@@ -1337,10 +1345,9 @@ operator has a device they mean to release; a strict-stub test is the only cover
 ### Phase 7: Mosyle reads, Logs Stream, reconciliation, Device 360
 
 **Status:** split. **7a** (MosyleModels, `MosyleRead`, `MosyleSession`, `MosyleClient` reads, the strict
-`MosyleStub`): on branch `phase-7a-mosyle-models`, its adversarial review's findings fixed and being verified
-(2026-10-17). **7b**
-(the Logs Stream drain, `LogsStore`) and the reports, Device 360, collectors and demo fleet: not started. Live checks
-wait for the operator.
+`MosyleStub`): merged. The rest of the reads, the reports, the screens, Device 360 and the demo fleet: built on
+`mosyle-screens` (§8.0 step 3). **7b** (the Logs Stream drain, `LogsStore`) and the collectors: after Phase 3's store.
+Live checks wait for the operator.
 
 **Owns:** `Mosyle/`, `MosyleModels/`, `Reports/{reconcile,mosylePosture,timeline}`,
 `History/{LogsStore,mosyleCollectors}`, `TestSupport/MosyleStub*`, `App/Screens/{Mosyle*,Reconciliation,Device360}`.

@@ -1,6 +1,7 @@
 import AppleBusiness
 import AppModels
 import Foundation
+import Mosyle
 import Orgs
 import Vault
 #if DEBUG
@@ -42,26 +43,36 @@ final class AppServices {
         let vault = Vault(store: KeychainStore())
         let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault) { account, rate in
             AppleClient(account: account, vault: vault, readsPerMinute: rate)
+        } makeMosyleClient: { org in
+            MosyleClient(org: org, vault: vault)
         }
         return AppServices(orgs: orgs, isDemo: false)
     }
 
     #if DEBUG
     /// Debug builds only: one Apple Business org whose key lives in memory and whose "Apple" is the strict
-    /// `AppleStub` serving the demo org's data (`DemoOrg`). Nothing is read from or written to the Keychain, `orgs.json`
-    /// or the network.
+    /// `AppleStub` serving the demo org's data (`DemoOrg`), paired with a Mosyle Business org whose "Mosyle" is the strict
+    /// `MosyleStub` serving its devices (`DemoMosyle`). Nothing is read from or written to the Keychain, `orgs.json` or the
+    /// network.
     static func demo() -> AppServices {
         let (store, stub) = DemoOrg.make()
+        DemoMosyle.storeSecrets(in: store)
+        let mosyleStub = DemoMosyle.make()
         let vault = Vault(store: store)
         var profile = OrgProfile(id: DemoOrg.orgID, name: DemoOrg.name, provider: .apple)
         profile.scope = .known(.business)
         profile.clientID = DemoOrg.clientID
         profile.keyID = DemoOrg.keyID
         profile.role = "Administrator"
+        profile.pairedOrg = DemoMosyle.orgID
         var orgs = OrgStore()
         try? orgs.add(profile)
+        try? orgs.add(OrgProfile(id: DemoMosyle.orgID, name: DemoMosyle.name, provider: .mosyle))
+        orgs.activeID = DemoOrg.orgID
         let model = OrgsModel(storage: .memory, vault: vault, store: orgs) { account, _ in
             AppleClient(account: account, vault: vault, transport: stub)
+        } makeMosyleClient: { org in
+            MosyleClient(org: org, vault: vault, transport: mosyleStub)
         }
         return AppServices(orgs: model, isDemo: true)
     }

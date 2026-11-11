@@ -4,8 +4,10 @@
 
 **Owns invariant(s):** #2, #3, #11
 
-**Status:** Phase 7a (reads, models, the strict stub). Lost-device actions are Phase 8; the Logs Stream drain is 7b
-(`docs/domains/logs-stream.md`).
+**Status:** Phase 7a (reads, models, the strict stub), then the build order's step 3 (plan §8.0): the three reads 7a lacked
+(custom device attributes, a device group's members with the compliance filter, the admin log), Mosyle's screens, the
+reconciliation and Device 360's Mosyle half. Lost-device actions are Phase 8; the Logs Stream drain and the snapshot
+collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
 
 ## Files
 - `Sources/MosyleModels/`: `Envelope.swift` (status inside a 200, the malformed shapes, a list page's reading, `rows`
@@ -19,6 +21,14 @@
 - `Sources/Mosyle/MosyleClient.swift`: devices per platform, users, groups, ping; paging, dedupe, the cap, the column
   fallback.
 - `Sources/TestSupport/MosyleStub.swift`: the strict stub (Debug only), with its own device-column list.
+- `Contracts/mosyle/operations.json`: every read on the allowlist, each request's and answer's parts with their sources
+  (plan §3.10; `MosyleContractTests` holds it to `MosyleRead.allowed`).
+- `Sources/Reports/{Reconcile,MosylePosture,Timeline,ExportMosyle}.swift`: abapit's `reconcile_enrollments`,
+  `mosyle_os_breakdown`, `mosyle_stale_devices` and `device_timeline` (`MergedTimeline`), held to the reports golden; the
+  Mosyle and reconciliation CSV columns.
+- `Packages/AbapitApp/Sources/AppModels/{MosyleModel,ReconciliationModel}.swift`, `DeviceDetailModel.mosyleSide`,
+  `OrgsModel` (`mosyleOrg`, `mosyleClient`, `pair`, `saveMosyle`); `App/Screens/{MosyleView,ReconciliationView,MosyleOrgEditor}.swift`;
+  `TestSupport/DemoMosyle.swift`.
 - Tests: `MosyleModelsTests` (parity); `MosyleTests`: `MosyleClientTests` and `MosyleSessionTests` (the happy paths),
   `MosyleFailureTests` (every failure the client handles), `MosyleLoginTests` (the login's failures, single flight, the
   Logs Stream's login), `MosyleStubTests` (the stub's own strictness), `MosyleReadTests` (the allowlist as values, the
@@ -82,6 +92,45 @@
   is the end, unmarked), and every list returns it; in the
   device stream every page after a cut says so, so the last page does (review L3). Each page's log line gives the
   rows it held and Mosyle's `rows`, for the live check of what `rows` means.
+
+- **The three reads step 3 added** (plan §2.2, Appendix C; `MosyleMoreReadsTests`):
+  - `list_custom_device_attributes`: one request per platform, its `os` beside the operation (Mosyle's doc, as plan §2.2
+    recorded it; a Mosyle Manager client sends it so too). Not paged.
+  - `get_info`: `options.iddevicegroup` (a string, as the Postman collection sends it) and, for the compliance filter,
+    `security_compliance_status` `compliant` or `noncompliant` (the values are the Manager client's). The answer is the
+    Postman example's: `response.devicegroup {name, udids[]}`. A group with no `udids` list, a UDID that isn't a string or a
+    status of its own is an error; an empty list is an empty group.
+  - `/adminlogs`: no operation, a top-level `filter_options {start_date, end_date}` (`YYYY-MM-DD`, UTC days, the last 1 to
+    365 days). One request; Mosyle's `rows`, when sent, is kept beside the entries so a cut list is said.
+  - **Answers no source shows** (attributes, admin-log entries) are read loudly: the list must be under one of the guessed
+    keys, else `.malformed`, never an empty list; each record is cut to the guessed fields (`MosyleAdapter.attributeFields`,
+    `adminLogFields`), and the names of the other fields it held (never their values) are kept for the screen to say
+    ("Mosyle sent fields this version doesn't read…"), so a wrong guess shows on the first live read.
+
+## Screens (step 3)
+- **Which Mosyle org**: `OrgsModel.mosyleOrg`, the active org when it is a Mosyle org, else the org the active Apple org is
+  paired with (defect 17: chosen in Settings, never the first one found). An Apple org with no pair, a pair that is gone or
+  one that isn't Mosyle says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle list, the reconciliation and
+  Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`). A new pair for the
+  active org, or removing the paired org, is an org switch: every screen reads again. A Mosyle org's sidebar is Mosyle and
+  Settings (`SidebarItem.mosyleSections`); Apple's screens say they don't read it.
+- **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows; the devices first,
+  since the device groups' members, the OS versions, the stale devices, the reconciliation and Device 360 all count that
+  one read. Errors are said in Mosyle's words (a 403 included: there is no Mosyle permissions probe, and a refusal may be the
+  token's IP restriction). The two reports are made only over a device list read whole (`reportNote` says why not). A
+  device group's members are read when it is chosen, with its own token, and named by the devices the list holds by UDID,
+  else by the UDID with a note. The refused-column fallback is said beside the devices.
+- **`ReconciliationModel`**: the Devices read and the Mosyle device read, shared; a report only from two lists read whole
+  (a cut or failed list would put the devices it didn't read in the wrong column), cached per pair of reads (a Refresh is a
+  new key: each finished read's state carries its time). CSV: every bucket, as abapit's export.
+- **Device 360** (`DeviceDetailModel.mosyleSide`): the shown serial found in the Mosyle read as abapit's `_find_serial`
+  found it (stripped, upper-cased), else "not enrolled there", or "not among the N read" when the list was cut; the
+  dates from both sources (`bothTimeline`).
+- **Settings**: Add › Mosyle Business, the editor's credentials stored as one set (`saveMosyle`, checked before any Keychain
+  write, an Add's id reserved and never one the Keychain still holds); an edit keeps them unless all are given again, an
+  empty Logs Stream token then clearing a stored one (defect 14). A pair is chosen on the Apple org.
+- **Not done here**: the Logs Stream drain and `LogsStore` (Phase 3's store), the snapshot collectors (defect 6), the
+  server-side device filters (`serial_numbers[]` and the rest: Device 360 reads the one device list instead).
 
 ## Invariants & failure history
 - Defects 1–3 (plan §2.3) are the reasons for the allowlist, the paging rule and the envelope rule.
@@ -193,6 +242,13 @@
   - Device groups answer with an object (`response.devicegroups`), as plan §3.5 says; users and user groups with
     the usual one-entry list.
   - The stub refuses a Logs Stream JWT on the business host and the reverse (its choice: two services, two logins).
+  - **Step 3's reads** (`Contracts/mosyle/operations.json` marks each guess G): the custom attributes' list key
+    (`custom_device_attributes`, `attributes` or `info`) and field names, and whether `visionos` is a platform there; the
+    admin log's list key (`logs`, `adminlogs` or `admin_logs`), its field names, its date format (`YYYY-MM-DD`), whether
+    it pages, and what it answers with no entries (an empty list reads as none; any status is an error); whether `get_info`
+    pages a large group, what it answers for a group it doesn't have (the stub's `DEVICEGROUP_NOTFOUND`), and whether its
+    filter takes `compliant` and `noncompliant`. The screens name any field Mosyle sends that isn't read, which answers most
+    of these on the first live read.
 - A tenant that ignores `page` would return the first page forever, and one that wraps past its end would serve its
   pages again: either way the walk stops at the first page that adds nothing new.
 
