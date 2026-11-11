@@ -78,6 +78,13 @@ public final class ReconciliationModel {
         return report
     }
 
+    /// When the older of the two reads finished: the report is as old as it (invariant 8: data read once and kept for the
+    /// session shows its age). Nil without a report.
+    public var readAt: Date? {
+        guard report != nil, case .loaded(let apple) = devices.state, case .loaded(let mosyle) = mosyle.devices.state else { return nil }
+        return min(apple, mosyle)
+    }
+
     /// Why there is no report, in words; nil when there is one.
     public var note: String? {
         if !orgs.reconciles {

@@ -121,14 +121,23 @@ public enum MosyleAdapter {
         ("ip", ["ip", "ip_address", "IP"]),
     ]
 
-    /// `raw` cut to `fields`, and the names of the raw fields it held that no field reads (sorted, by code points).
+    /// `raw` cut to `fields`, each the first truthy scalar of its sources, and the names of the raw fields it held that
+    /// nothing shows (sorted, by code points): a field no source names, and a guessed field that held an object or a list.
+    /// A container is never kept: its keys and values were never listed, and the CSV writes one whole as JSON (the
+    /// review of step 3: an `action` holding `{"payload": {"wifi_password": …}}` reached the export).
     public static func guessed(_ raw: JSONObject, _ fields: [Guessed]) -> (attributes: JSONObject, unread: [String]) {
-        var attributes = JSONObject()
+        var attributes = JSONObject(), containers: [String] = []
         for (name, sources) in fields {
-            if let value = sources.lazy.compactMap({ raw[$0] }).first(where: Python.truthy) { attributes[name] = value }
+            for source in sources {
+                guard let value = raw[source], Python.truthy(value) else { continue }
+                switch value {
+                case .object, .array: containers.append(source)
+                default: if attributes[name] == nil { attributes[name] = value }
+                }
+            }
         }
         let read = Set(fields.flatMap(\.sources).map { Array($0.utf8) })
-        let unread = raw.keys.filter { !read.contains(Array($0.utf8)) }.sorted(by: Python.precedes)
+        let unread = (raw.keys.filter { !read.contains(Array($0.utf8)) } + containers).sorted(by: Python.precedes)
         return (attributes, unread)
     }
 

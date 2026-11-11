@@ -290,8 +290,11 @@ public final class MosyleModel {
         }
     }
 
+    /// Reads `list` from the start: what it read before is dropped first, so a read for another range (the admin log's days)
+    /// never shows the last range's rows under its banner, nor counts them as its partial read (the review of step 3).
     private func start(_ list: List) {
         tasks[list]?.cancel()
+        clear(list)
         let token = token
         guard let client = orgs.mosyleClient else {
             let (why, notInScope) = orgs.mosyleUnavailable ?? ("Mosyle Business can't be read.", false)
@@ -350,6 +353,17 @@ public final class MosyleModel {
         var listing = Listing<Row>()
         (listing.rows, listing.truncated, listing.unread, listing.total, listing.state) = (rows, truncated, unread, total, .loaded(at: Date()))
         self[keyPath: list] = listing
+    }
+
+    private func clear(_ list: List) {
+        switch list {
+        case .devices: devices = Listing()
+        case .users: users = Listing()
+        case .userGroups: userGroups = Listing()
+        case .deviceGroups: deviceGroups = Listing()
+        case .attributes: attributes = Listing()
+        case .adminLog: adminLog = Listing()
+        }
     }
 
     private func set(_ list: List, state: LoadState) {
@@ -536,7 +550,8 @@ public final class MosyleModel {
     /// The selected group's members, each the device the device list holds by its UDID, else the UDID itself.
     public var memberRows: [MemberRow] {
         guard case .loaded(let found) = members.panel else { return [] }
-        let index = Dictionary(devices.rows.map { (Array($0.udid.utf8), $0) }, uniquingKeysWith: { first, _ in first })
+        // By bytes, and never by an empty UDID: a device that has none isn't every member that has none (the review of step 3).
+        let index = Dictionary(devices.rows.filter { !$0.udid.isEmpty }.map { (Array($0.udid.utf8), $0) }, uniquingKeysWith: { first, _ in first })
         return found.udids.enumerated().map { MemberRow(id: "\($0.offset)", udid: $0.element, device: index[Array($0.element.utf8)]) }
     }
 
@@ -558,7 +573,7 @@ public final class MosyleModel {
         public let udid: String
         public let device: DeviceRow?
 
-        public var name: String { device.map { $0.name == "—" ? $0.serial : $0.name } ?? udid }
+        public var name: String { device.map { $0.name == "—" ? $0.serial : $0.name } ?? (udid.isEmpty ? "A member with no UDID" : udid) }
         public var detail: String { device.map { "\($0.serial) · \($0.model)" } ?? "Not among the devices read" }
     }
 
@@ -621,17 +636,23 @@ public final class MosyleModel {
     /// Why the tab's Export is off; nil when it exports (`ScreenWords.exportBlocked`). A report over a device list that
     /// wasn't read whole has nothing to export.
     public func exportBlocked(_ tab: Tab, now: Date = Date()) -> String? {
-        let (state, read, shown): (LoadState, Int, Int) = switch tab {
-        case .devices: (devices.state, devices.partialCount ?? 0, shownDevices.count)
-        case .users: (users.state, users.partialCount ?? 0, shown(users).count)
-        case .userGroups: (userGroups.state, userGroups.partialCount ?? 0, shown(userGroups).count)
-        case .deviceGroups: (deviceGroups.state, deviceGroups.partialCount ?? 0, shown(deviceGroups).count)
-        case .attributes: (attributes.state, attributes.partialCount ?? 0, shown(attributes).count)
-        case .adminLog: (adminLog.state, adminLog.partialCount ?? 0, shown(adminLog).count)
-        case .osVersions: (devices.state, devices.partialCount ?? 0, shownVersions.count)
-        case .stale: (devices.state, devices.partialCount ?? 0, shownStale(now: now).count)
+        var (state, read, count): (LoadState, Int, Int) = (devices.state, 0, 0)
+        switch tab {
+        case .devices: (state, read, count) = (devices.state, devices.partialCount ?? 0, shownDevices.count)
+        case .users: (state, read, count) = (users.state, users.partialCount ?? 0, shown(users).count)
+        case .userGroups: (state, read, count) = (userGroups.state, userGroups.partialCount ?? 0, shown(userGroups).count)
+        case .deviceGroups: (state, read, count) = (deviceGroups.state, deviceGroups.partialCount ?? 0, shown(deviceGroups).count)
+        case .attributes: (state, read, count) = (attributes.state, attributes.partialCount ?? 0, shown(attributes).count)
+        case .adminLog: (state, read, count) = (adminLog.state, adminLog.partialCount ?? 0, shown(adminLog).count)
+        case .osVersions, .stale:
+            // A report counts devices: a partial read is said of the devices, and a list read but cut says why, not "nothing".
+            if !devices.isWhole {
+                return ScreenWords.exportBlocked(devices.state, read: devices.partialCount ?? 0, shown: 1, noun: "devices")
+                    ?? reportNote ?? ScreenWords.nothingToExport
+            }
+            (state, read, count) = (devices.state, 0, tab == .osVersions ? shownVersions.count : shownStale(now: now).count)
         }
-        return ScreenWords.exportBlocked(state, read: read, shown: shown, noun: tab.noun)
+        return ScreenWords.exportBlocked(state, read: read, shown: count, noun: tab.noun)
     }
 
     // MARK: words

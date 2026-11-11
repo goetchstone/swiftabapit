@@ -85,6 +85,12 @@ struct DeviceInspectorView: View {
                     }
                     LabeledContent("Last check-in", value: row.lastCheckIn.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never")
                 }
+                // Read once and kept: how old it is (invariant 8). Refresh on Mosyle reads it again.
+                if let readAt = model.mosyleReadAt {
+                    TimelineView(.periodic(from: .now, by: 60)) { _ in
+                        Text("Mosyle's device list as of \(readAt.formatted(.relative(presentation: .named)))").foregroundStyle(.secondary)
+                    }
+                }
             }
             .accessibilityIdentifier("inspector.mosyle")
             if case .found = model.mosyleSide {

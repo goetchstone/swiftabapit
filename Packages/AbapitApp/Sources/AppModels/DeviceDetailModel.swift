@@ -110,6 +110,13 @@ public final class DeviceDetailModel {
         }
     }
 
+    /// When the Mosyle device list `mosyleSide` reads finished: it is read once and kept, so Device 360 says how old it is
+    /// (invariant 8). Nil while it is read or when there is none.
+    public var mosyleReadAt: Date? {
+        guard let mosyle, orgs.mosyleOrg != nil, case .loaded(let at) = mosyle.devices.state else { return nil }
+        return at
+    }
+
     /// The device's dates from both sources, newest first (abapit's `device_timeline`): Apple's order and arrival, its audit
     /// events once read, and Mosyle's enrolment and check-ins once found. Each source adds what it has read so far.
     public var bothTimeline: [MergedTimeline.Item] {

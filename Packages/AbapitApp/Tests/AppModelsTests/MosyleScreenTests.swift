@@ -154,7 +154,7 @@ struct MosyleScreenTests {
         #expect(world.mosyle.osBreakdown == nil && world.mosyle.stale() == nil)
         #expect(world.mosyle.note(.osVersions)?.hasPrefix("Mosyle's device list stopped at the page limit (50 devices read)") == true)
         #expect(world.mosyle.exportBlocked(.devices) == nil, "a cut list exports, as its note says it was cut")
-        #expect(world.mosyle.exportBlocked(.osVersions) == ScreenWords.nothingToExport)
+        #expect(world.mosyle.exportBlocked(.osVersions) == world.mosyle.reportNote, "why, not \"nothing to export\"")
     }
 
     @Test func aListThatFailsPartWayIsPartialAndDoesntExport() async throws {

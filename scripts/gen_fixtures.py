@@ -1483,6 +1483,34 @@ def gen_mosyle(m: dict) -> None:
     write("mosyle", {**header(1007), "cases": cases})
 
 
+def gen_unicode_case(m: dict) -> None:
+    """Python's own case and space rules, for every code point that has one, as abapit's Python reads them (its Unicode,
+    the header's): `upper()`, `title()` of the character alone and after a cased one (CPython's lower_ucs4, the final
+    sigma included), whether it is cased (what `title()` reads to case the next one) and `isspace()`. The reconciliation's
+    serial key (`strip().upper()`) and the timeline's `title()` are held to this, character by character, because Swift's
+    tables are newer: the review of step 3 found four letters with a capital only since Unicode 16 and one that became
+    cased (each joined two serials abapit keeps apart)."""
+    cases = {}
+    for point in range(0x110000):
+        if 0xD800 <= point <= 0xDFFF:
+            continue
+        char, entry = chr(point), {}
+        if char.upper() != char:
+            entry["upper"] = char.upper()
+        if char.title() != char:
+            entry["title"] = char.title()
+        after = ("A" + char).title()[1:]
+        if after != char:
+            entry["after_cased"] = after
+        if (char + "A").title()[-1] == "a":
+            entry["cased"] = True
+        if char.isspace():
+            entry["space"] = True
+        if entry:
+            cases[str(point)] = entry
+    write("unicode_case", {**header(None), "cases": cases})
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--abapit", type=Path, required=True, help="a checkout of abapit holding the pinned commit")
@@ -1496,6 +1524,7 @@ def main() -> int:
     gen_diff(modules)
     gen_keys_and_claims(modules)
     gen_mosyle(modules)
+    gen_unicode_case(modules)
     return 0
 
 

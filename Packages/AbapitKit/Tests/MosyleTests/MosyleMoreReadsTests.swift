@@ -100,7 +100,8 @@ struct MosyleMoreReadsTests {
             ["date": .string("2026-11-05 00:00:00"), "email": .string("it@example.com"), "description": .string("Signed in"),
              "ip": .string("192.0.2.1")],
         ])
-        let now = try #require(ISODate.parse("2026-11-11T08:00:00Z")?.date)
+        // 02:00 UTC: on a Mac west of Greenwich still the 10th, and the days are UTC's (the review's M12).
+        let now = try #require(ISODate.parse("2026-11-11T02:00:00Z")?.date)
         let records = try await harness.client.adminLogs(days: 7, now: now)
         let options = try #require(harness.stub.bodies.last?["filter_options"]?.object)
         #expect(options["start_date"] == .string("2026-11-05") && options["end_date"] == .string("2026-11-11"))
@@ -134,6 +135,19 @@ struct MosyleMoreReadsTests {
         await #expect(throws: MosyleAPIError.status(.unknown("LOGS_NOTFOUND"), info: "stubbed")) {
             try await ended.client.adminLogs(days: 1, now: now)
         }
+    }
+
+    /// The guessed adapters (the review's M13–M15): the first truthy value, not the first present; no id from nothing; an
+    /// admin log's epoch date as ISO.
+    @Test func theGuessedAdaptersReadTheFirstTruthyScalar() {
+        let (item, unread) = MosyleAdapter.customAttribute(["name": .string(""), "Name": .string("Floor"), "Value": .number("0"), "value": .string("7")], os: "ios")
+        #expect(item.attributes["name"] == .string("Floor") && item.attributes["value"] == .string("7") && unread.isEmpty)
+        #expect(item.id == "ios/Floor")
+        #expect(MosyleAdapter.customAttribute([:], os: "mac").0.id == "")
+        #expect(MosyleAdapter.adminLog(["date": .string("1700000000")]).0.attributes["when"] == .string("2023-11-14T22:13:20Z"))
+        #expect(MosyleAdapter.adminLog(["date": .string("2026-11-10 09:00:00")]).0.attributes["when"] == .string("2026-11-10 09:00:00"))
+        #expect(Python.title("a\u{10D70}B") == "A\u{10D70}B", "a character Python doesn't know isn't cased")
+        #expect(Python.strip("\u{1C} a\u{3000}") == "a")
     }
 
     /// Each builder makes a request the session lets through as a read, as it will be sent.

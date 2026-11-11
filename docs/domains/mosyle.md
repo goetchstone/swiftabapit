@@ -104,8 +104,12 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     365 days). One request; Mosyle's `rows`, when sent, is kept beside the entries so a cut list is said.
   - **Answers no source shows** (attributes, admin-log entries) are read loudly: the list must be under one of the guessed
     keys, else `.malformed`, never an empty list; each record is cut to the guessed fields (`MosyleAdapter.attributeFields`,
-    `adminLogFields`), and the names of the other fields it held (never their values) are kept for the screen to say
-    ("Mosyle sent fields this version doesn't read…"), so a wrong guess shows on the first live read.
+    `adminLogFields`), each the first truthy **scalar** of its sources, and the names of the other fields it held (never
+    their values), a guessed field that held an object or a list among them, are kept for the screen to say ("Mosyle sent
+    fields this version doesn't read…"), so a wrong guess shows on the first live read. A container is never kept: its
+    keys were never listed, and the CSV would write it whole (step 3's review, failure-log 2026-11-11).
+  - The stub answers the attributes under `info`, the only key a source shows, and refuses an `os` in `options`, a
+    compliance value other than the two, and an admin-log date that isn't `YYYY-MM-DD` (`theStubRefusesStep3sReadsAsMosyleWould`).
 
 ## Screens (step 3)
 - **Which Mosyle org**: `OrgsModel.mosyleOrg`, the active org when it is a Mosyle org, else the org the active Apple org is
@@ -114,9 +118,11 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   list, the reconciliation and Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`).
   Removing the paired org is an org switch: every screen reads again. **Reachable only in the demo** until the Mosyle org
   editor and the pair picker land (the next PR, a split the parent session chose for review focus): this version can't add
-  a Mosyle org or choose a pair in Settings. A Mosyle org's sidebar is Mosyle and
+  a Mosyle org or choose a pair in Settings. The Mosyle device read is kept for the session, so the reconciliation
+  (`readAt`) and Device 360's Mosyle half (`mosyleReadAt`) say how old it is (invariant 8); Refresh on Mosyle reads it again. A Mosyle org's sidebar is Mosyle and
   Settings (`SidebarItem.mosyleSections`); Apple's screens say they don't read it.
-- **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows; the devices first,
+- **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows, and read again from
+  nothing (another admin-log range never shows the last range's entries, mid-read or as a partial read); the devices first,
   since the device groups' members, the OS versions, the stale devices, the reconciliation and Device 360 all count that
   one read. Errors are said in Mosyle's words (a 403 included: there is no Mosyle permissions probe, and a refusal may be the
   token's IP restriction). The two reports are made only over a device list read whole (`reportNote` says why not). A
@@ -165,6 +171,11 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   password or a token sent on a user reached its page and its CSV. The golden records the cut as a deviation and
   pins both lists. **Check live (Phase 7):** which other user and group fields Mosyle sends that are worth showing;
   each joins its list with its source.
+- **Python's case rules are held to every code point** (`unicode_case.json`, `UnicodeCaseTests`): `upper()`, `title()`
+  alone and after a cased character (CPython's final sigma included), cased-ness and `isspace()`, from CPython at the
+  golden's Unicode. Swift's tables are newer: four letters with a capital only since Unicode 16 (`Python.noCapitalYet`) and
+  one whose Cased property changed (`casedThen`) are read as Unicode 15 read them. When the golden's Python or this Mac's
+  tables move, the test names each character that differs.
 - **`Python.swift` is abapit's Python, exactly** (Phase 7a review L4), each rule held by `py_str`, `py_truthy`,
   `to_iso` and `dedupe_devices` cases: `str()` of a float is `repr()` (`1e+20`, `1000.0`, positional from 1e-4 up
   to 1e16), of a list or dict its `repr()`; `int()` of a string reads any script's decimal digits and strips only
@@ -249,7 +260,9 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     it pages, and what it answers with no entries (an empty list reads as none; any status is an error); whether `get_info`
     pages a large group, what it answers for a group it doesn't have (the stub's `DEVICEGROUP_NOTFOUND`), and whether its
     filter takes `compliant` and `noncompliant`. The screens name any field Mosyle sends that isn't read, which answers most
-    of these on the first live read.
+    of these on the first live read. Three a stub can't settle (step 3's review): if the admin log pages and `rows` is the
+    page's count, the first page reads as the whole log with no note; if Mosyle ignores a compliance value, "Compliant" lists
+    every member with nothing said; and one platform answering a status of its own for no attributes fails the whole tab.
 - A tenant that ignores `page` would return the first page forever, and one that wraps past its end would serve its
   pages again: either way the walk stops at the first page that adds nothing new.
 

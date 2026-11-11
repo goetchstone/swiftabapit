@@ -23,6 +23,11 @@ struct ReconciliationView: View {
                 }
                 .accessibilityIdentifier("reconciliation.note")
             } else {
+                if let readAt = model.readAt {
+                    StatusBanner(state: .loaded(at: readAt))
+                        .padding(.horizontal)
+                        .padding(.top, 6)
+                }
                 if let summary = model.summary {
                     Text(summary)
                         .font(.callout)

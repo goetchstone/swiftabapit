@@ -123,7 +123,8 @@ public final class MosyleStub: Transport, Sendable {
     public func add(deviceGroups: [JSONObject], os: String) { state.withLock { $0.deviceGroups[os, default: []] += deviceGroups } }
     /// A device group's members (`get_info`), by the group's id as Mosyle lists it, each compliant or not.
     public func add(members: [(udid: String, compliant: Bool)], toGroup id: String) { state.withLock { $0.groupMembers[id, default: []] += members } }
-    /// Custom device attributes for one platform, as Mosyle keeps them (the stub's guess at their shape: docs/domains/mosyle.md).
+    /// Custom device attributes for one platform, as Mosyle keeps them, answered under `info` (a Mosyle Manager client's
+    /// shape, the only source: docs/domains/mosyle.md).
     public func add(customAttributes: [JSONObject], os: String) { state.withLock { $0.customAttributes[os, default: []] += customAttributes } }
     /// Admin-log entries, each with a `date` whose first ten characters are its day (`YYYY-MM-DD`): the filter's dates are
     /// compared with them.
@@ -342,8 +343,9 @@ public final class MosyleStub: Transport, Sendable {
         case ("/v1/devices", "list_custom_device_attributes"):
             // `os` beside the operation (plan §2.2); in `options` it is no `os` at all.
             guard let os = object["os"]?.string, !os.isEmpty else { return (200, [:], Self.entry(Self.missing("os"))) }
+            // Under `info`, the only key a source shows (a Mosyle Manager client's); the client's other two are guesses.
             let rows = state.withLock { $0.customAttributes[os] ?? [] }
-            return (200, [:], Self.entry(["custom_device_attributes": .array(rows.map(JSONValue.object))]))
+            return (200, [:], Self.entry(["info": .array(rows.map(JSONValue.object))]))
         case ("/v1/adminlogs", nil): return try adminLogs(object)
         default:
             throw StubFailure.unhandled("\(path) \(object["operation"]?.string ?? "")")
@@ -378,7 +380,7 @@ public final class MosyleStub: Transport, Sendable {
     /// another format, is unhandled: no source says what Mosyle does with one.
     private func adminLogs(_ object: JSONObject) throws -> (Int, [String: String], Data) {
         guard case .object(let filter)? = object["filter_options"], let start = filter["start_date"]?.string, let end = filter["end_date"]?.string,
-              [start, end].allSatisfy({ $0.count == 10 && $0.unicodeScalars.allSatisfy { ("0"..."9").contains($0) || $0 == "-" } }) else {
+              [start, end].allSatisfy(Self.isDay) else {
             throw StubFailure.unhandled("/v1/adminlogs \(JSONValue.dumps(.object(object)))")
         }
         let rows = state.withLock { $0.adminLogs }.filter { row in
@@ -434,6 +436,13 @@ public final class MosyleStub: Transport, Sendable {
         let start = (number - 1) * Self.serverPageSize
         guard start < all.count else { return ([], all.count) }
         return (Array(all[start..<min(start + Self.serverPageSize, all.count)]), all.count)
+    }
+
+    /// `YYYY-MM-DD`, exactly: written out here, not taken from the client's own check.
+    static func isDay(_ text: String) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        guard scalars.count == 10 else { return false }
+        return scalars.indices.allSatisfy { $0 == 4 || $0 == 7 ? scalars[$0] == "-" : ("0"..."9").contains(scalars[$0]) }
     }
 
     static func missing(_ field: String) -> JSONObject {
