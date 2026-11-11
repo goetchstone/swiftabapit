@@ -33,6 +33,32 @@ struct AppleStubTests {
         if scope == .business { #expect(Set(AppleStub.parameters.keys) == Set(gets.compactMap { $0["path"] as? String })) }
     }
 
+    /// What the contract says only in prose, written out in the stub as its text says it: the values a parameter with no
+    /// `allowedValues` lists ("Possible values: A, B, and C": the device filters, 2.7), and the parameters it describes as
+    /// a "date and time". School's are Business's where it has the endpoint.
+    @Test(arguments: [Scope.business, .school])
+    func theStubsDescribedValuesAndDatesAreTheContracts(scope: Scope) throws {
+        var described: [String: [String: [String]]] = [:], dates: [String: Set<String>] = [:]
+        for endpoint in (try Self.manifest(scope)["endpoints"] as? [[String: Any]] ?? []) where endpoint["method"] as? String == "GET" {
+            let path = try #require(endpoint["path"] as? String)
+            for parameter in (endpoint["parameters"] as? [[String: Any]] ?? []) where parameter["in"] as? String == "query" {
+                let name = try #require(parameter["name"] as? String), text = parameter["description"] as? String ?? ""
+                if text.contains("date and time") { dates[path, default: []].insert(name) }
+                guard parameter["allowedValues"] == nil, let start = text.range(of: "Possible values: ") else { continue }
+                let list = text[start.upperBound...].prefix { $0 != "." }
+                described[path, default: [:]][name] = list.replacingOccurrences(of: ", and ", with: ", ").replacingOccurrences(of: " and ", with: ", ")
+                    .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            }
+        }
+        #expect(described["/v1/orgDevices"]?.count == 3 && dates["/v1/orgDevices"]?.count == 10)
+        if scope == .business {
+            #expect(AppleStub.described == described, "\(described)")
+            #expect(AppleStub.dateFilters == dates, "\(dates)")
+        } else {
+            #expect(described.allSatisfy { AppleStub.described[$0.key] == $0.value } && dates.allSatisfy { AppleStub.dateFilters[$0.key] == $0.value })
+        }
+    }
+
     /// The endpoints that page are those whose answer has `PagedDocumentLinks`, by the contract's own objects.
     @Test func theStubPagesWhatTheContractPages() throws {
         let manifest = try Self.manifest(.business)

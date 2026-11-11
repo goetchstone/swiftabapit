@@ -28,7 +28,8 @@ org editor's save).
   and a delivery hand out their URL as `WebhookURL.destination` and withhold the rest (below, "Webhooks"), keeping what
   Apple sent as `asSent`, `package`. `Sections.swift`: `AppleSection.businessOnly`.
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
-  builders take no scope; `AuditQuery`, the audit read's checked range and filters), `AppleClient` (pages as an
+  builders take no scope; `AuditQuery`, the audit read's checked range and filters; `DeviceFilter`, the device list's;
+  `WebhookDeliveryQuery`, a webhook's deliveries'), `AppleClient` (pages as an
   `AsyncThrowingStream`, page cap 200 with `truncated` on the last page; member lists as linkage streams; read
   probes; `BlueprintRead`, a blueprint with its `members`, read or refused), `AppleAPIError` (status +
   Apple `code`, never prose; `.notInScope(section)` for a Business-only read asked of a School org), `AcceptancePass`
@@ -92,7 +93,9 @@ org editor's save).
     loses detail.
   - The shape of `links.next`: Apple's example carries only `cursor`, and the stub now does the same (with
     `meta.paging.nextCursor`), so the client re-adds `limit`. The stub refuses any parameter an endpoint
-    doesn't document, `cursor` included where it isn't, as Apple's contract says Apple does.
+    doesn't document, `cursor` included where it isn't, as Apple's contract says Apple does. Since 2.7 the device list
+    pages by cursor and follows no next link; Apple's filtered example's next link carries the filters, its unfiltered
+    one the cursor alone.
   - `meta.paging.total`: absent in Apple's example; the stub sends it only when a test asks.
 - **Only a 404 or `"data": null` is unassigned.** A 403, a 500 or a malformed 200 (`{}`, `[]`, a linkage of
   another type) throws `.malformed` or its error: Phase 4's Guard re-validates assignments with this read.
@@ -187,6 +190,26 @@ org editor's save).
 - **Apple MDM posture is `mdmDevices/{id}/details`**, the documented read; abapit called the undocumented
   `mdmDevices/{id}` (plan §2.3, defect 11). The stub has no route for it, so a read of it fails the test. The pass
   doesn't hold the details' `id` to the device's: neither is documented.
+- **The device list pages by cursor** (2.7, both scopes), as the audit log does (below): each next page is the first read
+  again with Apple's `meta.paging.nextCursor` (or the `cursor` its next link carries), so a filter goes with every page.
+  Apple's filtered example's next link carries the filters and the cursor, its unfiltered one the cursor alone: a next
+  link that dropped them, followed, would widen the list past the filter with nothing said. A next page with no cursor
+  is malformed. The stub's next link carries the cursor alone, stricter than Apple's filtered example, so a client that
+  followed it would get the unfiltered list and fail (`aFilteredListKeepsItsFilterOnEveryPage`).
+- **Apple filters the device list, the client doesn't** (`DeviceFilter`, Business 2.7 and School 1.8): checked when made,
+  as `AuditQuery` is. `filter[serialNumber]` and `filter[orderNumber]` take identifiers of `isPathSafe`'s shape, so a
+  comma (a second value) or anything else that would steer the query is refused; `filter[status]`, `[productFamily]` and
+  `[purchaseSourceType]` take `DeviceStatus`, `ProductFamily` and `PurchaseSourceType`, the values their descriptions
+  list (`ModelContractTests` reads the text), an `.unknown` one refused; each list's values once, in the order given.
+  `filter[addedToOrgDateTime]` and `filter[orderDateTime]` are each a `DateFilter`: exact instants, one lower bound
+  (`[GT]` or `[GTE]`) and one upper (`[LT]` or `[LTE]`), so two lower bounds can't be asked. Every date is cut to whole
+  seconds, UTC, `Z` (Apple's descriptions show `2025-01-01T00:00:00Z`), 1970 to 9999. Bounds no device could fall between
+  (a lower past the upper, or at it while either leaves that instant out) and an exact instant its bounds leave out are
+  refused, each in words that name the attribute and never repeat the value (`DeviceFilter.Invalid.message`). The stub
+  really filters (each filter narrows the rest, a list's values widen each other, a device without the attribute passes
+  none) and refuses with a 400 a value outside a description's list, a date that isn't ISO 8601 and a bound given two
+  (`AppleStub.described` and `dateFilters`, held to the contract's text). No screen uses the filter yet: Needs attention
+  and history will.
 - **The audit log pages by cursor**: each next page is the first read again with `cursor` set to Apple's
   `meta.paging.nextCursor` (or the `cursor` its next link carries), so the required range and every filter go with
   every page. Its next link is never followed: Apple's examples' next links carry only the cursor, and the stub's do
@@ -319,6 +342,16 @@ org editor's save).
   it to both contracts and refuses a stub that imports `AppleModels` or names a builder, the client or a model's value
   list. A paged endpoint takes `cursor` (Apple's own next link carries it); a cursor the stub never gave is a 400, as
   is an empty value in a listed set (`include=`, `apps,,users`).
+- **Assumed, check live (the device filters, 2.7):**
+  - Do the filters combine as AND, and a list's values as OR (the stub's choice)?
+  - Does a comma sent percent-encoded (`%2C`, as `URL.make` sends it) separate a filter's values?
+  - What does Apple do with a value outside a description's list, a date that isn't ISO 8601, or a bound given two (the
+    stub: 400)? The client never sends one.
+  - Does an exact date (`filter[addedToOrgDateTime]=…`) match a device whose stamp has a fraction (Apple's examples' do:
+    `22:05:14.192Z`), when the client sends whole seconds? The stub compares instants exactly, so it doesn't.
+  - Is `[LT]` strictly before and `[LTE]` at or before, as the descriptions say, at Apple's own precision?
+  - Is there a cap on how many values a filter takes, or on the query's length? The client sets none.
+  - Does a filtered list's next link always carry the filters (the 2.7 example's does)? The client never follows it.
 - **Assumed, check live (Phase 2 live check):**
   - Does Apple cap the audit range? The client caps it at 365 days; the stub has no cap.
   - Is the audit range inclusive at both ends (the stub's choice), and is a range that ends before it starts a 400

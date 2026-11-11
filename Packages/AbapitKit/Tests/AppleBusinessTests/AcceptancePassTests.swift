@@ -295,23 +295,33 @@ struct AcceptancePassTests {
     }
 
     /// A list, a linkage list or a single read answered with another resource is malformed, never `ok`: a page of
-    /// `users` for `mdmServers`, a next link that walked off to the services, a linkage to a user, another device, a
-    /// lock or a coverage of another type (verifier round 2: each read `ok`).
+    /// `users` for `mdmServers`, a next link that walked off to another collection, a linkage to a user, another device, a
+    /// lock or a coverage of another type (verifier round 2: each read `ok`). The device list pages by cursor (2.7), so
+    /// it follows no next link: one with no cursor in it is malformed, never followed; the services list still follows
+    /// its next link, and one into the users is malformed.
     @Test func anAnswerOfAnotherTypeOrItemIsMalformed() async throws {
         let walked = try await Harness(devices: 1)
         walked.stub.add(services: [Harness.service("SVC1", name: "Mosyle")])
+        walked.stub.add([Resource(type: "users", id: "U1", attributes: ["firstName": .string("Jane")])])
         walked.stub.setLock("TESTD0000000", isLocked: false, lockType: "NONE")
         walked.stub.queue(200, for: "/v1/orgDevices?", body: #"""
             {"data":[{"type":"orgDevices","id":"TESTD0000000"}],"links":{"next":"https://api-business.apple.com/v1/mdmServers"}}
             """#)
+        walked.stub.queue(200, for: "/v1/mdmServers?", body: #"""
+            {"data":[{"type":"mdmServers","id":"SVC1"}],"links":{"next":"https://api-business.apple.com/v1/users"}}
+            """#)
         walked.stub.queue(200, for: "/v1/mdmServers/SVC1/relationships/devices", body: #"{"data":[{"type":"users","id":"U1"}]}"#)
         let first = await walked.client.acceptancePass()
         #expect(first.text.hasPrefix("""
-            orgDevices: error malformed, 1 item · items of type orgDevices
-            mdmServers: ok, 1 item
+            orgDevices: error malformed, 1 item · a next page of /v1/orgDevices without a cursor
+            mdmServers: error malformed, 1 item · items of type mdmServers
             mdmServers/{id}/relationships/devices: error malformed, 0 items · at service 1 of 1 · items of type orgDevices
 
             """), "\(first.text)")
+        // Followed, the device list's next link would have asked for the services with the limit added and no fields.
+        #expect(!walked.stub.requests.contains("GET api-business.apple.com/v1/mdmServers?limit=1000"), "\(walked.stub.requests)")
+        #expect(walked.stub.requests.filter { $0.hasPrefix("GET api-business.apple.com/v1/orgDevices?") } == [
+            "GET api-business.apple.com/v1/orgDevices?limit=1000", "GET api-business.apple.com/v1/orgDevices?limit=1"])
 
         let harness = try await Harness(devices: 2)
         for serial in Self.firstSerials(2) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
@@ -479,7 +489,8 @@ struct AcceptancePassTests {
         let harness = try await Harness(devices: 1_500)
         for serial in Self.firstSerials(5) { harness.stub.setLock(serial, isLocked: false, lockType: "NONE") }
         harness.stub.add(services: (0..<1_500).map { Harness.service("SVC\($0)", name: "S\($0)") })
-        harness.stub.queue(500, for: "/v1/orgDevices?cursor=")
+        // The device list pages by cursor (2.7): its later page is the first read again, the cursor after the limit.
+        harness.stub.queue(500, for: "/v1/orgDevices?limit=1000&cursor=")
         harness.stub.queue(500, for: "/v1/mdmServers?cursor=")
         let report = await harness.client.acceptancePass()
         let devices = try #require(report.lines.first { $0.resource == "orgDevices" })

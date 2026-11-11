@@ -17,8 +17,22 @@ struct ReadContractTests {
         return manifest["endpoints"] as? [[String: Any]] ?? []
     }
 
+    /// Device filters that, between them, send every one of the fifteen (2.7, both scopes).
+    static var deviceFilters: [DeviceFilter] {
+        let noon = Date(timeIntervalSince1970: 1_792_152_000)
+        typealias Dates = DeviceFilter.DateFilter
+        return [
+            try? DeviceFilter(serialNumbers: ["C02X", "C02Y"], orderNumbers: ["O-1"], statuses: DeviceStatus.allCases.map(OpenEnum.init),
+                              productFamilies: ProductFamily.allCases.map(OpenEnum.init), purchaseSourceTypes: PurchaseSourceType.allCases.map(OpenEnum.init),
+                              addedToOrg: Dates(exactly: [noon], lower: .atOrAfter(noon), upper: .atOrBefore(noon)),
+                              ordered: Dates(exactly: [noon], lower: .atOrAfter(noon), upper: .atOrBefore(noon))),
+            try? DeviceFilter(addedToOrg: Dates(lower: .after(noon), upper: .before(noon.addingTimeInterval(60))),
+                              ordered: Dates(lower: .after(noon), upper: .before(noon.addingTimeInterval(60)))),
+        ].compactMap { $0 }
+    }
+
     static func reads(_ scope: Scope) -> [ReadRequest] {
-        var reads: [ReadRequest?] = [
+        var reads: [ReadRequest?] = Self.deviceFilters.map { AppleRead.devices(scope, matching: $0) } + [
             AppleRead.devices(scope), AppleRead.device(scope, serial: "C02X"), AppleRead.appleCare(scope, serial: "C02X"),
             AppleRead.activationLock(scope, serial: "C02X"), AppleRead.assignedService(scope, serial: "C02X"),
             AppleRead.assignedServiceID(scope, serial: "C02X"), AppleRead.services(scope), AppleRead.service(scope, id: "S1"),
@@ -55,6 +69,9 @@ struct ReadContractTests {
     func everyReadIsADocumentedEndpointWithDocumentedParameters(scope: Scope) {
         let endpoints = Self.endpoints(scope)
         #expect(!endpoints.isEmpty)
+        // The device filters checked below send all fifteen.
+        let filters = Self.deviceFilters.flatMap { AppleRead.devices(scope, matching: $0).query.map(\.name) }.filter { $0.hasPrefix("filter[") }
+        #expect(Self.deviceFilters.count == 2 && Set(filters).count == 15)
         for read in Self.reads(scope) {
             let endpoint = endpoints.first { ($0["method"] as? String) == read.method.rawValue && ($0["path"] as? String) == read.template }
             #expect(endpoint != nil, "\(read.method.rawValue) \(read.template) isn't in the \(scope) contract")

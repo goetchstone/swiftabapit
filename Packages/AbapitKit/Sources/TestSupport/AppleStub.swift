@@ -263,11 +263,12 @@ public final class AppleStub: Transport, Sendable {
         // The endpoint Apple documents for this path, or none: `mdmDevices/{id}` (abapit's read) is unhandled.
         let template = "/v1/" + ([segments[1]] + (segments.count > 2 ? ["{id}"] + segments.dropFirst(3) : [])).joined(separator: "/")
         guard Self.parameters[template] != nil else { throw StubFailure.unhandled("GET \(path)") }
-        if let bad = Self.check(query, template: template) { return bad }
+        if let bad = Self.check(query, template: template) ?? Self.checkDescribed(query, template: template) { return bad }
         let id = segments.count > 2 ? segments[2] : ""
         switch template {
         case "/v1/orgDevices":
-            return page(state.withLock { $0.devices }, url: url, query: query, host: host)
+            // Apple filters (2.7): the stub really does, then pages what is left by cursor.
+            return page(state.withLock { $0.devices }.filter { Self.matches($0, query) }, url: url, query: query, host: host)
         case "/v1/orgDevices/{id}":
             guard let device = state.withLock({ $0.devices.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": device.asJSON, "links": .object(["self": .string(url.absoluteString)])]))
@@ -411,6 +412,39 @@ public final class AppleStub: Transport, Sendable {
                 && same(attributes["actorId"], query["filter[actorId]"]) && same(attributes["subjectId"], query["filter[subjectId]"])
         }
         return page(events, url: url, query: query, host: host)
+    }
+
+    /// Whether `device` passes every device filter `query` holds: each a list of values one of which it must have (by
+    /// bytes), each date filter its instants and bounds. Every filter narrows the others (assumed: check live). A device
+    /// without the attribute a filter names passes none of it.
+    private static func matches(_ device: Resource, _ query: [String: String]) -> Bool {
+        let attributes = device.attributes
+        func value(_ attribute: String) -> String? { attributes[attribute]?.string ?? (attribute == "serialNumber" ? device.id : nil) }
+        func listed(_ attribute: String) -> Bool {
+            guard let asked = query["filter[\(attribute)]"] else { return true }
+            guard let value = value(attribute) else { return false }
+            return asked.split(separator: ",", omittingEmptySubsequences: false).contains { $0.utf8.elementsEqual(value.utf8) }
+        }
+        func dated(_ attribute: String) -> Bool {
+            let name = "filter[\(attribute)]"
+            let asked = [name, name + "[GT]", name + "[GTE]", name + "[LT]", name + "[LTE]"].filter { query[$0] != nil }
+            guard !asked.isEmpty else { return true }
+            guard let when = instant(value(attribute)) else { return false }
+            for parameter in asked {
+                let dates = (query[parameter] ?? "").split(separator: ",").compactMap { instant(String($0)) }
+                let holds = switch parameter.dropFirst(name.count) {
+                case "[GT]": dates.allSatisfy { when > $0 }
+                case "[GTE]": dates.allSatisfy { when >= $0 }
+                case "[LT]": dates.allSatisfy { when < $0 }
+                case "[LTE]": dates.allSatisfy { when <= $0 }
+                default: dates.contains(when)
+                }
+                if !holds { return false }
+            }
+            return true
+        }
+        return ["serialNumber", "status", "productFamily", "purchaseSourceType", "orderNumber"].allSatisfy(listed)
+            && ["addedToOrgDateTime", "orderDateTime"].allSatisfy(dated)
     }
 
     private static func instant(_ text: String?) -> Date? {
@@ -714,6 +748,47 @@ public final class AppleStub: Transport, Sendable {
         "/v1/orgDevices", "/v1/orgDevices/{id}/appleCareCoverage", "/v1/organizationalUnits", "/v1/organizationalUnits/{id}/relationships/users",
         "/v1/packages", "/v1/userGroups", "/v1/userGroups/{id}/relationships/users", "/v1/users", "/v1/webhooks", "/v1/webhooks/{id}/deliveries",
     ]
+
+    /// The values the device filters' descriptions list ("Possible values: …", Business 2.7 and School 1.8), written out
+    /// from the contract's text, which gives them no `allowedValues`; `AppleStubTests` holds them to it. A value outside
+    /// them is refused with a 400, as a value outside an `allowedValues` list is (assumed: check live).
+    public static let described: [String: [String: [String]]] = [
+        "/v1/orgDevices": [
+            "filter[status]": ["ASSIGNED", "UNASSIGNED"],
+            "filter[productFamily]": ["Mac", "iPhone", "iPad", "iPod", "AppleTV", "Watch", "Vision"],
+            "filter[purchaseSourceType]": ["APPLE", "RESELLER", "MANUALLY_ADDED"],
+        ],
+    ]
+
+    /// The filters whose descriptions say "date and time": each value an ISO 8601 instant (`2025-01-01T00:00:00Z`, as the
+    /// device filters' descriptions show), else a 400 (assumed: check live). An exact device date (`filter[addedToOrgDateTime]`)
+    /// may list several; a bound takes one.
+    public static let dateFilters: [String: Set<String>] = [
+        "/v1/orgDevices": [
+            "filter[addedToOrgDateTime]", "filter[addedToOrgDateTime][GT]", "filter[addedToOrgDateTime][GTE]", "filter[addedToOrgDateTime][LT]",
+            "filter[addedToOrgDateTime][LTE]", "filter[orderDateTime]", "filter[orderDateTime][GT]", "filter[orderDateTime][GTE]",
+            "filter[orderDateTime][LT]", "filter[orderDateTime][LTE]",
+        ],
+        "/v1/webhooks/{id}/deliveries": ["filter[createdDateTimeAtBefore]", "filter[createdDateTimeAtOrAfter]"],
+    ]
+
+    /// A query Apple would refuse with 400 that its contract says only in prose: a value outside a filter's described list,
+    /// a date filter's value that isn't an instant, or a bound given two.
+    private static func checkDescribed(_ query: [String: String], template: String) -> (Int, [String: String], Data)? {
+        for (name, given) in query.sorted(by: { $0.key < $1.key }) {
+            let values = given.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            if let listed = described[template]?[name], let bad = values.first(where: { !listed.contains($0) }) {
+                return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(bad) isn't allowed in \(name).", parameter: name)
+            }
+            if dateFilters[template]?.contains(name) == true {
+                let bound = name.contains("][") || name.hasPrefix("filter[createdDateTime")
+                guard !values.contains(where: { instant($0) == nil }), !(bound && values.count > 1) else {
+                    return error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "\(name) isn't an ISO 8601 date and time.", parameter: name)
+                }
+            }
+        }
+        return nil
+    }
 
     /// A query Apple would refuse with 400: a parameter the endpoint doesn't document, a `limit` outside 1 to 1000, or a
     /// value outside a listed set (an empty one included: `include=` and `apps,,users` aren't lists of names).

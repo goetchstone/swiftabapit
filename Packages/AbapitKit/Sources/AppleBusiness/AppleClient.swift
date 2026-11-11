@@ -67,8 +67,12 @@ public actor AppleClient {
 
     // MARK: devices
 
-    public nonisolated func devices() -> AsyncThrowingStream<Page<OrgDevice>, any Error> {
-        pages(AppleRead.devices(account.scope)).map(OrgDevice.init)
+    /// The devices `filter` lets through (every device by default), a cursor at a time: each next page is this read again
+    /// with Apple's cursor, as the audit log's is, so a filter goes with every page. Apple's filtered example's next link
+    /// carries the filters and its unfiltered one only the cursor (2.7); a next link that dropped them, followed, would
+    /// widen the list past the filter with nothing said.
+    public nonisolated func devices(matching filter: DeviceFilter = .all) -> AsyncThrowingStream<Page<OrgDevice>, any Error> {
+        pages(AppleRead.devices(account.scope, matching: filter), cursorPaging: true).map(OrgDevice.init)
     }
 
     public func device(_ serial: String) async throws -> OrgDevice {
@@ -405,8 +409,8 @@ public actor AppleClient {
     }
 
     /// Follows `links.next` (or `meta.paging.nextCursor`) up to the page cap, a page at a time. `cursorPaging` (the audit
-    /// log) asks each next page as the first was, with Apple's cursor set, so its required range and filters go with
-    /// every page. `linkagesOf` checks every item is a linkage of that type: a member list of another type is malformed,
+    /// log, the device list, a webhook's deliveries) asks each next page as the first was, with Apple's cursor set, so its
+    /// range and filters go with every page. `linkagesOf` checks every item is a linkage of that type: a member list of another type is malformed,
     /// as an assigned server that isn't one is.
     nonisolated func pages(_ first: ReadRequest, cursorPaging: Bool = false, linkagesOf type: String? = nil)
         -> AsyncThrowingStream<Page<Resource>, any Error> {
