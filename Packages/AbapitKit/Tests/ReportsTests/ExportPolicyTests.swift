@@ -163,4 +163,33 @@ struct ExportPolicyTests {
             }
         }
     }
+
+    /// What CSV never exports, an audit payload never shows: `AuditEvent` keeps its own list of the stems, since AppleModels
+    /// can't import Reports, and this holds the two equal (the contract-2.8 review's L1). Every secret-shaped key, and each
+    /// stem inside a longer key, withholds its value in a payload, as the denylist drops it; keys that hold none show theirs.
+    @Test func anAuditPayloadWithholdsEveryKeyCSVWithholds() {
+        #expect(AuditEvent.sensitiveStems == ExportPolicy.sensitiveStems)
+        let keys = Self.secretShaped + ExportPolicy.sensitiveStems.flatMap { [$0, "Device_\($0)_x", $0.uppercased()] }
+            + ["serialNumber", "name", "activityId", "vendorName", "enabled", "passing", "tokn", "bypas", "unlock_p_i_n"]
+        for key in keys {
+            let event = AuditEvent(resource: Resource(type: "auditEvents", id: "e-1", attributes: [
+                "type": .string("WEBHOOK_UPDATED"), "eventDataWebhookUpdated": .object([key: .string("canary-value")]),
+            ]))
+            let withheld = event.payload?.object[key] == .string(AuditEvent.withheld)
+            #expect(withheld == ExportPolicy.isSensitive(key), "\(key.debugDescription)")
+            #expect(withheld || event.payload?.object[key] == .string("canary-value"), "\(key.debugDescription)")
+        }
+    }
+
+    /// The Activity CSV's `subjectName` and `actorName` show a URL only as where it goes, with its tag (the contract-2.8
+    /// review's M2: they were exported raw, and a webhook's event may name it by its URL).
+    @Test func theAuditCSVShowsNoURLInANameRaw() {
+        let event = AuditEvent(resource: Resource(type: "auditEvents", id: "e-1", attributes: [
+            "type": .string("WEBHOOK_UPDATED"), "subjectName": .string("https://hooks.example.com/T0/CANARYSUBJECT"),
+            "actorName": .string("Key (https://CANARYUSER:pw@hooks.example.com)"), "subjectId": .string("W1"),
+        ]))
+        let csv = CSV.text([CSV.Item(event.resource)], columns: ExportPolicy.auditEvents)
+        #expect(!csv.contains("CANARY") && csv.contains("https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/T0/CANARYSUBJECT")))"),
+                "\(csv)")
+    }
 }

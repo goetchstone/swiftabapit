@@ -89,6 +89,38 @@ struct DeviceFilterTests {
         #expect(throws: Never.self) { _ = try DeviceFilter(serialNumbers: [String(repeating: "A", count: 128), "A-1_b.2"], orderNumbers: ["O-1.a_2"]) }
     }
 
+    /// At most 100 serial numbers, and 100 order numbers, each counted once, until Apple's own limit is checked live: one
+    /// more is refused in words that never repeat a value (the contract-2.8 review's L6: any number went into one URL).
+    @Test func aFilterTakesAtMostAHundredOfEachIdentifier() throws {
+        let hundred = (0..<100).map { String(format: "C02%05d", $0) }
+        #expect(DeviceFilter.maximumIdentifiers == 100)
+        #expect(try DeviceFilter(serialNumbers: hundred, orderNumbers: hundred).serialNumbers.count == 100)
+        #expect(try DeviceFilter(serialNumbers: hundred + [hundred[0], hundred[99]]).serialNumbers == hundred, "a repeat isn't another")
+        #expect(throws: DeviceFilter.Invalid.tooMany(.serialNumber)) { try DeviceFilter(serialNumbers: hundred + ["C02X"]) }
+        #expect(throws: DeviceFilter.Invalid.tooMany(.orderNumber)) { try DeviceFilter(orderNumbers: hundred + ["O-1"]) }
+        #expect(throws: DeviceFilter.Invalid.notAnIdentifier(.serialNumber), "the shape is checked first") {
+            try DeviceFilter(serialNumbers: hundred + ["C02X", "a,b"])
+        }
+        #expect(DeviceFilter.Invalid.tooMany(.serialNumber).message
+                == "At most 100 different serial numbers can be filtered on at once: filter on fewer, or on something else.")
+        #expect(DeviceFilter.Invalid.tooMany(.orderNumber).message
+                == "At most 100 different order numbers can be filtered on at once: filter on fewer, or on something else.")
+    }
+
+    /// Where Apple's next link and `meta.paging.nextCursor` name different cursors, the cursor is `nextCursor`'s, the field
+    /// Apple documents as the cursor; with only a link, the link's (mutant C5, the link's preferred, survived the review).
+    @Test func theCursorIsMetaPagingsWhereTheNextLinkDiffers() async throws {
+        for (paging, link, cursor) in [(#","meta":{"paging":{"limit":1000,"nextCursor":"1"}}"#, "2", "1"), ("", "1", "1")] {
+            let harness = try await Harness(devices: 3)
+            harness.stub.queue(200, for: "/v1/orgDevices", body: #"""
+                {"data":[{"type":"orgDevices","id":"TESTD0000000","attributes":{"serialNumber":"TESTD0000000"}}],
+                 "links":{"self":"https://api-business.apple.com/v1/orgDevices","next":"https://api-business.apple.com/v1/orgDevices?cursor=\#(link)"}\#(paging)}
+                """#)
+            #expect(try await Self.ids(harness, .all) == ["TESTD0000000", "TESTD0000001", "TESTD0000002"], "\(paging)")
+            #expect(harness.reads.filter { $0.contains("/v1/orgDevices?") }.last == "GET api-business.apple.com/v1/orgDevices?limit=1000&cursor=\(cursor)")
+        }
+    }
+
     /// Apple's values only: an `.unknown` one (read from a device, say) throws, never goes out; each value once, in the order
     /// given, and identifiers each once by their bytes.
     @Test func onlyApplesValuesGoOutEachOnce() throws {

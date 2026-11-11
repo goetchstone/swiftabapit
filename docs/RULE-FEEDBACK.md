@@ -27,6 +27,23 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-11 — A withheld copy listed what it hid
+- **What happened:** `contract-2.8`'s review (failure-log 2026-11-11, "a withheld copy that withheld only what it knew"):
+  `WebhookDelivery`'s withheld copy hid `request` and `response` and showed every other attribute as Apple sent it, a
+  token quoted in `errorMessage` included, while `Webhook` beside it withheld everything it didn't read. The audit mask
+  hid a URL only under a key named for one, one level deep. And the URL mask hid the path so well that a repointed
+  webhook showed no change.
+- **Invariant in force:** #11 (sensitive fields never leave the app).
+- **Why it didn't hold:** wrong layer, again. RULE-FEEDBACK 2026-11-03 ("list the parts kept") was applied to a URL and
+  not to the object around it; #11's home (`RedactionTests`, the CSV allowlist) has no rule for a view's withheld copy,
+  so each view chose its own shape, and its canaries sat only where its author knew to hide.
+- **Would a rule have caught it?** only if enforced differently: a tripwire over every `ResourceView` with an `asSent`
+  (or a withheld copy) that feeds it a resource with a canary under an attribute, and a nested key, no contract names,
+  and asserts no public value, description, dump or mirror holds it. And for a mask, a test that two different secrets
+  mask to two different texts, so a mask that hides the very thing a reader compares fails.
+- **Enforcement home if changed:** tripwire test in `AppleModelsTests` over the views that hold `asSent` (two today);
+  the `pre-commit` skill's item 10 could say "a withheld copy lists what it shows".
+
 ## 2026-11-11 — A read with no screen had no place for its probe
 - **What happened:** Business 2.8's webhook reads are Business-only and refusable by role, so by the pattern they want a
   read probe and `.notInScope`. Both hang on `AppleSection`, and `NavigationTests` holds every section to a sidebar screen

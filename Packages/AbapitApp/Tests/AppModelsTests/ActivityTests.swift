@@ -462,6 +462,32 @@ struct ActivityTests {
         #expect(world.activity.exportName == "audit-events.csv")
     }
 
+    /// A URL in an event's subject or actor name, or anywhere in its payload, shows only where it goes, with its tag: in the
+    /// row, the inspector's every field and the CSV (the contract-2.8 review's M2: the names went raw to the screen and
+    /// the CSV; M4: two URLs on one host showed alike).
+    @Test func aURLInAnEventShowsOnlyWhereItGoes() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.add([Self.event("w1", hoursAgo: 1, type: "WEBHOOK_UPDATED", extra: [
+            "subjectName": .string("https://hooks.example.com/T0/CANARYSUBJECT"), "actorName": .string("Key via https://CANARYACTOR:pw@hooks.example.com/x"),
+            "eventDataWebhookUpdated": .object(["url": .string("https://hooks.example.com/T0/CANARYPAYLOAD"),
+                                                "previous": .object(["target": .string("https://hooks.example.com/T0/CANARYOLD")])]),
+            "eventDataFuture": .string("now https://hooks.example.com/CANARYOTHER"),
+        ])])
+        world.activity.load()
+        await Self.settled(world, 1)
+        let row = try #require(world.activity.rows.first)
+        #expect(row.subject == "https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/T0/CANARYSUBJECT")))")
+        let payload = try #require(row.event.payload)
+        #expect(payload.object["url"] == .string(WebhookURL.shown("https://hooks.example.com/T0/CANARYPAYLOAD")))
+        #expect(payload.object["url"] != payload.object["previous"]?["target"], "a repointed webhook shows as another tag")
+        let detail = AuditEventDetail(row.event)
+        let shown = detail.common.map { row.event.attributes[$0.key]?.jsonText ?? "" } + detail.payloadFields.map { payload.object[$0.key]?.jsonText ?? "" }
+            + detail.otherAttributes.map { row.event.attributes[$0]?.jsonText ?? "" } + [row.subject, row.actor, row.byline, world.activity.csv()]
+        #expect(detail.otherAttributes == ["eventDataFuture"])
+        for text in shown { #expect(!text.contains("CANARY"), "\(text)") }
+        #expect(world.activity.csv().contains("https://hooks.example.com/… (tag "))
+    }
+
     // MARK: the inspector
 
     /// The detail labels the common attributes, reads the payload where Apple put it, and says each payload problem.

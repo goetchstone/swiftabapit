@@ -1,4 +1,7 @@
 @testable import AppleModels
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 import Foundation
 import JSONAPI
 import Testing
@@ -57,7 +60,8 @@ struct WebhookTests {
         let webhook = Self.webhook(["name": .string("Device changes"), "enabled": .bool(true), "url": .string("https://hooks.example.com/T0/CANARYURL"),
                                     "secret": .string("CANARYSECRET"), "signingKey": .object(["k": .string("CANARYKEY")]), "retired": .null,
                                     "eventTypes": .array([.string("ORG_DEVICE_ATTRIBUTE_CHANGED")])])
-        #expect(webhook.destination == "https://hooks.example.com/…" && webhook.name == "Device changes" && webhook.isEnabled == true)
+        let tag = WebhookURL.tag("https://hooks.example.com/T0/CANARYURL")
+        #expect(webhook.destination == "https://hooks.example.com/… (tag \(tag))" && webhook.name == "Device changes" && webhook.isEnabled == true)
         #expect(webhook.attributes["secret"] == .string(Webhook.withheld) && webhook.attributes["signingKey"] == .string(Webhook.withheld))
         #expect(webhook.attributes["retired"] == .null)
         #expect(webhook.unreadAttributes == ["secret", "signingKey", "retired"])
@@ -100,30 +104,47 @@ struct WebhookTests {
 
     /// A delivery's request URL shows where it went, the receiver's body is withheld (that there was one is said), and
     /// every key of the request or response this version doesn't read is withheld and counted; a request or response
-    /// that isn't an object is withheld whole and named, never read as none.
+    /// that isn't an object is withheld whole and named, never read as none. Every attribute it doesn't read is withheld
+    /// too, key kept (`requestHeaders`, a signature by any name), and every URL in `errorMessage` shows only where it
+    /// goes, with its tag (the contract-2.8 review's M1: only `request` and `response` were withheld, so an unknown
+    /// attribute and a token quoted in the message went out in every description).
     @Test func aDeliveryWithholdsItsURLAndTheReceiversWords() {
         let delivery = Self.delivery([
-            "deliveryState": .string("FAILED"), "errorMessage": .string("The host didn't answer."),
+            "deliveryState": .string("FAILED"),
+            "errorMessage": .string("Couldn't reach https://hooks.example.com/T0/CANARYERR?token=CANARYERR: timed out (url=HTTPS://hooks.example.com/CANARYERR)."),
             "request": .object(["url": .string("https://hooks.example.com/in?token=CANARYURL"), "headers": .object(["x-apple-signature": .string("CANARYSIG")])]),
             "response": .object(["httpStatusCode": .number("500"), "body": .string("CANARYBODY"), "headers": .string("CANARYHEADER")]),
+            "requestHeaders": .object(["x-apple-signature": .string("CANARYTOPSIG")]), "signature": .string("CANARYTOPSIG"), "retired": .null,
         ], event: .object(["type": .string("webhookEvents"), "id": .string("E1")]))
-        #expect(delivery.state == .known(.failed) && delivery.errorMessage == "The host didn't answer." && delivery.eventID == "E1")
-        #expect(delivery.request?.destination == "https://hooks.example.com/…")
+        let tags = ["https://hooks.example.com/T0/CANARYERR?token=CANARYERR:", "HTTPS://hooks.example.com/CANARYERR)."].map(WebhookURL.tag)
+        #expect(delivery.errorMessage == "Couldn't reach https://hooks.example.com/… (tag \(tags[0])) timed out (url=https://hooks.example.com/… (tag \(tags[1]))",
+                "\(delivery.errorMessage ?? "nil")")
+        #expect(delivery.state == .known(.failed) && delivery.eventID == "E1")
+        #expect(delivery.request?.destination == "https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/in?token=CANARYURL")))")
         #expect(delivery.response?.statusCode == 500 && delivery.response?.hasBody == true)
         #expect(delivery.unreadNested == [NestedKey(attribute: "request", key: "headers"), NestedKey(attribute: "response", key: "headers")])
+        #expect(delivery.attributes["requestHeaders"] == .string(WebhookDelivery.withheld) && delivery.attributes["signature"] == .string(WebhookDelivery.withheld))
+        #expect(delivery.attributes["retired"] == .null && delivery.unreadAttributes == ["requestHeaders", "signature", "retired"])
         var dumped = ""
         dump(delivery, to: &dumped)
-        for text in [JSONValue.dumps(.object(delivery.attributes)), "\(delivery)", String(reflecting: delivery), dumped] {
+        for text in [JSONValue.dumps(.object(delivery.attributes)), "\(delivery)", String(reflecting: delivery), dumped,
+                     "\(Mirror(reflecting: delivery).children.map(\.value))", delivery.errorMessage ?? ""] {
             #expect(!text.contains("CANARY"), "\(text)")
         }
         #expect(delivery.asSent.attributes["response"]?["body"] == .string("CANARYBODY"))
+        #expect(delivery.asSent.attributes["requestHeaders"]?["x-apple-signature"] == .string("CANARYTOPSIG"))
+        #expect(delivery.asSent.attributes["errorMessage"]?.string?.contains("token=CANARYERR") == true)
+        // Apple's words with no URL in them come as they are; a message that isn't a string is withheld whole.
+        #expect(Self.delivery(["errorMessage": .string("The host didn't answer.")]).errorMessage == "The host didn't answer.")
+        let odd = Self.delivery(["errorMessage": .object(["url": .string("https://hooks.example.com/CANARY")])])
+        #expect(odd.attributes["errorMessage"] == .string(WebhookDelivery.withheld) && odd.errorMessage == WebhookDelivery.withheld)
         // A body Apple left out, or sent as null, is no body.
         #expect(Self.delivery(["response": .object(["httpStatusCode": .number("204")])]).response?.hasBody == false)
         #expect(Self.delivery(["response": .object(["body": .null])]).response?.hasBody == false)
         // Another shape: withheld whole and said.
-        let odd = Self.delivery(["request": .string("CANARYURL"), "response": .array([.string("CANARYBODY")])])
-        #expect(odd.misreadObjects == ["request", "response"] && odd.request == nil && odd.response == nil)
-        #expect(!JSONValue.dumps(.object(odd.attributes)).contains("CANARY"))
+        let misread = Self.delivery(["request": .string("CANARYURL"), "response": .array([.string("CANARYBODY")])])
+        #expect(misread.misreadObjects == ["request", "response"] && misread.request == nil && misread.response == nil)
+        #expect(!JSONValue.dumps(.object(misread.attributes)).contains("CANARY"))
         #expect(Self.delivery(["request": .null]).misreadObjects.isEmpty)
         // An event named by something that isn't a `webhookEvents` linkage is no event named.
         for event in [.object(["type": .string("orgDevices"), "id": .string("E1")]), .object(["type": .string("webhookEvents"), "id": .string("")]),
@@ -201,5 +222,155 @@ struct WebhookTests {
         let ping = Self.event(.string(Self.guide[4]), type: "WEBHOOK_PING")
         #expect(ping.eventType == .unknown("WEBHOOK_PING") && ping.payload?.type == .known(.webhookPingCreated))
         #expect(Self.event(nil, type: "ORG_DEVICE_ATTRIBUTE_CHANGED").eventType == .known(.orgDeviceAttributeChanged))
+    }
+
+    // MARK: the tag (the contract-2.8 review's M4)
+
+    /// The destination alone shows two URLs on one host alike, so a webhook repointed on a shared receiver couldn't be
+    /// seen: each masked URL carries a tag of the whole URL. The same URL gives the same tag; two paths on one host give two;
+    /// the tag is 8 hex digits, so it never holds the URL or any part of it.
+    @Test func aTagTellsTwoURLsApartAndHoldsNothingOfThem() {
+        let one = "https://hooks.example.com/T0/CANARYONE", two = "https://hooks.example.com/T0/CANARYTWO"
+        #expect(WebhookURL.tag(one) == WebhookURL.tag(one) && WebhookURL.shown(one) == WebhookURL.shown(one))
+        #expect(WebhookURL.tag(one) != WebhookURL.tag(two))
+        #expect(WebhookURL.destination(one) == WebhookURL.destination(two) && WebhookURL.shown(one) != WebhookURL.shown(two))
+        #expect(WebhookURL.shown(one) == "https://hooks.example.com/… (tag \(WebhookURL.tag(one)))")
+        let hex = Set("0123456789abcdef".utf8)
+        for url in [one, two, "", "https://example.com", "ftp://CANARY", "https://hooks.example.com/T0/CANARYONE "] {
+            let tag = WebhookURL.tag(url)
+            #expect(tag.utf8.count == 8 && tag.utf8.allSatisfy(hex.contains), "\(tag)")
+            #expect(!WebhookURL.shown(url).contains("CANARY"), "\(WebhookURL.shown(url))")
+        }
+        // A URL withheld whole has a tag too, so two withheld URLs don't look alike either.
+        #expect(WebhookURL.shown("ftp://CANARY/a") == "\(WebhookURL.withheld) (tag \(WebhookURL.tag("ftp://CANARY/a")))")
+        #expect(WebhookURL.shown("ftp://CANARY/a") != WebhookURL.shown("ftp://CANARY/b"))
+        // Two webhooks on one receiver show the same destination and different tags.
+        let first = Self.webhook(["url": .string(one)]), second = Self.webhook(["url": .string(two)])
+        #expect(first.destination != second.destination && first.destination?.hasPrefix("https://hooks.example.com/… (tag ") == true)
+    }
+
+    /// The tag's HMAC-SHA256, written out because this module can't import CryptoKit: FIPS 180-4's and RFC 4231's vectors
+    /// (a key longer than a block among them), the padding's edges, and CryptoKit's own answer for messages and keys of
+    /// every length to past two blocks.
+    @Test func theTagsHashIsHMACSHA256() {
+        func hex(_ bytes: [UInt8]) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
+        let hashes: [(String, String)] = [
+            ("", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+            ("abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            ("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+            (String(repeating: "a", count: 55), "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"),
+            (String(repeating: "a", count: 56), "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a"),
+            (String(repeating: "a", count: 64), "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb"),
+        ]
+        for (message, digest) in hashes { #expect(hex(TagHash.sha256(Array(message.utf8))) == digest, "\(message.count)") }
+        let macs: [([UInt8], [UInt8], String)] = [
+            (Array(repeating: 0x0b, count: 20), Array("Hi There".utf8), "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"),
+            (Array("Jefe".utf8), Array("what do ya want for nothing?".utf8), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"),
+            (Array(repeating: 0xaa, count: 20), Array(repeating: 0xdd, count: 50), "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"),
+            (Array(repeating: 0xaa, count: 131), Array("Test Using Larger Than Block-Size Key - Hash Key First".utf8),
+             "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"),
+        ]
+        for (key, message, mac) in macs { #expect(hex(TagHash.hmac(key: key, message)) == mac, "\(key.count)") }
+        #if canImport(CryptoKit)
+        var generator = SystemRandomNumberGenerator()
+        for length in [0, 1, 31, 32, 55, 56, 63, 64, 65, 119, 120, 128, 129, 200] {
+            let message = (0..<length).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
+            let key = (0..<(length % 70 + 1) * 2).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
+            #expect(TagHash.sha256(message) == Array(SHA256.hash(data: message)), "\(length)")
+            #expect(TagHash.hmac(key: key, message) == Array(HMAC<SHA256>.authenticationCode(for: message, using: SymmetricKey(data: key))),
+                    "\(length), key \(key.count)")
+        }
+        #endif
+    }
+
+    /// Every URL in Apple's words shows only where it goes, with its tag; what isn't a URL is left as it came. A URL starts
+    /// at a scheme and runs to the next blank: `://`, the `:/` and `:\\` a browser reads as one, an `http` or `https`
+    /// scheme with `:` alone, a run that starts `//`; text glued before the scheme stays.
+    @Test func everyURLInAppleWordsShowsOnlyWhereItGoes() {
+        func shown(_ url: String) -> String { WebhookURL.shown(url) }
+        let cases: [(String, String)] = [
+            ("The host didn't answer.", "The host didn't answer."),
+            ("", ""),
+            ("https://hooks.example.com/T0/CANARY", shown("https://hooks.example.com/T0/CANARY")),
+            ("Sent to https://hooks.example.com/in?token=CANARY, refused", "Sent to \(shown("https://hooks.example.com/in?token=CANARY,")) refused"),
+            ("(url=https://hooks.example.com/CANARY)", "(url=\(shown("https://hooks.example.com/CANARY)"))"),
+            ("a\thttps://h.example/CANARY\nb", "a\t\(shown("https://h.example/CANARY"))\nb"),
+            ("HTTPS:/hooks.example.com/CANARY", shown("HTTPS:/hooks.example.com/CANARY")),
+            ("https:\\\\hooks.example.com\\CANARY", shown("https:\\\\hooks.example.com\\CANARY")),
+            ("https:hooks.example.com/CANARY", shown("https:hooks.example.com/CANARY")),
+            ("webcal:\\\\hooks.example.com\\CANARY", shown("webcal:\\\\hooks.example.com\\CANARY")),
+            ("//hooks.example.com/CANARY", shown("//hooks.example.com/CANARY")),
+            ("url=//hooks.example.com/CANARY", "url=\(shown("//hooks.example.com/CANARY"))"),
+            ("://hooks.example.com/CANARY", ":\(shown("//hooks.example.com/CANARY"))"),
+            ("ftp://CANARY@files.example", shown("ftp://CANARY@files.example")),
+            ("note:https://h.example/CANARY", "note:\(shown("https://h.example/CANARY"))"),
+            ("two https://a.example/CANARY1 and http://b.example:8080/CANARY2", "two \(shown("https://a.example/CANARY1")) and \(shown("http://b.example:8080/CANARY2"))"),
+            // A combining mark after the scheme's slash can't hide the URL: bytes, not characters.
+            ("https:/\u{301}/h.example/CANARY", shown("https:/\u{301}/h.example/CANARY")),
+            // Not URLs: a time, a ratio, a label, a path with no scheme.
+            ("At 10:30, Error: none", "At 10:30, Error: none"), ("16:9", "16:9"), ("Devices/Macs", "Devices/Macs"),
+            ("and/or//both", "and/or//both"), ("a///b", "a///b"),
+            // No scheme before the colon, no URL.
+            ("see :/path and :\\\\share", "see :/path and :\\\\share"),
+        ]
+        for (text, masked) in cases {
+            #expect(Array(WebhookURL.maskingURLs(in: text).utf8) == Array(masked.utf8), "\(text.debugDescription) gave \(WebhookURL.maskingURLs(in: text).debugDescription)")
+            if text.contains("CANARY") { #expect(!WebhookURL.maskingURLs(in: text).contains("CANARY"), "\(text.debugDescription)") }
+        }
+    }
+
+    /// A payload wrapped in `data` with keys beside it: those keys are unread, and counted as `payload.<key>` (the
+    /// contract-2.8 review's L3: they were dropped unsaid).
+    @Test func aWrappedPayloadsKeysBesideDataAreCounted() throws {
+        let wrapped = try #require(Self.event(.string(#"{"meta":{"retry":2},"data":{"type":"webhookPingCreated","attributes":{"createdDateTime":"2026-10-14T17:24:54Z"}},"links":{}}"#)).payload)
+        #expect(wrapped.type == .known(.webhookPingCreated) && wrapped.besideData == ["meta", "links"])
+        #expect(wrapped.unreadKeys == [NestedKey(attribute: "payload", key: "meta"), NestedKey(attribute: "payload", key: "links")])
+        let bare = try #require(Self.event(.string(#"{"type":"webhookPingCreated","meta":1}"#)).payload)
+        #expect(bare.besideData.isEmpty && bare.unreadKeys == [NestedKey(attribute: "payload", key: "meta")])
+    }
+
+    /// A generated grammar of URLs in Apple's words, as RULE-FEEDBACK 2026-11-03 asks of a parser that masks a secret: text
+    /// glued before or none; a scheme in either case, or a scheme-relative `//`; `://`, `:/`, `:\`, `:\\`, `:///`, or `:`
+    /// alone after `http` or `https`; a host plain, with a port, IPv6, international or encoded; a canary in the user, the
+    /// password, the path, a path parameter, the query or the fragment; punctuation after; words or blanks around. 4,000
+    /// seeded draws, each checked: the canary never survives, and the words around do. The grammar's holes are the mask's
+    /// Not caught (no scheme and no `//`; another scheme with `:` alone; `//` glued to a word; a token in the host).
+    @Test func aGeneratedURLNeverSurvivesTheMask() {
+        var seed: UInt64 = 0x2026_1111
+        func next(_ count: Int) -> Int {
+            seed &+= 0x9E37_79B9_7F4A_7C15
+            var mixed = seed
+            mixed = (mixed ^ (mixed >> 30)) &* 0xBF58_476D_1CE4_E5B9
+            mixed = (mixed ^ (mixed >> 27)) &* 0x94D0_49BB_1331_11EB
+            return Int((mixed ^ (mixed >> 31)) % UInt64(count))
+        }
+        func pick(_ items: [String]) -> String { items[next(items.count)] }
+        let glued = ["", "url=", "(", "note:", "jar:", "\"", "<", "[", "'", "="]
+        let schemes = ["https", "http", "HTTPS", "Http", "ftp", "webcal", "x-y.z+1"]
+        let separators = ["://", ":/", ":\\", ":\\\\", ":///"]
+        let hosts = ["hooks.example.com", "hooks.example.com:8443", "[::1]:443", "b\u{FC}cher.example", "%41.example", "10.0.0.5"]
+        let canary = "CANARYQ7"
+        let secrets: [(String) -> String] = [
+            { "\(canary)@\($0)/in" }, { "user:\(canary)@\($0)" }, { ":\(canary)@\($0)" }, { "\($0)/T0/B0/\(canary)" },
+            { "\($0)/a;sid=\(canary)" }, { "\($0)/in?token=\(canary)&x=1" }, { "\($0)#\(canary)" }, { "\($0)/\(canary)?" },
+        ]
+        let after = ["", ")", ".", ",", "\"", ">", ");", "'", "]", "\u{301}"]
+        let around: [(String, String)] = [("", ""), ("Couldn't reach ", " in time."), ("a\t", "\nb"), ("Hook ", " (old)"), ("x\r\n", "\u{0B}y")]
+        for draw in 0..<4_000 {
+            let scheme = pick(schemes)
+            let bare = ["http", "https"].contains(scheme.lowercased())
+            let url: String
+            switch next(3) {
+            case 0 where bare: url = scheme + ":" + secrets[next(secrets.count)](pick(hosts))
+            case 1: url = "//" + secrets[next(secrets.count)](pick(hosts))
+            default: url = scheme + pick(separators) + secrets[next(secrets.count)](pick(hosts))
+            }
+            let (head, tail) = around[next(around.count)]
+            let before = url.hasPrefix("//") ? pick(glued.filter { !($0.last.map { $0.isLetter || $0.isNumber || $0 == ":" } ?? false) }) : pick(glued)
+            let text = head + before + url + pick(after) + tail
+            let masked = WebhookURL.maskingURLs(in: text)
+            #expect(!masked.contains(canary), "draw \(draw): \(text.debugDescription) gave \(masked.debugDescription)")
+            #expect(masked.hasPrefix(head + before) && masked.hasSuffix(tail) && masked.contains(" (tag "), "draw \(draw): \(text.debugDescription)")
+        }
     }
 }

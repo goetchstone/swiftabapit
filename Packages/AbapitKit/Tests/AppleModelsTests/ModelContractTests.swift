@@ -281,21 +281,22 @@ struct ModelContractTests {
         #expect(configuration.customSettings?.profileText == .notShown(ProfileText.unreadable))
     }
 
-    /// Apple's webhook examples read typed: the URL shown only as where it goes, the receiver's body withheld, the event
-    /// named by its linkage, which the example doesn't include.
+    /// Apple's webhook examples read typed: the URL shown only as where it goes, with its tag, the receiver's body withheld,
+    /// the event named by its linkage, which the example doesn't include.
     @Test func applesWebhookExamplesReadTyped() throws {
+        let shown = "https://example.com/… (tag \(WebhookURL.tag("https://example.com/webhooks/apple")))"
         let listed = try Self.example("get-webhooks").resources.map(Webhook.init)
         let webhook = try Webhook(resource: #require(Self.example("get-webhook-information").resource))
         #expect(listed.first?.id == webhook.id && webhook.id == "webhook-12345")
         #expect(webhook.name == "Device change notifications" && webhook.isEnabled == true)
         #expect(webhook.eventTypes == [.known(.orgDeviceAttributeChanged), .known(.orgDeviceRelationshipAssignedServerChanged)])
-        #expect(webhook.destination == "https://example.com/…" && webhook.created == ISODate.parse("2026-10-01T10:30:00Z") && webhook.updated != nil)
+        #expect(webhook.destination == shown && webhook.created == ISODate.parse("2026-10-01T10:30:00Z") && webhook.updated != nil)
         #expect(webhook.asSent.attributes.string("url") == "https://example.com/webhooks/apple")
 
         let delivery = try #require(Self.example("get-all-deliveries-for-a-webhook").resources.map(WebhookDelivery.init).first)
         #expect(delivery.id == "delivery-67890" && delivery.state == .known(.succeeded) && delivery.isRedelivery == false)
         #expect(delivery.created == ISODate.parse("2026-10-02T08:15:00Z") && delivery.sent == ISODate.parse("2026-10-02T08:15:01Z"))
-        #expect(delivery.request?.destination == "https://example.com/…" && delivery.response?.statusCode == 200 && delivery.response?.hasBody == true)
+        #expect(delivery.request?.destination == shown && delivery.response?.statusCode == 200 && delivery.response?.hasBody == true)
         #expect(delivery.response?.object["body"] == .string(WebhookDelivery.withheld) && delivery.errorMessage == nil)
         #expect(delivery.eventID == "event-24680" && delivery.event == nil && delivery.unreadNested.isEmpty && delivery.misreadObjects.isEmpty)
     }

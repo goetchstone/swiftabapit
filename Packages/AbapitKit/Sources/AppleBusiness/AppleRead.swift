@@ -250,7 +250,7 @@ public struct AuditQuery: Sendable, Equatable {
 public struct DeviceFilter: Sendable, Equatable {
     /// `filter[serialNumber]` and `filter[orderNumber]`: identifiers of `AppleRead.isPathSafe`'s shape, so a comma (Apple's
     /// separator), `&`, `=`, `#`, `%`, a blank, a line break or anything non-ASCII can't go out; each once, in the order
-    /// given.
+    /// given; at most `maximumIdentifiers` of each.
     public let serialNumbers: [String]
     public let orderNumbers: [String]
     /// `filter[status]`, `filter[productFamily]` and `filter[purchaseSourceType]`: Apple's values only (the ones their
@@ -264,6 +264,11 @@ public struct DeviceFilter: Sendable, Equatable {
 
     /// Every device: nothing filtered.
     public static let all = DeviceFilter(checked: [], [], [], [], [], .any, .any)
+
+    /// The most serial numbers, and the most order numbers, one filter takes, each counted once. Apple documents no limit
+    /// on a list's length; a long one makes a long URL, which a server may refuse or cut. 100 until Apple's limit is checked
+    /// live (the contract-2.8 review's L6).
+    public static let maximumIdentifiers = 100
 
     /// One date attribute's filter: instants matched exactly (`filter[<attribute>]`, joined by commas), a lower bound
     /// (`[GT]` or `[GTE]`) and an upper bound (`[LT]` or `[LTE]`). One bound of each side, so two lower bounds can't be
@@ -321,6 +326,8 @@ public struct DeviceFilter: Sendable, Equatable {
     public enum Invalid: Error, Equatable, Sendable {
         /// A serial or order number that isn't an identifier's shape (`AppleRead.isPathSafe`).
         case notAnIdentifier(Field)
+        /// More serial or order numbers than `maximumIdentifiers`, each counted once.
+        case tooMany(Field)
         /// A value this version doesn't know: it never goes to Apple.
         case unknownValue(Field, String)
         /// A date before 1970 or past 9999, or not a number.
@@ -335,6 +342,8 @@ public struct DeviceFilter: Sendable, Equatable {
             switch self {
             case .notAnIdentifier(let field):
                 "\(field.opening) to filter on can only be letters, digits, -, _ and . (not first), 1 to 128 of them: one per entry, never joined by commas."
+            case .tooMany(let field):
+                "At most \(DeviceFilter.maximumIdentifiers) different \(field.words)s can be filtered on at once: filter on fewer, or on something else."
             case .unknownValue(let field, _): "This version doesn't know one of the values asked for as the \(field.words), so it can't filter on it."
             case .outOfRange(let field): "\(field.opening) to filter on is before 1970 or after 9999."
             case .emptyRange(let field): "The range of the \(field.words) ends before it starts, so no device could match."
@@ -368,13 +377,15 @@ public struct DeviceFilter: Sendable, Equatable {
 
     public var isEmpty: Bool { self == .all }
 
-    /// Each once, by bytes: `String ==` would take two spellings of one identifier for one (failure-log 2026-10-16).
+    /// Each once, by bytes: `String ==` would take two spellings of one identifier for one (failure-log 2026-10-16); at
+    /// most `maximumIdentifiers` of them.
     private static func identifiers(_ ids: [String], _ field: Field) throws(Invalid) -> [String] {
         var kept: [String] = []
         for id in ids {
             guard AppleRead.isPathSafe(id) else { throw .notAnIdentifier(field) }
             if !kept.contains(where: { $0.utf8.elementsEqual(id.utf8) }) { kept.append(id) }
         }
+        guard kept.count <= maximumIdentifiers else { throw .tooMany(field) }
         return kept
     }
 

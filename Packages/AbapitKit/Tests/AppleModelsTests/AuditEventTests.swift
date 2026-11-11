@@ -309,17 +309,19 @@ struct AuditEventTests {
     }
 
     /// A webhook's URL can carry the receiver's token, and the inspector shows every payload field: an event's resource,
-    /// payload and description show only where it goes (`WebhookURL.destination`), for any URL-named field of any payload,
-    /// a type this version doesn't know included. A value that isn't a string is withheld whole; `null` stays; the common
-    /// attributes and a URL outside a payload aren't touched.
+    /// payload and description show only where it goes and its tag (`WebhookURL.shown`), for any URL-named field of any
+    /// payload, a type this version doesn't know included. A value that isn't a string is withheld whole; `null` stays.
+    /// The common attributes are Apple's words and ids, left as they came, but for `subjectName` and `actorName`, whose
+    /// every URL is masked too (the contract-2.8 review's M2: a URL there went raw to the screen and the CSV).
     @Test func aWebhookURLInAnEventShowsOnlyWhereItGoes() throws {
         let canary = "https://hooks.example.com/T0/B0/CANARYTOKEN?sig=CANARYSIG"
         let created = Self.event("WEBHOOK_CREATED", [
             "eventDataWebhookCreated": .object(["name": .string("Device changes"), "url": .string(canary)]),
             "eventDataFutureThing": .object(["callbackUrl": .string(canary), "URL": .object(["token": .string("CANARYTOKEN")]), "otherUrl": .null]),
         ])
-        #expect(created.payload?.object["url"] == .string("https://hooks.example.com/…"))
-        #expect(created.attributes["eventDataFutureThing"]?["callbackUrl"] == .string("https://hooks.example.com/…"))
+        let shown = "https://hooks.example.com/… (tag \(WebhookURL.tag(canary)))"
+        #expect(created.payload?.object["url"] == .string(shown))
+        #expect(created.attributes["eventDataFutureThing"]?["callbackUrl"] == .string(shown))
         #expect(created.attributes["eventDataFutureThing"]?["URL"] == .string(WebhookURL.withheld))
         #expect(created.attributes["eventDataFutureThing"]?["otherUrl"] == .null)
         for text in [JSONValue.dumps(.object(created.attributes)), "\(created)", String(reflecting: created)] {
@@ -328,8 +330,81 @@ struct AuditEventTests {
         var dumped = ""
         dump(created, to: &dumped)
         #expect(!dumped.contains("CANARY"))
-        // Only a payload's: the common attributes are Apple's words and ids, left as they came.
+        // The subject's and the actor's names have every URL in them masked, in any event; the other common attributes are
+        // left as they came.
         let named = Self.event("WEBHOOK_UPDATED", ["subjectName": .string("https://hooks.example.com/x")])
-        #expect(named.subjectName == "https://hooks.example.com/x")
+        #expect(named.subjectName == "https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/x")))")
+        let quoted = Self.event("DEVICE_ASSIGNED_TO_SERVER", [
+            "subjectName": .string("Hook https://hooks.example.com/T0/CANARYSUBJECT (old)"), "actorName": .string("key for http://CANARYACTOR@hooks.example.com"),
+            "subjectId": .string("s-https://not-masked.example/kept"), "groupId": .string("g-1"),
+        ])
+        #expect(quoted.subjectName == "Hook https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/T0/CANARYSUBJECT"))) (old)")
+        #expect(quoted.actorName == "key for http://hooks.example.com/… (tag \(WebhookURL.tag("http://CANARYACTOR@hooks.example.com")))")
+        #expect(quoted.subjectID == "s-https://not-masked.example/kept" && quoted.groupID == "g-1")
+        for text in [JSONValue.dumps(.object(quoted.attributes)), "\(quoted)"] { #expect(!text.contains("CANARY"), "\(text)") }
+        #expect(Self.event("DEVICE_ASSIGNED_TO_SERVER").subjectName == "C02TEST0001" && Self.event("DEVICE_ASSIGNED_TO_SERVER").actorName == "abapit key")
     }
+
+    /// The payload mask walks every object and list, at any depth, of any attribute but the common ones: a string that is a
+    /// URL, or holds one, shows only where it goes with its tag, whatever its key; a value under a key holding one of the CSV
+    /// denylist's stems is withheld; a payload sent as JSON text is read and walked the same way, and written back as JSON
+    /// text. The contract-2.8 review's L1: the mask read one level and URL-named keys only, so a token one level down, under
+    /// another key or inside JSON text went to the inspector.
+    @Test func thePayloadMaskWalksEverythingApplesSent() throws {
+        let url = "https://hooks.example.com/T0/CANARYURL"
+        let shown = WebhookURL.shown(url)
+        let event = Self.event("WEBHOOK_UPDATED", [
+            "eventDataWebhookUpdated": .object([
+                "name": .string("Device changes"), "enabled": .string("true"),
+                "previous": .object(["target": .string(url), "headers": .object(["x-api-key": .string("CANARYKEY")]),
+                                     "history": .array([.string(url), .object(["at": .string("2026-11-11"), "endpoint": .string("see \(url)")])])]),
+                "clientSecret": .string("CANARYSECRET"), "api_key": .number("12345"), "signingTokens": .array([.string("CANARYTOKEN")]),
+                "settings": .string(#"{"callback":"\#(url)","auth":{"password":"CANARYPASSWORD"},"note":"plain"}"#),
+                "quiet": .string(#"{"note":"plain","count":1}"#), "list": .string(#"["\#(url)"]"#), "notJSON": .string("{ \(url)"),
+                "homepage": .string("https://example.com"), "count": .number("3"), "missing": .null, "tokenCount": .null,
+            ]),
+            "eventDataFutureThing": .string(url), "secretAttribute": .string("CANARYTOP"), "passwordPolicy": .array([.string("CANARYLIST")]),
+        ])
+        let payload = try #require(event.payload?.object)
+        #expect(payload["name"] == .string("Device changes") && payload["enabled"] == .string("true") && payload["count"] == .number("3"))
+        #expect(payload["previous"]?["target"] == .string(shown) && payload["previous"]?["headers"]?["x-api-key"] == .string(AuditEvent.withheld))
+        #expect(payload["previous"]?["history"] == .array([.string(shown), .object(["at": .string("2026-11-11"), "endpoint": .string("see \(shown)")])]))
+        #expect(payload["clientSecret"] == .string(AuditEvent.withheld) && payload["api_key"] == .string(AuditEvent.withheld))
+        #expect(payload["signingTokens"] == .string(AuditEvent.withheld) && payload["missing"] == .null && payload["tokenCount"] == .null)
+        let settings = try #require(payload["settings"]?.string.flatMap(JSONValue.parse))
+        #expect(settings == .object(["callback": .string(shown), "auth": .object(["password": .string(AuditEvent.withheld)]), "note": .string("plain")]))
+        #expect(payload["quiet"] == .string(#"{"note":"plain","count":1}"#), "JSON text the walk didn't change stays byte for byte")
+        #expect(payload["list"]?.string.flatMap(JSONValue.parse) == .array([.string(shown)]))
+        #expect(payload["notJSON"] == .string("{ \(shown)"))
+        #expect(payload["homepage"] == .string(WebhookURL.shown("https://example.com")))
+        #expect(event.attributes["eventDataFutureThing"] == .string(shown))
+        #expect(event.attributes["secretAttribute"] == .string(AuditEvent.withheld) && event.attributes["passwordPolicy"] == .string(AuditEvent.withheld))
+        var dumped = ""
+        dump(event, to: &dumped)
+        for text in [JSONValue.dumps(.object(event.attributes)), "\(event)", dumped] { #expect(!text.contains("CANARY"), "\(text)") }
+        // Two of Apple's payload keys hold a stem: their payloads are read and walked like any other, as an object or as
+        // JSON text, while an attribute of another name holding one is withheld whole, an object too.
+        let changed = try Self.payload(.accountPasswordChanged, ["activityId": .string("act-1"), "token": .string("CANARYTOKEN")])
+        #expect(changed.key == "eventDataAccountPasswordChanged" && changed.object["activityId"] == .string("act-1"))
+        #expect(changed.object["token"] == .string(AuditEvent.withheld))
+        #expect(try Self.payload(.batchPasswordResetInitiated, [:]).key == "eventDataBatchPasswordResetInitiated")
+        let sentAsText = Self.event("ACCOUNT_PASSWORD_CHANGED", ["eventDataAccountPasswordChanged": .string(#"{"activityId":"act-2","token":"CANARYTOKEN"}"#),
+                                                                 "secretThing": .object(["note": .string("CANARYNOTE")]),
+                                                                 "EventDataAccountPasswordChanged": .string("CANARYCASE")])
+        let walked = try #require(sentAsText.attributes["eventDataAccountPasswordChanged"]?.string.flatMap(JSONValue.parse))
+        #expect(walked == .object(["activityId": .string("act-2"), "token": .string(AuditEvent.withheld)]))
+        #expect(sentAsText.payloadProblems == [.notAnObject] && sentAsText.attributes["secretThing"] == .string(AuditEvent.withheld))
+        // Apple's key by its bytes: another spelling of it is another attribute, named for a secret.
+        #expect(sentAsText.attributes["EventDataAccountPasswordChanged"] == .string(AuditEvent.withheld))
+        // Past the depth the walk goes, a value is withheld whole: nothing nested deeper is shown unchecked.
+        var deep: JSONValue = .string(url)
+        for _ in 0..<AuditEvent.maskDepth { deep = .array([deep]) }
+        let buried = Self.event("WEBHOOK_UPDATED", ["eventDataWebhookUpdated": .object(["deep": deep])])
+        #expect(!JSONValue.dumps(.object(buried.attributes)).contains("CANARY") && JSONValue.dumps(.object(buried.attributes)).contains(AuditEvent.withheld))
+        let levels = AuditEvent.maskDepth + 4
+        let text = String(repeating: "[", count: levels) + #""CANARYDEEP""# + String(repeating: "]", count: levels)
+        let strings = Self.event("WEBHOOK_UPDATED", ["eventDataWebhookUpdated": .object(["nested": .string(text)])])
+        #expect(!JSONValue.dumps(.object(strings.attributes)).contains("CANARYDEEP"))
+    }
+
 }

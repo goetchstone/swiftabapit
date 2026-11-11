@@ -1,4 +1,6 @@
+import AppleModels
 import Foundation
+import JSONAPI
 import Testing
 import TestSupport
 
@@ -148,6 +150,25 @@ struct BoundaryTests {
         // The scan reads what a widening would write, and not a comment.
         #expect(SourceScan.names(SourceScan.File(path: "x.swift", text: "let url = webhook.asSent.attributes"), ["asSent"]))
         #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: "// asSent\nlet shown = webhook.destination"), ["asSent"]))
+    }
+
+    /// What the app can read of a delivery through AbapitKit's public API holds no token, signature or header: its
+    /// `errorMessage` quoting the URL, its description, its attributes, an attribute this version doesn't read (the
+    /// contract-2.8 review's M1: only `request` and `response` were withheld, the rest handed out as Apple sent it).
+    @Test func aDeliveryHandsTheAppNoTokenOrHeader() {
+        let delivery = WebhookDelivery(resource: Resource(type: "webhookDeliveries", id: "D1", attributes: [
+            "errorMessage": .string("POST https://hooks.example.com/T0/CANARYTOKEN?sig=CANARYSIG failed"),
+            "requestHeaders": .object(["x-apple-signature": .string("CANARYSIG")]),
+            "request": .object(["url": .string("https://hooks.example.com/T0/CANARYTOKEN")]),
+        ]))
+        var dumped = ""
+        dump(delivery, to: &dumped)
+        for text in [delivery.errorMessage ?? "", "\(delivery)", String(reflecting: delivery), JSONValue.object(delivery.attributes).jsonText,
+                     delivery.request?.destination ?? "", dumped, "\(Mirror(reflecting: delivery).children.map(\.value))"] {
+            #expect(!text.contains("CANARY"), "\(text)")
+        }
+        #expect(delivery.errorMessage?.hasPrefix("POST https://hooks.example.com/… (tag ") == true && delivery.errorMessage?.hasSuffix(") failed") == true)
+        #expect(delivery.unreadAttributes == ["requestHeaders"])
     }
 
     @Test func onlyTheListedLinesReadTheRawProfile() throws {

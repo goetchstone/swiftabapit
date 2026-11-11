@@ -334,10 +334,16 @@ public actor AppleClient {
         }
     }
 
-    /// A page's deliveries, each with the event it names among `included`, compared by bytes.
+    /// A page's deliveries, each with the event it names among `included`, compared by bytes. JSON:API includes a resource
+    /// once (a (type, id) pair is unique in a document), so one included twice is malformed: which copy is the event would
+    /// be a guess (the contract-2.8 review's L2).
     static func deliveries(_ items: [Resource], included: [Resource]) throws -> [WebhookDelivery] {
         guard included.allSatisfy({ $0.type.utf8.elementsEqual(WebhookEvent.resourceType.utf8) && !$0.id.isEmpty }) else {
             throw AppleAPIError.malformed("included of type \(WebhookEvent.resourceType)")
+        }
+        var seen: Set<[UInt8]> = []
+        guard included.allSatisfy({ seen.insert(Array($0.id.utf8)).inserted }) else {
+            throw AppleAPIError.malformed("included \(WebhookEvent.resourceType) twice")
         }
         return items.map { item in
             let named = WebhookDelivery(resource: item).eventID
@@ -497,6 +503,9 @@ public actor AppleClient {
             let repeated = AppleAPIError.malformed("a repeated cursor on \(first.template)")
             if cursorPaging {
                 // Apple's cursor, or the one its next link carries: never a next link followed, which may drop the filters.
+                // Where the two differ, `meta.paging.nextCursor` wins: it is the field Apple documents as the cursor
+                // (`PagingInformation.Paging`), while `links.next` is a URI whose query is Apple's to shape
+                // (`theCursorIsMetaPagingsWhereTheNextLinkDiffers`).
                 guard let cursor = document.nextCursor ?? document.next.flatMap(Self.cursor(in:)) else {
                     throw AppleAPIError.malformed("a next page of \(first.template) without a cursor")
                 }

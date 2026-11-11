@@ -1,4 +1,4 @@
-import AppleBusiness
+@testable import AppleBusiness
 import AppleModels
 import Foundation
 import JSONAPI
@@ -54,7 +54,8 @@ struct WebhookReadTests {
                                                                                extra: ["secret": .string("CANARYSECRET")])])
         let webhooks = try await Harness.all(harness.client.webhooks())
         #expect(webhooks.map(\.id) == ["webhook-12345", "W2"])
-        #expect(webhooks.map(\.destination) == ["https://example.com/…", "https://hooks.example.com/…"])
+        #expect(webhooks.map(\.destination) == ["https://example.com/… (tag \(WebhookURL.tag("https://example.com/webhooks/apple")))",
+                                                 "https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/T0/CANARYURL")))"])
         #expect(webhooks[1].attributes["secret"] == .string(Webhook.withheld) && webhooks[1].unreadAttributes == ["secret"])
         let one = try await harness.client.webhook("W2")
         #expect(one.name == "Device changes" && one.isEnabled == true && one.eventTypes == [.known(.orgDeviceAttributeChanged)])
@@ -79,7 +80,8 @@ struct WebhookReadTests {
         #expect(deliveries.map(\.eventID) == ["E1", "E9", nil, "E2"] && deliveries.map { $0.event?.id } == ["E1", nil, nil, "E2"])
         #expect(deliveries.map { $0.event?.payload?.serialNumber } == ["TESTD0000001", nil, nil, "TESTD0000002"])
         #expect(deliveries[0].event?.eventType == .known(.orgDeviceAttributeChanged) && deliveries[0].state == .known(.succeeded))
-        #expect(deliveries[0].request?.destination == "https://hooks.example.com/…" && deliveries[0].response?.statusCode == 200)
+        #expect(deliveries[0].request?.destination == "https://hooks.example.com/… (tag \(WebhookURL.tag("https://hooks.example.com/in")))"
+                && deliveries[0].response?.statusCode == 200)
         #expect(try await Harness.all(harness.client.webhookDeliveries("W2")).map { $0.event?.id } == ["E1"])
         // JSON:API includes a resource once however many name it (the stub too): W1's page names E1 and E2, and E9, which
         // isn't held, so it isn't included.
@@ -197,6 +199,22 @@ struct WebhookReadTests {
              "included":[{"type":"orgDevices","id":"E1","attributes":{}}],"links":{"self":"x"}}
             """#)
         await #expect(throws: AppleAPIError.malformed("included of type webhookEvents")) { _ = try await Harness.all(harness.client.webhookDeliveries("W1")) }
+        // JSON:API includes a resource once: an event included twice is malformed, never one copy picked (the contract-2.8
+        // review's L2: the first was taken, and a mutant taking the last survived).
+        harness.stub.queue(200, for: "/v1/webhooks/W1/deliveries", body: #"""
+            {"data":[{"type":"webhookDeliveries","id":"D1","relationships":{"event":{"data":{"type":"webhookEvents","id":"E1"}}}}],
+             "included":[{"type":"webhookEvents","id":"E1","attributes":{"eventType":"ORG_DEVICE_ATTRIBUTE_CHANGED"}},
+                         {"type":"webhookEvents","id":"E2","attributes":{}},
+                         {"type":"webhookEvents","id":"E1","attributes":{"eventType":"ORG_DEVICE_RELATIONSHIP_WARRANTY_CHANGED"}}],
+             "links":{"self":"x"}}
+            """#)
+        await #expect(throws: AppleAPIError.malformed("included webhookEvents twice")) { _ = try await Harness.all(harness.client.webhookDeliveries("W1")) }
+        #expect(throws: AppleAPIError.malformed("included webhookEvents twice")) {
+            _ = try AppleClient.deliveries([], included: [Resource(type: "webhookEvents", id: "E1"), Resource(type: "webhookEvents", id: "E1")])
+        }
+        // Two ids that are one only to `String ==` (NFC and NFD) are two resources, as JSON:API compares them.
+        #expect(try AppleClient.deliveries([], included: [Resource(type: "webhookEvents", id: "\u{E9}"), Resource(type: "webhookEvents", id: "e\u{301}")])
+                .isEmpty)
         harness.stub.queue(200, for: "/v1/webhooks/W1/deliveries", body: #"{"data":{"type":"webhookDeliveries","id":"D1"}}"#)
         await #expect(throws: AppleAPIError.malformed("a page of /v1/webhooks/{id}/deliveries")) {
             _ = try await Harness.all(harness.client.webhookDeliveries("W1"))
@@ -219,7 +237,42 @@ struct WebhookReadTests {
         #expect(try await harness.raw("/v1/webhooks/W1/deliveries", [("fields[webhookEvents]", "payload"), ("include", "event")]).status == 200)
     }
 
+    /// Each page includes only the events its own deliveries name, each once: an event another page names, or that no
+    /// delivery names, isn't included (the stub as Apple's JSON:API does; mutant S5, the stub including every event it
+    /// held, survived the review).
+    @Test func eachPageIncludesOnlyTheEventsItNames() async throws {
+        let harness = try await Harness()
+        harness.stub.add([Self.webhook("W1")])
+        harness.stub.add([Self.delivery("D1", at: 0, event: "E1"), Self.delivery("D2", at: 1, event: "E2"), Self.delivery("D3", at: 2, event: "E1")])
+        harness.stub.add([Self.event("E1"), Self.event("E2"), Self.event("E3")])
+        harness.stub.relate("webhooks", "W1", "deliveries", to: ["D1", "D2", "D3"])
+        let first = try await harness.raw("/v1/webhooks/W1/deliveries", [("include", "event"), ("limit", "1")])
+        #expect(first.body?["included"]?.array?.compactMap { $0["id"]?.string } == ["E1"])
+        let second = try await harness.raw("/v1/webhooks/W1/deliveries", [("include", "event"), ("limit", "1"), ("cursor", "1")])
+        #expect(second.body?["included"]?.array?.compactMap { $0["id"]?.string } == ["E2"])
+        let whole = try await harness.raw("/v1/webhooks/W1/deliveries", [("include", "event")])
+        #expect(whole.body?["included"]?.array?.compactMap { $0["id"]?.string } == ["E1", "E2"])
+    }
+
     // MARK: the acceptance pass and the log
+
+    /// The deliveries line reads the first webhook's last day, every page of it: a delivery older than a day isn't counted
+    /// (mutant P1, reading every delivery, survived the review), and more than a page of recent ones is counted whole
+    /// (mutant P3, stopping after the first page, survived too).
+    @Test func theDeliveriesLineCountsTheLastDayEveryPage() async throws {
+        let recent = Date().addingTimeInterval(-3_600)
+        let harness = try await Harness()
+        harness.stub.add([Self.webhook("W1")])
+        let ids = (0..<1_001).map { String(format: "D%05d", $0) }
+        harness.stub.add(ids.enumerated().map { Self.delivery($1, at: Double($0), event: "E1", base: recent) }
+                         + [Self.delivery("OLD", at: 0, event: "E1", base: Date().addingTimeInterval(-2 * 86_400))])
+        harness.stub.add([Self.event("E1")])
+        harness.stub.relate("webhooks", "W1", "deliveries", to: ["OLD"] + ids)
+        let report = await harness.client.acceptancePass()
+        #expect(report.text.contains("\nwebhooks/{id}/deliveries: ok, 1001 items · the last day\n"), "\(report.text)")
+        let reads = harness.reads.filter { $0.contains("/v1/webhooks/W1/deliveries?") }
+        #expect(reads.count == 2 && reads[0].contains("filter%5BcreatedDateTimeAtOrAfter%5D=") && reads[1].contains("&cursor=1000"), "\(reads)")
+    }
 
     /// A canary in every place a token or the receiver's words could hide (the webhook's URL, its secret, a delivery's
     /// request URL, response body, headers and error message, an event's payload and an unknown attribute) reaches

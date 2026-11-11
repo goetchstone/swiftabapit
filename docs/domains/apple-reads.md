@@ -27,8 +27,10 @@ org editor's save).
   `Configuration` and `CustomSettingsValues` hand out the profile withheld and keep it as it came at `package` access.
   `Webhooks.swift` (Business 2.8): `Webhook`, `WebhookDelivery` (with `WebhookDeliveryRequest` and `…Response`) and
   `WebhookEvent`, whose `payload` string is read as `WebhookPayload` (`WebhookPayloadType`, from Apple's guide); a webhook
-  and a delivery hand out their URL as `WebhookURL.destination` and withhold the rest (below, "Webhooks"), keeping what
-  Apple sent as `asSent`, `package`. `Sections.swift`: `AppleSection.businessOnly`.
+  and a delivery hand out their URL as `WebhookURL.shown` (its destination and a tag), a delivery the URLs in its
+  `errorMessage` too, and withhold every attribute they don't read (below, "Webhooks"), keeping what Apple sent as
+  `asSent`, `package`. `URLTag.swift`: the tag's HMAC-SHA256 (`TagHash`), written out since this module is pure.
+  `Sections.swift`: `AppleSection.businessOnly`.
 - `Sources/AppleBusiness/` — `ClientAssertion`, `TokenBroker`, `AppleRead` (every read built here; the Business-only
   builders take no scope; `AuditQuery`, the audit read's checked range and filters; `DeviceFilter`, the device list's;
   `WebhookDeliveryQuery`, a webhook's deliveries'), `AppleClient` (pages as an
@@ -205,6 +207,8 @@ org editor's save).
   comma (a second value) or anything else that would steer the query is refused; `filter[status]`, `[productFamily]` and
   `[purchaseSourceType]` take `DeviceStatus`, `ProductFamily` and `PurchaseSourceType`, the values their descriptions
   list (`ModelContractTests` reads the text), an `.unknown` one refused; each list's values once, in the order given.
+  At most 100 serial numbers and 100 order numbers, each counted once (`DeviceFilter.maximumIdentifiers`; one more is
+  `.tooMany`, in words): Apple documents no limit, and a long list is a long URL (the contract-2.8 review's L6; check live).
   `filter[addedToOrgDateTime]` and `filter[orderDateTime]` are each a `DateFilter`: exact instants, one lower bound
   (`[GT]` or `[GTE]`) and one upper (`[LT]` or `[LTE]`), so two lower bounds can't be asked. Every date is cut to whole
   seconds, UTC, `Z` (Apple's descriptions show `2025-01-01T00:00:00Z`), 1970 to 9999. Bounds no device could fall between
@@ -233,12 +237,27 @@ org editor's save).
   as "no payload", the event's serial or subscription went unread, its unknown fields uncounted, and the pass said
   `ok`. `AuditEvent.payloadProblems` holds a named key that is absent, `""` or not a string, and a payload that isn't an
   object (`null` included); the pass's note says each with a count (`payload key named but absent in 1 event`).
-- **An audit payload's URL shows only where it goes** (2.8): `WEBHOOK_CREATED` and `WEBHOOK_UPDATED` carry the webhook's
-  `url`, which can hold the receiver's token, and the Activity inspector shows every payload field. `AuditEvent.resource`
-  shows the value under any key of a payload object that is `url` or ends in it (any case, any type's payload, an unknown
-  type's too) as `WebhookURL.destination`, a non-string withheld whole; no copy as Apple sent it is kept, since nothing
-  reads the URL from an event (`aWebhookURLInAnEventShowsOnlyWhereItGoes`). The common attributes aren't touched. The three
-  webhook types are in Access & Security (`AuditView`): a webhook sends the fleet's changes, serials included, off-site.
+- **An audit event's URLs show only where they go** (2.8): `WEBHOOK_CREATED` and `WEBHOOK_UPDATED` carry the webhook's
+  `url`, which can hold the receiver's token, and the Activity inspector shows every payload field and common attribute,
+  its CSV the common attributes. `AuditEvent.resource` is masked when read (`AuditEvent.withholding`), for every type, an
+  unknown one's too; no copy as Apple sent it is kept, since nothing reads a URL from an event. Every attribute but the
+  common ones is walked, objects and lists at any depth (`AuditEvent.masked`): a value under a key that is `url` or ends in
+  it (any case) is `WebhookURL.shown`'s, a non-string withheld whole; a value under a key holding one of
+  `ExportPolicy.sensitiveStems` (mirrored as `AuditEvent.sensitiveStems`, held equal by `ExportPolicyTests`) is
+  `AuditEvent.withheld`, whole, but for an attribute that is one of Apple's payload keys (`eventDataAccountPasswordChanged`
+  and `eventDataBatchPasswordResetInitiated` hold a stem: their payloads are walked, as an object or as JSON text); any
+  other string has every URL in it masked
+  (`WebhookURL.maskingURLs`), and a string of JSON text (an object or a list, a payload sent as a string) is read, walked
+  the same way and written back as JSON text when the walk changed it. Past `AuditEvent.maskDepth` (32) levels a value is
+  withheld whole. Of the common attributes, `subjectName` and `actorName` have every URL in them masked (a webhook's event
+  may name it by its URL); the rest are Apple's words and ids, left as they came. Held by
+  `aWebhookURLInAnEventShowsOnlyWhereItGoes`, `thePayloadMaskWalksEverythingApplesSent`,
+  `anAuditPayloadWithholdsEveryKeyCSVWithholds`, `theAuditCSVShowsNoURLInANameRaw` and, on the app side,
+  `ActivityTests.aURLInAnEventShowsOnlyWhereItGoes` (the contract-2.8 review's M2 and L1: the mask read one level of a
+  payload and URL-named keys only, and the two names went raw to the screen and the CSV). Not caught: a URL with no
+  scheme and no `//`, a URL in a key's name, and JSON text nested past `JSONValue.maximumDepth`, which reads as text. The
+  three webhook types are in Access & Security (`AuditView`): a webhook sends the fleet's changes, serials included,
+  off-site.
 - **Keys inside the objects a view reads are counted too** (Phase 2a review L1): a user's `phoneNumbers` and
   `roleOuList`, a custom setting's `customSettingsValues` and an audit payload's role locations, as `attribute.key`
   (`phoneNumbers.isPrimary`, `accountRoleLocationList.scope`), the attribute this version's name and Apple's key each
@@ -354,7 +373,10 @@ org editor's save).
   - Does an exact date (`filter[addedToOrgDateTime]=…`) match a device whose stamp has a fraction (Apple's examples' do:
     `22:05:14.192Z`), when the client sends whole seconds? The stub compares instants exactly, so it doesn't.
   - Is `[LT]` strictly before and `[LTE]` at or before, as the descriptions say, at Apple's own precision?
-  - Is there a cap on how many values a filter takes, or on the query's length? The client sets none.
+  - Is there a cap on how many values a filter takes, or on the query's length? The client takes at most 100 serial numbers
+    and 100 order numbers (`DeviceFilter.maximumIdentifiers`), a guess until this is answered.
+  - Are `filter[serialNumber]` and `filter[orderNumber]` case-sensitive? The stub matches by bytes, and the client sends
+    what was typed.
   - Does a filtered list's next link always carry the filters (the 2.7 example's does)? The client never follows it.
 - **Assumed, check live (Phase 2 live check):**
   - Does Apple cap the audit range? The client caps it at 365 days; the stub has no cap.
@@ -398,19 +420,40 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
   brackets), at most 253 bytes, is `WebhookURL.withheld` whole (a percent-encoded host, a blank, `;`, no `//`, no scheme).
   Stricter than a package's location (`ContentWords.location`, which keeps the path): a webhook's path is often the
   token itself. Not caught: a token in the host name.
+- **The tag** (`WebhookURL.shown`, `tag`; the contract-2.8 review's M4): the destination alone shows two URLs on one host
+  alike, so a webhook repointed on a shared receiver couldn't be seen. Every masked URL, a webhook's, a delivery's, an
+  audit event's, shows as `https://hooks.example.com/… (tag a1b2c3d4)`: the first 8 hex digits of HMAC-SHA256 of the URL
+  as Apple sent it, under a key of 32 random bytes made once per process, held in memory only, never stored or logged. A
+  URL withheld whole has one too. **Tags compare only within one run of the app**: the same URL tags alike in a run and
+  differently in the next, so a tag in a CSV or a screenshot means nothing beside one from another run, and nothing of the
+  URL can be read back from it. The HMAC is written out (`TagHash`, this module being pure) and held to FIPS 180-4's and
+  RFC 4231's vectors and to CryptoKit (`theTagsHashIsHMACSHA256`). The acceptance pass prints no URL, so no tag either.
+- **A URL in Apple's words** (`WebhookURL.maskingURLs`): a run of text between ASCII blanks holds a URL from a scheme
+  whose `:` is followed by `/` or `\` (`https://`, and the `https:/` and `https:\\` a browser reads as one), from an
+  `http` or `https` scheme followed by `:` alone, or from a scheme-relative `//` that doesn't follow a scheme's character
+  or a `/` (`url=//hooks.example.com/…`), to the run's end; what is glued before it is kept. Errs toward hiding:
+  punctuation after a URL goes with it; a time (`10:30`), a label (`Error:`) or `and/or//both` stays. Held by a list of
+  cases and by a generated grammar of 4,000 seeded URLs in text (`aGeneratedURLNeverSurvivesTheMask`, RULE-FEEDBACK
+  2026-11-03). Not caught: a URL with no scheme and no `//` (`hooks.example.com/token`), a `//` glued to a word, another
+  scheme with `:` alone, and what follows a blank inside a URL.
 - **A webhook** (`Webhook`): `url` as its destination; every attribute it doesn't read (`fields` is
   `Webhook.Attributes`), `secret` included, withheld as `Webhook.withheld` with its key kept, so the acceptance pass
   counts `secret` as an unknown key and never prints it; an attribute Apple adds may be the secret by another name.
-- **A delivery** (`WebhookDelivery`): `request.url` as its destination; `response.body` withheld (`hasBody` says whether
-  the receiver said anything; Apple keeps a body only for an answer that isn't 2xx); every other key of `request` or
-  `response` withheld, `httpStatusCode` kept; a `request` or `response` that isn't an object withheld whole and named in
-  `misreadObjects`. `errorMessage` is Apple's words for a receiver that never answered and is kept as it comes: a screen
-  shows it through `ContentWords.addresses`, in case it quotes the URL (check live).
+- **A delivery** (`WebhookDelivery`): `request.url` as `WebhookURL.shown` shows it; `response.body` withheld (`hasBody`
+  says whether the receiver said anything; Apple keeps a body only for an answer that isn't 2xx); every other key of
+  `request` or `response` withheld, `httpStatusCode` kept; a `request` or `response` that isn't an object withheld whole and
+  named in `misreadObjects`. Every attribute it doesn't read (`requestHeaders`, a signature by any name) withheld, its key
+  kept so the pass counts it, as a webhook's are. `errorMessage` is Apple's words for a receiver that never answered,
+  which may quote the URL, token and all: every URL in it is masked (`WebhookURL.maskingURLs`), and one that isn't a
+  string is withheld whole; `asSent` keeps it raw. The contract-2.8 review's M1: only `request` and `response` were
+  withheld, so an unknown attribute and a token quoted in the message went out in every description, dump and mirror
+  (`aDeliveryWithholdsItsURLAndTheReceiversWords`, and the app side's `BoundaryTests.aDeliveryHandsTheAppNoTokenOrHeader`).
 - **An event** (`WebhookEvent`): public as it came. Its `payload` names a device by serial and a service by id, the
   organization's own data as an audit event's is; `WebhookPayload` reads it, wrapped in `data` (the guide's examples, the
   POST body) or not (the guide's prose). A field is read only where its type documents it (`WebhookPayloadType.fields`,
-  `.relationships`), the rest counted as `unreadKeys` (`payload.`, `attributes.`, `relationships.`); a payload that
-  isn't a string, or a string that isn't an event, is `payloadProblem`, never read as none.
+  `.relationships`), the rest counted as `unreadKeys` (`payload.`, `attributes.`, `relationships.`), a wrapped payload's
+  keys beside `data` among them (`besideData`, as `payload.<key>`: the contract-2.8 review's L3); a payload that isn't a
+  string, or a string that isn't an event, is `payloadProblem`, never read as none.
 - Held by `WebhookTests` (canaries through each public value, `description`, `dump` and the mirror; the stored layout,
   `whatAWebhookAndADeliveryStoreIsTheTwoCopies`; neither type `Equatable`, whose synthesized `==` would compare `asSent`),
   `applesWebhookExamplesReadTyped`, and `BoundaryTests.whatAppleSentOfAWebhookStaysPackage`: `asSent` is `package` and only
@@ -423,7 +466,12 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
   and `filter[createdDateTimeAtBefore]` whole seconds, 1970 to 9999, the start before the end after the cut (else
   `.emptyRange`, in words); `filter[deliveryState]` Apple's three states, each once. `include=event` always goes: each
   delivery's `event` is the included `webhookEvents` resource its linkage names, by bytes; an included resource of another
-  type is `.malformed("included of type webhookEvents")`; an event named and not included leaves `event` nil with
+  type is `.malformed("included of type webhookEvents")`, one included twice `.malformed("included webhookEvents twice")`
+  (JSON:API includes a resource once; which copy is the event would be a guess: the contract-2.8 review's L2), and the stub
+  includes on each page only the events that page names (`eachPageIncludesOnlyTheEventsItNames`). Where a page's next
+  link and `meta.paging.nextCursor` name different cursors, every cursor-paged read takes `nextCursor`, the field Apple
+  documents as the cursor (`theCursorIsMetaPagingsWhereTheNextLinkDiffers`); an event named and not included leaves
+  `event` nil with
   `eventID` set, never another event. An id that can't go in a path is never sent (`.notFound`, as every read's).
 - **What each state says** (no screen yet; these are what the client and the pass say): a School org, `.webhooksNotInScope`
   ("Apple School Manager's API has no webhooks to read."), nothing sent, and the pass's three lines
@@ -435,8 +483,11 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
   isn't a string or an event; it reports unknown keys of a delivery (`request.`, `response.`), its event (`event.`) and the
   payload (`payload.`, `attributes.`, `relationships.`) and unknown `deliveryState`, `eventType` and `payloadType` values.
 - **Never printed or logged** (invariant 11; `noURLBodyOrPayloadReachesThePassOrTheLog`): a webhook's URL and name, its
-  secret, a delivery's request URL, headers, response body and error message, an event's payload. The pass prints only
-  words of Apple's vocabulary (a key's name, an enum value) and counts, so `secret` shows as an unknown key, never its value;
+  secret, a delivery's request URL, headers (in `request` or as an attribute of their own), response body, error message
+  and every attribute it doesn't read, an event's payload. A description, dump or mirror of a webhook or a delivery shows
+  the withheld copy: a URL as its destination and tag, the error message with its URLs masked, the rest withheld. The
+  pass prints only words of Apple's vocabulary (a key's name, an enum value) and counts, so `secret` shows as an unknown
+  key, never its value;
   `HTTPClient` logs the method, the host, the path's template and the status, and the test reads this process's log back
   (`OSLogStore`), finding the deliveries' line and no canary.
 - **No probe for the webhooks yet.** A probe is per `AppleSection`, and `NavigationTests` holds every section to a sidebar
@@ -452,7 +503,16 @@ copy with it withheld and keeps what Apple sent at `package` (`asSent`), and pri
     (the stub's choices); what a value outside the states, or a bound given two dates, gets (the stub: 400).
   - Whether `payload` holds the event wrapped in `data` (the guide's examples) or bare (its prose); both are read.
   - Whether the payload's `id` is the `webhookEvents` id, and what `eventType` a ping's event carries.
-  - Whether `errorMessage` quotes the URL, its token and all.
+  - Whether `errorMessage` quotes the URL, its token and all (every URL in it is masked meanwhile).
+  - Whether a delivery carries the request's headers or the signature, in `request` or as an attribute of its own (each
+    withheld meanwhile, its key counted).
+  - Whether a page of 1,000 deliveries with `include=event` fits the 32 MiB body cap (`HTTPClient.bodyLimit`): each event's
+    payload rides with it, and an answer past the cap fails the read.
+  - What `subjectName` holds for the `WEBHOOK_*` audit events: the webhook's name, its URL (masked meanwhile), or its id.
+  - What `WEBHOOK_UPDATED`'s payload carries: the webhook after the change only, as Apple documents, or the old values
+    too (a previous `url` would show as a second tag); and whether any of it comes as JSON text.
+  - Whether Apple's roles separate webhook management from the device reads: a role that can read devices may be able
+    to create a webhook, and a key that can create one can stream every device change to any URL (plan §3.4.4).
   - Whether Apple ever sends `secret` (documented write-only), and whether `include=event` repeats an event several
     deliveries share (the stub includes each once).
   - The webhook audit payloads' `enabled`: a string in Apple's docs, the webhook's own a boolean.

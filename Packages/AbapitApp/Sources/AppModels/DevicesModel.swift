@@ -25,14 +25,14 @@ public enum LoadState: Equatable, Sendable {
 
     public var isLoading: Bool { if case .loading = self { true } else { false } }
 
-    /// The state a read's error leaves: a 403 is "your role can't read this", a School org's Business-only read is not
-    /// in scope, in words; anything else failed, in the operator's words. Every screen model maps its errors here, so
-    /// the five screens say each the same way.
+    /// The state a read's error leaves: a 403 is "your role can't read this", a School org's Business-only read (the
+    /// webhooks' too, `.webhooksNotInScope`, until they are a section) is not in scope, in words; anything else failed, in
+    /// the operator's words. Every screen model maps its errors here, so the five screens say each the same way.
     @MainActor
     public init(after error: any Error) {
         switch error as? AppleAPIError {
         case .forbidden?: self = .forbidden
-        case .notInScope?: self = .notInScope(OrgsModel.message(error))
+        case .notInScope?, .webhooksNotInScope?: self = .notInScope(OrgsModel.message(error))
         default: self = .failed(OrgsModel.message(error))
         }
     }
