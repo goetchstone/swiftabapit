@@ -286,12 +286,17 @@ public enum ProfileText: Sendable, Equatable {
 /// end in a secret word or names a policy (`PasswordRequired`, `maxPINAgeInDays`, `PasscodeMinLength` are policies; a
 /// numeric `Passcode`, `UnlockCode` or `SharedSecret` isn't); every string holding a private key, wherever it is; and every data
 /// blob, wherever it is (a certificate, a PKCS#12 identity, a shared secret: none readable, some secret, and an Exchange
-/// payload carries an identity outside any certificate payload). Bounded in depth and in the values it visits.
+/// payload carries an identity outside any certificate payload). Also every value in a dictionary or a list of HTTP
+/// headers, whatever its type (`ProfileSecrets.namesHeaders`). Bounded in depth and in the values it visits.
 private struct MaskingWalk {
     var masked = 0, merged = 0, visited = 0
     var refusal = ProfileText.unreadable
 
-    mutating func mask(_ value: Any, depth: Int) -> Any? {
+    /// `headers`: the value sits under a key that names HTTP headers. A dictionary's every value and a list's every item is
+    /// masked whole, so a credential is hidden whatever the header's name (`X-Authorization`, `Ocp-Apim-Subscription-Key`)
+    /// and however it is written (a string, a list, a nested dictionary, a list of name and value pairs): review M-3, only a
+    /// string under four credential names was masked. A scalar under the key (EAS `HeaderMagic`) is read as any other.
+    mutating func mask(_ value: Any, depth: Int, headers: Bool = false) -> Any? {
         visited += 1
         guard visited <= ProfileText.maximumValues else { refusal = ProfileText.tooMany; return nil }
         if let dictionary = value as? [String: Any] {
@@ -302,12 +307,13 @@ private struct MaskingWalk {
             merged += max(0, ((value as? NSDictionary)?.count ?? dictionary.count) - dictionary.count)
             var out: [String: Any] = [:]
             for (key, item) in dictionary {
-                if ProfileSecrets.isSecret(key) && (item is String || item is Data || item is [Any] || item is [String: Any])
+                if headers
+                    || ProfileSecrets.isSecret(key) && (item is String || item is Data || item is [Any] || item is [String: Any])
                     || ProfileSecrets.isNumber(item) && ProfileSecrets.endsInASecretWord(key) {
                     out[key] = ProfileText.mask
                     masked += 1
                 } else {
-                    guard let walked = mask(item, depth: depth + 1) else { return nil }
+                    guard let walked = mask(item, depth: depth + 1, headers: ProfileSecrets.namesHeaders(key)) else { return nil }
                     out[key] = walked
                 }
             }
@@ -317,6 +323,11 @@ private struct MaskingWalk {
             guard depth < ProfileText.maximumDepth else { refusal = ProfileText.tooDeep; return nil }
             var out: [Any] = []
             for item in array {
+                if headers {
+                    out.append(ProfileText.mask)
+                    masked += 1
+                    continue
+                }
                 guard let walked = mask(item, depth: depth + 1) else { return nil }
                 out.append(walked)
             }
@@ -341,17 +352,27 @@ enum ProfileSecrets {
     /// so that stem would be dead: its mutant survived), and an encryption, client, access or licence key, which no stem
     /// held. Verifier round 2 added `ExportPolicy.sensitiveStems`' three this list lacked (`bypass`, the Activation Lock
     /// bypass code invariant 11 names first; `assertion`; `unlockpin`), which `ExportPolicyTests` now holds it to; an
-    /// unlock or access code, which only a number was masked under; and a WEP key.
+    /// unlock or access code, which only a number was masked under; and a WEP key. Review M-2 added `clientidentifier`,
+    /// ACME's anti-replay code, which Apple's schemas at 27.0 hold in no other key.
     static let stems = ["password", "passwd", "passphrase", "passcode", "pwd", "secret", "token", "credential", "privatekey",
                         "apikey", "recoverykey", "escrow", "challenge", "bearer", "jwt", "psk", "sharedkey", "encryptionkey",
-                        "clientkey", "accesskey", "licensekey", "bypass", "assertion", "unlockpin", "unlockcode", "accesscode", "wepkey"]
+                        "clientkey", "accesskey", "licensekey", "bypass", "assertion", "unlockpin", "unlockcode", "accesscode", "wepkey",
+                        "clientidentifier"]
     /// A secret by its own word, or as the folded key's ending: too short to find inside a longer word.
     static let secretWords = ["pin", "pw", "puk"]
+    /// A secret only as the folded key's ending: IKEv2's post-quantum pre-shared key `PPK`, as a string (review M-2: only its
+    /// data was masked), while `PPKIdentifier` names it and `PPKMandatory` is a rule.
+    static let secretEndings = ["ppk"]
+
+    /// Whether a key's value is HTTP headers, a dictionary keyed by their names or a list: `AdditionalHTTPHeaderFields`,
+    /// `Headers`. Every value in it is masked (`MaskingWalk.mask`), not only the ones a name marks as a credential: the
+    /// privacy payload's `Authorization` is Allow or Deny for each of 24 services, so no header name can be a stem.
+    static func namesHeaders(_ key: String) -> Bool { Array(letters(key).utf8).firstRange(of: Array("header".utf8)) != nil }
 
     static func isSecret(_ key: String) -> Bool {
         let letters = letters(key)
         return stems.contains { Array(letters.utf8).firstRange(of: Array($0.utf8)) != nil }
-            || endsIn(letters, secretWords)
+            || endsIn(letters, secretWords + secretEndings)
             || words(key).contains { word in secretWords.contains { same(word, $0) || same(word, $0 + "s") } }
     }
 
@@ -370,7 +391,7 @@ enum ProfileSecrets {
     static func endsInASecretWord(_ key: String) -> Bool {
         let words = words(key)
         guard !words.contains(where: { word in policyWords.contains { same($0, word) } }) else { return false }
-        return endsIn(letters(key), stems + secretWords)
+        return endsIn(letters(key), stems + secretWords + secretEndings)
     }
 
     /// Whether `text` ends in one of `ends`, past any plural `s` and `trailingWords` at its end: `pins`, `pincode`,
