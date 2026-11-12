@@ -14,6 +14,8 @@ struct SettingsView: View {
     let isDemo: Bool
     @State private var selected: String?
     @State private var editing: OrgEditor.Mode?
+    /// The Mosyle org being edited, or `.add`.
+    @State private var editingMosyle: OrgEditor.Mode?
     @State private var removing: OrgProfile?
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
@@ -40,8 +42,13 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.orgs")
                 HStack {
-                    Button("Add Apple Organization…", systemImage: "plus") { editing = .add }
-                        .accessibilityIdentifier("settings.add")
+                    Menu("Add", systemImage: "plus") {
+                        Button("Apple Business or Apple School Manager…") { editing = .add }
+                            .accessibilityIdentifier("settings.add")
+                        Button("Mosyle Business…") { editingMosyle = .add }
+                            .accessibilityIdentifier("settings.addMosyle")
+                    }
+                    .accessibilityIdentifier("settings.addMenu")
                     Spacer()
                 }
                 .padding([.horizontal, .bottom], 8)
@@ -55,7 +62,9 @@ struct SettingsView: View {
                 if isDemo {
                     Label("Demo: this organization lives in memory and its \"Apple\" is the test stub. Nothing is saved.", systemImage: "theatermasks")
                 }
-                if let profile {
+                if let profile, profile.provider == .known(.mosyle) {
+                    mosyle(profile)
+                } else if let profile {
                     Section(profile.name) {
                         LabeledContent("Scope", value: profile.scope.known?.displayName ?? profile.scope.rawValue)
                         LabeledContent("Client ID", value: profile.clientID).textSelection(.enabled)
@@ -105,6 +114,10 @@ struct SettingsView: View {
             .frame(minWidth: 380)
         }
         .sheet(item: $editing) { mode in OrgEditor(mode: mode, orgs: orgs) }
+        // A Test's result belongs to the credentials it read: an edit may have changed them.
+        .sheet(item: $editingMosyle, onDismiss: { testResult = [:] }) { mode in
+            MosyleOrgEditor(editing: { if case .edit(let profile) = mode { profile } else { nil } }(), orgs: orgs)
+        }
         .sheet(isPresented: Binding(get: { acceptance != nil }, set: { if !$0 { acceptance = nil } })) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Acceptance pass").font(.headline)
@@ -120,10 +133,47 @@ struct SettingsView: View {
         }
         .confirmationDialog("Remove \(removing?.name ?? "this organization")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { profile in
-            Button("Remove and Delete Its Key", role: .destructive) { remove(profile) }
+            Button(profile.provider == .known(.mosyle) ? "Remove and Delete Its Credentials" : "Remove and Delete Its Key", role: .destructive) {
+                remove(profile)
+            }
             Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
+        } message: { profile in
+            Text(profile.provider == .known(.mosyle)
+                 ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it."
+                 : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
+        }
+    }
+
+    /// A Mosyle Business org: its name, Test (a login and one page of Macs), its pair, Edit and Remove. Its credentials are
+    /// in the Keychain and never shown.
+    @ViewBuilder private func mosyle(_ profile: OrgProfile) -> some View {
+        Section(profile.name) {
+            LabeledContent("Provider", value: "Mosyle Business")
+            LabeledContent("Credentials", value: "In this Mac's Keychain")
+            HStack {
+                if profile.id != orgs.active?.id { Button("Make Active") { orgs.select(profile.id) } }
+                Button("Test") { testMosyle(profile) }.disabled(working != nil)
+                    .help("Logs in afresh with the stored credentials and reads one page of Macs: proves the token, the admin account and the network")
+                Spacer()
+                Button("Edit…") { editingMosyle = .edit(profile) }
+                Button("Remove…", role: .destructive) { removing = profile }
+            }
+            if working == profile.id { ProgressView().controlSize(.small) }
+            if let result = testResult[profile.id] { Text(result) }
+        }
+    }
+
+    private func testMosyle(_ profile: OrgProfile) {
+        guard let client = orgs.mosyleClient(for: profile) else { return }
+        working = profile.id
+        Task {
+            defer { working = nil }
+            do {
+                try await client.ping()
+                testResult[profile.id] = "Connected: the token, the admin account and the network work."
+            } catch {
+                testResult[profile.id] = OrgsModel.message(error)
+            }
         }
     }
 

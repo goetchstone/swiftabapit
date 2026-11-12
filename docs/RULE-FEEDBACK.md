@@ -27,6 +27,17 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-12 — A mutant run counted a compile error as a kill
+- **What happened:** PR #17's fix mutants first reported 17 of 17 killed. A test added after the scratch copy was last
+  built didn't compile (a nested `#require`), so every mutant "failed" before any test ran. The runner read any non-zero
+  exit as a kill. The rerun, after a green control run and with compile errors told apart, killed all 17 for real.
+- **Invariant in force:** none: the `pre-commit` skill's item 14 (mutants run by a script that restores each file).
+- **Why it didn't hold:** not covered. Item 14 asks for a restoring script, not for a control run, and not for the script to
+  tell a kill from a build that never ran the tests.
+- **Would a rule have caught it?** yes, if stated: a mutant run starts with the unmutated copy green, and counts a kill only
+  when a test fails (`✘`), never on a compile error.
+- **Enforcement home if changed:** skill (`pre-commit` item 14), with the PR's runner (`edfix.py` shape) as the pattern.
+
 ## 2026-11-11 — An allowlist of keys trusted the values under them
 - **What happened:** step 3's review (failure-log 2026-11-11, "a guessed field kept a value of any shape"): the Mosyle
   adapters for records no source shows kept a field on their list whatever its value. An object under `action` went to the
