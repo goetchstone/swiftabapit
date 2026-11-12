@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct PeopleView: View {
     @Bindable var model: PeopleModel
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
     /// Which user columns show, and their order and widths: the operator's, kept with the window.
     @SceneStorage("people.users.columns") private var userColumns = TableColumnCustomization<PeopleModel.UserRow>()
 
@@ -44,7 +45,7 @@ struct PeopleView: View {
         }
         // Written only when asked for: a large list's CSV isn't rebuilt on every redraw.
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv(model.tab)) : nil,
-                      contentType: .commaSeparatedText, defaultFilename: model.tab.filename) { _ in }
+                      contentType: .commaSeparatedText, defaultFilename: ScreenWords.filename(model.tab.filename, client: exportClient)) { _ in }
         .inspector(isPresented: Binding(get: { model.hasSelection }, set: { if !$0 { model.clearSelection() } })) {
             PeopleInspectorView(model: model)
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)

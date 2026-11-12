@@ -18,6 +18,18 @@ public enum ScreenWords {
 
     public static let nothingToExport = "There's nothing to export."
 
+    /// An export's file name: the client's name before it when the app shows clients, so a file says whose data it holds
+    /// (plan §8.0, "Clients": no export mixes clients, and each names its own). A `/` or `:` in the name, which a file name
+    /// can't hold, is a `-`.
+    public static func filename(_ base: String, client: String?) -> String {
+        guard let client, !client.isEmpty else { return base }
+        let safe = String(String.UnicodeScalarView(client.unicodeScalars.map { $0 == "/" || $0 == ":" ? "-" : $0 }))
+        return "\(safe) - \(base)"
+    }
+
+    /// What every School screen and Settings say until a school has tested the app (the operator, 2026-11-12).
+    public static let schoolUnverified = "Apple School Manager support is built from Apple's published documentation and isn't verified on a live tenant yet."
+
     /// Why a list's Export is off, in words, by one rule for every screen: still loading; partial (the `read` rows of a walk
     /// that failed or was refused are never exported as if whole: the file couldn't say so); or nothing `shown` to export.
     /// Nil when it exports: a list the page cap stopped exports, as its banner says "showing N of ≥M".

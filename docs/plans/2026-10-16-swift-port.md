@@ -964,10 +964,9 @@ reads, and what they reveal, come before writes.
    `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
    reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
    half and the demo's paired Mosyle org (PR #16, merged 2026-11-12). Then, on `mosyle-org-editor`, the Mosyle org editor
-   and its credential storage (split off by the parent session, for a credential review of its own). The pair picker is
-   held: the operator is weighing multi-client (MSP) support, where a pair may become a "client" grouping (one Apple org,
-   an optional MDM org, later a Google Workspace domain, every screen scoped to one client). Decisions the session
-   proposed, not the operator's (in the PR): only the active Apple org's pair is read; a Mosyle org's sidebar is Mosyle
+   and its credential storage (PR #17, merged 2026-11-12). The pair picker was replaced by clients (below, "Clients"; built
+   on `client-grouping`): an Apple org and its Mosyle org belong to one client. Decisions the session
+   proposed, not the operator's (in the PR): only the active client's Mosyle org is read; a Mosyle org's sidebar is Mosyle
    and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
 4. **Phase 3, plus Needs attention** (below).
@@ -995,6 +994,32 @@ Phase 5's.
 - The URL is the operator's own and lives only in local settings. Events carry serials, so never a third party's URL.
 - `secret` is write-only at Apple, and the app doesn't keep it. A URL is masked as a package's location is.
 - Writes go with Phase 5, through the preview, which shows the destination.
+
+**Clients** (operator, 2026-11-12): one app reads several customers' organizations, one customer at a time.
+
+- A **client** owns its orgs: one Apple org (Apple Business or Apple School Manager) and an optional MDM org (Mosyle
+  Business) now; a Google Workspace domain later. Every org belongs to exactly one client, and a client has at least one.
+  Reconciliation and Device 360 pair within the active client; this replaces a per-org "paired organization".
+- With one client there is no client UI: the app looks as it did. A client switcher appears with two or more, and
+  Settings then groups orgs by client, with a client picker and a client name per org. A new org joins the active client
+  when that client has no org of its kind, else it is a client of its own.
+- Switching client clears every screen, selection and in-memory read, as switching org does. No view, report, CSV or
+  notification mixes clients, and each export names its client. No cross-client overview yet.
+- Existing orgs are grouped once (store version 2), the same way every time:
+  - The default client takes the active org (else the first Apple org in the store's order) and the Mosyle org it was
+    paired with.
+  - Every other Apple org is a client of its own, with its own pair unless the default client took it; Settings says once
+    which pairing moved where.
+  - A Mosyle org paired with nothing is a client with no Apple org. Names never collide (" (2)").
+  - The new file is written atomically and the old one stays readable if that fails; Keychain items, keyed by org, are
+    never touched and keep the Vault's protections.
+
+**Schools** (operator, 2026-11-12): a school's own staff, and anyone who manages schools, are a first-class audience.
+
+- A client's Apple org may be Apple School Manager; its screens hide what School's API doesn't offer (§2.4).
+- Apple's School API has no people, classes or rosters, so class data will come from Google Classroom when Google joins.
+- School support is built from Apple's and Google's published documentation, and the app and the README label it "not
+  verified on a live tenant" until a school tests it.
 
 **Other tools**: Google stays its own tool (SwiftGamGui). A total picture later joins on serial and email through
 read-only exports, and no tool holds another's keys.

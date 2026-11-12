@@ -51,7 +51,8 @@ struct World {
     /// Org `m`, Mosyle Business.
     static func mosyleProfile(_ id: String = "m") -> OrgProfile { OrgProfile(id: id, name: "Mosyle \(id)", provider: .mosyle) }
 
-    /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, with `a` paired with it.
+    /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, in the client of the first org (`a`), as
+    /// `OrgStore.add` places it.
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap) async throws -> World {
         let keychain = MemoryStore()
@@ -79,10 +80,6 @@ struct World {
             try orgStore.add(mosyleProfile())
             try await vault.replaceSet([.mosyleAccessToken: Secret(mosyleAccount.accessToken), .mosyleEmail: Secret(mosyleAccount.email),
                                         .mosylePassword: Secret(mosyleAccount.password)], for: "m")
-            if var a = orgStore["a"] {
-                a.pairedOrg = "m"
-                try orgStore.update(a)
-            }
         }
         orgStore.activeID = orgStore.orgs.first?.id
         let routes = gates, stall = Stall()

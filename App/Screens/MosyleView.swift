@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
 struct MosyleView: View {
     @Bindable var model: MosyleModel
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
     @SceneStorage("mosyle.devices.columns") private var deviceColumns = TableColumnCustomization<MosyleModel.DeviceRow>()
     @SceneStorage("mosyle.log.columns") private var logColumns = TableColumnCustomization<MosyleModel.RecordRow>()
 
@@ -68,7 +69,7 @@ struct MosyleView: View {
             }
         }
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv(model.tab)) : nil,
-                      contentType: .commaSeparatedText, defaultFilename: model.tab.filename) { _ in }
+                      contentType: .commaSeparatedText, defaultFilename: ScreenWords.filename(model.tab.filename, client: exportClient)) { _ in }
         .inspector(isPresented: Binding(get: { model.hasSelection }, set: { if !$0 { model.clearSelection() } })) {
             MosyleInspectorView(model: model)
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)

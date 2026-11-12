@@ -127,9 +127,9 @@ struct OrgStoreTests {
     @Test func aFileFromANewerVersionIsNeverWrittenOver() throws {
         let dir = try Self.folder()
         defer { try? FileManager.default.removeItem(at: dir) }
-        try Data(#"{"version": 2, "orgs": []}"#.utf8).write(to: dir.appending(path: OrgStore.fileName))
+        try Data(#"{"version": 3, "orgs": []}"#.utf8).write(to: dir.appending(path: OrgStore.fileName))
         let store = try OrgStore.load(from: dir)
-        #expect(throws: OrgStore.Failure.newerVersion(2)) { try store.save(to: dir) }
+        #expect(throws: OrgStore.Failure.newerVersion(3)) { try store.save(to: dir) }
     }
 
     @Test func theFileIsPrivateAndNeverWrittenThroughALink() throws {

@@ -45,6 +45,15 @@ Personal Team works): create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM`, `C
 Apple Development` and `CODE_SIGN_ENTITLEMENTS = Config/abapit-Team.entitlements`, then build once in
 Xcode so it provisions the keychain access group.
 
+## Clients and schools
+
+One app can read several customers' organizations, one customer (a **client**) at a time: an Apple Business or Apple
+School Manager organization and, optionally, its Mosyle Business organization. With one client the app shows no client
+at all; with two or more, a switcher. Nothing on screen or in an export mixes two clients.
+
+Apple School Manager support is built from Apple's published documentation and **isn't verified on a live tenant yet**:
+no school has tested it.
+
 ## Live verification
 
 Every write is unproven until it has run against a real organization on a scratch object

@@ -120,10 +120,20 @@ struct ContentView: View {
         }
         .navigationSubtitle(orgs.active.map { "\($0.name)\($0.role.isEmpty ? "" : " · \($0.role)")" } ?? "No organization yet")
         .toolbar {
-            if orgs.store.orgs.count > 1 {
+            // Clients only when there are two or more (the operator, 2026-11-12): with one, the toolbar is as it was.
+            if orgs.showsClients {
+                ToolbarItem(placement: .navigation) {
+                    Picker("Client", selection: Binding(get: { orgs.activeClient?.id ?? "" }, set: { orgs.selectClient($0) })) {
+                        ForEach(orgs.clients) { Text($0.name).tag($0.id) }
+                    }
+                    .accessibilityIdentifier("toolbar.client")
+                }
+            }
+            // The active client's organizations only: every screen reads one client.
+            if orgs.clientOrgs.count > 1 {
                 ToolbarItem(placement: .navigation) {
                     Picker("Organization", selection: Binding(get: { orgs.active?.id ?? "" }, set: { orgs.select($0) })) {
-                        ForEach(orgs.store.orgs) { Text($0.name).tag($0.id) }
+                        ForEach(orgs.clientOrgs) { Text($0.name).tag($0.id) }
                     }
                     .accessibilityIdentifier("toolbar.org")
                 }
@@ -141,6 +151,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .findDevice)) { _ in finding = true }
         .onReceive(NotificationCenter.default.publisher(for: .refreshSection)) { _ in refresh() }
         .sheet(isPresented: $finding) { findSheet }
+        .environment(\.exportClient, orgs.exportClient)
         .frame(minWidth: ColumnWidths.windowMin, minHeight: ColumnWidths.windowMinHeight)
         #if DEBUG
         // The snapshot harness's row selection (`ABAPIT_SELECT=first`): each screen with an inspector reads it
@@ -164,7 +175,8 @@ struct ContentView: View {
             }
         } else {
             switch section {
-            case .overview: OverviewView(model: services.dashboard, hasOrg: orgs.active != nil) { self.section = .settings }
+            case .overview:
+                OverviewView(model: services.dashboard, hasOrg: orgs.active != nil, note: orgs.unverifiedNote) { self.section = .settings }
             case .devices: DevicesView(model: services.devices, detail: services.detail, selection: $selection)
             case .services: ServicesView(model: services.devices)
             case .appleMDM: AppleMDMView(model: services.appleMDM)

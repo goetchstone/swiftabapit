@@ -21,10 +21,14 @@ public enum DemoMosyle {
     /// Devices Mosyle lists that Apple Business doesn't: bought outside it, or enrolled by hand.
     static let mosyleOnly = ["DEMOM0000001", "DEMOM0000002", "DEMOM0000003", "DEMOM0000004"]
 
-    /// A memory Vault item set for the demo's Mosyle org, written into `store` as `Vault.replaceSet` would.
-    public static func storeSecrets(in store: MemoryStore) {
+    /// The two-client demo's second client: a Mosyle org with no Apple org, served by the same stub (`ABAPIT_DEMO=clients`).
+    public static let secondOrgID = "demo-mosyle-second"
+    public static let secondName = "Second Example (demo)"
+
+    /// A memory Vault item set for a demo Mosyle org, written into `store` as `Vault.replaceSet` would.
+    public static func storeSecrets(in store: MemoryStore, org: String = orgID) {
         for (kind, value) in [(VaultItem.Kind.mosyleAccessToken, account.accessToken), (.mosyleEmail, account.email), (.mosylePassword, account.password)] {
-            if let item = VaultItem(org: orgID, kind: kind) { try? store.write(Data(value.utf8), as: item) }
+            if let item = VaultItem(org: org, kind: kind) { try? store.write(Data(value.utf8), as: item) }
         }
     }
 

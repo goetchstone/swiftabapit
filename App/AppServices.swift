@@ -38,7 +38,12 @@ final class AppServices {
 
     static func make() -> AppServices {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["ABAPIT_DEMO"] == "1" { return demo() }
+        // `1`: the demo, one client; `clients`: the same with a second client, for the snapshots of the client switcher.
+        switch ProcessInfo.processInfo.environment["ABAPIT_DEMO"] {
+        case "1": return demo()
+        case "clients": return demo(clients: true)
+        default: break
+        }
         #endif
         let vault = Vault(store: KeychainStore())
         let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault) { account, rate in
@@ -54,9 +59,10 @@ final class AppServices {
     /// `AppleStub` serving the demo org's data (`DemoOrg`), paired with a Mosyle Business org whose "Mosyle" is the strict
     /// `MosyleStub` serving its devices (`DemoMosyle`). Nothing is read from or written to the Keychain, `orgs.json` or the
     /// network.
-    static func demo() -> AppServices {
+    static func demo(clients: Bool = false) -> AppServices {
         let (store, stub) = DemoOrg.make()
         DemoMosyle.storeSecrets(in: store)
+        if clients { DemoMosyle.storeSecrets(in: store, org: DemoMosyle.secondOrgID) }
         let mosyleStub = DemoMosyle.make()
         let vault = Vault(store: store)
         var profile = OrgProfile(id: DemoOrg.orgID, name: DemoOrg.name, provider: .apple)
@@ -64,10 +70,12 @@ final class AppServices {
         profile.clientID = DemoOrg.clientID
         profile.keyID = DemoOrg.keyID
         profile.role = "Administrator"
-        profile.pairedOrg = DemoMosyle.orgID
         var orgs = OrgStore()
         try? orgs.add(profile)
+        // Into the Apple org's client: one client, so nothing on screen says "client" (`OrgStore.add`).
         try? orgs.add(OrgProfile(id: DemoMosyle.orgID, name: DemoMosyle.name, provider: .mosyle))
+        // A second client: a Mosyle org with no Apple org (the active client has one), read from the same stub.
+        if clients { try? orgs.add(OrgProfile(id: DemoMosyle.secondOrgID, name: DemoMosyle.secondName, provider: .mosyle)) }
         orgs.activeID = DemoOrg.orgID
         let model = OrgsModel(storage: .memory, vault: vault, store: orgs) { account, _ in
             AppleClient(account: account, vault: vault, transport: stub)

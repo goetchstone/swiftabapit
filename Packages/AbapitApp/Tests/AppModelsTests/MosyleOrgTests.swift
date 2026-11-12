@@ -227,13 +227,11 @@ struct MosyleOrgReviewTests {
         #expect(world.mosyle.devices.unavailable == nil && world.mosyle.devices.state.isLoading)
     }
 
-    /// P5: an Add never takes the id a stale pair names, so it never becomes an Apple org's pair unchosen (defect 17).
-    @Test func anAddNeverTakesAnIdAPairNames() async throws {
-        var a = World.profile("a")
-        a.pairedOrg = "fleet"
-        let world = try await World.make(profiles: [a, World.profile("b")])
+    /// A Mosyle org added while the active client has one is a client of its own: it never replaces what a client reads.
+    @Test func aSecondMosyleOrgIsAClientOfItsOwn() async throws {
+        let world = try await World.make(mosyle: true)
         let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
-        #expect(added.id != "fleet" && world.orgs.mosyleOrg == nil)
+        #expect(world.orgs.mosyleOrg?.id == "m" && world.orgs.store.client(of: added.id)?.orgs == [added.id])
     }
 
     /// P6: a draft is saved only onto the org it was opened for: an edit's never as an Add, an Add's never as an edit.
