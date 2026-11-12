@@ -88,6 +88,7 @@ where Columns.TableRowValue == Row, Columns.TableColumnSortComparator == KeyPath
     @Bindable var model: ContentModel
     let columns: Columns
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
 
     init(list: ContentList<Row>, model: ContentModel, @TableColumnBuilder<Row, KeyPathComparator<Row>> columns: () -> Columns) {
         self.list = list
@@ -135,7 +136,7 @@ where Columns.TableRowValue == Row, Columns.TableColumnSortComparator == KeyPath
         }
         // Written when asked for, not on every redraw of the table.
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv(for: Row.kind)) : nil,
-                      contentType: .commaSeparatedText, defaultFilename: "\(name).csv") { _ in }
+                      contentType: .commaSeparatedText, defaultFilename: ScreenWords.filename("\(name).csv", client: exportClient)) { _ in }
     }
 
     /// The placeholder's symbol for why there's no row; its words say the same (a status is never colour or symbol alone).

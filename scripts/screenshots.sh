@@ -52,7 +52,7 @@ debug_run() {
   local dlog
   dlog="$(mktemp)"
   env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
-    ABAPIT_DEMO=1 ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name-lldb.png" \
+    ABAPIT_DEMO="${demo:-1}" ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name-lldb.png" \
     ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} \
     /usr/bin/lldb --batch -o run -k "thread backtrace -c 40" -k "quit" -- "$binary" > "$dlog" 2>&1 &
   local pid=$!
@@ -67,7 +67,8 @@ debug_run() {
 }
 
 status=0
-# name:section[:selected[:window]] — section is a SidebarItem raw value (AppModels/Navigation.swift). The narrow-*
+# name:section[:selected[:window[:demo]]] — demo is ABAPIT_DEMO's value, `1` unless given (`clients`: two clients, the
+# client switcher and Settings by client). Section is a SidebarItem raw value (AppModels/Navigation.swift). The narrow-*
 # runs open a section in the smallest window with the sidebar and any inspector dragged to their widest, where
 # SwiftGamGui's narrow-window layout loop crashed AppKit (its failure-log 2026-10-10): they fail when the pane has
 # too little room to spare, and on any non-zero exit. The demo org: seeded data, strict stub. `first` selects the
@@ -80,14 +81,15 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
             settings:settings narrow-overview:overview::smallest narrow-device-inspector:devices:first:smallest \
             narrow-apple-mdm-detail:apple-mdm:first:smallest narrow-people-detail:people:first:smallest \
             narrow-content-detail:content:first:smallest narrow-activity-detail:activity:first:smallest \
-            narrow-mosyle-detail:mosyle:first:smallest narrow-reconciliation:reconciliation::smallest; do
-  IFS=: read -r name section selected window <<< "$spec"
+            narrow-mosyle-detail:mosyle:first:smallest narrow-reconciliation:reconciliation::smallest \
+            clients-overview:overview:::clients clients-settings:settings:::clients; do
+  IFS=: read -r name section selected window demo <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"
   : > "$log"
   touch "$marker"
   env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
-    ABAPIT_DEMO=1 ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name.png" \
+    ABAPIT_DEMO="${demo:-1}" ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name.png" \
     ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} "$binary" > "$log" 2>&1 &
   pid=$!
   for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done

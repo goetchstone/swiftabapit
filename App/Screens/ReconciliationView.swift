@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ReconciliationView: View {
     @Bindable var model: ReconciliationModel
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
     @SceneStorage("reconciliation.columns") private var columns = TableColumnCustomization<ReconciliationModel.Row>()
 
     var body: some View {
@@ -59,7 +60,7 @@ struct ReconciliationView: View {
             }
         }
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil,
-                      contentType: .commaSeparatedText, defaultFilename: "reconciliation.csv") { _ in }
+                      contentType: .commaSeparatedText, defaultFilename: ScreenWords.filename("reconciliation.csv", client: exportClient)) { _ in }
         .task { model.load() }
     }
 

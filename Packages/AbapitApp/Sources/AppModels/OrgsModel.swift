@@ -151,6 +151,11 @@ public final class OrgsModel {
         } else if case .folder(let folder) = storage {
             do {
                 self.store = try OrgStore.load(from: folder)
+                // A version-1 file grouped into clients is saved once, as version 2, atomically: a save that fails leaves the
+                // old file as it was, to be grouped the same way next time, and says why in Settings. Only a file that was
+                // read: one that couldn't be is never written over (the review of PR 18: one guard stood between an
+                // unreadable file and an empty store saved over it).
+                if self.store.migrated { save() }
             } catch {
                 self.store = OrgStore()
                 problem = error.message
@@ -187,21 +192,22 @@ public final class OrgsModel {
 
     // MARK: Mosyle Business
 
-    /// The Mosyle Business org the Mosyle screens read: the active org when it is one, else the org the active Apple org is
-    /// paired with (plan §2.3 defect 17: chosen by the operator, never the first one found), when that is a Mosyle org.
+    /// The Mosyle Business org the Mosyle screens read: the active org when it is one, else the active client's MDM org, when
+    /// that is a Mosyle org (plan §8.0, "Clients": an Apple org and its MDM org belong to one client; the operator, 2026-11-12).
     public var mosyleOrg: OrgProfile? {
         guard let active else { return nil }
         if active.provider == .known(.mosyle) { return active }
-        guard active.provider == .known(.apple), let paired = store[active.pairedOrg], paired.provider == .known(.mosyle) else { return nil }
-        return paired
+        guard active.provider == .known(.apple), let mdm = store.client(of: active.id)?.mdm, let org = store[mdm],
+              org.provider == .known(.mosyle) else { return nil }
+        return org
     }
 
-    /// The Apple org reconciled against `mosyleOrg`: the active org, when it is an Apple org paired with a Mosyle one.
+    /// The Apple org reconciled against `mosyleOrg`: the active org, when it is an Apple org whose client has a Mosyle org.
     /// Reconciliation reads the Apple org's devices through the Devices screen's read, which is the active org's.
     public var reconciles: Bool { active?.provider == .known(.apple) && mosyleOrg != nil }
 
     /// Why nothing can be read from Mosyle, in words, and whether it is that this org has no Mosyle in scope (`notInScope`:
-    /// an Apple org with no Mosyle org paired) or can't be used at all; nil when `mosyleOrg` can be read.
+    /// an Apple org whose client has no Mosyle org) or can't be used at all; nil when `mosyleOrg` can be read.
     public var mosyleUnavailable: (why: String, notInScope: Bool)? {
         guard let active else {
             return ("No organization yet: add an Apple Business or Mosyle Business organization in Settings.", false)
@@ -209,13 +215,73 @@ public final class OrgsModel {
         if mosyleOrg != nil { return makeMosyleClient == nil ? ("This build reads no Mosyle Business organization.", false) : nil }
         guard active.provider == .known(.apple) else { return (unusableReason ?? "This organization can't be used.", false) }
         let name = Self.title(active)
-        if active.pairedOrg.isEmpty {
-            return ("Mosyle Business isn't in scope for \(name): no Mosyle Business organization is paired with it. Pair one in Settings.", true)
+        if let mdm = store.client(of: active.id)?.mdm, let org = store[mdm] {
+            return ("\(name)'s MDM organization, \(Self.title(org)), isn't a Mosyle Business organization this version reads.", true)
         }
-        guard let paired = store[active.pairedOrg] else {
-            return ("The organization paired with \(name) has been removed. Pair another in Settings.", true)
+        return ("Mosyle Business isn't in scope for \(name): no Mosyle Business organization is set up with it. Add one in Settings.", true)
+    }
+
+    // MARK: Clients
+
+    /// The clients, in the store's order (plan §8.0, "Clients"). With one, nothing on screen says so: the app looks as it did.
+    public var clients: [Client] { store.clients }
+
+    /// Whether the app shows clients at all: only with two or more (the operator, 2026-11-12).
+    public var showsClients: Bool { store.clients.count >= 2 }
+
+    /// The active org's client.
+    public var activeClient: Client? { store.activeClient }
+
+    /// The active client's orgs, its Apple org first: what the organization picker offers. Every screen reads one client.
+    public var clientOrgs: [OrgProfile] { activeClient.map { $0.orgs.compactMap { store[$0] } } ?? store.orgs }
+
+    /// The client an export is named for: the active client's name when the app shows clients, else nil (one client, no
+    /// client anywhere on screen). No export holds more than one client's data.
+    public var exportClient: String? { showsClients ? activeClient?.name : nil }
+
+    /// Switches to the client `id`: its Apple org, else its MDM org, becomes active, and every screen, selection and read is
+    /// cleared and read again, as an org switch does.
+    public func selectClient(_ id: String) {
+        // The client on screen already: nothing changes (a picker that sends its current value again clears nothing).
+        guard id != activeClient?.id, let client = store[client: id], let org = client.apple ?? client.mdm else { return }
+        select(org)
+    }
+
+    /// Moves an org to another client (nil: a client of its own). When it changes what the screens read, they read again.
+    public func move(_ org: String, toClient target: String?) throws(SaveFailure) {
+        let before = (activeClient?.id, mosyleOrg?.id)
+        do {
+            try store.move(org, to: target)
+        } catch {
+            throw .refused(error.message)
         }
-        return ("\(name) is paired with \(Self.title(paired)), which isn't a Mosyle Business organization. Pair a Mosyle Business one in Settings.", true)
+        // Only when what the screens read changed: the active client, or the Mosyle org it reads (a move into the client the
+        // org is in already changes nothing, and clears nothing).
+        if before.0 != activeClient?.id || before.1 != mosyleOrg?.id { bump() }
+        save()
+    }
+
+    public func renameClient(_ id: String, to name: String) throws(SaveFailure) {
+        do {
+            try store.renameClient(id, to: name)
+        } catch {
+            throw .refused(error.message)
+        }
+        save()
+    }
+
+    /// The note a School org's screens carry until a school has tested them (`ScreenWords.schoolUnverified`); nil otherwise.
+    public var unverifiedNote: String? {
+        active?.provider == .known(.apple) && active?.scope == .known(.school) ? ScreenWords.schoolUnverified : nil
+    }
+
+    /// What grouping the old file into clients changed, to be said once (Settings).
+    public var migrationNotes: [String] { store.migrationNotes }
+
+    /// The notes have been read: they go, with the old pairings they spoke of.
+    public func dismissMigrationNotes() {
+        store.dismissMigrationNotes()
+        save()
     }
 
     /// `mosyleOrg`'s client, made once per org and generation; nil when there is none.
@@ -240,9 +306,9 @@ public final class OrgsModel {
     /// - Everything that can refuse is checked before any Keychain write, the draft's own org among it: an edit's draft is
     ///   saved only onto the org it opened, an Add's only as an Add (the review: an edit's draft saved as an Add skipped the
     ///   Add's credential rule).
-    /// - An Add's id is past every id the Keychain still holds items under, every id an org's pair still names (an Add
-    ///   that took a stale pair's id became that Apple org's pair unchosen: defect 17) and every save in flight; it stays
-    ///   reserved while its credentials are written, as `save` does for an Apple org.
+    /// - An Add's id is past every id the Keychain still holds items under and every save in flight; it stays reserved
+    ///   while its credentials are written, as `save` does for an Apple org. It is a client of its own (`OrgStore.add`); the
+    ///   operator moves it to the client it belongs to.
     /// - The credentials go in as one set (`Vault.replaceSet`), whole or absent: a write that fails part-way removes the set,
     ///   the credentials stored before an edit included, rather than leave old and new mixed. What the Keychain then holds is
     ///   read back (names only, no prompt) and said, never "nothing was saved" over what stayed (the review's M1 and M3), and
@@ -267,9 +333,8 @@ public final class OrgsModel {
             } catch {
                 throw .refused(Self.message(error))
             }
-            let paired = Set(store.orgs.map(\.pairedOrg).filter { !$0.isEmpty })
             // No await between choosing the id and reserving it below: two Adds can't both take it.
-            orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs).union(paired))
+            orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs))
             var trial = store
             do {
                 try trial.add(OrgProfile(id: orgID, name: draft.name, provider: .mosyle))

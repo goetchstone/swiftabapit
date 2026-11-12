@@ -11,6 +11,7 @@ struct DevicesView: View {
     let detail: DeviceDetailModel
     @Binding var selection: DeviceRow.ID?
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -65,7 +66,7 @@ struct DevicesView: View {
         }
         // Built only while exporting: a large list's CSV isn't rebuilt on every redraw as its pages arrive.
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
-                      defaultFilename: "devices.csv") { _ in }
+                      defaultFilename: ScreenWords.filename("devices.csv", client: exportClient)) { _ in }
         .inspector(isPresented: Binding(get: { selection != nil }, set: { if !$0 { selection = nil } })) {
             DeviceInspectorView(model: detail)
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)

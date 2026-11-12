@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var editing: OrgEditor.Mode?
     /// The Mosyle org being edited, or `.add`.
     @State private var editingMosyle: OrgEditor.Mode?
+    /// The selected org's client's name as typed, renamed on Return.
+    @State private var clientName = ""
     @State private var removing: OrgProfile?
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
@@ -27,18 +29,15 @@ struct SettingsView: View {
     var body: some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 8) {
-                List(orgs.store.orgs, selection: $selected) { org in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(org.name.isEmpty ? org.id : org.name)
-                            if org.id == orgs.active?.id { Text("Active").font(.caption).foregroundStyle(.secondary) }
+                // By client only when there are two or more (the operator, 2026-11-12): with one, the list is as it was.
+                List(selection: $selected) {
+                    if orgs.showsClients {
+                        ForEach(orgs.clients) { client in
+                            Section(client.name) { ForEach(client.orgs.compactMap { orgs.store[$0] }) { row($0) } }
                         }
-                        Text([org.provider == .known(.mosyle) ? "Mosyle Business" : org.scope.known?.displayName ?? org.provider.rawValue, org.role]
-                                .filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(orgs.store.orgs) { row($0) }
                     }
-                    .tag(org.id)
-                    .accessibilityElement(children: .combine)
                 }
                 .accessibilityIdentifier("settings.orgs")
                 HStack {
@@ -62,11 +61,22 @@ struct SettingsView: View {
                 if isDemo {
                     Label("Demo: this organization lives in memory and its \"Apple\" is the test stub. Nothing is saved.", systemImage: "theatermasks")
                 }
+                // What grouping the organizations into clients changed, said until read (plan §8.0, "Clients").
+                if !orgs.migrationNotes.isEmpty {
+                    Section("Clients") {
+                        ForEach(orgs.migrationNotes, id: \.self) { Label($0, systemImage: "arrow.triangle.branch") }
+                        Button("Got It") { orgs.dismissMigrationNotes() }.accessibilityIdentifier("settings.notes.dismiss")
+                    }
+                }
                 if let profile, profile.provider == .known(.mosyle) {
                     mosyle(profile)
                 } else if let profile {
                     Section(profile.name) {
                         LabeledContent("Scope", value: profile.scope.known?.displayName ?? profile.scope.rawValue)
+                        if profile.scope == .known(.school) {
+                            Label(ScreenWords.schoolUnverified, systemImage: "checkmark.seal.trianglebadge.exclamationmark")
+                                .foregroundStyle(.secondary)
+                        }
                         LabeledContent("Client ID", value: profile.clientID).textSelection(.enabled)
                         LabeledContent("Key ID", value: profile.keyID).textSelection(.enabled)
                         LabeledContent("Team ID", value: profile.teamID.isEmpty ? "— (the client ID is the issuer)" : profile.teamID)
@@ -89,6 +99,7 @@ struct SettingsView: View {
                             .help("Every read this version makes; reports counts and unknown field names, never data (plan §7)")
                         #endif
                     }
+                    clientSection(profile)
                     // What the profile holds, never a copy kept here: an edit to another account clears it there, and a
                     // check of the old account is never recorded (verifier round 2: this view kept its own results).
                     let found = Self.stored(profile)
@@ -160,6 +171,58 @@ struct SettingsView: View {
             }
             if working == profile.id { ProgressView().controlSize(.small) }
             if let result = testResult[profile.id] { Text(result) }
+        }
+        clientSection(profile)
+    }
+
+    /// One org in the list: its name, whether it is active, its kind.
+    private func row(_ org: OrgProfile) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(org.name.isEmpty ? org.id : org.name)
+                if org.id == orgs.active?.id { Text("Active").font(.caption).foregroundStyle(.secondary) }
+            }
+            Text([org.provider == .known(.mosyle) ? "Mosyle Business" : org.scope.known?.displayName ?? org.provider.rawValue, org.role]
+                    .filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .tag(org.id)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The org's client, only when there are two or more: which it belongs to (another with room for it, or a new one of its
+    /// own) and the client's name. A client has one Apple organization and one MDM organization.
+    @ViewBuilder private func clientSection(_ profile: OrgProfile) -> some View {
+        if orgs.showsClients, let client = orgs.store.client(of: profile.id) {
+            let slot = Client.Slot(profile)
+            let room = orgs.clients.filter { $0.id == client.id || !$0.has(slot) }
+            Section("Client") {
+                Picker("Client", selection: Binding(get: { client.id }, set: { pick in
+                    do {
+                        try orgs.move(profile.id, toClient: pick.isEmpty ? nil : pick)
+                        problem = nil
+                    } catch {
+                        problem = OrgsModel.message(error)
+                    }
+                })) {
+                    ForEach(room) { Text($0.name).tag($0.id) }
+                    if client.orgs.count > 1 { Text("A new client of its own").tag("") }
+                }
+                .accessibilityIdentifier("settings.client")
+                TextField("Client name", text: $clientName)
+                    .onSubmit {
+                        do {
+                            try orgs.renameClient(client.id, to: clientName)
+                            problem = nil
+                        } catch {
+                            problem = OrgsModel.message(error)
+                        }
+                    }
+                    .onAppear { clientName = client.name }
+                    .onChange(of: client.name) { clientName = client.name }
+                    .onChange(of: client.id) { clientName = client.name }
+                    .accessibilityIdentifier("settings.clientName")
+            }
         }
     }
 

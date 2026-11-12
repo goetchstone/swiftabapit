@@ -22,7 +22,7 @@ struct MosyleScreenTests {
         return raw
     }
 
-    static let notPaired = "Mosyle Business isn't in scope for Org a: no Mosyle Business organization is paired with it. Pair one in Settings."
+    static let notPaired = "Mosyle Business isn't in scope for Org a: no Mosyle Business organization is set up with it. Add one in Settings."
 
     static func loaded(_ state: LoadState) -> Bool { if case .loaded = state { true } else { false } }
 
@@ -53,19 +53,14 @@ struct MosyleScreenTests {
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         try await world.orgs.remove("m", deleteSecrets: true)
-        #expect(world.orgs.mosyleUnavailable?.why == Self.notPaired && world.orgs.store["a"]?.pairedOrg == "")
+        #expect(world.orgs.mosyleUnavailable?.why == Self.notPaired && world.orgs.store.client(of: "a")?.mdm == nil)
         #expect(world.mosyle.devices.rows.isEmpty && world.mosyle.devices.state == .notInScope(Self.notPaired))
-        // A pair naming an org that isn't there (a profile written elsewhere), or one that isn't Mosyle.
-        var dangling = World.profile("a")
-        dangling.pairedOrg = "gone"
-        let lone = try await World.make(profiles: [dangling])
-        #expect(lone.orgs.mosyleUnavailable?.why == "The organization paired with Org a has been removed. Pair another in Settings.")
-        var apple = World.profile("a")
-        apple.pairedOrg = "b"
-        let twoApple = try await World.make(profiles: [apple, World.profile("b")])
-        #expect(twoApple.orgs.mosyleUnavailable?.why
-                == "Org a is paired with Org b, which isn't a Mosyle Business organization. Pair a Mosyle Business one in Settings.")
-        #expect(twoApple.orgs.mosyleUnavailable?.notInScope == true && twoApple.orgs.mosyleOrg == nil)
+        // A client whose MDM org is of a provider this version doesn't read.
+        let other = OrgProfile(raw: ["id": .string("j"), "name": .string("J"), "provider": .string("jamf")])
+        let jamf = try await World.make(profiles: [World.profile("a"), other])
+        try jamf.orgs.move("j", toClient: try #require(jamf.orgs.store.client(of: "a")).id)
+        #expect(jamf.orgs.mosyleUnavailable?.why == "Org a's MDM organization, J, isn't a Mosyle Business organization this version reads.")
+        #expect(jamf.orgs.mosyleUnavailable?.notInScope == true && jamf.orgs.mosyleOrg == nil)
     }
 
     @Test func aPairedOrgsDevicesAreReadFirstAndEachTabWhenShown() async throws {

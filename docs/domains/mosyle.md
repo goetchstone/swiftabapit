@@ -112,14 +112,12 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     compliance value other than the two, and an admin-log date that isn't `YYYY-MM-DD` (`theStubRefusesStep3sReadsAsMosyleWould`).
 
 ## Screens (step 3)
-- **Which Mosyle org**: `OrgsModel.mosyleOrg`, the active org when it is a Mosyle org, else the org the active Apple org is
-  paired with (defect 17: chosen by the operator, never the first one found; the profile's `paired_org`). An Apple org with no
-  pair, a pair that is gone or one that isn't Mosyle says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle
-  list, the reconciliation and Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`).
-  Removing the paired org is an org switch: every screen reads again. **No pair can be chosen in Settings yet**: the
-  picker is held while the operator decides whether pairing becomes a multi-client grouping (one Apple org, an optional
-  MDM org and later a Google Workspace domain, every screen scoped to one client); until then a pair comes from the
-  profile's `paired_org` (the demo's). The Mosyle device read is kept for the session, so the reconciliation
+- **Which Mosyle org**: `OrgsModel.mosyleOrg`, the active org when it is a Mosyle org, else the active client's MDM org
+  (plan §8.0, "Clients"; defect 17: never the first one found). An Apple org whose client has no Mosyle org, or an MDM org
+  of another provider, says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle list, the reconciliation and
+  Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`). Moving an org between
+  clients, removing the client's Mosyle org, or switching client is an org switch: every screen reads again. The old
+  `paired_org` is read once, when a version-1 store is grouped into clients (`OrgStore.group`). The Mosyle device read is kept for the session, so the reconciliation
   (`readAt`) and Device 360's Mosyle half (`mosyleReadAt`) say how old it is (invariant 8); Refresh on Mosyle reads it again. A Mosyle org's sidebar is Mosyle and
   Settings (`SidebarItem.mosyleSections`); Apple's screens say they don't read it.
 - **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows, and read again from
@@ -141,7 +139,7 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   L4, defect 10), only after everything that can refuse was checked; an Add's id is reserved while it is written and never
   one the Keychain still holds items under. An edit keeps the credentials unless all are given again, an empty Logs Stream
   token then clearing a stored one (defect 14), and a new set for the org on screen reads every screen again. Removing the
-  org deletes its credentials. The pair picker is held (above).
+  org deletes its credentials. A new Mosyle org is a client of its own until it is moved into the Apple org's client in Settings.
   - **A refused write** removes the set, the credentials stored before an edit included: the Vault keeps a set whole or
     absent, never half old and half new. The save then reads back what the Keychain holds (names only, no prompt) and says
     it, and an edit of the org on screen switches, so nothing reads on the old login (the credential review's M1, failure-log

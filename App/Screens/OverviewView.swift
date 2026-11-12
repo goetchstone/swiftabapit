@@ -9,13 +9,16 @@ import SwiftUI
 struct OverviewView: View {
     let dashboard: DashboardModel
     let hasOrg: Bool
+    /// A sentence the org's screens carry (`OrgsModel.unverifiedNote`: a School org isn't verified on a live tenant yet).
+    let note: String?
     let addOrg: () -> Void
 
     private var model: DevicesModel { dashboard.devices }
 
-    init(model: DashboardModel, hasOrg: Bool, addOrg: @escaping () -> Void) {
+    init(model: DashboardModel, hasOrg: Bool, note: String? = nil, addOrg: @escaping () -> Void) {
         dashboard = model
         self.hasOrg = hasOrg
+        self.note = note
         self.addOrg = addOrg
     }
 
@@ -44,6 +47,11 @@ struct OverviewView: View {
                     StatusBanner(state: model.state, shown: model.rows.count, truncated: model.truncated, total: model.total,
                                  partial: model.partialCount) {
                         dashboard.load(force: true)
+                    }
+                    if let note {
+                        Label(note, systemImage: "checkmark.seal.trianglebadge.exclamationmark").font(.callout).foregroundStyle(.secondary)
+                            .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("overview.unverified")
                     }
                     if let note = model.serviceNote {
                         Label(note, systemImage: "questionmark.circle").font(.callout).foregroundStyle(.secondary)

@@ -8,7 +8,7 @@ import Foundation
 /// `scripts/screenshots.sh` moves it out; `ABAPIT_SCREEN` picks the section (a `SidebarItem` raw value), `ABAPIT_SELECT=first`
 /// the first row of the screen's table (each screen's `selectsFirstRow` hook, Screens/FirstRowSelection.swift), `ABAPIT_WINDOW` the size
 /// (`WIDTHxHEIGHT` or `smallest`) and `ABAPIT_DEMO=1` fills it from the demo org (strict stubs, memory
-/// only). Environment variables, not launch arguments: AppKit reads `-key value` arguments as defaults,
+/// only; `ABAPIT_DEMO=clients` adds a second client). Environment variables, not launch arguments: AppKit reads `-key value` arguments as defaults,
 /// and a bare path left over is taken as a document to open. CI runs it (`scripts/screenshots.sh`); it
 /// never runs on the operator's screen.
 enum Snapshots {

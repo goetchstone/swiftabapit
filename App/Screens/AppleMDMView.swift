@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 struct AppleMDMView: View {
     @Bindable var model: AppleMDMModel
     @State private var exporting = false
+    @Environment(\.exportClient) private var exportClient
     /// Which columns show, and their order and widths: the operator's, kept with the window.
     @SceneStorage("apple-mdm.columns") private var columns = TableColumnCustomization<AppleMDMRow>()
 
@@ -51,7 +52,7 @@ struct AppleMDMView: View {
             }
         }
         .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
-                      defaultFilename: "apple-mdm.csv") { _ in }
+                      defaultFilename: ScreenWords.filename("apple-mdm.csv", client: exportClient)) { _ in }
         .inspector(isPresented: Binding(get: { model.selection != nil }, set: { if !$0 { model.selection = nil } })) {
             AppleMDMInspectorView(row: model.selected, note: model.selectionNote)
                 .inspectorColumnWidth(min: ColumnWidths.inspector.min, ideal: ColumnWidths.inspector.ideal, max: ColumnWidths.inspector.max)
