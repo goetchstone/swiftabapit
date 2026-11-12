@@ -89,7 +89,6 @@ struct SettingsView: View {
                             .help("Every read this version makes; reports counts and unknown field names, never data (plan §7)")
                         #endif
                     }
-                    pairing(profile)
                     // What the profile holds, never a copy kept here: an edit to another account clears it there, and a
                     // check of the old account is never recorded (verifier round 2: this view kept its own results).
                     let found = Self.stored(profile)
@@ -160,37 +159,6 @@ struct SettingsView: View {
             }
             if working == profile.id { ProgressView().controlSize(.small) }
             if let result = testResult[profile.id] { Text(result) }
-            // A pair is chosen on the Apple org, whose screens read it: here it is only said.
-            let pairs = orgs.store.orgs.filter { $0.provider == .known(.apple) && $0.pairedOrg == profile.id }
-            LabeledContent("Paired with", value: pairs.isEmpty ? "No Apple organization: pair it from one's settings."
-                           : pairs.map { $0.name.isEmpty ? $0.id : $0.name }.joined(separator: ", "))
-        }
-    }
-
-    /// The org of the other provider this one is paired with (defect 17): an Apple org's Mosyle screens, reconciliation and
-    /// Device 360 read it.
-    @ViewBuilder private func pairing(_ profile: OrgProfile) -> some View {
-        let candidates = orgs.pairable(with: profile.id)
-        Section("Paired organization") {
-            Picker("Paired with", selection: Binding(get: { profile.pairedOrg }, set: { pick in
-                do {
-                    try orgs.pair(profile.id, with: pick.isEmpty ? nil : pick)
-                    problem = nil
-                } catch {
-                    problem = OrgsModel.message(error)
-                }
-            })) {
-                Text("None").tag("")
-                ForEach(candidates) { Text($0.name.isEmpty ? $0.id : $0.name).tag($0.id) }
-                if !profile.pairedOrg.isEmpty, !candidates.contains(where: { $0.id == profile.pairedOrg }) {
-                    Text("\(profile.pairedOrg) (not found)").tag(profile.pairedOrg)
-                }
-            }
-            .accessibilityIdentifier("settings.pair")
-            Text("The Mosyle screens, the reconciliation and Device 360 read the Mosyle Business organization paired here.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
     }
 

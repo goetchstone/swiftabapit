@@ -963,8 +963,10 @@ reads, and what they reveal, come before writes.
    (custom attributes and the admin log's answers have none, so they are read loudly and named fields not read are said);
    `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
    reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
-   half and the demo's paired Mosyle org (PR #16, merged 2026-11-12). Then, on `mosyle-org-editor`, the Mosyle org editor and
-   the pair picker in Settings (split off by the parent session, for a credential review of its own). Decisions the session
+   half and the demo's paired Mosyle org (PR #16, merged 2026-11-12). Then, on `mosyle-org-editor`, the Mosyle org editor
+   and its credential storage (split off by the parent session, for a credential review of its own). The pair picker is
+   held: the operator is weighing multi-client (MSP) support, where a pair may become a "client" grouping (one Apple org,
+   an optional MDM org, later a Google Workspace domain, every screen scoped to one client). Decisions the session
    proposed, not the operator's (in the PR): only the active Apple org's pair is read; a Mosyle org's sidebar is Mosyle
    and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").

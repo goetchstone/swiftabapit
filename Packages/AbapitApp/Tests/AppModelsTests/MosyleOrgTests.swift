@@ -130,53 +130,16 @@ struct MosyleCredentialTests {
     }
 }
 
-/// The pair, chosen in Settings (defect 17): an Apple org with a Mosyle org, remembered in the Apple org's profile; a new pair
-/// for the active org reads every screen again; and an Apple org with none still reads Apple, Mosyle not in scope.
-@Suite("Pairing")
+/// Mosyle stays optional: with no pair, an Apple org reads its devices as before, and Mosyle says it isn't in scope.
+@Suite("Mosyle is optional")
 @MainActor
-struct PairingTests {
-    @Test func aNewPairClearsMosyleAndReadsAgain() async throws {
-        let world = try await World.make(mosyle: true)
-        world.mosyleStub.add(devices: [MosyleScreenTests.device("MAC1")], os: "mac")
-        world.mosyle.load()
-        await eventually("devices") { MosyleScreenTests.loaded(world.mosyle.devices.state) }
-        world.mosyle.selectedDevice = "MAC1"
-        try world.orgs.pair("a", with: nil)
-        #expect(world.orgs.store["a"]?.pairedOrg == "")
-        #expect(world.mosyle.devices.rows.isEmpty && world.mosyle.selectedDevice == nil)
-        #expect(world.mosyle.devices.state == .notInScope(MosyleScreenTests.notPaired))
-        try world.orgs.pair("a", with: "m")
-        #expect(world.orgs.store["a"]?.pairedOrg == "m" && world.mosyle.devices.state.isLoading)
-        await eventually("devices again") { MosyleScreenTests.loaded(world.mosyle.devices.state) }
-        // Pairing an org that isn't active reads nothing again.
-        let generation = world.orgs.generation
-        try world.orgs.pair("b", with: "m")
-        #expect(world.orgs.generation == generation && world.orgs.store["b"]?.pairedOrg == "m")
-        // The same pair again changes nothing.
-        try world.orgs.pair("a", with: "m")
-        #expect(world.orgs.generation == generation)
-    }
-
-    @Test func onlyAnOrgOfTheOtherProviderIsAPair() async throws {
-        let world = try await World.make(mosyle: true)
-        #expect(world.orgs.pairable(with: "a").map(\.id) == ["m"] && world.orgs.pairable(with: "m").map(\.id) == ["a", "b"])
-        #expect(throws: OrgsModel.SaveFailure.refused("Org a can be paired only with an organization of the other provider.")) {
-            try world.orgs.pair("a", with: "b")
-        }
-        #expect(throws: OrgsModel.SaveFailure.refused("Org a can be paired only with an organization of the other provider.")) {
-            try world.orgs.pair("a", with: "a")
-        }
-        #expect(throws: OrgsModel.SaveFailure.refused(OrgStore.Failure.unknownOrg("x").message)) { try world.orgs.pair("x", with: "m") }
-        #expect(world.orgs.store["a"]?.pairedOrg == "m")
-    }
-
-    /// Mosyle stays optional: with no pair, an Apple org reads its devices as before, and Mosyle says it isn't in scope.
+struct MosyleOptionalTests {
     @Test func anAppleOrgWithNoPairStillReadsApple() async throws {
         let world = try await World.make()
         world.devices.load()
         world.mosyle.load()
         await world.settled(2)
         #expect(world.devices.devicesReadWhole && world.devices.rows.count == 3)
-        #expect(world.mosyle.devices.state == .notInScope(MosyleScreenTests.notPaired) && world.orgs.pairable(with: "a").isEmpty)
+        #expect(world.mosyle.devices.state == .notInScope(MosyleScreenTests.notPaired))
     }
 }

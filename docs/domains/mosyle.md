@@ -116,8 +116,10 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   paired with (defect 17: chosen by the operator, never the first one found; the profile's `paired_org`). An Apple org with no
   pair, a pair that is gone or one that isn't Mosyle says so in words (`mosyleUnavailable`, "not in scope"), in every Mosyle
   list, the reconciliation and Device 360's panel, and sends nothing (`anAppleOrgWithNoPairSaysMosyleIsntInScopeAndSendsNothing`).
-  Choosing a new pair for the active org, or removing the paired org, is an org switch: every screen reads again. The
-  Mosyle device read is kept for the session, so the reconciliation
+  Removing the paired org is an org switch: every screen reads again. **No pair can be chosen in Settings yet**: the
+  picker is held while the operator decides whether pairing becomes a multi-client grouping (one Apple org, an optional
+  MDM org and later a Google Workspace domain, every screen scoped to one client); until then a pair comes from the
+  profile's `paired_org` (the demo's). The Mosyle device read is kept for the session, so the reconciliation
   (`readAt`) and Device 360's Mosyle half (`mosyleReadAt`) say how old it is (invariant 8); Refresh on Mosyle reads it again. A Mosyle org's sidebar is Mosyle and
   Settings (`SidebarItem.mosyleSections`); Apple's screens say they don't read it.
 - **`MosyleModel`**: eight tabs over six reads, each with its own state, read when its tab first shows, and read again from
@@ -133,14 +135,13 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
 - **Device 360** (`DeviceDetailModel.mosyleSide`): the shown serial found in the Mosyle read as abapit's `_find_serial`
   found it (stripped, upper-cased), else "not enrolled there", or "not among the N read" when the list was cut; the
   dates from both sources (`bothTimeline`).
-- **Settings** (`OrgsModel.saveMosyle`, `pair`; `MosyleOrgEditor`): Add › Mosyle Business. The credentials (access
+- **Settings** (`OrgsModel.saveMosyle`; `MosyleOrgEditor`): Add › Mosyle Business. The credentials (access
   token, admin email and password, optional Logs Stream token) go to the Vault as one set (`replaceSet`), as generic
   passwords under the Apple key's rules (data-protection Keychain, this device only, user presence: `KeychainStore.write`;
   L4, defect 10), only after everything that can refuse was checked; an Add's id is reserved while it is written and never
   one the Keychain still holds items under. An edit keeps the credentials unless all are given again, an empty Logs Stream
   token then clearing a stored one (defect 14), and a new set for the org on screen reads every screen again. Removing the
-  org deletes its credentials. A pair is chosen on the Apple org ("Paired organization"), only with an org of the other
-  provider; a Mosyle org's section says which Apple orgs pair with it.
+  org deletes its credentials. The pair picker is held (above).
 - **The credentials never print** (invariant 3, `MosyleCredentialTests`): `MosyleDraft`'s description, debug description
   and mirror hold its name and whether credentials were typed, never what they are; no save or Test failure's message
   holds one; and nothing the process logs holds one (a canary read back from `OSLogStore`). The editor's typed values are
@@ -266,7 +267,7 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   - **The editor, on the team-signed build (S1):** adding a Mosyle org stores four Keychain items under one org (Keychain
     Access shows `abapit: <org> mosyle-…`) and Test logs in with them, asking for Touch ID once per session; an edit with
     every credential given replaces the set, one without keeps it; an empty Logs Stream token removes a stored one;
-    Remove deletes them all; pairing an Apple org shows its Mosyle screens, unpairing says Mosyle isn't in scope.
+    Remove deletes them all.
   - **Step 3's reads** (`Contracts/mosyle/operations.json` marks each guess G): the custom attributes' list key
     (`custom_device_attributes`, `attributes` or `info`) and field names, and whether `visionos` is a platform there; the
     admin log's list key (`logs`, `adminlogs` or `admin_logs`), its field names, its date format (`YYYY-MM-DD`), whether

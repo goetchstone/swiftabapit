@@ -306,36 +306,6 @@ public final class OrgsModel {
         return profile
     }
 
-    /// The orgs `id` may be paired with: those of the other provider (an Apple org with a Mosyle one, and back).
-    public func pairable(with id: String) -> [OrgProfile] {
-        guard let profile = store[id] else { return [] }
-        let other: Provider? = switch profile.provider {
-        case .known(.apple): .mosyle
-        case .known(.mosyle): .apple
-        default: nil
-        }
-        return store.orgs.filter { other != nil && $0.provider == .known(other!) }
-    }
-
-    /// Pairs `id` with `other` (nil: unpairs), remembered in `id`'s profile (defect 17). Only an org of the other provider
-    /// may be chosen. When it changes the active org's pair, every screen reads again, as an org switch does, so nothing of
-    /// the old pair's Mosyle stays on screen.
-    public func pair(_ id: String, with other: String?) throws(SaveFailure) {
-        guard var profile = store[id] else { throw .refused(OrgStore.Failure.unknownOrg(id).message) }
-        if let other, !pairable(with: id).contains(where: { $0.id == other }) {
-            throw .refused("\(Self.title(profile)) can be paired only with an organization of the other provider.")
-        }
-        guard profile.pairedOrg != (other ?? "") else { return }
-        profile.pairedOrg = other ?? ""
-        do {
-            try store.update(profile)
-        } catch {
-            throw .refused(Self.message(error))
-        }
-        if store.active?.id == id { bump() }
-        save()
-    }
-
     /// A client for any org (Settings → Test and Permissions on an org that isn't active); the active org's is shared.
     public func client(for profile: OrgProfile) -> AppleClient? {
         if profile.id == active?.id { return appleClient }
