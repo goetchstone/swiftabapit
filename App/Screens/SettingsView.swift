@@ -114,7 +114,8 @@ struct SettingsView: View {
             .frame(minWidth: 380)
         }
         .sheet(item: $editing) { mode in OrgEditor(mode: mode, orgs: orgs) }
-        .sheet(item: $editingMosyle) { mode in
+        // A Test's result belongs to the credentials it read: an edit may have changed them.
+        .sheet(item: $editingMosyle, onDismiss: { testResult = [:] }) { mode in
             MosyleOrgEditor(editing: { if case .edit(let profile) = mode { profile } else { nil } }(), orgs: orgs)
         }
         .sheet(isPresented: Binding(get: { acceptance != nil }, set: { if !$0 { acceptance = nil } })) {
@@ -152,7 +153,7 @@ struct SettingsView: View {
             HStack {
                 if profile.id != orgs.active?.id { Button("Make Active") { orgs.select(profile.id) } }
                 Button("Test") { testMosyle(profile) }.disabled(working != nil)
-                    .help("Logs in and reads one page of Macs: proves the token, the admin account and the network")
+                    .help("Logs in afresh with the stored credentials and reads one page of Macs: proves the token, the admin account and the network")
                 Spacer()
                 Button("Edit…") { editingMosyle = .edit(profile) }
                 Button("Remove…", role: .destructive) { removing = profile }

@@ -45,7 +45,8 @@ struct MosyleOrgEditor: View {
         .formStyle(.grouped)
         .frame(minWidth: 460, minHeight: 360)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { forget(); dismiss() } }
+            // Not while a save runs: its outcome, a failure included, is said here, never after the sheet is gone.
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { forget(); dismiss() }.disabled(saving) }
             ToolbarItem(placement: .confirmationAction) {
                 Button(editing == nil ? "Add" : "Save") { save() }
                     .disabled(saving || draft.problem != nil)

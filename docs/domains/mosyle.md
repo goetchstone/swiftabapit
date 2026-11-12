@@ -142,6 +142,12 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   one the Keychain still holds items under. An edit keeps the credentials unless all are given again, an empty Logs Stream
   token then clearing a stored one (defect 14), and a new set for the org on screen reads every screen again. Removing the
   org deletes its credentials. The pair picker is held (above).
+  - **A refused write** removes the set, the credentials stored before an edit included: the Vault keeps a set whole or
+    absent, never half old and half new. The save then reads back what the Keychain holds (names only, no prompt) and says
+    it, and an edit of the org on screen switches, so nothing reads on the old login (the credential review's M1, failure-log
+    2026-11-12). Settings' Test always logs in afresh with what is stored (`mosyleClient(for:)` is never the shared one).
+  - **An edit racing a removal** of its org removes the credentials it wrote; an Add skips ids a pair or the Keychain still
+    names, and its id is reserved during its write; a draft is saved only onto the org it was opened for.
 - **The credentials never print** (invariant 3, `MosyleCredentialTests`): `MosyleDraft`'s description, debug description
   and mirror hold its name and whether credentials were typed, never what they are; no save or Test failure's message
   holds one; and nothing the process logs holds one (a canary read back from `OSLogStore`). The editor's typed values are
@@ -265,7 +271,9 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     the usual one-entry list.
   - The stub refuses a Logs Stream JWT on the business host and the reverse (its choice: two services, two logins).
   - **The editor, on the team-signed build (S1):** adding a Mosyle org stores four Keychain items under one org (Keychain
-    Access shows `abapit: <org> mosyle-…`) and Test logs in with them, asking for Touch ID once per session; an edit with
+    Access shows `abapit: <org> mosyle-…`) and Test logs in with them, asking for Touch ID once per session; the vault spike
+    (`ABAPIT_SPIKE=vault`) reads a stored password's protection back (this device only, with an access control) and fails
+    without it; whether replacing a user-presence item prompts, and what a cancelled prompt mid-set leaves; an edit with
     every credential given replaces the set, one without keeps it; an empty Logs Stream token removes a stored one;
     Remove deletes them all.
   - **Step 3's reads** (`Contracts/mosyle/operations.json` marks each guess G): the custom attributes' list key

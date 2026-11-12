@@ -51,6 +51,7 @@ public final class MemoryStore: SecretStore {
         var uses = 0
         var sessionsEnded = 0
         var keyHold = KeyHold()
+        var writeHold = KeyHold()
     }
 
     private struct KeyHold { var armed = false, released = false, waiting = 0 }
@@ -80,6 +81,12 @@ public final class MemoryStore: SecretStore {
     /// Key writes waiting at the hold now.
     public var keysWaiting: Int { state.withLock { $0.keyHold.waiting } }
 
+    /// The next `write` waits off the caller's thread until `releaseWriteHold()`, as `holdNextKey` does for a key: a test holds
+    /// a Mosyle save inside its Keychain write (the review of PR 17: no test could reach that window).
+    public func holdNextWrite() { state.withLock { $0.writeHold.armed = true; $0.writeHold.released = false } }
+    public func releaseWriteHold() { state.withLock { $0.writeHold.released = true } }
+    public var writesWaiting: Int { state.withLock { $0.writeHold.waiting } }
+
     /// Reads and signatures so far: what a session would have prompted for.
     public var useCount: Int { state.withLock { $0.uses } }
     public var sessionsEnded: Int { state.withLock { $0.sessionsEnded } }
@@ -103,6 +110,16 @@ public final class MemoryStore: SecretStore {
     }
 
     package func write(_ data: Data, as item: VaultItem) throws {
+        let held = state.withLock { state in
+            defer { state.writeHold.armed = false }
+            if state.writeHold.armed { state.writeHold.waiting += 1 }
+            return state.writeHold.armed
+        }
+        if held {
+            let deadline = ContinuousClock.now.advanced(by: Self.keyHoldLimit)
+            while !state.withLock({ $0.writeHold.released }), ContinuousClock.now < deadline { usleep(500) }
+            state.withLock { $0.writeHold.waiting -= 1 }
+        }
         try state.withLock { state in
             try check(.write, in: &state)
             state.values[item] = data

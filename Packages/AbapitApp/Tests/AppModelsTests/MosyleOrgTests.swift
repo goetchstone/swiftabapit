@@ -143,3 +143,198 @@ struct MosyleOptionalTests {
         #expect(world.mosyle.devices.state == .notInScope(MosyleScreenTests.notPaired))
     }
 }
+
+extension MosyleOrgTests {
+    static func draft(_ name: String, base: OrgProfile) -> MosyleDraft {
+        MosyleDraft(name: name, accessToken: World.mosyleAccount.accessToken, email: World.mosyleAccount.email,
+                    password: World.mosyleAccount.password, editing: base)
+    }
+
+    static func newSet(_ m: OrgProfile) -> MosyleDraft {
+        MosyleDraft(name: m.name, accessToken: "new-token", email: "new@example.com", password: "new-pw", editing: m)
+    }
+}
+
+/// The credential review of PR 17, each finding held by its probe (P1–P16), each failing on the reviewed code.
+@Suite("Mosyle orgs: the credential review")
+@MainActor
+struct MosyleOrgReviewTests {
+    /// M2 (P1): an edit whose org is removed while its credentials are written removes them again, and says so.
+    @Test func anEditRacingARemovalLeavesNoCredentials() async throws {
+        let world = try await World.make(mosyle: true)
+        let m = try #require(world.orgs.store["m"])
+        world.keychain.holdNextWrite()
+        let save = Task { () -> String in
+            do { try await world.orgs.saveMosyle(MosyleOrgTests.newSet(m), editing: "m"); return "saved" } catch { return OrgsModel.message(error) }
+        }
+        await eventually("the edit inside its Keychain write") { world.keychain.writesWaiting == 1 }
+        try await world.orgs.remove("m", deleteSecrets: true)
+        world.keychain.releaseWriteHold()
+        #expect(await save.value == "The organization was removed while its credentials were being saved, so they were removed again.")
+        #expect(try await world.vault.inventory()["m"] == nil)
+    }
+
+    /// M3 (P2): a failed write whose clean-up is refused says what stayed, never "nothing was saved".
+    @Test func aRefusedCleanUpSaysWhatStayed() async throws {
+        let world = try await World.make(mosyle: true)
+        world.keychain.failNext(.write, with: errSecInteractionNotAllowed, skipping: 1)
+        world.keychain.failNext(.delete, with: errSecInteractionNotAllowed, skipping: 1)
+        var message = ""
+        do { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) } catch { message = OrgsModel.message(error) }
+        let inventory = try await world.vault.inventory()
+        let orphans = Set(inventory.keys).subtracting(world.orgs.store.orgs.map(\.id))
+        #expect(!orphans.isEmpty, "the test reaches a refused clean-up")
+        #expect(!message.contains("Nothing was saved") && message.contains("stayed in the Keychain") && message.contains("wasn't added"), "\(message)")
+        let names: [VaultItem.Kind: String] = [.mosyleAccessToken: "the access token", .mosyleEmail: "the admin's email", .mosylePassword: "the password"]
+        for org in orphans { for kind in inventory[org] ?? [] { #expect(message.contains(names[kind] ?? "?"), "\(kind) unsaid: \(message)") } }
+    }
+
+    /// M1 (P3): a refused edit removes the stored set with the new one (a set is whole or absent), says so in words, reads
+    /// every screen again, and Settings' Test then logs in afresh and fails, never "Connected" on a login kept in memory.
+    @Test func aRefusedEditSaysTheStoredCredentialsWentAndReadsAgain() async throws {
+        let world = try await World.make(mosyle: true)
+        try await #require(world.orgs.mosyleClient).ping()
+        let m = try #require(world.orgs.store["m"])
+        let generation = world.orgs.generation
+        world.keychain.failNext(.write, with: errSecUserCanceled)
+        var message = ""
+        do { try await world.orgs.saveMosyle(MosyleOrgTests.newSet(m), editing: "m") } catch { message = OrgsModel.message(error) }
+        #expect(message.hasPrefix("The new credentials couldn't be stored: ") && message.contains("The ones stored before were removed with them"), "\(message)")
+        #expect(message.hasSuffix("Enter them all again before this organization can be read."))
+        #expect(try await world.vault.inventory()["m"] == nil)
+        #expect(world.orgs.generation == generation + 1, "the screens read again")
+        let test = try #require(world.orgs.mosyleClient(for: m))
+        await #expect(throws: (any Error).self, "Test logs in afresh, with nothing stored") { try await test.ping() }
+    }
+
+    /// Settings' Test logs in afresh, even for the org on screen whose login is kept in memory: it proves what is stored.
+    @Test func testLogsInAfreshEvenForTheOrgOnScreen() async throws {
+        let world = try await World.make(mosyle: true)
+        try await #require(world.orgs.mosyleClient).ping()
+        #expect(world.mosyleStub.logins == 1)
+        let shown = try #require(world.orgs.mosyleOrg)
+        try await #require(world.orgs.mosyleClient(for: shown)).ping()
+        #expect(world.mosyleStub.logins == 2)
+    }
+
+    /// P4: the first org added, a Mosyle one, is read on screen at once.
+    @Test func theFirstOrgAddedIsReadOnScreen() async throws {
+        let world = try await World.make(profiles: [])
+        world.mosyle.load()
+        #expect(world.mosyle.devices.unavailable != nil)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        #expect(world.orgs.active?.id == added.id && world.orgs.generation == 1)
+        #expect(world.mosyle.devices.unavailable == nil && world.mosyle.devices.state.isLoading)
+    }
+
+    /// P5: an Add never takes the id a stale pair names, so it never becomes an Apple org's pair unchosen (defect 17).
+    @Test func anAddNeverTakesAnIdAPairNames() async throws {
+        var a = World.profile("a")
+        a.pairedOrg = "fleet"
+        let world = try await World.make(profiles: [a, World.profile("b")])
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        #expect(added.id != "fleet" && world.orgs.mosyleOrg == nil)
+    }
+
+    /// P6: a draft is saved only onto the org it was opened for: an edit's never as an Add, an Add's never as an edit.
+    @Test func aDraftIsSavedOnlyOntoTheOrgItOpened() async throws {
+        let world = try await World.make(mosyle: true)
+        let m = try #require(world.orgs.store["m"])
+        let refused = OrgsModel.SaveFailure.refused("This editor was opened for another organization: close it and open it again.")
+        await #expect(throws: refused) { try await world.orgs.saveMosyle(MosyleDraft(name: "Ghost", editing: m), editing: nil) }
+        await #expect(throws: refused) { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: "m") }
+        #expect(world.orgs.store.orgs.count == 3)
+    }
+
+    /// P7: two Adds of one name, the second inside the first's Keychain write: two ids, each with its whole set.
+    @Test func twoAddsAtOnceKeepEachSet() async throws {
+        let world = try await World.make(mosyle: true)
+        world.keychain.holdNextWrite()
+        let first = Task { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) }
+        await eventually("the first Add inside its Keychain write") { world.keychain.writesWaiting == 1 }
+        let second = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        world.keychain.releaseWriteHold()
+        let firstProfile = try await first.value
+        let inventory = try await world.vault.inventory()
+        #expect(firstProfile.id != second.id)
+        #expect(inventory[firstProfile.id]?.count == 3 && inventory[second.id]?.count == 3, "\(inventory)")
+    }
+
+    /// P8: removing a Mosyle org deletes its Logs Stream token too.
+    @Test func removalDeletesTheLogsStreamToken() async throws {
+        let world = try await World.make()
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil)
+        #expect(try await world.vault.inventory()[added.id]?.contains(.mosyleLogsToken) == true)
+        try await world.orgs.remove(added.id, deleteSecrets: true)
+        #expect(try await world.vault.inventory()[added.id] == nil)
+    }
+
+    /// P9: an Add never takes the id of a removed org whose credentials stayed in the Keychain.
+    @Test func anAddSkipsAnIdTheKeychainHolds() async throws {
+        let world = try await World.make(mosyle: true)
+        try await world.orgs.remove("m", deleteSecrets: false)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("m"), editing: nil)
+        #expect(added.id != "m")
+    }
+
+    /// P10: a rename keeps the stored credentials: a fresh login after it works.
+    @Test func aRenameKeepsTheCredentials() async throws {
+        let world = try await World.make(mosyle: true)
+        try await world.orgs.saveMosyle(MosyleDraft(name: "Renamed", editing: try #require(world.orgs.store["m"])), editing: "m")
+        let m = try #require(world.orgs.store["m"])
+        try await #require(world.orgs.mosyleClient(for: m)).ping()
+    }
+
+    /// P11: an edit giving a set with no Logs Stream token removes the stored one (defect 14).
+    @Test func anEditClearsAStoredLogsStreamToken() async throws {
+        let world = try await World.make()
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil)
+        try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", base: added), editing: added.id)
+        #expect(try await world.vault.inventory()[added.id] == [.mosyleAccessToken, .mosyleEmail, .mosylePassword])
+    }
+
+    /// P12: a password is stored as typed, its surrounding spaces kept.
+    @Test func aPasswordIsKeptAsTyped() async throws {
+        let world = try await World.make()
+        world.mosyleStub.register(MosyleStub.Account(accessToken: "t2", email: "e2@example.com", password: " pw "))
+        let added = try await world.orgs.saveMosyle(MosyleDraft(name: "Fleet", accessToken: "t2", email: "e2@example.com", password: " pw "), editing: nil)
+        try await #require(world.orgs.mosyleClient(for: added)).ping()
+    }
+
+    /// P13: an Add whose Keychain inventory can't be read is refused before any write.
+    @Test func anUnreadableInventoryRefusesTheAdd() async throws {
+        let world = try await World.make(mosyle: true)
+        world.keychain.failNext(.inventory, with: errSecInteractionNotAllowed)
+        await #expect(throws: OrgsModel.SaveFailure.self) { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) }
+        let stored = Set(try await world.vault.inventory().keys)
+        #expect(world.orgs.store.orgs.count == 3 && stored == ["a", "b", "m"])
+    }
+
+    /// P14: an edit typing only a Logs Stream token is refused, never saved as a rename that drops it.
+    @Test func aLogsStreamTokenAloneIsRefused() async throws {
+        let world = try await World.make(mosyle: true)
+        let draft = MosyleDraft(name: "Mosyle m", logsToken: "logs", editing: try #require(world.orgs.store["m"]))
+        await #expect(throws: OrgsModel.SaveFailure.refused(
+            "To change the credentials, enter the access token, the admin's email and the password again, together.")) {
+            try await world.orgs.saveMosyle(draft, editing: "m")
+        }
+    }
+
+    /// P15: new credentials for an org not on screen read nothing again.
+    @Test func anOffScreenEditDoesntSwitch() async throws {
+        let world = try await World.make(mosyle: true)
+        let other = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other"), editing: nil)
+        let generation = world.orgs.generation
+        try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other", base: other), editing: other.id)
+        #expect(world.orgs.generation == generation)
+    }
+
+    /// P16: two sheets on one org: the later credentials-only save keeps the earlier rename.
+    @Test func aLaterSheetKeepsAnEarlierRename() async throws {
+        let world = try await World.make(mosyle: true)
+        let opened = try #require(world.orgs.store["m"])
+        try await world.orgs.saveMosyle(MosyleDraft(name: "Renamed", editing: opened), editing: "m")
+        try await world.orgs.saveMosyle(MosyleOrgTests.draft(opened.name, base: opened), editing: "m")
+        #expect(world.orgs.store["m"]?.name == "Renamed")
+    }
+}

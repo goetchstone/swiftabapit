@@ -144,11 +144,16 @@ enum Spikes {
                     print("sign \(attempt): \(signature.count) bytes, verifies=\(ok), took \(clock.now - started)")
                 }
                 try await vault.store(Secret("not-a-secret"), as: token)
+                // A Mosyle credential is held as the Apple key is (L4, defect 10): this device only, behind user presence.
+                // Read back from the Keychain itself, since no test can (step 3's credential review, mutant M37).
+                let protected = passwordProtection(service: "swiftabapit-spike", account: token.description)
+                print("Mosyle password protection: \(protected.accessible ?? "none"), access control: \(protected.hasAccessControl)")
+                let heldAsTheKey = protected.accessible == (kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String) && protected.hasAccessControl
                 print("inventory: \(try await vault.inventory()["swiftabapit-spike"].map { $0.map(\.rawValue).sorted() } ?? [])")
                 try await vault.remove(org: "swiftabapit-spike")
                 let left = try await vault.inventory()["swiftabapit-spike"]
                 print("after remove: \(left.map { $0.map(\.rawValue).sorted() } ?? [])")
-                status.withLock { $0 = verified && left == nil ? 0 : 1 }
+                status.withLock { $0 = verified && heldAsTheKey && left == nil ? 0 : 1 }
             } catch let error as VaultError {
                 print("vault: \(error) — \(error.guidance)")
                 try? await vault.remove(org: "swiftabapit-spike")
@@ -159,6 +164,18 @@ enum Spikes {
         }
         done.wait()
         return status.withLock { $0 }
+    }
+
+    /// A stored generic password's accessibility and whether it carries an access control (its user-presence ACL), read as
+    /// attributes only, so no prompt is asked for.
+    nonisolated static func passwordProtection(service: String, account: String) -> (accessible: String?, hasAccessControl: Bool) {
+        let query: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
+                                      kSecUseDataProtectionKeychain: true, kSecReturnAttributes: true, kSecMatchLimit: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let attributes = result as? [CFString: Any] else {
+            return (nil, false)
+        }
+        return (attributes[kSecAttrAccessible] as? String, attributes[kSecAttrAccessControl] != nil)
     }
 
     static func teamIdentifier() -> String? {
