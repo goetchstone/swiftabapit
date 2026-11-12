@@ -34,8 +34,9 @@ struct OrgEditor: View {
     /// The answer to which customer the org is for; none until the operator picks one.
     @State private var clientChoice: ClientChoice?
 
-    /// An Add's question, asked whenever some client has room for an Apple org (plan §8.0, "Clients"); never an edit's.
-    private var question: ClientQuestion? { isAdding ? orgs.clientQuestion(adding: .apple) : nil }
+    /// An Add's question, asked whenever some client has room for an Apple org, or the answer given lost its client (plan
+    /// §8.0, "Clients"); never an edit's.
+    private var question: ClientQuestion? { isAdding ? orgs.clientQuestion(adding: .apple, answer: clientChoice) : nil }
 
     var body: some View {
         Form {
@@ -56,6 +57,7 @@ struct OrgEditor: View {
                     }
                     .pickerStyle(.radioGroup)
                     .accessibilityIdentifier("editor.client")
+                    if let note = question.note { Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 }
             }
             Section("Private key") {
@@ -77,10 +79,12 @@ struct OrgEditor: View {
         .formStyle(.grouped)
         .frame(minWidth: 460, minHeight: 420)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { key = nil; dismiss() } }
+            // Not while a save runs: its outcome, a refusal after the key was stored included, is said here, never after the
+            // sheet is gone, and a cancelled Add never lands afterwards (the review of PR 19).
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { key = nil; dismiss() }.disabled(saving) }
             ToolbarItem(placement: .confirmationAction) {
                 Button(isAdding ? "Add" : "Save") { save() }.disabled(saving || !canSave)
-                    .help(question.flatMap { $0.accepts(clientChoice) ? nil : $0.prompt } ?? "")
+                    .help(question.flatMap { $0.accepts(clientChoice) ? nil : $0.note ?? $0.prompt } ?? "")
             }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "pem") ?? .data, .data, .text]) { result in
@@ -92,6 +96,7 @@ struct OrgEditor: View {
         } message: {
             Text("The key is in this Mac's Keychain now. The file is still at \(offerTrash?.path(percentEncoded: false) ?? "its place"); anyone who can read it can use the API account.")
         }
+        .interactiveDismissDisabled(saving)
         .onAppear(perform: fill)
         .onDisappear { key = nil }
     }
@@ -129,8 +134,8 @@ struct OrgEditor: View {
         problem = nil
         var editing: String?
         if case .edit(let profile) = mode { editing = profile.id }
-        // The answer only while it answers the question as it stands: a client filled or removed since is no answer.
-        let choice = question.flatMap { $0.accepts(clientChoice) ? clientChoice : nil }
+        // The answer as chosen, never another: one whose client was filled or removed since is refused, not taken for none.
+        let choice = clientChoice
         Task {
             defer { saving = false }
             let picked = key != nil

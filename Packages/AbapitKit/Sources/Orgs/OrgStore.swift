@@ -151,6 +151,7 @@ public struct OrgStore: Sendable, Equatable {
     /// to offer to delete (defect 14). The org that becomes active is the client's other one when there is one.
     public mutating func remove(_ id: String) {
         let sibling = client(of: id)?.orgs.first { $0 != id }
+        let (leaving, left) = (self[id], client(of: id)?.id)
         orgs.removeAll { $0.id == id }
         if activeID == id { activeID = sibling ?? orgs.first?.id }
         for index in orgs.indices where orgs[index].pairedOrg == id { orgs[index].pairedOrg = "" }
@@ -159,6 +160,7 @@ public struct OrgStore: Sendable, Equatable {
             if clients[index].mdm == id { clients[index].mdm = nil }
         }
         clients.removeAll { $0.orgs.isEmpty }
+        if let leaving, let left { renameClient(left, leftBy: leaving) }
         // A note about how clients were made means nothing once there is one client left, and none shows with one.
         if clients.count < 2, !migrationNotes.isEmpty { dismissMigrationNotes() }
     }
@@ -184,7 +186,10 @@ public struct OrgStore: Sendable, Equatable {
         } else if client(of: org)?.orgs == [org] {
             return
         }
+        let left = client(of: org)?.id
         for index in clients.indices where clients[index].holds(org) { clients[index].set(slot, nil) }
+        clients.removeAll { $0.orgs.isEmpty }
+        if let left { renameClient(left, leftBy: profile) }
         if let target, let index = clients.firstIndex(where: { $0.id == target }) {
             clients[index].set(slot, org)
         } else {
@@ -221,14 +226,45 @@ public struct OrgStore: Sendable, Equatable {
         Self.client(for: profile, slot: Client.Slot(profile), other: nil, among: clients)
     }
 
-    static func client(for profile: OrgProfile, slot: Client.Slot, other: String?, among clients: [Client]) -> Client {
+    /// The name a client made for `profile` starts from: its name, trimmed, else its id.
+    static func baseName(_ profile: OrgProfile) -> String {
         let trimmed = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = trimmed.isEmpty ? profile.id : trimmed
+        return trimmed.isEmpty ? profile.id : trimmed
+    }
+
+    /// `base`, or `base (2)`, `base (3)`… : the first no client in `clients` has, as uniqueness compares names.
+    static func uniqueName(_ base: String, among clients: [Client]) -> String {
         var name = base, counter = 2
         while clients.contains(where: { nameKey($0.name) == nameKey(name) }) {
             name = "\(base) (\(counter))"
             counter += 1
         }
+        return name
+    }
+
+    /// Whether `name` is one a client made for an org called `base` gets: `base`, or `base` made unique (" (2)"…).
+    static func isNamed(_ name: String, after base: String) -> Bool {
+        let key = nameKey(name), stem = nameKey(base)
+        guard key != stem else { return true }
+        guard key.hasPrefix(stem + " ("), key.hasSuffix(")") else { return false }
+        let digits = key.dropFirst(stem.count + 2).dropLast()
+        return !digits.isEmpty && digits.allSatisfy { ("0"..."9").contains($0) }
+    }
+
+    /// After `profile` left the client `id`, by a move or a removal: when that client is still named after it and holds
+    /// another org, it takes that org's name, so no client is named after an org it doesn't hold (the review of PR 19: after
+    /// Separate, the Mosyle org's client kept the Apple org's name, on its exports and in the switcher). A name the operator
+    /// gave is kept. Called before the leaving org's new client is made, so that one gets its own name back cleanly.
+    private mutating func renameClient(_ id: String, leftBy profile: OrgProfile) {
+        guard let index = clients.firstIndex(where: { $0.id == id }), Self.isNamed(clients[index].name, after: Self.baseName(profile)),
+              let staying = clients[index].orgs.first.flatMap({ self[$0] }) else { return }
+        let others = clients.enumerated().filter { $0.offset != index }.map(\.element)
+        clients[index].name = Self.uniqueName(Self.baseName(staying), among: others)
+    }
+
+    static func client(for profile: OrgProfile, slot: Client.Slot, other: String?, among clients: [Client]) -> Client {
+        let base = baseName(profile)
+        let name = uniqueName(base, among: clients)
         let slug = slug(base)
         var id = slug, number = 2
         while clients.contains(where: { $0.id == id }) {
@@ -300,13 +336,7 @@ public struct OrgStore: Sendable, Equatable {
             guard !client.id.isEmpty, ids.insert(client.id).inserted else { continue }
             // A name empty, or one another client before it has (as uniqueness compares names), is made unique as a new one is.
             let trimmed = client.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let base = trimmed.isEmpty ? client.id : trimmed
-            var name = base, counter = 2
-            while kept.contains(where: { Self.nameKey($0.name) == Self.nameKey(name) }) {
-                name = "\(base) (\(counter))"
-                counter += 1
-            }
-            client.name = name
+            client.name = Self.uniqueName(trimmed.isEmpty ? client.id : trimmed, among: kept)
             for slot in [Client.Slot.apple, .mdm] {
                 guard let org = slot == .apple ? client.apple : client.mdm else { continue }
                 if let profile = self[org], Client.Slot(profile) == slot, seen.insert(org).inserted { continue }

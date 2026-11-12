@@ -25,11 +25,12 @@ struct MosyleOrgEditor: View {
         MosyleDraft(name: name, accessToken: accessToken, email: email, password: password, logsToken: logsToken, editing: editing)
     }
 
-    /// An Add's question, asked whenever some client has room for a Mosyle org (plan §8.0, "Clients"); never an edit's.
-    private var question: ClientQuestion? { editing == nil ? orgs.clientQuestion(adding: .mdm) : nil }
+    /// An Add's question, asked whenever some client has room for a Mosyle org, or the answer given lost its client (plan
+    /// §8.0, "Clients"); never an edit's.
+    private var question: ClientQuestion? { editing == nil ? orgs.clientQuestion(adding: .mdm, answer: clientChoice) : nil }
 
     /// Why Add can't be pressed yet, in words; nil when it can.
-    private var blocker: String? { draft.problem ?? question.flatMap { $0.accepts(clientChoice) ? nil : $0.prompt } }
+    private var blocker: String? { draft.problem ?? question.flatMap { $0.accepts(clientChoice) ? nil : $0.note ?? $0.prompt } }
 
     var body: some View {
         Form {
@@ -43,6 +44,7 @@ struct MosyleOrgEditor: View {
                     }
                     .pickerStyle(.radioGroup)
                     .accessibilityIdentifier("mosyleEditor.client")
+                    if let note = question.note { Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 }
             }
             Section {
@@ -70,6 +72,7 @@ struct MosyleOrgEditor: View {
                     .help(blocker ?? "")
             }
         }
+        .interactiveDismissDisabled(saving)
         .onAppear { if let editing { name = editing.name } }
         .onDisappear(perform: forget)
     }
@@ -78,8 +81,8 @@ struct MosyleOrgEditor: View {
         saving = true
         problem = nil
         let draft = draft
-        // The answer only while it answers the question as it stands: a client filled or removed since is no answer.
-        let choice = question.flatMap { $0.accepts(clientChoice) ? clientChoice : nil }
+        // The answer as chosen, never another: one whose client was filled or removed since is refused, not taken for none.
+        let choice = clientChoice
         Task {
             defer { saving = false }
             do {

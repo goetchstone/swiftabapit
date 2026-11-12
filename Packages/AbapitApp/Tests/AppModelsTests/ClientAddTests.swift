@@ -126,7 +126,8 @@ struct ClientAddTests {
     }
 
     /// With one client, nothing the operator can read about grouping says "client" (the operator, 2026-11-12: "lets make it
-    /// friendly"): the question, the grouping, and every refusal an Add or Separate can meet, races included.
+    /// friendly"): the question, its note on an answer gone stale, the grouping, and the refusals an Add or Separate can meet,
+    /// races included.
     @Test func oneClientNeverSaysClient() async throws {
         let world = try await World.make(profiles: [World.profile("a")])
         let a = try #require(world.orgs.store.client(of: "a")).id
@@ -140,8 +141,99 @@ struct ClientAddTests {
         #expect(!world.orgs.showsClients)
         await refusal { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other"), editing: nil, client: .join(a)) }
         await refusal { try await world.orgs.saveMosyle(MosyleDraft(name: "Fleet", editing: fleet), editing: fleet.id, client: .new) }
-        words += [world.orgs.grouping(of: "a") ?? "", OrgStore.Failure.unknownClient(a).message]
-        #expect(words.count == 9 && words.allSatisfy { !$0.isEmpty && !$0.localizedCaseInsensitiveContains("client") }, "\(words)")
+        words += [world.orgs.grouping(of: "a") ?? "", OrgStore.Failure.unknownClient(a).message,
+                  world.orgs.clientQuestion(adding: .mdm, answer: .join(a))?.note ?? ""]
+        do { try world.orgs.move("gone", toClient: nil) } catch { words.append(OrgsModel.message(error)) }
+        #expect(words.count == 11 && words.allSatisfy { !$0.isEmpty && !$0.localizedCaseInsensitiveContains("client") }, "\(words)")
+    }
+
+    /// An answer whose client was filled while the sheet was open is never taken for another: the question stays, with a
+    /// note and only the answers left, and Add sent with the old answer is refused rather than made a different customer's
+    /// (the review of PR 19, finding 1).
+    @Test func aStaleAnswerIsNeverTakenForAnother() async throws {
+        let world = try await World.make(profiles: [World.profile("a")])
+        let a = try #require(world.orgs.store.client(of: "a")).id
+        #expect(world.orgs.clientQuestion(adding: .mdm, answer: .join(a))?.note == nil)
+        _ = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .join(a))
+        let question = try #require(world.orgs.clientQuestion(adding: .mdm, answer: .join(a)), "the answer lost its client: still asked")
+        #expect(question.note == "The customer you chose can't take this organization any more: choose again.")
+        #expect(question.options.map(\.choice) == [.new] && !question.accepts(.join(a)) && question.accepts(.new))
+        #expect(world.orgs.clientQuestion(adding: .mdm, answer: nil) == nil && world.orgs.clientQuestion(adding: .mdm, answer: .new) == nil)
+        await #expect(throws: OrgsModel.SaveFailure.refused(OrgStore.Failure.clientFull("Org a").message)) {
+            try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other"), editing: nil, client: .join(a))
+        }
+        #expect(world.orgs.clients.count == 1 && world.orgs.store["other"] == nil)
+        // With two clients the note says "client", as the question does; a removed client's answer is stale too.
+        let two = try await World.make(mosyle: true)
+        let b = try #require(two.orgs.store.client(of: "b")).id
+        try await two.orgs.remove("b", deleteSecrets: false)
+        try await two.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil)
+        #expect(two.orgs.showsClients && two.orgs.clientQuestion(adding: .mdm, answer: .join(b))?.note?.hasPrefix("The client you chose") == true)
+    }
+
+    /// The Apple Add's answer is checked before the key is stored and again after (review mutants A3, A4): a full client is
+    /// refused with the Keychain untouched; a client filled, or room that appears, while the key is stored refuses the Add
+    /// and removes the key.
+    @Test func theAppleAddChecksTheAnswerBeforeAndAfterTheKey() async throws {
+        let full = try await World.make(mosyle: true)
+        let a = try #require(full.orgs.store.client(of: "a")).id
+        let inventory = try await full.vault.inventory()
+        await #expect(throws: OrgsModel.SaveFailure.refused(OrgStore.Failure.clientFull("Org a").message)) {
+            try await full.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil, client: .join(a))
+        }
+        #expect(try await full.vault.inventory() == inventory)
+
+        let filled = try await World.make(profiles: [World.mosyleProfile()])
+        let m = try #require(filled.orgs.store.client(of: "m")).id
+        filled.keychain.holdNextKey()
+        let first = Task { try await filled.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil, client: .join(m)) }
+        await eventually("the first Add at the Keychain") { filled.keychain.keysWaiting == 1 }
+        var other = Self.appleDraft("South")
+        other.clientID = World.clientID("b")
+        let south = try await filled.orgs.save(other, key: Self.key(), editing: nil, client: .join(m))
+        filled.keychain.releaseKeyHold()
+        await #expect(throws: OrgsModel.SaveFailure.notSaved(OrgStore.Failure.clientFull("Mosyle m").message)) { try await first.value }
+        #expect(filled.orgs.store.client(of: "m")?.apple == south.id && filled.orgs.store["north"] == nil)
+        #expect(try await filled.vault.inventory()["north"] == nil)
+
+        let room = try await World.make(profiles: [])
+        room.keychain.holdNextKey()
+        let held = Task { try await room.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil) }
+        await eventually("the Add at the Keychain") { room.keychain.keysWaiting == 1 }
+        _ = try await room.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        room.keychain.releaseKeyHold()
+        await #expect(throws: OrgsModel.SaveFailure.notSaved("Choose which customer this organization is for.")) { try await held.value }
+        #expect(room.orgs.store.orgs.map(\.id) == ["fleet"])
+        #expect(try await room.vault.inventory()["north"] == nil)
+    }
+
+    /// An Add that changes nothing on screen clears nothing (review mutants A8, A9): a new client of its own, an Apple org
+    /// joining a client not on screen, and one joining the client on screen while its Mosyle org is the one shown.
+    @Test func anAddOffScreenClearsNothing() async throws {
+        let world = try await World.make(mosyle: true)
+        var generation = world.orgs.generation
+        _ = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new)
+        #expect(world.orgs.generation == generation)
+        let fleet = try #require(world.orgs.store.client(of: "fleet")).id
+        _ = try await world.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil, client: .join(fleet))
+        #expect(world.orgs.generation == generation && world.orgs.store.client(of: "north")?.orgs == ["north", "fleet"])
+
+        let mosyleOnly = try await World.make(profiles: [World.mosyleProfile()])
+        generation = mosyleOnly.orgs.generation
+        let m = try #require(mosyleOnly.orgs.store.client(of: "m")).id
+        _ = try await mosyleOnly.orgs.save(Self.appleDraft("North"), key: Self.key(), editing: nil, client: .join(m))
+        #expect(mosyleOnly.orgs.generation == generation && mosyleOnly.orgs.mosyleOrg?.id == "m" && mosyleOnly.orgs.active?.id == "m")
+    }
+
+    /// After Separate the org that stays keeps a client named after itself, never after the org that left: its exports and
+    /// the switcher name the right customer (the review of PR 19, finding 2).
+    @Test func separateNamesEachClientAfterItsOwnOrg() async throws {
+        let world = try await World.make(profiles: [World.profile("a")])
+        let a = try #require(world.orgs.store.client(of: "a")).id
+        let fleet = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .join(a))
+        try world.orgs.move("a", toClient: nil)
+        #expect(world.orgs.clients.map(\.name) == ["Fleet", "Org a"] && world.orgs.store.client(of: fleet.id)?.orgs == [fleet.id])
+        #expect(world.orgs.exportClient == "Org a")
     }
 
     /// An edit never moves an org, for either kind: Settings does.

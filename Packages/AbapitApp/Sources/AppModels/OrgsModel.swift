@@ -98,6 +98,8 @@ public struct ClientQuestion: Sendable, Equatable {
     /// The question, as the picker's label.
     public let prompt: String
     public let options: [Option]
+    /// Why the answer given can't stand, when it no longer can: its client was filled or removed while the sheet was open.
+    public var note: String?
 
     /// Whether `choice` answers the question: one of its options, never none.
     public func accepts(_ choice: ClientChoice?) -> Bool { options.contains { $0.choice == choice } }
@@ -288,20 +290,30 @@ public final class OrgsModel {
         save()
     }
 
-    /// The add sheet's question for a new org of `slot`'s kind, or nil when no client has room for one, and it is a client
-    /// of its own (the operator, 2026-11-12, "lets do it right"; the details are the parent session's proposal). The options
-    /// are each client with room, by name, and a new one. With one client the app shows no client anywhere, so the question
-    /// names the org it would join instead.
-    public func clientQuestion(adding slot: Client.Slot) -> ClientQuestion? {
+    /// The add sheet's question for a new org of `slot`'s kind, given the sheet's `answer` so far; nil when no client has room
+    /// for one and none was chosen: then it is a client of its own (the operator, 2026-11-12, "lets do it right"; the details
+    /// are the parent session's proposal). The options are each client with room, by name, and a new one. With one client the
+    /// app shows no client anywhere, so the question names the org it would join instead, and never says "client".
+    ///
+    /// An answer whose client was filled or removed while the sheet was open is never taken for another (the review of PR 19:
+    /// the sheet sent it as no answer, and the org became a different customer's, the opposite of what was chosen). The
+    /// question stays, with a note, and Add waits until the operator chooses again.
+    public func clientQuestion(adding slot: Client.Slot, answer: ClientChoice? = nil) -> ClientQuestion? {
         let room = store.clients(withRoomFor: slot)
-        guard let first = room.first else { return nil }
+        var stale = false
+        if case .join? = answer { stale = !room.contains { ClientChoice.join($0.id) == answer } }
+        guard !room.isEmpty || stale else { return nil }
+        var question: ClientQuestion
         if showsClients {
-            return ClientQuestion(title: "Client", prompt: "Which client is this organization for?",
-                                  options: room.map { .init(choice: .join($0.id), label: $0.name) } + [.init(choice: .new, label: "A new client")])
+            question = ClientQuestion(title: "Client", prompt: "Which client is this organization for?",
+                                      options: room.map { .init(choice: .join($0.id), label: $0.name) } + [.init(choice: .new, label: "A new client")])
+        } else {
+            question = ClientQuestion(title: "Customer", prompt: "Which customer is this organization for?",
+                                      options: room.prefix(1).map { .init(choice: .join($0.id), label: "The same customer as \(names($0.orgs))") }
+                                          + [.init(choice: .new, label: "A different customer")])
         }
-        return ClientQuestion(title: "Customer", prompt: "Which customer is this organization for?",
-                              options: [.init(choice: .join(first.id), label: "The same customer as \(names(first.orgs))"),
-                                        .init(choice: .new, label: "A different customer")])
+        if stale { question.note = "The \(showsClients ? "client" : "customer") you chose can't take this organization any more: choose again." }
+        return question
     }
 
     /// The other orgs in `org`'s client, in words ("Grouped with …"), or nil when it is alone in its client. Settings says it

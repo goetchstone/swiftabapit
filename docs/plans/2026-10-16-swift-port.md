@@ -1012,10 +1012,13 @@ Phase 5's.
   - With one client the question names the other org ("The same customer as …", "A different customer"), never "client".
   - `OrgStore.add` takes the client, refused as a move is (no such client, or one with an org of that kind) and whole or
     not at all. The model refuses an Add with no answer while a client has room, checks the answer again once the
-    credentials are stored, and removes them if it no longer holds.
+    credentials are stored, and removes them if it no longer holds. An answer whose client was filled or removed while
+    the sheet was open is never taken for another: the sheet says so and asks again.
   - Settings shows an org grouped with another even with one client ("Grouped with …"), with Separate to make it a
-    different customer's, so a join can always be seen and undone. With two or more clients, the picker does that.
-  - A client holds at most one org of each kind, an org is in exactly one client, and the Keychain is never touched.
+    different customer's, so a join can always be seen and undone. With two or more clients, the picker does that. A
+    client an org leaves, by Separate or removal, takes the name of the org that stays, unless the operator named it.
+  - A client holds at most one org of each kind and an org is in exactly one client. Grouping, the question and Separate
+    never touch the Keychain; an Add stores its org's own secrets, as before.
 - Switching client clears every screen, selection and in-memory read, as switching org does. No view, report, CSV or
   notification mixes clients, and each export names its client. No cross-client overview yet.
 - Existing orgs are grouped once (store version 2), the same way every time:

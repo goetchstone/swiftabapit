@@ -256,6 +256,41 @@ struct ClientTests {
         #expect(empty == OrgStore() && empty.activeID == nil)
     }
 
+    /// No client is named after an org it doesn't hold: when an org leaves a client named after it, by a move or a removal,
+    /// the client takes the name of the org that stays, and the leaving org's new client gets its own name back. A name the
+    /// operator gave is kept (the review of PR 19, finding 2).
+    @Test func aClientIsNeverNamedAfterAnOrgItDoesntHold() throws {
+        var store = OrgStore()
+        try store.add(Self.apple("a"))
+        try store.add(Self.mosyle("m"), to: try #require(store.client(of: "a")).id)
+        try store.move("a", to: nil)
+        #expect(Self.shape(store) == ["M: -+m", "A: a+-"])
+        // From the other side, the client keeps its name: it is named after the org that stays.
+        var other = OrgStore()
+        try other.add(Self.apple("a"))
+        try other.add(Self.mosyle("m"), to: try #require(other.client(of: "a")).id)
+        try other.move("m", to: nil)
+        #expect(Self.shape(other) == ["A: a+-", "M: -+m"])
+        // A removal, and a name made unique (" (2)") is still named after the org.
+        var removal = OrgStore()
+        try removal.add(Self.mosyle("n", name: "B"))
+        try removal.add(Self.apple("b"))
+        try removal.add(Self.mosyle("m"), to: try #require(removal.client(of: "b")).id)
+        #expect(Self.shape(removal) == ["B: -+n", "B (2): b+m"])
+        removal.remove("b")
+        #expect(Self.shape(removal) == ["B: -+n", "M: -+m"])
+        #expect(throws: OrgStore.Failure.clientFull("M")) { try removal.add(Self.mosyle("x"), to: try #require(removal.client(of: "m")).id) }
+        // A name the operator gave, or one that only looks made unique, stays.
+        var named = OrgStore()
+        try named.add(Self.apple("a"))
+        let client = try #require(named.client(of: "a")).id
+        try named.add(Self.mosyle("m"), to: client)
+        try named.renameClient(client, to: "A (North)")
+        try named.move("a", to: nil)
+        #expect(Self.shape(named) == ["A (North): -+m", "A: a+-"])
+        #expect(OrgStore.isNamed("A (12)", after: "a") && !OrgStore.isNamed("A ()", after: "A") && !OrgStore.isNamed("AB", after: "A"))
+    }
+
     /// The active org after a removal: the removed org's client's other org (review mutant R1: in the old test the sibling
     /// was also the store's first org).
     @Test func removingAClientsLastOrgRemovesTheClientAndTheActiveStaysInIt() throws {
@@ -267,7 +302,7 @@ struct ClientTests {
         store.activeID = "a"
         store.remove("a")
         #expect(store.activeID == "m", "the client's other org, not the store's first")
-        #expect(Self.shape(store) == ["B: b+-", "A: -+m"])
+        #expect(Self.shape(store) == ["B: b+-", "M: -+m"], "named after the org it holds, not the one removed (PR 19, finding 2)")
         store.remove("m")
         #expect(Self.shape(store) == ["B: b+-"] && store.activeID == "b")
     }
