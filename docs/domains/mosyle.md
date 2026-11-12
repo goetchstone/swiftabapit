@@ -139,7 +139,9 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   L4, defect 10), only after everything that can refuse was checked; an Add's id is reserved while it is written and never
   one the Keychain still holds items under. An edit keeps the credentials unless all are given again, an empty Logs Stream
   token then clearing a stored one (defect 14), and a new set for the org on screen reads every screen again. Removing the
-  org deletes its credentials. A new Mosyle org is a client of its own until it is moved into the Apple org's client in Settings.
+  org deletes its credentials. The Add sheet asks which customer a new Mosyle org is for whenever a client has room for one
+  (plan §8.0, "Clients"); joined to the Apple org's client, it is reconciled against that org whenever that client is on
+  screen (at once when it is the one on screen), and Settings' Separate undoes the join.
   - **A refused write** removes the set, the credentials stored before an edit included: the Vault keeps a set whole or
     absent, never half old and half new. The save then reads back what the Keychain holds (names only, no prompt) and says
     it, and an edit of the org on screen switches, so nothing reads on the old login (the credential review's M1, failure-log

@@ -20,7 +20,7 @@ struct MosyleOrgTests {
 
     @Test func anAddedOrgsCredentialsAreInTheVaultAndItsClientReads() async throws {
         let world = try await World.make()
-        let profile = try await world.orgs.saveMosyle(Self.draft(logs: " logs-token "), editing: nil)
+        let profile = try await world.orgs.saveMosyle(Self.draft(logs: " logs-token "), editing: nil, client: .new)
         #expect(profile.provider == .known(.mosyle) && profile.name == "Fleet" && world.orgs.store[profile.id] != nil)
         let stored = try await world.vault.inventory()[profile.id]
         #expect(stored == [.mosyleAccessToken, .mosyleEmail, .mosylePassword, .mosyleLogsToken])
@@ -37,7 +37,7 @@ struct MosyleOrgTests {
         let noPassword = MosyleDraft(name: "Fleet", accessToken: "t", email: "admin@example.com", password: "   ")
         for (draft, why) in [(noName, "A name is needed."),
                              (noPassword, "The access token, the admin's email and the password are all needed.")] {
-            await #expect(throws: OrgsModel.SaveFailure.refused(why)) { try await world.orgs.saveMosyle(draft, editing: nil) }
+            await #expect(throws: OrgsModel.SaveFailure.refused(why)) { try await world.orgs.saveMosyle(draft, editing: nil, client: .new) }
         }
         let partial = MosyleDraft(name: "Mosyle m", accessToken: "only-the-token", editing: try #require(world.orgs.store["m"]))
         await #expect(throws: OrgsModel.SaveFailure.refused(
@@ -70,8 +70,8 @@ struct MosyleOrgTests {
     /// Two Adds of one name get two ids, and an Add never takes an id the Keychain still holds items under.
     @Test func anAddNeverTakesAnIdInUse() async throws {
         let world = try await World.make(mosyle: true)
-        let first = try await world.orgs.saveMosyle(Self.draft("m"), editing: nil)
-        let second = try await world.orgs.saveMosyle(Self.draft("m"), editing: nil)
+        let first = try await world.orgs.saveMosyle(Self.draft("m"), editing: nil, client: .new)
+        let second = try await world.orgs.saveMosyle(Self.draft("m"), editing: nil, client: .new)
         #expect(first.id != "m" && second.id != first.id && second.id != "m")
     }
 }
@@ -108,11 +108,11 @@ struct MosyleCredentialTests {
         let world = try await World.make(mosyle: true)
         var messages: [String] = []
         world.keychain.failNext(.write, with: errSecAuthFailed)
-        do { try await world.orgs.saveMosyle(Self.draft(), editing: nil) } catch { messages.append(OrgsModel.message(error)) }
+        do { try await world.orgs.saveMosyle(Self.draft(), editing: nil, client: .new) } catch { messages.append(OrgsModel.message(error)) }
         let partial = MosyleDraft(name: "Mosyle m", password: Self.canary, editing: try #require(world.orgs.store["m"]))
         do { try await world.orgs.saveMosyle(partial, editing: "m") } catch { messages.append(OrgsModel.message(error)) }
         // Credentials Mosyle refuses: Settings' Test says so, in Mosyle's words.
-        let refused = try await world.orgs.saveMosyle(Self.draft(), editing: nil)
+        let refused = try await world.orgs.saveMosyle(Self.draft(), editing: nil, client: .new)
         do { try await #require(world.orgs.mosyleClient(for: refused)).ping() } catch { messages.append(OrgsModel.message(error)) }
         #expect(messages.count == 3, "\(messages)")
         #expect(messages.allSatisfy { !$0.contains(Self.canary) && !$0.contains("TOKEN-") }, "\(messages)")
@@ -180,7 +180,7 @@ struct MosyleOrgReviewTests {
         world.keychain.failNext(.write, with: errSecInteractionNotAllowed, skipping: 1)
         world.keychain.failNext(.delete, with: errSecInteractionNotAllowed, skipping: 1)
         var message = ""
-        do { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) } catch { message = OrgsModel.message(error) }
+        do { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new) } catch { message = OrgsModel.message(error) }
         let inventory = try await world.vault.inventory()
         let orphans = Set(inventory.keys).subtracting(world.orgs.store.orgs.map(\.id))
         #expect(!orphans.isEmpty, "the test reaches a refused clean-up")
@@ -222,15 +222,21 @@ struct MosyleOrgReviewTests {
         let world = try await World.make(profiles: [])
         world.mosyle.load()
         #expect(world.mosyle.devices.unavailable != nil)
+        // No client yet has room for it, so nothing is asked: no answer is needed.
         let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
         #expect(world.orgs.active?.id == added.id && world.orgs.generation == 1)
         #expect(world.mosyle.devices.unavailable == nil && world.mosyle.devices.state.isLoading)
     }
 
-    /// A Mosyle org added while the active client has one is a client of its own: it never replaces what a client reads.
+    /// A Mosyle org added as a new customer's, while the active client has one, is a client of its own: it never replaces
+    /// what a client reads, and it can't join a client that has a Mosyle org already.
     @Test func aSecondMosyleOrgIsAClientOfItsOwn() async throws {
         let world = try await World.make(mosyle: true)
-        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        let a = try #require(world.orgs.store.client(of: "a")).id
+        await #expect(throws: OrgsModel.SaveFailure.refused(OrgStore.Failure.clientFull("Org a").message)) {
+            try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .join(a))
+        }
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new)
         #expect(world.orgs.mosyleOrg?.id == "m" && world.orgs.store.client(of: added.id)?.orgs == [added.id])
     }
 
@@ -239,7 +245,7 @@ struct MosyleOrgReviewTests {
         let world = try await World.make(mosyle: true)
         let m = try #require(world.orgs.store["m"])
         let refused = OrgsModel.SaveFailure.refused("This editor was opened for another organization: close it and open it again.")
-        await #expect(throws: refused) { try await world.orgs.saveMosyle(MosyleDraft(name: "Ghost", editing: m), editing: nil) }
+        await #expect(throws: refused) { try await world.orgs.saveMosyle(MosyleDraft(name: "Ghost", editing: m), editing: nil, client: .new) }
         await #expect(throws: refused) { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: "m") }
         #expect(world.orgs.store.orgs.count == 3)
     }
@@ -248,9 +254,9 @@ struct MosyleOrgReviewTests {
     @Test func twoAddsAtOnceKeepEachSet() async throws {
         let world = try await World.make(mosyle: true)
         world.keychain.holdNextWrite()
-        let first = Task { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) }
+        let first = Task { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new) }
         await eventually("the first Add inside its Keychain write") { world.keychain.writesWaiting == 1 }
-        let second = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        let second = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new)
         world.keychain.releaseWriteHold()
         let firstProfile = try await first.value
         let inventory = try await world.vault.inventory()
@@ -261,7 +267,7 @@ struct MosyleOrgReviewTests {
     /// P8: removing a Mosyle org deletes its Logs Stream token too.
     @Test func removalDeletesTheLogsStreamToken() async throws {
         let world = try await World.make()
-        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil, client: .new)
         #expect(try await world.vault.inventory()[added.id]?.contains(.mosyleLogsToken) == true)
         try await world.orgs.remove(added.id, deleteSecrets: true)
         #expect(try await world.vault.inventory()[added.id] == nil)
@@ -271,7 +277,7 @@ struct MosyleOrgReviewTests {
     @Test func anAddSkipsAnIdTheKeychainHolds() async throws {
         let world = try await World.make(mosyle: true)
         try await world.orgs.remove("m", deleteSecrets: false)
-        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("m"), editing: nil)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("m"), editing: nil, client: .new)
         #expect(added.id != "m")
     }
 
@@ -286,7 +292,7 @@ struct MosyleOrgReviewTests {
     /// P11: an edit giving a set with no Logs Stream token removes the stored one (defect 14).
     @Test func anEditClearsAStoredLogsStreamToken() async throws {
         let world = try await World.make()
-        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", logs: "logs"), editing: nil, client: .new)
         try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet", base: added), editing: added.id)
         #expect(try await world.vault.inventory()[added.id] == [.mosyleAccessToken, .mosyleEmail, .mosylePassword])
     }
@@ -295,7 +301,7 @@ struct MosyleOrgReviewTests {
     @Test func aPasswordIsKeptAsTyped() async throws {
         let world = try await World.make()
         world.mosyleStub.register(MosyleStub.Account(accessToken: "t2", email: "e2@example.com", password: " pw "))
-        let added = try await world.orgs.saveMosyle(MosyleDraft(name: "Fleet", accessToken: "t2", email: "e2@example.com", password: " pw "), editing: nil)
+        let added = try await world.orgs.saveMosyle(MosyleDraft(name: "Fleet", accessToken: "t2", email: "e2@example.com", password: " pw "), editing: nil, client: .new)
         try await #require(world.orgs.mosyleClient(for: added)).ping()
     }
 
@@ -303,7 +309,7 @@ struct MosyleOrgReviewTests {
     @Test func anUnreadableInventoryRefusesTheAdd() async throws {
         let world = try await World.make(mosyle: true)
         world.keychain.failNext(.inventory, with: errSecInteractionNotAllowed)
-        await #expect(throws: OrgsModel.SaveFailure.self) { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil) }
+        await #expect(throws: OrgsModel.SaveFailure.self) { try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new) }
         let stored = Set(try await world.vault.inventory().keys)
         #expect(world.orgs.store.orgs.count == 3 && stored == ["a", "b", "m"])
     }
@@ -321,7 +327,7 @@ struct MosyleOrgReviewTests {
     /// P15: new credentials for an org not on screen read nothing again.
     @Test func anOffScreenEditDoesntSwitch() async throws {
         let world = try await World.make(mosyle: true)
-        let other = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other"), editing: nil)
+        let other = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other"), editing: nil, client: .new)
         let generation = world.orgs.generation
         try await world.orgs.saveMosyle(MosyleOrgTests.draft("Other", base: other), editing: other.id)
         #expect(world.orgs.generation == generation)

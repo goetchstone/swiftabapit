@@ -49,7 +49,8 @@ Xcode so it provisions the keychain access group.
 
 One app can read several customers' organizations, one customer (a **client**) at a time: an Apple Business or Apple
 School Manager organization and, optionally, its Mosyle Business organization. With one client the app shows no client
-at all; with two or more, a switcher. Nothing on screen or in an export mixes two clients.
+at all; with two or more, a switcher. Nothing on screen or in an export mixes two clients. Adding an organization asks
+which customer it's for whenever another one could be grouped with it, and Settings can separate the two again.
 
 Apple School Manager support is built from Apple's published documentation and **isn't verified on a live tenant yet**:
 no school has tested it.

@@ -76,9 +76,8 @@ struct World {
         }
         for profile in profiles ?? [] { try orgStore.add(profile) }
         if mosyle {
-            try orgStore.add(mosyleProfile())
-            // Into the first org's client, as the operator would move it there (`OrgStore.add` makes it a client of its own).
-            if let first = orgStore.orgs.first, let client = orgStore.client(of: first.id) { try orgStore.move("m", to: client.id) }
+            // Into the first org's client, as the operator would answer the add sheet's question (plan §8.0, "Clients").
+            try orgStore.add(mosyleProfile(), to: orgStore.orgs.first.flatMap { orgStore.client(of: $0.id)?.id })
             try await vault.replaceSet([.mosyleAccessToken: Secret(mosyleAccount.accessToken), .mosyleEmail: Secret(mosyleAccount.email),
                                         .mosylePassword: Secret(mosyleAccount.password)], for: "m")
         }

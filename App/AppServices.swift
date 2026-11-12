@@ -38,10 +38,12 @@ final class AppServices {
 
     static func make() -> AppServices {
         #if DEBUG
-        // `1`: the demo, one client; `clients`: the same with a second client, for the snapshots of the client switcher.
+        // `1`: the demo, one client; `clients`: the same with a second client, for the snapshots of the client switcher;
+        // `apple`: the Apple org alone, so adding a Mosyle org asks which customer it is for.
         switch ProcessInfo.processInfo.environment["ABAPIT_DEMO"] {
         case "1": return demo()
         case "clients": return demo(clients: true)
+        case "apple": return demo(mosyle: false)
         default: break
         }
         #endif
@@ -58,8 +60,8 @@ final class AppServices {
     /// Debug builds only: one Apple Business org whose key lives in memory and whose "Apple" is the strict
     /// `AppleStub` serving the demo org's data (`DemoOrg`), paired with a Mosyle Business org whose "Mosyle" is the strict
     /// `MosyleStub` serving its devices (`DemoMosyle`). Nothing is read from or written to the Keychain, `orgs.json` or the
-    /// network.
-    static func demo(clients: Bool = false) -> AppServices {
+    /// network. `mosyle` false leaves the Mosyle org out.
+    static func demo(clients: Bool = false, mosyle: Bool = true) -> AppServices {
         let (store, stub) = DemoOrg.make()
         DemoMosyle.storeSecrets(in: store)
         if clients { DemoMosyle.storeSecrets(in: store, org: DemoMosyle.secondOrgID) }
@@ -72,9 +74,8 @@ final class AppServices {
         profile.role = "Administrator"
         var orgs = OrgStore()
         try? orgs.add(profile)
-        // Moved into the Apple org's client: one client, so nothing on screen says "client".
-        try? orgs.add(OrgProfile(id: DemoMosyle.orgID, name: DemoMosyle.name, provider: .mosyle))
-        if let client = orgs.client(of: DemoOrg.orgID) { try? orgs.move(DemoMosyle.orgID, to: client.id) }
+        // In the Apple org's client, as the add sheet's "the same customer" puts it: one client, so nothing says "client".
+        if mosyle { try? orgs.add(OrgProfile(id: DemoMosyle.orgID, name: DemoMosyle.name, provider: .mosyle), to: orgs.client(of: DemoOrg.orgID)?.id) }
         // A second client: a Mosyle org with no Apple org (the active client has one), read from the same stub.
         if clients { try? orgs.add(OrgProfile(id: DemoMosyle.secondOrgID, name: DemoMosyle.secondName, provider: .mosyle)) }
         orgs.activeID = DemoOrg.orgID
