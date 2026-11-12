@@ -32,6 +32,50 @@ public struct OrgDraft: Sendable, Equatable {
     }
 }
 
+/// What the Mosyle Business org editor collects (plan §4: a name, the access token, the admin's email and password, and the
+/// optional Logs Stream token). The credentials are `Secret`s from the moment the editor makes the draft: they never print,
+/// dump or mirror (invariant 3), as nothing in the screen models may reflect to hide them (`BoundaryTests`). They are a set
+/// (`Vault.replaceSet`): an Add gives the first three, an edit gives all of them again or none, so a stored set is never
+/// half old and half new; an empty Logs Stream token in a set given is none, which clears one stored (defect 14: abapit's
+/// couldn't be cleared).
+public struct MosyleDraft: Sendable, Equatable {
+    public let name: String
+    public let accessToken: Secret
+    public let email: Secret
+    public let password: Secret
+    public let logsToken: Secret
+    /// The profile the editor opened; nil for an Add.
+    let base: OrgProfile?
+
+    /// The editor's fields as typed. The token, the email and the Logs Stream token lose surrounding whitespace (a paste's);
+    /// a password is kept as typed, unless it is only whitespace, which is none.
+    public init(name: String, accessToken: String = "", email: String = "", password: String = "", logsToken: String = "",
+                editing base: OrgProfile? = nil) {
+        func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        self.name = name
+        self.accessToken = Secret(trimmed(accessToken))
+        self.email = Secret(trimmed(email))
+        self.password = Secret(trimmed(password).isEmpty ? "" : password)
+        self.logsToken = Secret(trimmed(logsToken))
+        self.base = base
+    }
+
+    /// Whether any credential was typed.
+    public var givesCredentials: Bool { [accessToken, email, password, logsToken].contains { !$0.isEmpty } }
+
+    /// Why it can't be saved yet, in words; nil when it can. An Add needs the three credentials; an edit needs all three
+    /// or none.
+    public var problem: String? {
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "A name is needed." }
+        let missing = [accessToken, email, password].contains(where: \.isEmpty)
+        if base == nil, missing { return "The access token, the admin's email and the password are all needed." }
+        if base != nil, givesCredentials, missing {
+            return "To change the credentials, enter the access token, the admin's email and the password again, together."
+        }
+        return nil
+    }
+}
+
 /// The organizations, which one is active, and its client (plan §3.7). Switching org, or changing the active
 /// org's account or key, bumps `generation` and tells every screen model at once (`onSwitch`): each drops what
 /// it read for the old org and reads again, and every load checks its own token before it shows a result, so
@@ -181,6 +225,115 @@ public final class OrgsModel {
         let client = makeMosyleClient(org.id)
         cachedMosyle = (org.id, generation, client)
         return client
+    }
+
+    /// A client for any Mosyle org (Settings → Test on an org not on screen); the one on screen's is shared.
+    public func mosyleClient(for profile: OrgProfile) -> MosyleClient? {
+        guard profile.provider == .known(.mosyle), let makeMosyleClient else { return nil }
+        if profile.id == mosyleOrg?.id { return mosyleClient }
+        return makeMosyleClient(profile.id)
+    }
+
+    /// Adds a Mosyle Business org (`editing` nil) or applies the editor's fields to one. Everything that can refuse is
+    /// checked before any Keychain write; an Add's id is chosen past every id the Keychain still holds items under (a new org
+    /// never inherits another's secrets) and reserved while its credentials are written, as `save` does for an Apple org. The
+    /// credentials go in as one set (`Vault.replaceSet`: a failure part-way removes the set, never leaves it mixed); an Add
+    /// whose profile then can't be saved removes them again. An edit writes only the name it changed, onto the profile as it
+    /// is after the Keychain write, and a new set of credentials for the org on screen makes every screen read again.
+    @discardableResult
+    public func saveMosyle(_ draft: MosyleDraft, editing id: String?) async throws(SaveFailure) -> OrgProfile {
+        if let why = draft.problem { throw .refused(why) }
+        let orgID: String
+        if let id {
+            guard let current = store[id] else { throw .refused(OrgStore.Failure.unknownOrg(id).message) }
+            guard current.provider == .known(.mosyle) else { throw .refused("\(Self.title(current)) isn't a Mosyle Business organization.") }
+            orgID = current.id
+        } else {
+            let stored: Set<String>
+            do {
+                stored = Set(try await vault.inventory().keys)
+            } catch {
+                throw .refused(Self.message(error))
+            }
+            orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs))
+            var trial = store
+            do {
+                try trial.add(OrgProfile(id: orgID, name: draft.name, provider: .mosyle))
+            } catch {
+                throw .refused(Self.message(error))
+            }
+        }
+        guard VaultItem(org: orgID, kind: .mosyleAccessToken) != nil else { throw .refused("That name can't be used.") }
+        reservedIDs.append(orgID)
+        defer { if let index = reservedIDs.firstIndex(of: orgID) { reservedIDs.remove(at: index) } }
+
+        if draft.givesCredentials {
+            do {
+                try await vault.replaceSet([
+                    .mosyleAccessToken: draft.accessToken, .mosyleEmail: draft.email, .mosylePassword: draft.password,
+                    .mosyleLogsToken: draft.logsToken.isEmpty ? nil : draft.logsToken,
+                ], for: orgID)
+            } catch {
+                throw .notSaved("The credentials couldn't be stored: \(Self.message(error)) Nothing was saved\(id == nil ? "" : "; enter them again")")
+            }
+        }
+
+        let profile: OrgProfile
+        do {
+            if id == nil {
+                profile = OrgProfile(id: orgID, name: draft.name, provider: .mosyle)
+                try store.add(profile)
+            } else {
+                guard var current = store[orgID] else { throw OrgStore.Failure.unknownOrg(orgID) }
+                if draft.base?.name != draft.name { current.name = draft.name }
+                try store.update(current)
+                profile = current
+            }
+        } catch {
+            let why = Self.message(error)
+            guard id == nil else { throw .notSaved(why) }
+            do {
+                try await vault.remove(org: orgID)
+            } catch {
+                let removal = (error as? VaultError)?.guidance ?? Self.message(error)
+                throw .notSaved("\(why) Its credentials were stored and couldn't be removed again (\(removal)) They stay in the Keychain, "
+                                + "under an id no new organization will reuse.")
+            }
+            throw .notSaved(why)
+        }
+        if id != nil, draft.givesCredentials, store.active?.id == orgID || mosyleOrg?.id == orgID { bump() }
+        save()
+        return profile
+    }
+
+    /// The orgs `id` may be paired with: those of the other provider (an Apple org with a Mosyle one, and back).
+    public func pairable(with id: String) -> [OrgProfile] {
+        guard let profile = store[id] else { return [] }
+        let other: Provider? = switch profile.provider {
+        case .known(.apple): .mosyle
+        case .known(.mosyle): .apple
+        default: nil
+        }
+        return store.orgs.filter { other != nil && $0.provider == .known(other!) }
+    }
+
+    /// Pairs `id` with `other` (nil: unpairs), remembered in `id`'s profile (defect 17). Only an org of the other provider
+    /// may be chosen. When it changes the active org's pair, every screen reads again, as an org switch does, so nothing of
+    /// the old pair's Mosyle stays on screen.
+    public func pair(_ id: String, with other: String?) throws(SaveFailure) {
+        guard var profile = store[id] else { throw .refused(OrgStore.Failure.unknownOrg(id).message) }
+        if let other, !pairable(with: id).contains(where: { $0.id == other }) {
+            throw .refused("\(Self.title(profile)) can be paired only with an organization of the other provider.")
+        }
+        guard profile.pairedOrg != (other ?? "") else { return }
+        profile.pairedOrg = other ?? ""
+        do {
+            try store.update(profile)
+        } catch {
+            throw .refused(Self.message(error))
+        }
+        if store.active?.id == id { bump() }
+        save()
     }
 
     /// A client for any org (Settings → Test and Permissions on an org that isn't active); the active org's is shared.
