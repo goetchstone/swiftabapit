@@ -14,15 +14,21 @@ public final class ScreenModels {
     public let activity: ActivityModel
     /// Counts `devices`: one device read for the Devices screen and the Dashboard.
     public let dashboard: DashboardModel
+    /// Mosyle Business: its device read is the reconciliation's and Device 360's too.
+    public let mosyle: MosyleModel
+    /// Counts `devices` and `mosyle`'s devices.
+    public let reconciliation: ReconciliationModel
 
     public init(orgs: OrgsModel) {
         devices = DevicesModel(orgs: orgs)
-        detail = DeviceDetailModel(orgs: orgs)
+        mosyle = MosyleModel(orgs: orgs)
+        detail = DeviceDetailModel(orgs: orgs, mosyle: mosyle)
         people = PeopleModel(orgs: orgs)
         content = ContentModel(orgs: orgs)
         appleMDM = AppleMDMModel(orgs: orgs)
         activity = ActivityModel(orgs: orgs)
         dashboard = DashboardModel(orgs: orgs, devices: devices)
+        reconciliation = ReconciliationModel(orgs: orgs, devices: devices, mosyle: mosyle)
     }
 
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices
@@ -35,6 +41,8 @@ public final class ScreenModels {
         case .people: people.load(force: true)
         case .content: content.load(force: true)
         case .activity: activity.load(force: true)
+        case .mosyle: mosyle.load(force: true)
+        case .reconciliation: reconciliation.load(force: true)
         case .devices, .services, .reports, .settings: devices.load(force: true)
         }
     }

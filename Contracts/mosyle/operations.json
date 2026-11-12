@@ -1,0 +1,156 @@
+{
+ "about": "Mosyle Business reads, hand-written (no machine-readable doc exists; plan \u00a73.10). One row per MosyleRead.allowed entry; each part of a row names its source. Confidence as Appendix C: OD official doc, PM Postman, LV live, 3P third party, G guess. A part with no source is a guess, listed in docs/domains/mosyle.md's 'Assumed, check live'.",
+ "sources": {
+  "OD": "Mosyle Business's in-console API doc, as captured in the 2026-06-18 abapit session (plan \u00a72.2, Appendix C)",
+  "PM": "Mosyle's Postman collection, https://mybusiness.mosyle.com/downloads/api-docs/API%20Business.json (read 2026-11-11)",
+  "LV": "abapit's live use at its parity pin (mosyle.py)",
+  "3P": "a third-party client of Mosyle Manager, Tools4ever-NIM/NIM-System-PowerShell-Mosyle-Manager (read 2026-11-11): Manager's v2 API, a sibling of Business's"
+ },
+ "operations": [
+  {
+   "read": "/v1/devices#list",
+   "request": {
+    "options": [
+     "os (required)",
+     "page",
+     "page_size",
+     "specific_columns[]"
+    ]
+   },
+   "request_sources": [
+    "OD",
+    "PM",
+    "LV"
+   ],
+   "answer": "response[0].devices[], or DEVICES_NOTFOUND past the end",
+   "answer_sources": [
+    "LV"
+   ]
+  },
+  {
+   "read": "/v1/devices#list_custom_device_attributes",
+   "request": {
+    "top_level": [
+     "os"
+    ]
+   },
+   "request_sources": [
+    "OD",
+    "3P"
+   ],
+   "answer": "a list under custom_device_attributes, attributes or info (3P's is info, with Name, UniqueID, Value, LastUpdate, Source, OS, IsDeleted)",
+   "answer_sources": [
+    "G",
+    "3P"
+   ]
+  },
+  {
+   "read": "/v1/users#list_users",
+   "request": {
+    "options": [
+     "page",
+     "page_size"
+    ]
+   },
+   "request_sources": [
+    "PM",
+    "OD"
+   ],
+   "answer": "response[0].users[]",
+   "answer_sources": [
+    "LV"
+   ]
+  },
+  {
+   "read": "/v1/usergroups#list_usergroup",
+   "request": {
+    "options": [
+     "page",
+     "page_size"
+    ]
+   },
+   "request_sources": [
+    "PM",
+    "OD"
+   ],
+   "answer": "response[0].usergroups[], or USERGROUP_NOTFOUND past the end",
+   "answer_sources": [
+    "LV",
+    "OD"
+   ]
+  },
+  {
+   "read": "/v1/devicegroups#list_devicegroup",
+   "request": {
+    "options": [
+     "os (required)",
+     "page",
+     "page_size"
+    ]
+   },
+   "request_sources": [
+    "PM",
+    "LV"
+   ],
+   "answer": "response.devicegroups[] (an object response)",
+   "answer_sources": [
+    "PM",
+    "LV"
+   ]
+  },
+  {
+   "read": "/v1/devicegroups#get_info",
+   "request": {
+    "options": [
+     "iddevicegroup (a string, as PM sends it)",
+     "security_compliance_status: compliant | noncompliant"
+    ]
+   },
+   "request_sources": [
+    "OD",
+    "PM",
+    "3P (the filter's two values)"
+   ],
+   "answer": "response.devicegroup {name, udids[]} (an object response; PM's example is recorded against /devicegroupinfo)",
+   "answer_sources": [
+    "PM"
+   ]
+  },
+  {
+   "read": "/v1/adminlogs#",
+   "request": {
+    "top_level": [
+     "filter_options {start_date, end_date, idusers[]} (no operation)"
+    ],
+    "date_format": "YYYY-MM-DD (a guess)"
+   },
+   "request_sources": [
+    "OD",
+    "G (the date format)"
+   ],
+   "answer": "a list under logs, adminlogs or admin_logs; each entry's fields are guesses",
+   "answer_sources": [
+    "G"
+   ]
+  },
+  {
+   "read": "/v1/logsstream#",
+   "request": {
+    "top_level": [
+     "LogType[]",
+     "page"
+    ],
+    "host": "the Logs Stream host, its own token and login"
+   },
+   "request_sources": [
+    "OD",
+    "LV"
+   ],
+   "answer": "response {TotalLogs, TotalPages, per-type Logs}; consuming",
+   "answer_sources": [
+    "OD",
+    "LV"
+   ]
+  }
+ ]
+}

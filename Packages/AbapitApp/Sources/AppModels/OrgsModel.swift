@@ -1,5 +1,6 @@
 import AppleBusiness
 import Foundation
+import Mosyle
 import Observation
 import Orgs
 import Vault
@@ -83,6 +84,9 @@ public final class OrgsModel {
     private let storage: Storage
     private let makeClient: @MainActor (TokenBroker.Account, Double?) -> AppleClient
     @ObservationIgnored private var cached: (account: TokenBroker.Account, generation: Int, client: AppleClient)?
+    /// Makes a Mosyle Business org's client from its id (its secrets are in the Vault under it); nil where nothing reads Mosyle.
+    private let makeMosyleClient: (@MainActor (String) -> MosyleClient)?
+    @ObservationIgnored private var cachedMosyle: (org: String, generation: Int, client: MosyleClient)?
     @ObservationIgnored private var switchHandlers: [@MainActor () -> Void] = []
     /// The ids saves in flight are writing, an Add's new one and an edit's own (one entry per save), and the client
     /// IDs they are writing: two editors open at once never get the same id or both take one client ID (Phase 1b
@@ -92,10 +96,12 @@ public final class OrgsModel {
     @ObservationIgnored private var reservedClientIDs: [(org: String, client: String)] = []
 
     public init(storage: Storage, vault: Vault, store: OrgStore? = nil,
-                makeClient: @escaping @MainActor (TokenBroker.Account, Double?) -> AppleClient) {
+                makeClient: @escaping @MainActor (TokenBroker.Account, Double?) -> AppleClient,
+                makeMosyleClient: (@MainActor (String) -> MosyleClient)? = nil) {
         self.storage = storage
         self.vault = vault
         self.makeClient = makeClient
+        self.makeMosyleClient = makeMosyleClient
         if let store {
             self.store = store
         } else if case .folder(let folder) = storage {
@@ -125,8 +131,56 @@ public final class OrgsModel {
     /// Why the active org can't be read, in words; nil when it can, or when there's no org.
     public var unusableReason: String? {
         guard let profile = active, TokenBroker.Account(profile) == nil else { return nil }
+        if profile.provider == .known(.mosyle) {
+            return "\(Self.title(profile)) is a Mosyle Business organization: Apple Business's and Apple School Manager's screens don't read it."
+        }
         return profile.problem
-            ?? "\(profile.name.isEmpty ? profile.id : profile.name) is a \(profile.provider.rawValue) organization, which this version can't read yet."
+            ?? "\(Self.title(profile)) is a \(profile.provider.rawValue) organization, which this version can't read yet."
+    }
+
+    /// An org's name in a sentence: its name, else its id.
+    static func title(_ profile: OrgProfile) -> String { profile.name.isEmpty ? profile.id : profile.name }
+
+    // MARK: Mosyle Business
+
+    /// The Mosyle Business org the Mosyle screens read: the active org when it is one, else the org the active Apple org is
+    /// paired with (plan §2.3 defect 17: chosen by the operator, never the first one found), when that is a Mosyle org.
+    public var mosyleOrg: OrgProfile? {
+        guard let active else { return nil }
+        if active.provider == .known(.mosyle) { return active }
+        guard active.provider == .known(.apple), let paired = store[active.pairedOrg], paired.provider == .known(.mosyle) else { return nil }
+        return paired
+    }
+
+    /// The Apple org reconciled against `mosyleOrg`: the active org, when it is an Apple org paired with a Mosyle one.
+    /// Reconciliation reads the Apple org's devices through the Devices screen's read, which is the active org's.
+    public var reconciles: Bool { active?.provider == .known(.apple) && mosyleOrg != nil }
+
+    /// Why nothing can be read from Mosyle, in words, and whether it is that this org has no Mosyle in scope (`notInScope`:
+    /// an Apple org with no Mosyle org paired) or can't be used at all; nil when `mosyleOrg` can be read.
+    public var mosyleUnavailable: (why: String, notInScope: Bool)? {
+        guard let active else {
+            return ("No organization yet: add an Apple Business or Mosyle Business organization in Settings.", false)
+        }
+        if mosyleOrg != nil { return makeMosyleClient == nil ? ("This build reads no Mosyle Business organization.", false) : nil }
+        guard active.provider == .known(.apple) else { return (unusableReason ?? "This organization can't be used.", false) }
+        let name = Self.title(active)
+        if active.pairedOrg.isEmpty {
+            return ("Mosyle Business isn't in scope for \(name): no Mosyle Business organization is paired with it. Pair one in Settings.", true)
+        }
+        guard let paired = store[active.pairedOrg] else {
+            return ("The organization paired with \(name) has been removed. Pair another in Settings.", true)
+        }
+        return ("\(name) is paired with \(Self.title(paired)), which isn't a Mosyle Business organization. Pair a Mosyle Business one in Settings.", true)
+    }
+
+    /// `mosyleOrg`'s client, made once per org and generation; nil when there is none.
+    public var mosyleClient: MosyleClient? {
+        guard let org = mosyleOrg, let makeMosyleClient else { return nil }
+        if let cachedMosyle, cachedMosyle.org == org.id, cachedMosyle.generation == generation { return cachedMosyle.client }
+        let client = makeMosyleClient(org.id)
+        cachedMosyle = (org.id, generation, client)
+        return client
     }
 
     /// A client for any org (Settings → Test and Permissions on an org that isn't active); the active org's is shared.
@@ -242,9 +296,10 @@ public final class OrgsModel {
     /// them orphaned). A refused Keychain removal keeps the profile, so the secret stays reachable to remove.
     public func remove(_ id: String, deleteSecrets: Bool) async throws {
         if deleteSecrets { try await vault.remove(org: id) }
-        let wasActive = store.active?.id == id
+        // The Mosyle org the active Apple org is paired with is on screen too: removing it clears what was read from it.
+        let wasShown = store.active?.id == id || mosyleOrg?.id == id
         store.remove(id)
-        if wasActive { bump() }
+        if wasShown { bump() }
         save()
     }
 
@@ -272,6 +327,7 @@ public final class OrgsModel {
     public static func message(_ error: any Error) -> String {
         switch error {
         case let error as AppleAPIError: error.message
+        case let error as MosyleAPIError: error.message
         case let error as VaultError: error.guidance
         case let error as OrgStore.Failure: error.message
         case let error as SaveFailure: error.message
@@ -321,6 +377,7 @@ public final class OrgsModel {
     private func bump() {
         generation += 1
         cached = nil
+        cachedMosyle = nil
         for handler in switchHandlers { handler() }
     }
 

@@ -109,6 +109,32 @@ struct MosyleStubTests {
                 "the control")
     }
 
+    /// Step 3's reads, as their sources shape them (the review of step 3, mutant M44: a stub that also took `os` inside
+    /// `options` survived): the attributes' `os` beside the operation, never in `options`; a group's id; the compliance
+    /// filter's two values only; the admin log's dates.
+    @Test func theStubRefusesStep3sReadsAsMosyleWould() async throws {
+        let stub = MosyleStub()
+        stub.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw"))
+        let jwt = try #require(try await Self.login(stub).1)
+        let auth = ["accessToken": "access-token", "Authorization": jwt]
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
+                                      body: #"{"operation": "list_custom_device_attributes", "options": {"os": "mac"}}"#) == "MISSING_DATA")
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
+                                      body: #"{"operation": "list_custom_device_attributes", "os": "mac"}"#) == nil, "the control")
+        #expect(try await Self.status(stub, path: "/v1/devicegroups", headers: auth, body: #"{"operation": "get_info", "options": {}}"#) == "MISSING_DATA")
+        await #expect(throws: MosyleStub.StubFailure.self, "an unknown compliance value") {
+            _ = try await Self.post(stub, path: "/v1/devicegroups", headers: auth,
+                                    body: #"{"operation": "get_info", "options": {"iddevicegroup": "1", "security_compliance_status": "partial"}}"#)
+        }
+        await #expect(throws: MosyleStub.StubFailure.self, "no dates") {
+            _ = try await Self.post(stub, path: "/v1/adminlogs", headers: auth, body: #"{}"#)
+        }
+        await #expect(throws: MosyleStub.StubFailure.self, "another date format") {
+            _ = try await Self.post(stub, path: "/v1/adminlogs", headers: auth,
+                                    body: #"{"filter_options": {"start_date": "1730000000", "end_date": "1730086400"}}"#)
+        }
+    }
+
     /// A device list with `specific_columns` answers those columns only, and one without answers every column: the
     /// client's own trimming is held elsewhere (`theDeviceColumnsAreTheAdapters`), the stub's here (round 3: a stub
     /// that answered every column whatever was asked survived).

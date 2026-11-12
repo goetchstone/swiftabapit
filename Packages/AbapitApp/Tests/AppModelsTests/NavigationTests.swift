@@ -22,21 +22,24 @@ struct NavigationTests {
     /// Apple School Manager has no people, content, Apple MDM or audit endpoints (plan §2.4): those sections are hidden,
     /// not shown empty. The Overview stays: it reads devices and services too.
     @Test func aSchoolOrgHidesTheBusinessOnlySections() {
-        #expect(SidebarItem.shown(for: Self.org("school")) == [.overview, .devices, .services, .reports, .settings])
+        #expect(SidebarItem.shown(for: Self.org("school")) == [.overview, .devices, .services, .mosyle, .reconciliation, .reports, .settings])
     }
 
     @Test func aBusinessOrgShowsEverySectionInOrder() {
         #expect(SidebarItem.shown(for: Self.org("business"))
-                == [.overview, .devices, .services, .appleMDM, .people, .content, .activity, .reports, .settings])
+                == [.overview, .devices, .services, .appleMDM, .people, .content, .activity, .mosyle, .reconciliation, .reports, .settings])
         #expect(SidebarItem.allCases == SidebarItem.shown(for: Self.org("business")))
     }
 
-    /// No org, a scope this version doesn't know, or another provider hides nothing: each screen says why it can't
-    /// read (`LoadState.unusable`), which a hidden section couldn't. Provider rules arrive with Mosyle (Phase 7).
-    @Test func onlyAKnownSchoolScopeHidesASection() {
+    /// No org, a scope this version doesn't know, or a provider it doesn't know hides nothing: each screen says why it can't
+    /// read (`LoadState.unusable`), which a hidden section couldn't. A Mosyle Business org shows Mosyle's sections (Phase 7),
+    /// whatever its scope says.
+    @Test func onlyAKnownSchoolScopeOrMosyleHidesASection() {
         #expect(SidebarItem.shown(for: nil) == SidebarItem.allCases)
         #expect(SidebarItem.shown(for: Self.org("district")) == SidebarItem.allCases)
-        #expect(SidebarItem.shown(for: Self.org("school", provider: "mosyle")) == SidebarItem.allCases)
+        #expect(SidebarItem.shown(for: Self.org("business", provider: "jamf")) == SidebarItem.allCases)
+        #expect(SidebarItem.shown(for: Self.org("school", provider: "mosyle")) == [.mosyle, .settings])
+        #expect(SidebarItem.shown(for: Self.org("business", provider: "mosyle")) == SidebarItem.mosyleSections)
     }
 
     /// A section is Business-only when every read it shows is: the Overview's audit panel says "not in scope" itself.
@@ -45,7 +48,8 @@ struct NavigationTests {
         #expect(reads == [
             .overview: [.devices, .mdmServers, .auditEvents], .devices: [.devices], .services: [.mdmServers],
             .appleMDM: [.mdmEnrolled], .people: [.users, .userGroups, .orgUnits],
-            .content: [.apps, .packages, .blueprints, .configurations], .activity: [.auditEvents], .reports: [], .settings: [],
+            .content: [.apps, .packages, .blueprints, .configurations], .activity: [.auditEvents], .mosyle: [], .reconciliation: [],
+            .reports: [], .settings: [],
         ])
         #expect(SidebarItem.allCases.filter(\.isBusinessOnly) == [.appleMDM, .people, .content, .activity])
         // Every Apple read the client has is some section's: none is left without a screen.
@@ -57,6 +61,10 @@ struct NavigationTests {
     @Test func aHiddenSectionShowsTheOverview() {
         let school = Self.org("school"), business = Self.org("business")
         #expect(SidebarItem.showing(.people, for: school) == .overview)
+        // A Mosyle org has no Overview: its first section.
+        #expect(SidebarItem.showing(.people, for: Self.org("business", provider: "mosyle")) == .mosyle)
+        #expect(SidebarItem.showing(nil, for: Self.org("business", provider: "mosyle")) == .mosyle)
+        #expect(SidebarItem.showing(.settings, for: Self.org("business", provider: "mosyle")) == .settings)
         #expect(SidebarItem.showing(.activity, for: school) == .overview)
         #expect(SidebarItem.showing(.devices, for: school) == .devices)
         #expect(SidebarItem.showing(.people, for: business) == .people)
@@ -140,7 +148,7 @@ struct NavigationTests {
         #expect(!SidebarItem.people.isLocked(for: errors), "an error isn't a refusal")
         let school = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden"])
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: school) } == [.devices, .services])
-        #expect(SidebarItem.shown(for: school) == [.overview, .devices, .services, .reports, .settings])
+        #expect(SidebarItem.shown(for: school) == [.overview, .devices, .services, .mosyle, .reconciliation, .reports, .settings])
         let schoolAll = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden", "audit_events": "forbidden"])
         #expect(SidebarItem.overview.isLocked(for: schoolAll), "every read recorded refused")
     }
@@ -149,11 +157,12 @@ struct NavigationTests {
     /// accessibility identifiers use, unchanged from Phase 1 for its sections.
     @Test func everySectionHasOneTitleAndOneName() {
         #expect(SidebarItem.allCases.map(\.title)
-                == ["Overview", "Devices", "Services", "Apple MDM", "People", "Content", "Activity", "Reports", "Settings"])
+                == ["Overview", "Devices", "Services", "Apple MDM", "People", "Content", "Activity", "Mosyle", "Reconciliation", "Reports", "Settings"])
         #expect(SidebarItem.allCases.map(\.rawValue)
-                == ["overview", "devices", "services", "apple-mdm", "people", "content", "activity", "reports", "settings"])
+                == ["overview", "devices", "services", "apple-mdm", "people", "content", "activity", "mosyle", "reconciliation", "reports", "settings"])
         #expect(SidebarItem.allCases.map(\.phrase)
-                == ["overview", "devices", "services", "Apple MDM", "people", "content", "activity", "reports", "settings"])
+                == ["overview", "devices", "services", "Apple MDM", "people", "content", "activity", "Mosyle", "reconciliation", "reports",
+                    "settings"])
     }
 
     /// `scripts/screenshots.sh` names sections by raw value; a name that isn't one would open the Overview and pass.
@@ -169,7 +178,7 @@ struct NavigationTests {
         let screens = Set(specs.map { $0[1] })
         #expect(screens == names.subtracting(["reports"]), "\(screens.sorted())")
         let inspected = Set(specs.filter { $0.count > 2 && $0[2] == "first" }.map { $0[1] })
-        #expect(inspected == ["devices", "people", "content", "apple-mdm", "activity"], "\(inspected.sorted())")
+        #expect(inspected == ["devices", "people", "content", "apple-mdm", "activity", "mosyle"], "\(inspected.sorted())")
         let narrow = specs.filter { $0[0].hasPrefix("narrow-") }
         #expect(narrow.allSatisfy { $0.count == 4 && $0[3] == "smallest" })
         #expect(Set(narrow.filter { $0[2] == "first" }.map { $0[1] }) == inspected)
@@ -226,12 +235,13 @@ struct ScaffoldTests {
     /// Refresh sent to the devices left every suite green while the routing sat in the app's `ContentView`).
     @Test func refreshReadsTheSectionsOwnModel() async throws {
         for section in SidebarItem.allCases {
-            let world = try await World.make()
+            let world = try await World.make(mosyle: true)
             world.screens.refresh(section)
             let loading: [String: Bool] = [
                 "devices": world.devices.state.isLoading, "audit": world.dashboard.auditState.isLoading,
                 "people": world.people.users.state.isLoading, "content": world.content.apps.state.isLoading,
                 "appleMDM": world.appleMDM.state.isLoading, "activity": world.activity.state.isLoading,
+                "mosyle": world.mosyle.devices.state.isLoading,
             ]
             let expected: Set<String> = switch section {
             case .overview: ["devices", "audit"]
@@ -239,6 +249,8 @@ struct ScaffoldTests {
             case .content: ["content"]
             case .appleMDM: ["appleMDM"]
             case .activity: ["activity"]
+            case .mosyle: ["mosyle"]
+            case .reconciliation: ["devices", "mosyle"]
             case .devices, .services, .reports, .settings: ["devices"]
             }
             #expect(Set(loading.filter(\.value).keys) == expected, "\(section)")
@@ -256,25 +268,27 @@ struct ScaffoldTests {
     /// read, and only People's force was held).
     @Test func refreshOnASectionAlreadyReadReadsAgain() async throws {
         for section in SidebarItem.allCases {
-            let world = try await World.make()
+            let world = try await World.make(mosyle: true)
             switch section {
             case .overview: world.dashboard.load()
             case .people: world.people.load()
             case .content: world.content.load()
             case .appleMDM: world.appleMDM.load()
             case .activity: world.activity.load()
+            case .mosyle: world.mosyle.load()
+            case .reconciliation: world.reconciliation.load()
             case .devices, .services, .reports, .settings: world.devices.load()
             }
             await eventually("\(section) read once") {
                 world.devices.readsFinished + world.dashboard.readsFinished + world.people.readsFinished + world.content.readsFinished
-                    + world.appleMDM.readsFinished + world.activity.readsFinished > 0
+                    + world.appleMDM.readsFinished + world.activity.readsFinished + world.mosyle.readsFinished > 0
                     && ![world.devices.state, world.dashboard.auditState, world.people.users.state, world.content.apps.state,
-                         world.appleMDM.state, world.activity.state].contains { $0.isLoading }
+                         world.appleMDM.state, world.activity.state, world.mosyle.devices.state].contains { $0.isLoading }
             }
             world.screens.refresh(section)
             let loading = [world.devices.state, world.dashboard.auditState, world.people.users.state, world.content.apps.state,
-                           world.appleMDM.state, world.activity.state].filter(\.isLoading).count
-            #expect(loading == (section == .overview ? 2 : 1), "\(section)")
+                           world.appleMDM.state, world.activity.state, world.mosyle.devices.state].filter(\.isLoading).count
+            #expect(loading == ([.overview, .reconciliation].contains(section) ? 2 : 1), "\(section)")
         }
     }
 

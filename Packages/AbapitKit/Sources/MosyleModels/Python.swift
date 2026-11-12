@@ -4,7 +4,7 @@ import JSONAPI
 /// The few Python behaviours abapit's `mosyle.py` leans on, made exact so the adapters hold to its goldens:
 /// truthiness (`x or y`), `str()` of a parsed value, `int()` of a timestamp, `in` on strings and a set's keys.
 /// Unicode properties come from Swift's own tables, read as of `unicodeVersion`.
-enum Python {
+public enum Python {
     /// The Unicode version of the Python the goldens came from (the golden's `unicode`, which a test holds this
     /// to). Swift's tables are newer (17.0 on macOS 27), so a character assigned since is unassigned here, as it is
     /// to abapit: `repr()` escapes it, and `int()` and `str.isdigit()` take it for no digit. Verifier round 1:
@@ -18,7 +18,7 @@ enum Python {
     }
 
     /// `bool(value)`: null, `false`, `0`, `0.0`, `""`, `[]` and `{}` are false; NaN is true.
-    static func truthy(_ value: JSONValue?) -> Bool {
+    public static func truthy(_ value: JSONValue?) -> Bool {
         switch value {
         case nil, .null?: false
         case .bool(let flag)?: flag
@@ -31,7 +31,7 @@ enum Python {
 
     /// `str(value)` of what `json.loads` made of it: the string itself, `True`, `None`, a number as Python writes
     /// it (Phase 7a review L4: `1e20` is `1e+20`, `1e3` is `1000.0`), and a list or a dict as its `repr()`.
-    static func str(_ value: JSONValue?) -> String {
+    public static func str(_ value: JSONValue?) -> String {
         switch value {
         case nil: "None"
         case .string(let text)?: text
@@ -217,6 +217,83 @@ enum Python {
         case .null, .array, .object: return nil
         }
     }
+
+    /// `str.isspace()` for one character, ASCII's own included: what `strip()` removes.
+    static func isWhitespace(_ scalar: Unicode.Scalar) -> Bool {
+        (0x09...0x0D).contains(scalar.value) || (0x1C...0x20).contains(scalar.value) || isSpace(scalar)
+    }
+
+    /// `text.strip()`: Python's whitespace off both ends, by code points.
+    public static func strip(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        guard let first = scalars.firstIndex(where: { !isWhitespace($0) }), let last = scalars.lastIndex(where: { !isWhitespace($0) }) else {
+            return ""
+        }
+        return String(String.UnicodeScalarView(scalars[first...last]))
+    }
+
+    /// Characters assigned by `unicodeVersion` whose case changed since, read as abapit's Python reads them, each held by the
+    /// `unicode_case` golden (every code point's `upper()`, `title()`, cased-ness and `isspace()` from CPython). Four
+    /// lowercase letters gained a capital in Unicode 16 (`ƛ`, `ɤ`, `ꟓ`, `ꟕ`): Python 15 has none, so their serials stay
+    /// apart from a capital's (the review of step 3: Swift's tables joined Apple's `ƛ1` and Mosyle's `꟝1`).
+    static let noCapitalYet: Set<UInt32> = [0x019B, 0x0264, 0xA7D3, 0xA7D5]
+    /// `ʕ` was a cased letter in Unicode 15 and isn't since 16: `title()` lowercases what follows it there.
+    static let casedThen: Set<UInt32> = [0x0295]
+
+    /// Whether `title()` reads the character as cased (CPython's `_PyUnicode_IsCased`, as of `unicodeVersion`).
+    static func isCased(_ scalar: Unicode.Scalar) -> Bool {
+        casedThen.contains(scalar.value) || (known(scalar) && scalar.properties.isCased)
+    }
+
+    /// `text.upper()`: each known character's full uppercase mapping (`ß` is `SS`); a character abapit's Python doesn't
+    /// know (`unicodeVersion`), or knew without a capital, stays as it is, as it does there.
+    public static func upper(_ text: String) -> String {
+        var out = ""
+        for scalar in text.unicodeScalars {
+            if known(scalar), !noCapitalYet.contains(scalar.value) { out += scalar.properties.uppercaseMapping } else { out.unicodeScalars.append(scalar) }
+        }
+        return out
+    }
+
+    /// `text.title()`: CPython's `do_title`. A character after a cased one is lowercased (`lower_ucs4`, so a capital sigma
+    /// ending a word is `ς`), any other titlecased, by each character's own Cased property, so `IPHONE1X` is `Iphone1X` (a
+    /// digit isn't cased).
+    public static func title(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        var out = "", previousCased = false
+        for index in scalars.indices {
+            let scalar = scalars[index]
+            if !known(scalar) || (!previousCased && noCapitalYet.contains(scalar.value)) {
+                out.unicodeScalars.append(scalar)
+            } else if !previousCased {
+                out += scalar.properties.titlecaseMapping
+            } else if scalar == "\u{3A3}" {
+                out.unicodeScalars.append(isFinalSigma(scalars, index) ? "\u{3C2}" : "\u{3C3}")
+            } else {
+                out += scalar.properties.lowercaseMapping
+            }
+            previousCased = isCased(scalar)
+        }
+        return out
+    }
+
+    /// CPython's `handle_capital_sigma`: a cased character before it (past case-ignorable ones), and none after it.
+    static func isFinalSigma(_ scalars: [Unicode.Scalar], _ index: Int) -> Bool {
+        func ignorable(_ scalar: Unicode.Scalar) -> Bool { known(scalar) && scalar.properties.isCaseIgnorable }
+        guard let before = scalars[..<index].lastIndex(where: { !ignorable($0) }), isCased(scalars[before]) else { return false }
+        guard let after = scalars[(index + 1)...].firstIndex(where: { !ignorable($0) }) else { return true }
+        return !isCased(scalars[after])
+    }
+
+    /// `round(value, 1)`: the nearest tenth of the double's exact value, a tie to the even tenth. printf rounds the exact
+    /// binary value as Python's `round` does (`0.25` is `0.2`, `18.75` is `18.8`); `(value * 10).rounded() / 10` doesn't.
+    public static func round1(_ value: Double) -> Double {
+        guard value.isFinite else { return value }
+        return Double(String(format: "%.1f", value)) ?? value
+    }
+
+    /// `a < b` for two Python strings: by code points. Swift's `<` on `String` orders by canonical equivalence.
+    public static func precedes(_ a: String, _ b: String) -> Bool { a.unicodeScalars.lexicographicallyPrecedes(b.unicodeScalars) }
 
     static func pad(_ number: Int, _ width: Int) -> String {
         let text = String(number)

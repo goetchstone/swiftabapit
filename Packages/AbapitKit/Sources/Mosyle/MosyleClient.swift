@@ -22,6 +22,22 @@ public enum MosyleColumnFallback: Sendable, Equatable {
     case everyColumn
 }
 
+/// Records read in a shape no source shows (custom device attributes, admin-log entries), cut to the fields this app
+/// guesses at, and the names of the fields it didn't read (sorted, unique): a screen says them, so a wrong guess is seen on
+/// the first live read, never silent (invariant 8). Only names, never values (invariant 11).
+public struct MosyleRecords: Sendable {
+    public let items: [Resource]
+    public let unread: [String]
+    /// Mosyle's own `rows` beside the list, when it sent one: more than `items` holds means the list was cut.
+    public let total: Int?
+}
+
+/// A device group's members (`get_info`): their UDIDs, as Mosyle lists them, and the group's name.
+public struct MosyleGroupMembers: Sendable, Equatable {
+    public let name: String?
+    public let udids: [String]
+}
+
 /// One Mosyle Business org's reads (plan §8, Phase 7). Paging continues until the list's own end-of-list status, an
 /// empty page, a page that adds nothing new, or the cap: whether `rows` is the overall total or the page's count is
 /// still unconfirmed, and abapit's stop-on-a-short-page lost every row past 50 (defect 2).
@@ -43,6 +59,11 @@ public actor MosyleClient {
         session = MosyleSession(org: org, service: .business, vault: vault,
                                 http: HTTPClient(transport: transport, limiter: limiter, bodyLimit: bodyLimit, sleep: sleep))
         self.pageCap = pageCap
+    }
+
+    /// The app's client: Mosyle over `URLSession`.
+    public init(org: String, vault: Vault) {
+        self.init(org: org, vault: vault, transport: URLSessionTransport())
     }
 
     public var logins: Int { get async { await session.logins } }
@@ -82,6 +103,69 @@ public actor MosyleClient {
             truncated = truncated || page.truncated
         }
         return MosylePage(items: groups, truncated: truncated)
+    }
+
+    /// Every platform's custom device attributes, one read each (not paged). The list may come under any of three names
+    /// (a guess each, `Assumed, check live`); anything else, an end status included, is an error, never an empty list.
+    public func customAttributes() async throws -> MosyleRecords {
+        var items: [Resource] = [], unread: [String] = []
+        for os in MosyleRead.platforms {
+            let page = try Self.page(try await envelope(MosyleRead.customAttributes(os: os)), ["custom_device_attributes", "attributes", "info"], [])
+            guard case .rows(let rows) = page else { continue }
+            for row in rows {
+                let (item, names) = MosyleAdapter.customAttribute(row, os: os)
+                items.append(item)
+                unread += names
+            }
+        }
+        return MosyleRecords(items: items, unread: Self.unique(unread), total: nil)
+    }
+
+    /// A device group's members, only the compliant or the non-compliant ones when `compliance` says. The answer is an
+    /// object (`response.devicegroup`, its `udids` a list of strings: Mosyle's Postman collection); any other shape is
+    /// `.malformed`, and a status of its own (a group Mosyle doesn't have) is `.status`.
+    public func deviceGroupMembers(_ id: String, compliance: MosyleRead.Compliance? = nil) async throws -> MosyleGroupMembers {
+        let envelope = try await envelope(MosyleRead.deviceGroupInfo(id: id, compliance: compliance))
+        if let malformed = envelope.malformed { throw MosyleAPIError.malformed(malformed) }
+        if let status = envelope.status, status != .known(.ok) { throw MosyleAPIError.status(status, info: envelope.info) }
+        guard case .object(let group)? = envelope.entry["devicegroup"] else { throw MosyleAPIError.malformed("it has no devicegroup object") }
+        guard case .array(let listed)? = group["udids"] else { throw MosyleAPIError.malformed("its devicegroup has no udids list") }
+        let udids = listed.compactMap(\.string)
+        guard udids.count == listed.count else { throw MosyleAPIError.malformed("a udid in its devicegroup isn't a string") }
+        return MosyleGroupMembers(name: group["name"]?.string, udids: udids)
+    }
+
+    /// The admin audit log for the last `days` days (1 to 365), today included, as UTC days: one read, not paged (no
+    /// source shows a page). Mosyle's `rows`, when sent, is kept beside the entries, so a cut list can be said.
+    public func adminLogs(days: Int, now: Date = Date()) async throws -> MosyleRecords {
+        let days = min(max(days, 1), 365)
+        let request = MosyleRead.adminLogs(start: Self.day(now.addingTimeInterval(-Double(days - 1) * 86_400)), end: Self.day(now))
+        let envelope = try await envelope(request)
+        guard case .rows(let rows) = try Self.page(envelope, ["logs", "adminlogs", "admin_logs"], []) else {
+            return MosyleRecords(items: [], unread: [], total: envelope.total)
+        }
+        var items: [Resource] = [], unread: [String] = []
+        for row in rows {
+            let (item, names) = MosyleAdapter.adminLog(row)
+            items.append(item)
+            unread += names
+        }
+        return MosyleRecords(items: items, unread: Self.unique(unread), total: envelope.total)
+    }
+
+    /// `YYYY-MM-DD` of `date` in UTC.
+    static func day(_ date: Date) -> String {
+        let parts = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(secondsFromGMT: 0)!, from: date)
+        func pad(_ value: Int?, _ width: Int) -> String {
+            let text = String(value ?? 0)
+            return String(repeating: "0", count: max(0, width - text.count)) + text
+        }
+        return "\(pad(parts.year, 4))-\(pad(parts.month, 2))-\(pad(parts.day, 2))"
+    }
+
+    static func unique(_ names: [String]) -> [String] {
+        var seen: Set<[UInt8]> = []
+        return names.filter { seen.insert(Array($0.utf8)).inserted }.sorted(by: Python.precedes)
     }
 
     /// Settings → Test: a login and the first page of Macs, asked as the device list asks them (its columns, and their

@@ -43850,6 +43850,1011 @@
    }
   },
   {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "  c02abc\u3000",
+      "attributes": {
+       "status": "ASSIGNED",
+       "productFamily": "",
+       "deviceModel": null,
+       "addedToOrgDateTime": "2024-01-02"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02ABC",
+      "attributes": {
+       "status": "UNASSIGNED",
+       "productFamily": "",
+       "deviceModel": "",
+       "addedToOrgDateTime": "2025-01-02"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "stra\u00dfe1",
+      "attributes": {
+       "status": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02\u00c9X",
+      "attributes": {
+       "status": "ASSIGNED",
+       "productFamily": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "\t",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "Zeta",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "alpha",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "\u00e9clair",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "\u0131d",
+      "attributes": {
+       "status": "ASSIGNED"
+      }
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "c02abc",
+      "attributes": {
+       "status": "enrolled",
+       "productFamily": "Mac",
+       "deviceModel": "Mac mini (M4)",
+       "osVersion": "27.0",
+       "lastCheckIn": "2026-10-01",
+       "currentUser": "kai@example.com"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "STRASSE1",
+      "attributes": {
+       "status": "pending",
+       "productFamily": "iPhone"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02E\u0301X",
+      "attributes": {
+       "status": 2
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "ID",
+      "attributes": {
+       "status": "enrolled"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "id ",
+      "attributes": {
+       "status": "pending",
+       "osVersion": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "beta",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "Beta",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [
+      {
+       "serial": "C02\u00c9X",
+       "presence": "abm_only",
+       "abm_status": "ASSIGNED",
+       "mosyle_status": "",
+       "productFamily": "Mac",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "Zeta",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "alpha",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "\u00e9clair",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "mosyle_only": [
+      {
+       "serial": "Beta",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "C02E\u0301X",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": 2,
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [
+      {
+       "serial": "C02ABC",
+       "presence": "both",
+       "abm_status": "UNASSIGNED",
+       "mosyle_status": "enrolled",
+       "productFamily": "Mac",
+       "deviceModel": "Mac mini (M4)",
+       "osVersion": "27.0",
+       "lastCheckIn": "2026-10-01",
+       "addedToOrgDateTime": "2025-01-02",
+       "currentUser": "kai@example.com"
+      },
+      {
+       "serial": "stra\u00dfe1",
+       "presence": "both",
+       "abm_status": null,
+       "mosyle_status": "pending",
+       "productFamily": "iPhone",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "\u0131d",
+       "presence": "both",
+       "abm_status": "ASSIGNED",
+       "mosyle_status": "pending",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": null,
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "summary": {
+      "total_abm": 7,
+      "total_mosyle": 5,
+      "total_unique": 9,
+      "both_count": 3,
+      "abm_only_count": 4,
+      "mosyle_only_count": 2,
+      "enrollment_rate": 33.3
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [],
+    "mosyle_devices": []
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [],
+     "mosyle_only": [],
+     "both": [],
+     "summary": {
+      "total_abm": 0,
+      "total_mosyle": 0,
+      "total_unique": 0,
+      "both_count": 0,
+      "abm_only_count": 0,
+      "mosyle_only_count": 0,
+      "enrollment_rate": 0.0
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "TIE01",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE02",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE03",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE04",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE05",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE06",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE07",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE08",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE09",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE10",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "TIE01",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE02",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIE03",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM01",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM02",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM03",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM04",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM05",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "TIEM06",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [
+      {
+       "serial": "TIE04",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE05",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE06",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE07",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE08",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE09",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE10",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "mosyle_only": [
+      {
+       "serial": "TIEM01",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIEM02",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIEM03",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIEM04",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIEM05",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIEM06",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [
+      {
+       "serial": "TIE01",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE02",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "TIE03",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "summary": {
+      "total_abm": 10,
+      "total_mosyle": 9,
+      "total_unique": 16,
+      "both_count": 3,
+      "abm_only_count": 7,
+      "mosyle_only_count": 6,
+      "enrollment_rate": 18.8
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "ONE",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "ONE",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M0",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M2",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M3",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M4",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M5",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "M6",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [],
+     "mosyle_only": [
+      {
+       "serial": "M0",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M1",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M2",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M3",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M4",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M5",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "M6",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [
+      {
+       "serial": "ONE",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "summary": {
+      "total_abm": 1,
+      "total_mosyle": 8,
+      "total_unique": 8,
+      "both_count": 1,
+      "abm_only_count": 0,
+      "mosyle_only_count": 7,
+      "enrollment_rate": 12.5
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "A1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "A2",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "A1",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [
+      {
+       "serial": "A2",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "mosyle_only": [],
+     "both": [
+      {
+       "serial": "A1",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "summary": {
+      "total_abm": 2,
+      "total_mosyle": 1,
+      "total_unique": 2,
+      "both_count": 1,
+      "abm_only_count": 1,
+      "mosyle_only_count": 0,
+      "enrollment_rate": 50.0
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "A1",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "A1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "A2",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [],
+     "mosyle_only": [
+      {
+       "serial": "A2",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [
+      {
+       "serial": "A1",
+       "presence": "both",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "summary": {
+      "total_abm": 1,
+      "total_mosyle": 2,
+      "total_unique": 2,
+      "both_count": 1,
+      "abm_only_count": 0,
+      "mosyle_only_count": 1,
+      "enrollment_rate": 50.0
+     }
+    }
+   }
+  },
+  {
+   "function": "reconcile_enrollments",
+   "input": {
+    "abm_devices": [
+     {
+      "type": "orgDevices",
+      "id": "G\ud803\udd70X",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02\u00c9X",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02FX",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C02E\u0301X",
+      "attributes": {}
+     }
+    ],
+    "mosyle_devices": [
+     {
+      "type": "orgDevices",
+      "id": "G\ud803\udd50X",
+      "attributes": {}
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "abm_only": [
+      {
+       "serial": "C02E\u0301X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "C02FX",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "C02\u00c9X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      },
+      {
+       "serial": "G\ud803\udd70X",
+       "presence": "abm_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "mosyle_only": [
+      {
+       "serial": "G\ud803\udd50X",
+       "presence": "mosyle_only",
+       "abm_status": "",
+       "mosyle_status": "",
+       "productFamily": "",
+       "deviceModel": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "addedToOrgDateTime": "",
+       "currentUser": ""
+      }
+     ],
+     "both": [],
+     "summary": {
+      "total_abm": 4,
+      "total_mosyle": 1,
+      "total_unique": 5,
+      "both_count": 0,
+      "abm_only_count": 4,
+      "mosyle_only_count": 1,
+      "enrollment_rate": 0.0
+     }
+    }
+   }
+  },
+  {
    "function": "device_timeline",
    "input": {
     "abm_attrs": null,
@@ -45403,6 +46408,191 @@
       "source": "ABM"
      }
     ]
+   }
+  },
+  {
+   "function": "device_timeline",
+   "input": {
+    "abm_attrs": {
+     "orderDateTime": "2026-01-01",
+     "addedToOrgDateTime": "2026-01-01"
+    },
+    "mosyle_attrs": {
+     "enrolledAt": "2026-01-01",
+     "lastMdmCheckIn": "",
+     "lastPush": null,
+     "lastCheckIn": "2026-01-02"
+    },
+    "audit_events": [
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-01",
+      "attributes": {
+       "eventDateTime": "2026-01-01"
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-01",
+      "attributes": {
+       "eventDateTime": "2026-01-01",
+       "type": "DEVICE_ADDED_TO_ORG",
+       "outcome": null
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-03",
+      "attributes": {
+       "eventDateTime": "2026-01-03",
+       "type": "IPHONE1X_ADDED",
+       "outcome": 0
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-04",
+      "attributes": {
+       "eventDateTime": "2026-01-04",
+       "type": "device_added",
+       "outcome": "  \u00b7 x \u00b7"
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-05",
+      "attributes": {
+       "eventDateTime": "2026-01-05",
+       "type": "\u00c9V\u00c9NEMENT_\u00df",
+       "outcome": "SUCCESS"
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-06",
+      "attributes": {
+       "eventDateTime": "2026-01-06",
+       "type": "A_\u0301B",
+       "outcome": "FAILURE"
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-07",
+      "attributes": {
+       "eventDateTime": "2026-01-07",
+       "type": "X",
+       "outcome": "\u00b7"
+      }
+     },
+     {
+      "type": "auditEvents",
+      "id": "evt-2026-01-08",
+      "attributes": {
+       "eventDateTime": "2026-01-08",
+       "type": "\u05d0B_C",
+       "outcome": "SUCCESS"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": [
+     {
+      "when": "2026-01-08",
+      "kind": "audit",
+      "label": "\u05d0B C \u00b7 SUCCESS",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-07",
+      "kind": "audit",
+      "label": "X",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-06",
+      "kind": "audit",
+      "label": "A \u0301B \u00b7 FAILURE",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-05",
+      "kind": "audit",
+      "label": "\u00c9v\u00e9nement Ss \u00b7 SUCCESS",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-04",
+      "kind": "audit",
+      "label": "Device Added \u00b7   \u00b7 x",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-03",
+      "kind": "audit",
+      "label": "Iphone1X Added",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-02",
+      "kind": "beat",
+      "label": "Last seen (heartbeat)",
+      "source": "Mosyle"
+     },
+     {
+      "when": "2026-01-01",
+      "kind": "ordered",
+      "label": "Ordered",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-01",
+      "kind": "added",
+      "label": "Added to Apple Business",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-01",
+      "kind": "audit",
+      "label": "Event",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-01",
+      "kind": "audit",
+      "label": "Device Added To Org",
+      "source": "ABM"
+     },
+     {
+      "when": "2026-01-01",
+      "kind": "enrolled",
+      "label": "Enrolled in Mosyle",
+      "source": "Mosyle"
+     }
+    ]
+   }
+  },
+  {
+   "function": "device_timeline",
+   "input": {
+    "abm_attrs": null,
+    "mosyle_attrs": null,
+    "audit_events": null
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "function": "device_timeline",
+   "input": {
+    "abm_attrs": {},
+    "mosyle_attrs": {},
+    "audit_events": []
+   },
+   "expected": {
+    "ok": []
    }
   },
   {
@@ -48697,6 +49887,370 @@
      ],
      "total": 17,
      "max_count": 5
+    }
+   }
+  },
+  {
+   "function": "mosyle_os_breakdown",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "A",
+      "attributes": {
+       "osVersion": "Unknown"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "B",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "C",
+      "attributes": {
+       "osVersion": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "D",
+      "attributes": {
+       "osVersion": "10.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "E",
+      "attributes": {
+       "osVersion": "9.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "F",
+      "attributes": {
+       "osVersion": "10.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "G",
+      "attributes": {
+       "osVersion": "9.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "H",
+      "attributes": {
+       "osVersion": "Caf\u00e9"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "I",
+      "attributes": {
+       "osVersion": "Cafe\u0301"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "J",
+      "attributes": {
+       "osVersion": null
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      [
+       "10.0",
+       2,
+       20.0
+      ],
+      [
+       "9.0",
+       2,
+       20.0
+      ],
+      [
+       "Cafe\u0301",
+       1,
+       10.0
+      ],
+      [
+       "Caf\u00e9",
+       1,
+       10.0
+      ],
+      [
+       "Unknown",
+       4,
+       40.0
+      ]
+     ],
+     "total": 10,
+     "max_count": 4
+    }
+   }
+  },
+  {
+   "function": "mosyle_os_breakdown",
+   "input": {
+    "devices": []
+   },
+   "expected": {
+    "ok": {
+     "rows": [],
+     "total": 0,
+     "max_count": 0
+    }
+   }
+  },
+  {
+   "function": "mosyle_os_breakdown",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "S0",
+      "attributes": {
+       "osVersion": "27.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S1",
+      "attributes": {
+       "osVersion": "27.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S2",
+      "attributes": {
+       "osVersion": "27.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S3",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S4",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S5",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S6",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S7",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S8",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S9",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S10",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S11",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S12",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S13",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S14",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "S15",
+      "attributes": {
+       "osVersion": "26.0"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      [
+       "26.0",
+       13,
+       81.2
+      ],
+      [
+       "27.0",
+       3,
+       18.8
+      ]
+     ],
+     "total": 16,
+     "max_count": 13
+    }
+   }
+  },
+  {
+   "function": "mosyle_os_breakdown",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "A",
+      "attributes": {
+       "osVersion": "1"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "B",
+      "attributes": {
+       "osVersion": "2"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "C",
+      "attributes": {
+       "osVersion": "3"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "D",
+      "attributes": {
+       "osVersion": "4"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "E",
+      "attributes": {
+       "osVersion": "5"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "F",
+      "attributes": {
+       "osVersion": "6"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "G",
+      "attributes": {
+       "osVersion": "7"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "H",
+      "attributes": {
+       "osVersion": "7"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      [
+       "7",
+       2,
+       25.0
+      ],
+      [
+       "1",
+       1,
+       12.5
+      ],
+      [
+       "2",
+       1,
+       12.5
+      ],
+      [
+       "3",
+       1,
+       12.5
+      ],
+      [
+       "4",
+       1,
+       12.5
+      ],
+      [
+       "5",
+       1,
+       12.5
+      ],
+      [
+       "6",
+       1,
+       12.5
+      ]
+     ],
+     "total": 8,
+     "max_count": 2
     }
    }
   },
@@ -53537,6 +55091,693 @@
      "stale_count": 19,
      "never_count": 1,
      "days": 0
+    }
+   }
+  },
+  {
+   "function": "mosyle_stale_devices",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "EDGE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "SHORT",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OFFSET",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T17:30:00+05:30"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NAIVE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "AHEAD",
+      "attributes": {
+       "lastCheckIn": "2026-10-17T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER2",
+      "attributes": {
+       "lastCheckIn": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "BAD",
+      "attributes": {
+       "lastCheckIn": "not a date"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD1",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD2",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T06:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NULL",
+      "attributes": {
+       "lastCheckIn": null
+      }
+     }
+    ],
+    "days": 0
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      {
+       "serial": "NEVER1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NEVER2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "BAD",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "not a date",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NULL",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": null,
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "OLD1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T00:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "OLD2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T06:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "EDGE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T12:00:00Z",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "OFFSET",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T17:30:00+05:30",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "NAIVE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "SHORT",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z",
+       "currentUser": "",
+       "days_stale": 29
+      }
+     ],
+     "total": 11,
+     "stale_count": 10,
+     "never_count": 4,
+     "days": 0
+    }
+   }
+  },
+  {
+   "function": "mosyle_stale_devices",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "EDGE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "SHORT",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OFFSET",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T17:30:00+05:30"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NAIVE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "AHEAD",
+      "attributes": {
+       "lastCheckIn": "2026-10-17T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER2",
+      "attributes": {
+       "lastCheckIn": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "BAD",
+      "attributes": {
+       "lastCheckIn": "not a date"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD1",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD2",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T06:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NULL",
+      "attributes": {
+       "lastCheckIn": null
+      }
+     }
+    ],
+    "days": 1
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      {
+       "serial": "NEVER1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NEVER2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "BAD",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "not a date",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NULL",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": null,
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "OLD1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T00:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "OLD2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T06:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "EDGE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T12:00:00Z",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "OFFSET",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T17:30:00+05:30",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "NAIVE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "SHORT",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z",
+       "currentUser": "",
+       "days_stale": 29
+      }
+     ],
+     "total": 11,
+     "stale_count": 10,
+     "never_count": 4,
+     "days": 1
+    }
+   }
+  },
+  {
+   "function": "mosyle_stale_devices",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "EDGE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "SHORT",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OFFSET",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T17:30:00+05:30"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NAIVE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "AHEAD",
+      "attributes": {
+       "lastCheckIn": "2026-10-17T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER2",
+      "attributes": {
+       "lastCheckIn": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "BAD",
+      "attributes": {
+       "lastCheckIn": "not a date"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD1",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD2",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T06:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NULL",
+      "attributes": {
+       "lastCheckIn": null
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      {
+       "serial": "NEVER1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NEVER2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "BAD",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "not a date",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NULL",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": null,
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "OLD1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T00:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "OLD2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T06:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "EDGE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T12:00:00Z",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "OFFSET",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16T17:30:00+05:30",
+       "currentUser": "",
+       "days_stale": 30
+      },
+      {
+       "serial": "NAIVE",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-09-16",
+       "currentUser": "",
+       "days_stale": 30
+      }
+     ],
+     "total": 11,
+     "stale_count": 9,
+     "never_count": 4,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "mosyle_stale_devices",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "EDGE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "SHORT",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T12:00:00.000001Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OFFSET",
+      "attributes": {
+       "lastCheckIn": "2026-09-16T17:30:00+05:30"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NAIVE",
+      "attributes": {
+       "lastCheckIn": "2026-09-16"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "AHEAD",
+      "attributes": {
+       "lastCheckIn": "2026-10-17T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER1",
+      "attributes": {}
+     },
+     {
+      "type": "orgDevices",
+      "id": "NEVER2",
+      "attributes": {
+       "lastCheckIn": ""
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "BAD",
+      "attributes": {
+       "lastCheckIn": "not a date"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD1",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "OLD2",
+      "attributes": {
+       "lastCheckIn": "2026-01-01T06:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "NULL",
+      "attributes": {
+       "lastCheckIn": null
+      }
+     }
+    ],
+    "days": 31
+   },
+   "expected": {
+    "ok": {
+     "rows": [
+      {
+       "serial": "NEVER1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NEVER2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "BAD",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "not a date",
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "NULL",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": null,
+       "currentUser": "",
+       "days_stale": null
+      },
+      {
+       "serial": "OLD1",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T00:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      },
+      {
+       "serial": "OLD2",
+       "deviceModel": "",
+       "productFamily": "",
+       "osVersion": "",
+       "lastCheckIn": "2026-01-01T06:00:00Z",
+       "currentUser": "",
+       "days_stale": 288
+      }
+     ],
+     "total": 11,
+     "stale_count": 6,
+     "never_count": 4,
+     "days": 31
     }
    }
   },

@@ -31,7 +31,8 @@ struct SettingsView: View {
                             Text(org.name.isEmpty ? org.id : org.name)
                             if org.id == orgs.active?.id { Text("Active").font(.caption).foregroundStyle(.secondary) }
                         }
-                        Text([org.scope.known?.displayName ?? org.provider.rawValue, org.role].filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text([org.provider == .known(.mosyle) ? "Mosyle Business" : org.scope.known?.displayName ?? org.provider.rawValue, org.role]
+                                .filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .tag(org.id)

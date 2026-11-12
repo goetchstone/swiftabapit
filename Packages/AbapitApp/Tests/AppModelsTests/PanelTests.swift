@@ -320,7 +320,9 @@ struct PanelTests {
             Issue.record("\(world.devices.state)")
             return
         }
-        #expect(why.contains("mosyle"))
+        // Its own sentence since Phase 7, which reads Mosyle orgs: Apple's screens don't (the sidebar hides them for one).
+        #expect(why == "This organization can't be used: Fleet is a Mosyle Business organization: Apple Business's and Apple School "
+                + "Manager's screens don't read it.")
     }
 
     @Test func noOrganizationSaysSo() async throws {

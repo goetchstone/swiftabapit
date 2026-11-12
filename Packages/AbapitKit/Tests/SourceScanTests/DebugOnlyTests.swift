@@ -51,10 +51,12 @@ struct DebugOnlyTests {
                 #expect(spots.isEmpty, "\(spots)")
             }
         }
-        // Its definition, its Vault initializer and the demo's use, each where the scan looks; a new use is a reviewed
-        // change here. A count (`seen >= 3`) could be relaxed with every test green (Phase 1b gates verifier round 2).
+        // Its definition, its Vault initializer and the demos' uses (the Mosyle demo's credentials since Phase 7), each where
+        // the scan looks; a new use is a reviewed change here. A count (`seen >= 3`) could be relaxed with every test green
+        // (Phase 1b gates verifier round 2).
         let sources = "Packages/AbapitKit/Sources"
-        #expect(seen == ["\(sources)/Vault/SecretStore.swift", "\(sources)/Vault/Vault.swift", "\(sources)/TestSupport/DemoOrg.swift"], "\(seen)")
+        #expect(seen == ["\(sources)/Vault/SecretStore.swift", "\(sources)/Vault/Vault.swift", "\(sources)/TestSupport/DemoOrg.swift",
+                         "\(sources)/TestSupport/DemoMosyle.swift"], "\(seen)")
     }
 
     /// The scan must see the switches it guards, or it passes vacuously.

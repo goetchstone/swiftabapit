@@ -4,6 +4,7 @@ import CryptoKit
 import Foundation
 import HTTPCore
 import JSONAPI
+import Mosyle
 import Orgs
 import Synchronization
 import Testing
@@ -26,6 +27,10 @@ struct World {
     let appleMDM: AppleMDMModel
     let activity: ActivityModel
     let dashboard: DashboardModel
+    let mosyle: MosyleModel
+    let reconciliation: ReconciliationModel
+    /// The Mosyle org `m`'s strict stub (`make(mosyle: true)` adds `m` and pairs `a` with it).
+    let mosyleStub: MosyleStub
     let stubs: [String: AppleStub]
     let gates: [String: Gate]
     let store: MemoryStore
@@ -41,10 +46,18 @@ struct World {
 
     /// `devices` per org, serials `ADEV0000000…`; `rates` are the profiles' learned rates; `profiles` replaces the
     /// two Apple orgs' profiles (an unusable org, none at all).
+    static let mosyleAccount = MosyleStub.Account(accessToken: "m-access-token", email: "admin@example.com", password: "m-password")
+
+    /// Org `m`, Mosyle Business.
+    static func mosyleProfile(_ id: String = "m") -> OrgProfile { OrgProfile(id: id, name: "Mosyle \(id)", provider: .mosyle) }
+
+    /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, with `a` paired with it.
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
-                     profiles: [OrgProfile]? = nil) async throws -> World {
+                     profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap) async throws -> World {
         let keychain = MemoryStore()
         let vault = Vault(store: keychain)
+        let mosyleStub = MosyleStub()
+        mosyleStub.register(mosyleAccount)
         var stubs: [String: AppleStub] = [:], gates: [String: Gate] = [:], keys: [String: P256.Signing.PrivateKey] = [:]
         var orgStore = OrgStore()
         for org in ["a", "b"] {
@@ -62,6 +75,15 @@ struct World {
             if profiles == nil { try orgStore.add(profile(org, rate: rates[org] ?? 0)) }
         }
         for profile in profiles ?? [] { try orgStore.add(profile) }
+        if mosyle {
+            try orgStore.add(mosyleProfile())
+            try await vault.replaceSet([.mosyleAccessToken: Secret(mosyleAccount.accessToken), .mosyleEmail: Secret(mosyleAccount.email),
+                                        .mosylePassword: Secret(mosyleAccount.password)], for: "m")
+            if var a = orgStore["a"] {
+                a.pairedOrg = "m"
+                try orgStore.update(a)
+            }
+        }
         orgStore.activeID = orgStore.orgs.first?.id
         let routes = gates, stall = Stall()
         // The limiter's sleeps move its own clock, and the client's retry sleeps return at once: nothing here
@@ -73,12 +95,17 @@ struct World {
                                limiter: RateLimiter(readsPerMinute: rate ?? 600, now: { stall.pass(clientID); return clock.now },
                                                     sleep: { clock.advance($0) }),
                                pageCap: pageCap, sleep: { _ in })
+        } makeMosyleClient: { org in
+            let clock = ManualClock()
+            return MosyleClient(org: org, vault: vault, transport: mosyleStub,
+                                limiter: RateLimiter(readsPerMinute: 6_000, now: { clock.now }, sleep: { clock.advance($0) }),
+                                pageCap: mosylePageCap, sleep: { _ in })
         }
         // As AppServices builds them, so the switch handlers run in the app's order too.
         let screens = ScreenModels(orgs: orgs)
         return World(orgs: orgs, screens: screens, devices: screens.devices, detail: screens.detail, people: screens.people,
                      content: screens.content, appleMDM: screens.appleMDM, activity: screens.activity, dashboard: screens.dashboard,
-                     stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
+                     mosyle: screens.mosyle, reconciliation: screens.reconciliation, mosyleStub: mosyleStub, stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
 
     /// Org `org`'s profile as the world makes it: Apple Business unless `scope` says School, its own client and key IDs.

@@ -30,7 +30,8 @@ PACKAGE = ROOT / "Packages" / "AbapitKit"
 # The screen models' package (Phase 1b review): outside AbapitKit as the app is, so they see its public API only. One
 # dependency, AbapitKit by path; products only; no unsafeFlags, which could name AbapitKit's package and reopen it.
 APP_PACKAGE = ROOT / "Packages" / "AbapitApp"
-APP_EDGES = {"AppModels": {"product:AppleBusiness", "product:AppleModels", "product:Orgs", "product:Vault", "product:Reports"}}
+APP_EDGES = {"AppModels": {"product:AppleBusiness", "product:AppleModels", "product:Orgs", "product:Vault", "product:Reports",
+                           "product:Mosyle", "product:MosyleModels", "product:JSONAPI"}}
 APP_TESTS = {"AppModelsTests": {"AppModels", "product:JSONAPI", "product:HTTPCore", "product:TestSupport"} | APP_EDGES["AppModels"]}
 
 # A new edge is a reviewed change to this list, PackageGraphTests' list and the plan.

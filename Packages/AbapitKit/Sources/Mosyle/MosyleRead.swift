@@ -34,17 +34,18 @@ public enum MosyleRead {
     /// The end-of-list statuses of the list `request` reads (none for anything else).
     static func ends(_ request: ReadRequest) -> Set<String> { key(of: request).flatMap { endOfList[$0] } ?? [] }
 
-    static func body(_ operation: String?, _ options: JSONObject) -> Data {
+    static func body(_ operation: String?, _ options: JSONObject, top: JSONObject = [:]) -> Data {
         var object = JSONObject()
         if let operation { object["operation"] = JSONValue.string(operation) }
+        for (key, value) in top { object[key] = value }
         if !options.isEmpty { object["options"] = JSONValue.object(options) }
         let text: String = JSONValue.dumps(JSONValue.object(object))
         return Data(text.utf8)
     }
 
-    static func read(_ path: String, _ operation: String?, _ options: JSONObject = [:], host: APIHost = .mosyle) -> ReadRequest {
+    static func read(_ path: String, _ operation: String?, _ options: JSONObject = [:], top: JSONObject = [:], host: APIHost = .mosyle) -> ReadRequest {
         precondition(allowed.contains("\(path)#\(operation ?? "")"), "\(path) \(operation ?? "") is not a Mosyle read")
-        return ReadRequest(host: host, method: .post, path: path, template: "\(path) \(operation ?? "")", body: body(operation, options))
+        return ReadRequest(host: host, method: .post, path: path, template: "\(path) \(operation ?? "")", body: body(operation, options, top: top))
     }
 
     /// `path#operation` as Mosyle will read the request: nil unless the body is exactly what `body(_:_:)` writes
@@ -106,6 +107,40 @@ public enum MosyleRead {
         var options = paging(page)
         options["os"] = JSONValue.string(os)
         return read("/v1/devicegroups", "list_devicegroup", options)
+    }
+
+    /// One platform's custom device attributes (`list_custom_device_attributes`). Its `os` sits beside the operation, not
+    /// in `options` (plan §2.2, Mosyle's own doc; a third-party client of Mosyle Manager sends it the same way). Not paged:
+    /// no source shows a page. Its answer's shape has no source here: docs/domains/mosyle.md, "Assumed, check live".
+    public static func customAttributes(os: String) -> ReadRequest {
+        read("/v1/devices", "list_custom_device_attributes", top: ["os": .string(os)])
+    }
+
+    /// `security_compliance_status`, the device-group read's filter: its two values are a third-party client's (of Mosyle
+    /// Manager, which takes the same option); Mosyle Business's own doc names the option (plan §2.2).
+    public enum Compliance: String, Sendable, CaseIterable {
+        case compliant, noncompliant
+    }
+
+    /// A device group's members (`get_info`, `options.iddevicegroup`, the id as a string as Mosyle's Postman collection
+    /// sends it), only those `compliance` names when given.
+    public static func deviceGroupInfo(id: String, compliance: Compliance? = nil) -> ReadRequest {
+        var options = JSONObject()
+        options["iddevicegroup"] = JSONValue.string(id)
+        if let compliance { options["security_compliance_status"] = JSONValue.string(compliance.rawValue) }
+        return read("/v1/devicegroups", "get_info", options)
+    }
+
+    /// The admin audit log from `start` to `end` (`YYYY-MM-DD`, both included): `/adminlogs` takes no operation, only
+    /// `filter_options` (plan §2.2, Mosyle's own doc). The dates' format has no source: docs/domains/mosyle.md.
+    public static func adminLogs(start: String, end: String) -> ReadRequest {
+        precondition([start, end].allSatisfy(isDay), "an admin-log date is YYYY-MM-DD")
+        return read("/v1/adminlogs", nil, top: ["filter_options": .object(["start_date": .string(start), "end_date": .string(end)])])
+    }
+
+    static func isDay(_ text: String) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        return scalars.count == 10 && scalars.indices.allSatisfy { [4, 7].contains($0) ? scalars[$0] == "-" : ("0"..."9").contains(scalars[$0]) }
     }
 
     /// The Logs Stream page `page` of the given log types (separate host and token). Consuming.

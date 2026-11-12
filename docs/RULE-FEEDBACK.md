@@ -27,6 +27,19 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-11 — An allowlist of keys trusted the values under them
+- **What happened:** step 3's review (failure-log 2026-11-11, "a guessed field kept a value of any shape"): the Mosyle
+  adapters for records no source shows kept a field on their list whatever its value. An object under `action` went to the
+  CSV whole, its nested secret with it, and nothing named it.
+- **Invariant in force:** #11 (sensitive fields never leave the app; the Mosyle adapter and CSV export are allowlists).
+- **Why it didn't hold:** wrong layer. #11 is enforced by key: the allowlists, `isSensitive`, the canaries under keys not on
+  a list. A key on the list was trusted to hold a scalar, and `CSV.cell` writes a container as JSON. The same lesson as the
+  entry below, one level down: list what is shown, at every level, the value's shape included.
+- **Would a rule have caught it?** only if enforced differently: every allowlisted adapter's canary test also puts a
+  container holding a canary under a listed key, and asserts the CSV and the screen never carry it.
+- **Enforcement home if changed:** tripwire test (`aContainerInAGuessedFieldIsNamedNeverExported` holds the two adapters
+  that guess; Phase 7a's user and group lists, which keep a listed raw field as sent, are the next to hold).
+
 ## 2026-11-11 — A withheld copy listed what it hid
 - **What happened:** `contract-2.8`'s review (failure-log 2026-11-11, "a withheld copy that withheld only what it knew"):
   `WebhookDelivery`'s withheld copy hid `request` and `response` and showed every other attribute as Apple sent it, a

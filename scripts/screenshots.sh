@@ -76,9 +76,11 @@ status=0
 for spec in overview:overview devices:devices device-inspector:devices:first services:services \
             apple-mdm:apple-mdm apple-mdm-detail:apple-mdm:first people:people people-detail:people:first \
             content:content content-detail:content:first activity:activity activity-detail:activity:first \
+            mosyle:mosyle mosyle-detail:mosyle:first reconciliation:reconciliation \
             settings:settings narrow-overview:overview::smallest narrow-device-inspector:devices:first:smallest \
             narrow-apple-mdm-detail:apple-mdm:first:smallest narrow-people-detail:people:first:smallest \
-            narrow-content-detail:content:first:smallest narrow-activity-detail:activity:first:smallest; do
+            narrow-content-detail:content:first:smallest narrow-activity-detail:activity:first:smallest \
+            narrow-mosyle-detail:mosyle:first:smallest narrow-reconciliation:reconciliation::smallest; do
   IFS=: read -r name section selected window <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"
