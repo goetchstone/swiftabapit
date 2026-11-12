@@ -18,15 +18,32 @@ struct MosyleOrgEditor: View {
     @State private var logsToken = ""
     @State private var problem: String?
     @State private var saving = false
+    /// The answer to which customer the org is for; none until the operator picks one.
+    @State private var clientChoice: ClientChoice?
 
     private var draft: MosyleDraft {
         MosyleDraft(name: name, accessToken: accessToken, email: email, password: password, logsToken: logsToken, editing: editing)
     }
 
+    /// An Add's question, asked whenever some client has room for a Mosyle org (plan §8.0, "Clients"); never an edit's.
+    private var question: ClientQuestion? { editing == nil ? orgs.clientQuestion(adding: .mdm) : nil }
+
+    /// Why Add can't be pressed yet, in words; nil when it can.
+    private var blocker: String? { draft.problem ?? question.flatMap { $0.accepts(clientChoice) ? nil : $0.prompt } }
+
     var body: some View {
         Form {
             Section {
                 TextField("Name", text: $name).accessibilityIdentifier("mosyleEditor.name")
+            }
+            if let question {
+                Section(question.title) {
+                    Picker(question.prompt, selection: $clientChoice) {
+                        ForEach(question.options) { Text($0.label).tag(Optional($0.choice)) }
+                    }
+                    .pickerStyle(.radioGroup)
+                    .accessibilityIdentifier("mosyleEditor.client")
+                }
             }
             Section {
                 SecureField("Access token", text: $accessToken).accessibilityIdentifier("mosyleEditor.token")
@@ -49,8 +66,8 @@ struct MosyleOrgEditor: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { forget(); dismiss() }.disabled(saving) }
             ToolbarItem(placement: .confirmationAction) {
                 Button(editing == nil ? "Add" : "Save") { save() }
-                    .disabled(saving || draft.problem != nil)
-                    .help(draft.problem ?? "")
+                    .disabled(saving || blocker != nil)
+                    .help(blocker ?? "")
             }
         }
         .onAppear { if let editing { name = editing.name } }
@@ -61,10 +78,12 @@ struct MosyleOrgEditor: View {
         saving = true
         problem = nil
         let draft = draft
+        // The answer only while it answers the question as it stands: a client filled or removed since is no answer.
+        let choice = question.flatMap { $0.accepts(clientChoice) ? clientChoice : nil }
         Task {
             defer { saving = false }
             do {
-                try await orgs.saveMosyle(draft, editing: editing?.id)
+                try await orgs.saveMosyle(draft, editing: editing?.id, client: choice)
             } catch {
                 problem = OrgsModel.message(error)
                 return

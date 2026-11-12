@@ -76,6 +76,33 @@ public struct MosyleDraft: Sendable, Equatable {
     }
 }
 
+/// Which client a new org joins: the operator's answer to the add sheet's question (plan §8.0, "Clients").
+public enum ClientChoice: Sendable, Hashable {
+    /// A client of its own, named after it.
+    case new
+    /// The client with this id, which must have no org of the new one's kind.
+    case join(String)
+}
+
+/// The add sheet's question: which customer a new org is for. Asked whenever some client has room for an org of its kind;
+/// nothing is chosen until the operator answers (`OrgsModel.clientQuestion`).
+public struct ClientQuestion: Sendable, Equatable {
+    public struct Option: Sendable, Equatable, Identifiable {
+        public let choice: ClientChoice
+        public let label: String
+        public var id: ClientChoice { choice }
+    }
+
+    /// The section's title.
+    public let title: String
+    /// The question, as the picker's label.
+    public let prompt: String
+    public let options: [Option]
+
+    /// Whether `choice` answers the question: one of its options, never none.
+    public func accepts(_ choice: ClientChoice?) -> Bool { options.contains { $0.choice == choice } }
+}
+
 /// The organizations, which one is active, and its client (plan §3.7). Switching org, or changing the active
 /// org's account or key, bumps `generation` and tells every screen model at once (`onSwitch`): each drops what
 /// it read for the old org and reads again, and every load checks its own token before it shows a result, so
@@ -261,6 +288,52 @@ public final class OrgsModel {
         save()
     }
 
+    /// The add sheet's question for a new org of `slot`'s kind, or nil when no client has room for one, and it is a client
+    /// of its own (the operator, 2026-11-12, "lets do it right"; the details are the parent session's proposal). The options
+    /// are each client with room, by name, and a new one. With one client the app shows no client anywhere, so the question
+    /// names the org it would join instead.
+    public func clientQuestion(adding slot: Client.Slot) -> ClientQuestion? {
+        let room = store.clients(withRoomFor: slot)
+        guard let first = room.first else { return nil }
+        if showsClients {
+            return ClientQuestion(title: "Client", prompt: "Which client is this organization for?",
+                                  options: room.map { .init(choice: .join($0.id), label: $0.name) } + [.init(choice: .new, label: "A new client")])
+        }
+        return ClientQuestion(title: "Customer", prompt: "Which customer is this organization for?",
+                              options: [.init(choice: .join(first.id), label: "The same customer as \(names(first.orgs))"),
+                                        .init(choice: .new, label: "A different customer")])
+    }
+
+    /// The other orgs in `org`'s client, in words ("Grouped with …"), or nil when it is alone in its client. Settings says it
+    /// with one client too, so a join can always be seen and undone (`move(_:toClient:)` with nil).
+    public func grouping(of org: String) -> String? {
+        guard let client = store.client(of: org) else { return nil }
+        let others = client.orgs.filter { $0 != org }
+        return others.isEmpty ? nil : "Grouped with \(names(others))"
+    }
+
+    /// Orgs' names in a sentence, in the order given.
+    private func names(_ ids: [String]) -> String {
+        ids.compactMap { store[$0] }.map(Self.title).joined(separator: " and ")
+    }
+
+    /// The client an Add joins (nil: a client of its own), from the sheet's answer. No answer while some client has room for
+    /// the org is refused, never taken for "a new client": the sheet asks then, and an org is never placed unasked.
+    private func target(_ choice: ClientChoice?, adding slot: Client.Slot) throws(SaveFailure) -> String? {
+        switch choice {
+        case .join(let id)?: return id
+        case .new?: return nil
+        case nil:
+            guard store.clients(withRoomFor: slot).isEmpty else { throw .refused(Self.unanswered) }
+            return nil
+        }
+    }
+
+    static let unanswered = "Choose which customer this organization is for."
+
+    /// An edit never moves an org: Settings does (the draft and the call must agree, as an Add's must).
+    static let editMoves = "An edit doesn't change which customer an organization is for: change that in Settings."
+
     public func renameClient(_ id: String, to name: String) throws(SaveFailure) {
         do {
             try store.renameClient(id, to: name)
@@ -307,8 +380,10 @@ public final class OrgsModel {
     ///   saved only onto the org it opened, an Add's only as an Add (the review: an edit's draft saved as an Add skipped the
     ///   Add's credential rule).
     /// - An Add's id is past every id the Keychain still holds items under and every save in flight; it stays reserved
-    ///   while its credentials are written, as `save` does for an Apple org. It is a client of its own (`OrgStore.add`); the
-    ///   operator moves it to the client it belongs to.
+    ///   while its credentials are written, as `save` does for an Apple org. It joins the client `choice` names, or is a
+    ///   client of its own; with no answer while some client has room for it, it is refused (`clientQuestion`). The answer
+    ///   is checked before the Keychain write and again when the org is added, so a client filled or removed meanwhile
+    ///   refuses it, and its credentials go again.
     /// - The credentials go in as one set (`Vault.replaceSet`), whole or absent: a write that fails part-way removes the set,
     ///   the credentials stored before an edit included, rather than leave old and new mixed. What the Keychain then holds is
     ///   read back (names only, no prompt) and said, never "nothing was saved" over what stayed (the review's M1 and M3), and
@@ -318,8 +393,9 @@ public final class OrgsModel {
     /// - An edit writes only the name it changed, onto the profile as it is after the Keychain write.
     /// - An org on screen reads again: an Add that becomes the active org, or an edit with new credentials.
     @discardableResult
-    public func saveMosyle(_ draft: MosyleDraft, editing id: String?) async throws(SaveFailure) -> OrgProfile {
+    public func saveMosyle(_ draft: MosyleDraft, editing id: String?, client choice: ClientChoice? = nil) async throws(SaveFailure) -> OrgProfile {
         guard draft.base?.id == id else { throw .refused("This editor was opened for another organization: close it and open it again.") }
+        guard id == nil || choice == nil else { throw .refused(Self.editMoves) }
         if let why = draft.problem { throw .refused(why) }
         let orgID: String
         if let id {
@@ -335,9 +411,10 @@ public final class OrgsModel {
             }
             // No await between choosing the id and reserving it below: two Adds can't both take it.
             orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs))
+            let joining = try target(choice, adding: .mdm)
             var trial = store
             do {
-                try trial.add(OrgProfile(id: orgID, name: draft.name, provider: .mosyle))
+                try trial.add(OrgProfile(id: orgID, name: draft.name, provider: .mosyle), to: joining)
             } catch {
                 throw .refused(Self.message(error))
             }
@@ -375,7 +452,7 @@ public final class OrgsModel {
         do {
             if id == nil {
                 profile = OrgProfile(id: orgID, name: draft.name, provider: .mosyle)
-                try store.add(profile)
+                try store.add(profile, to: try target(choice, adding: .mdm))
             } else {
                 guard var current = store[orgID] else { throw OrgStore.Failure.unknownOrg(orgID) }
                 if draft.base?.name != draft.name { current.name = draft.name }
@@ -463,10 +540,12 @@ public final class OrgsModel {
     /// it, and writes only the fields the operator changed (`merged`), so a probe, a learned rate or another sheet's
     /// save that landed meanwhile survives; a changed account clears what was learned about the old one. Its id stays
     /// reserved meanwhile, so the profile it merges onto is the org it opened or none. A save that fails after its
-    /// key was stored removes the key, and says so if it can't.
+    /// key was stored removes the key, and says so if it can't. An Add joins the client `choice` names, as `saveMosyle`'s
+    /// does, and is refused with no answer while some client has room for an Apple org.
     @discardableResult
-    public func save(_ draft: OrgDraft, key: ImportedKey?, editing id: String?) async throws(SaveFailure) -> OrgProfile {
+    public func save(_ draft: OrgDraft, key: ImportedKey?, editing id: String?, client choice: ClientChoice? = nil) async throws(SaveFailure) -> OrgProfile {
         guard draft.isComplete else { throw .refused("A name, a client ID and a key ID are needed.") }
+        guard id == nil || choice == nil else { throw .refused(Self.editMoves) }
         let orgID: String
         let opened: OrgProfile
         if let id {
@@ -491,10 +570,11 @@ public final class OrgsModel {
         if reservedClientIDs.contains(where: { $0.client == client && $0.org != orgID }) {
             throw .refused(OrgStore.Failure.duplicateClientID(draft.clientID).message)
         }
+        let joining = try id == nil ? target(choice, adding: .apple) : nil
         var trial = store
         do {
             let tried = Self.merged(draft, onto: opened, withKey: key != nil)
-            if id == nil { try trial.add(tried) } else { try trial.update(tried) }
+            if id == nil { try trial.add(tried, to: joining) } else { try trial.update(tried) }
         } catch {
             throw .refused(Self.message(error))
         }
@@ -518,7 +598,7 @@ public final class OrgsModel {
         let profile = Self.merged(draft, onto: before ?? opened, withKey: key != nil)
         do {
             if id == nil {
-                try store.add(profile)
+                try store.add(profile, to: try target(choice, adding: .apple))
             } else {
                 guard before != nil else { throw OrgStore.Failure.unknownOrg(orgID) }
                 try store.update(profile)

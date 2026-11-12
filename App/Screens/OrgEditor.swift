@@ -31,6 +31,11 @@ struct OrgEditor: View {
     @State private var problem: String?
     @State private var saving = false
     @State private var offerTrash: URL?
+    /// The answer to which customer the org is for; none until the operator picks one.
+    @State private var clientChoice: ClientChoice?
+
+    /// An Add's question, asked whenever some client has room for an Apple org (plan §8.0, "Clients"); never an edit's.
+    private var question: ClientQuestion? { isAdding ? orgs.clientQuestion(adding: .apple) : nil }
 
     var body: some View {
         Form {
@@ -43,6 +48,15 @@ struct OrgEditor: View {
                 TextField("Key ID", text: $draft.keyID).accessibilityIdentifier("editor.keyID")
                 TextField("Team ID (optional)", text: $draft.teamID, prompt: Text("Leave empty to use the client ID"))
                 TextField("Role (for your notes)", text: $draft.role, prompt: Text("Administrator, Device Enrollment Manager…"))
+            }
+            if let question {
+                Section(question.title) {
+                    Picker(question.prompt, selection: $clientChoice) {
+                        ForEach(question.options) { Text($0.label).tag(Optional($0.choice)) }
+                    }
+                    .pickerStyle(.radioGroup)
+                    .accessibilityIdentifier("editor.client")
+                }
             }
             Section("Private key") {
                 HStack {
@@ -66,6 +80,7 @@ struct OrgEditor: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { key = nil; dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button(isAdding ? "Add" : "Save") { save() }.disabled(saving || !canSave)
+                    .help(question.flatMap { $0.accepts(clientChoice) ? nil : $0.prompt } ?? "")
             }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "pem") ?? .data, .data, .text]) { result in
@@ -83,7 +98,8 @@ struct OrgEditor: View {
 
     private var isAdding: Bool { if case .add = mode { true } else { false } }
 
-    private var canSave: Bool { draft.isComplete && (key != nil || !isAdding) }
+    /// Complete, with a key for an Add, and the customer question answered when it is asked.
+    private var canSave: Bool { draft.isComplete && (key != nil || !isAdding) && question?.accepts(clientChoice) != false }
 
     private func fill() {
         guard case .edit(let profile) = mode else { return }
@@ -113,11 +129,13 @@ struct OrgEditor: View {
         problem = nil
         var editing: String?
         if case .edit(let profile) = mode { editing = profile.id }
+        // The answer only while it answers the question as it stands: a client filled or removed since is no answer.
+        let choice = question.flatMap { $0.accepts(clientChoice) ? clientChoice : nil }
         Task {
             defer { saving = false }
             let picked = key != nil
             do {
-                try await orgs.save(draft, key: key, editing: editing)
+                try await orgs.save(draft, key: key, editing: editing, client: choice)
             } catch {
                 // A key that stayed in the Keychain needs no copy here; any other failure keeps it for the retry.
                 if (error as? OrgsModel.SaveFailure)?.keyIsStored == true { key = nil }

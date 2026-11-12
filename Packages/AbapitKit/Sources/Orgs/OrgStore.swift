@@ -68,8 +68,10 @@ public struct OrgStore: Sendable, Equatable {
             case .duplicateID(let id): "Another organization already has the id \(id)."
             case .unknownOrg(let id): "There's no organization \(id)."
             case .unwritable(let code): "The organizations file couldn't be saved (\(String(cString: strerror(code))))."
-            case .unknownClient(let id): "There's no client \(id)."
-            case .clientFull(let name): "\(name) already has an organization of that kind: a client has one Apple organization and one MDM organization."
+            // In a customer's words, not "client": with one client the app shows none, and an add sheet can still meet these
+            // when another sheet's save got there first (the operator, 2026-11-12: "lets make it friendly").
+            case .unknownClient: "That customer isn't set up any more: choose again."
+            case .clientFull(let name): "\(name) already has an organization of that kind: a customer has one Apple organization and one MDM organization."
             case .clientNameTaken(let name): "Another client is already called \(name)."
             case .clientNameEmpty: "A client needs a name."
             }
@@ -109,17 +111,34 @@ public struct OrgStore: Sendable, Equatable {
         return slug
     }
 
-    /// Adds `profile`, as a client of its own named after it; the first org becomes active. An Apple org's client ID must
-    /// be unique. A new org never joins a client by itself: which customer an org belongs to is the operator's to say, by
-    /// moving it (`move`), so two customers' orgs are never read together unchosen (the review of PR 18: an Add joined the
-    /// active client, and with one client nothing on screen showed it or could undo it; defect 17).
-    public mutating func add(_ profile: OrgProfile) throws(Failure) {
+    /// Adds `profile` to the client `target`, which must have no org of its kind (one Apple org, one MDM org), or, with nil,
+    /// as a client of its own named after it; the first org becomes active. An Apple org's client ID must be unique. Whole or
+    /// not at all: a refusal leaves the store as it was.
+    ///
+    /// A new org never joins a client by itself: `target` is the operator's answer to the add sheet's question, which
+    /// customer the org is for (plan §8.0, "Clients"; the review of PR 18: an Add that joined the active client paired two
+    /// customers' orgs with nothing on screen to show it; defect 17).
+    public mutating func add(_ profile: OrgProfile, to target: String? = nil) throws(Failure) {
         guard self[profile.id] == nil else { throw .duplicateID(profile.id) }
         try checkClientID(profile, replacing: nil)
+        let slot = Client.Slot(profile)
+        var joined: Int?
+        if let target {
+            guard let index = clients.firstIndex(where: { $0.id == target }) else { throw .unknownClient(target) }
+            guard !clients[index].has(slot) else { throw .clientFull(clients[index].name) }
+            joined = index
+        }
         orgs.append(profile)
         if activeID == nil { activeID = profile.id }
-        clients.append(newClient(for: profile))
+        if let joined {
+            clients[joined].set(slot, profile.id)
+        } else {
+            clients.append(newClient(for: profile))
+        }
     }
+
+    /// The clients a new org of `slot`'s kind could join: those with no org in that place, in the store's order.
+    public func clients(withRoomFor slot: Client.Slot) -> [Client] { clients.filter { !$0.has(slot) } }
 
     /// Replaces the profile with the same id.
     public mutating func update(_ profile: OrgProfile) throws(Failure) {
@@ -154,7 +173,7 @@ public struct OrgStore: Sendable, Equatable {
     public var activeClient: Client? { active.flatMap { client(of: $0.id) } }
 
     /// Moves `org` to the client `target` (nil: a new client of its own, named after it), which must have no org of its
-    /// kind. The client it leaves is removed when it is left with none.
+    /// kind. The client it leaves is removed when it is left with none. Settings undoes a join with it.
     public mutating func move(_ org: String, to target: String?) throws(Failure) {
         guard let profile = self[org] else { throw .unknownOrg(org) }
         let slot = Client.Slot(profile)

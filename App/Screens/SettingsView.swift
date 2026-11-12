@@ -124,6 +124,16 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .frame(minWidth: 380)
         }
+        .onAppear {
+            #if DEBUG
+            // The snapshot harness's add sheet (`ABAPIT_SHEET`, scripts/screenshots.sh): CI draws the customer question.
+            switch ProcessInfo.processInfo.environment["ABAPIT_SHEET"] {
+            case "add-apple": editing = .add
+            case "add-mosyle": editingMosyle = .add
+            default: break
+            }
+            #endif
+        }
         .sheet(item: $editing) { mode in OrgEditor(mode: mode, orgs: orgs) }
         // A Test's result belongs to the credentials it read: an edit may have changed them.
         .sheet(item: $editingMosyle, onDismiss: { testResult = [:] }) { mode in
@@ -190,10 +200,34 @@ struct SettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The org's client, only when there are two or more: which it belongs to (another with room for it, or a new one of its
-    /// own) and the client's name. A client has one Apple organization and one MDM organization.
+    /// The org's client. With two or more: which it belongs to (another with room for it, or a new one of its own) and the
+    /// client's name; a client has one Apple organization and one MDM organization. With one, no client is named: an org
+    /// grouped with another says so, with Separate to make it a different customer's, so a join made in the add sheet can
+    /// always be seen and undone (plan §8.0, "Clients").
     @ViewBuilder private func clientSection(_ profile: OrgProfile) -> some View {
-        if orgs.showsClients, let client = orgs.store.client(of: profile.id) {
+        if !orgs.showsClients, let grouping = orgs.grouping(of: profile.id) {
+            Section {
+                HStack {
+                    Text(grouping).accessibilityIdentifier("settings.groupedWith")
+                    Spacer()
+                    Button("Separate") {
+                        do {
+                            try orgs.move(profile.id, toClient: nil)
+                            problem = nil
+                        } catch {
+                            problem = OrgsModel.message(error)
+                        }
+                    }
+                    .help("Makes this organization a different customer's: it is no longer read with the other.")
+                    .accessibilityIdentifier("settings.separate")
+                }
+            } header: {
+                Text("Customer")
+            } footer: {
+                Text("Grouped organizations are one customer's: their devices are read together, Apple's against Mosyle's.")
+                    .foregroundStyle(.secondary)
+            }
+        } else if orgs.showsClients, let client = orgs.store.client(of: profile.id) {
             let slot = Client.Slot(profile)
             let room = orgs.clients.filter { $0.id == client.id || !$0.has(slot) }
             Section("Client") {

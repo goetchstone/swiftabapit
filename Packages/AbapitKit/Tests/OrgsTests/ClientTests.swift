@@ -211,9 +211,10 @@ struct ClientTests {
 
     // MARK: adding, removing, moving, renaming
 
-    /// A new org is always a client of its own: which customer it belongs to is the operator's to say, by a move (the review
-    /// of PR 18, finding 1: an Add that joined the only client paired two customers' orgs with no client UI to undo it).
-    @Test func aNewOrgIsAlwaysAClientOfItsOwn() throws {
+    /// A new org with no client named is a client of its own: which customer it belongs to is the operator's to say, in the
+    /// add sheet or by a move (the review of PR 18, finding 1: an Add that joined the only client paired two customers' orgs
+    /// with no client UI to undo it).
+    @Test func aNewOrgWithNoClientNamedIsAClientOfItsOwn() throws {
         var store = OrgStore()
         try store.add(Self.apple("a"))
         try store.add(Self.mosyle("m"))
@@ -222,6 +223,37 @@ struct ClientTests {
         #expect(Self.shape(store) == ["A: a+m"])
         try store.add(Self.mosyle("n"))
         #expect(Self.shape(store) == ["A: a+m", "N: -+n"])
+    }
+
+    /// A new org joins the client the operator chose, only when that client has no org of its kind; a refusal, of any kind,
+    /// leaves the store as it was.
+    @Test func aNewOrgJoinsTheClientChosenOnlyWithRoom() throws {
+        var store = OrgStore()
+        try store.add(Self.apple("a"))
+        let a = try #require(store.client(of: "a")).id
+        #expect(store.clients(withRoomFor: .mdm).map(\.id) == [a] && store.clients(withRoomFor: .apple).isEmpty)
+        try store.add(Self.mosyle("m"), to: a)
+        #expect(Self.shape(store) == ["A: a+m"] && store.activeID == "a" && store.clients(withRoomFor: .mdm).isEmpty)
+        let before = store
+        #expect(throws: OrgStore.Failure.clientFull("A")) { try store.add(Self.mosyle("n"), to: a) }
+        #expect(throws: OrgStore.Failure.clientFull("A")) { try store.add(Self.apple("b"), to: a) }
+        #expect(throws: OrgStore.Failure.unknownClient("x")) { try store.add(Self.mosyle("n"), to: "x") }
+        // A taken id or client ID is refused before the client is looked at.
+        #expect(throws: OrgStore.Failure.duplicateID("m")) { try store.add(Self.mosyle("m"), to: "x") }
+        var copy = Self.apple("c")
+        copy.clientID = "businessapi.A "
+        #expect(throws: OrgStore.Failure.duplicateClientID("businessapi.A")) { try store.add(copy, to: a) }
+        #expect(store == before, "a refused add leaves the store as it was")
+        // An Apple org into a Mosyle org's client, after the client before it in the store's order.
+        try store.add(Self.mosyle("n"))
+        let n = try #require(store.client(of: "n")).id
+        #expect(store.clients(withRoomFor: .apple).map(\.id) == [n])
+        try store.add(Self.apple("b"), to: n)
+        #expect(Self.shape(store) == ["A: a+m", "N: b+n"] && store.activeID == "a")
+        // The first org added into nothing is active; one added to an empty store with a client named is refused.
+        var empty = OrgStore()
+        #expect(throws: OrgStore.Failure.unknownClient("a")) { try empty.add(Self.mosyle("m"), to: "a") }
+        #expect(empty == OrgStore() && empty.activeID == nil)
     }
 
     /// The active org after a removal: the removed org's client's other org (review mutant R1: in the old test the sibling
