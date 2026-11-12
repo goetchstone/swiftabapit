@@ -27,7 +27,7 @@ public enum ScreenWords {
         return "\(safe) - \(base)"
     }
 
-    /// What every School screen and Settings say until a school has tested the app (the operator, 2026-11-12).
+    /// What a School org's Overview and Settings say until a school has tested the app (the operator, 2026-11-12).
     public static let schoolUnverified = "Apple School Manager support is built from Apple's published documentation and isn't verified on a live tenant yet."
 
     /// Why a list's Export is off, in words, by one rule for every screen: still loading; partial (the `read` rows of a walk

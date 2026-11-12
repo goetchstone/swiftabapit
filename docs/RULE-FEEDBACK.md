@@ -27,6 +27,19 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-12 — A convenience met a rule that hid it
+- **What happened:** PR #18's review (failure-log 2026-11-12, "an org joined a client nobody could see"): "a new org joins
+  the active client when it has room" and "no client UI with one client" each made sense. Together, a second customer's org
+  joined the first customer's client, unseen and impossible to undo, breaking "no view mixes clients".
+- **Invariant in force:** none numbered. The operator's client rule (plan §8.0, "Clients"); defect 17 ("the operator picks
+  the paired org").
+- **Why it didn't hold:** not covered. Each rule was tested alone, with one customer's orgs.
+- **Would a rule have caught it?** yes, if stated: anything the app decides for the operator (placing an org, pairing,
+  choosing a default) is tested with two customers' data, and against what the screen shows at that moment. If the screen
+  hides the choice, the app doesn't make it.
+- **Enforcement home if changed:** skill (the review brief and `pre-commit` item 12), with the two-customer test as the
+  tripwire (`anAddedOrgIsReadWithAnotherOnlyOnceMoved`).
+
 ## 2026-11-12 — A mutant run counted a compile error as a kill
 - **What happened:** PR #17's fix mutants first reported 17 of 17 killed. A test added after the scratch copy was last
   built didn't compile (a nested `#require`), so every mutant "failed" before any test ran. The runner read any non-zero

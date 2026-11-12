@@ -51,8 +51,7 @@ struct World {
     /// Org `m`, Mosyle Business.
     static func mosyleProfile(_ id: String = "m") -> OrgProfile { OrgProfile(id: id, name: "Mosyle \(id)", provider: .mosyle) }
 
-    /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, in the client of the first org (`a`), as
-    /// `OrgStore.add` places it.
+    /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, moved into the client of the first org (`a`).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap) async throws -> World {
         let keychain = MemoryStore()
@@ -78,6 +77,8 @@ struct World {
         for profile in profiles ?? [] { try orgStore.add(profile) }
         if mosyle {
             try orgStore.add(mosyleProfile())
+            // Into the first org's client, as the operator would move it there (`OrgStore.add` makes it a client of its own).
+            if let first = orgStore.orgs.first, let client = orgStore.client(of: first.id) { try orgStore.move("m", to: client.id) }
             try await vault.replaceSet([.mosyleAccessToken: Secret(mosyleAccount.accessToken), .mosyleEmail: Secret(mosyleAccount.email),
                                         .mosylePassword: Secret(mosyleAccount.password)], for: "m")
         }

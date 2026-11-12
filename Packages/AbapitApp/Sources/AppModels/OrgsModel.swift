@@ -151,13 +151,15 @@ public final class OrgsModel {
         } else if case .folder(let folder) = storage {
             do {
                 self.store = try OrgStore.load(from: folder)
+                // A version-1 file grouped into clients is saved once, as version 2, atomically: a save that fails leaves the
+                // old file as it was, to be grouped the same way next time, and says why in Settings. Only a file that was
+                // read: one that couldn't be is never written over (the review of PR 18: one guard stood between an
+                // unreadable file and an empty store saved over it).
+                if self.store.migrated { save() }
             } catch {
                 self.store = OrgStore()
                 problem = error.message
             }
-            // A version-1 file grouped into clients is saved once, as version 2, atomically: a save that fails leaves the old
-            // file as it was, to be grouped the same way next time, and says why in Settings.
-            if self.store.migrated { save() }
         } else {
             self.store = OrgStore()
         }
@@ -240,7 +242,8 @@ public final class OrgsModel {
     /// Switches to the client `id`: its Apple org, else its MDM org, becomes active, and every screen, selection and read is
     /// cleared and read again, as an org switch does.
     public func selectClient(_ id: String) {
-        guard let client = store[client: id], let org = client.apple ?? client.mdm else { return }
+        // The client on screen already: nothing changes (a picker that sends its current value again clears nothing).
+        guard id != activeClient?.id, let client = store[client: id], let org = client.apple ?? client.mdm else { return }
         select(org)
     }
 
@@ -252,7 +255,9 @@ public final class OrgsModel {
         } catch {
             throw .refused(error.message)
         }
-        if before.0 != activeClient?.id || before.1 != mosyleOrg?.id || store.active?.id == org { bump() }
+        // Only when what the screens read changed: the active client, or the Mosyle org it reads (a move into the client the
+        // org is in already changes nothing, and clears nothing).
+        if before.0 != activeClient?.id || before.1 != mosyleOrg?.id { bump() }
         save()
     }
 
@@ -302,8 +307,8 @@ public final class OrgsModel {
     ///   saved only onto the org it opened, an Add's only as an Add (the review: an edit's draft saved as an Add skipped the
     ///   Add's credential rule).
     /// - An Add's id is past every id the Keychain still holds items under and every save in flight; it stays reserved
-    ///   while its credentials are written, as `save` does for an Apple org. It joins the active client when that client has
-    ///   no MDM org, else it is a client of its own (`OrgStore.add`).
+    ///   while its credentials are written, as `save` does for an Apple org. It is a client of its own (`OrgStore.add`); the
+    ///   operator moves it to the client it belongs to.
     /// - The credentials go in as one set (`Vault.replaceSet`), whole or absent: a write that fails part-way removes the set,
     ///   the credentials stored before an edit included, rather than leave old and new mixed. What the Keychain then holds is
     ///   read back (names only, no prompt) and said, never "nothing was saved" over what stayed (the review's M1 and M3), and

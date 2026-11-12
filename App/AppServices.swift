@@ -72,8 +72,9 @@ final class AppServices {
         profile.role = "Administrator"
         var orgs = OrgStore()
         try? orgs.add(profile)
-        // Into the Apple org's client: one client, so nothing on screen says "client" (`OrgStore.add`).
+        // Moved into the Apple org's client: one client, so nothing on screen says "client".
         try? orgs.add(OrgProfile(id: DemoMosyle.orgID, name: DemoMosyle.name, provider: .mosyle))
+        if let client = orgs.client(of: DemoOrg.orgID) { try? orgs.move(DemoMosyle.orgID, to: client.id) }
         // A second client: a Mosyle org with no Apple org (the active client has one), read from the same stub.
         if clients { try? orgs.add(OrgProfile(id: DemoMosyle.secondOrgID, name: DemoMosyle.secondName, provider: .mosyle)) }
         orgs.activeID = DemoOrg.orgID

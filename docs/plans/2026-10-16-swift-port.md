@@ -1001,8 +1001,10 @@ Phase 5's.
   Business) now; a Google Workspace domain later. Every org belongs to exactly one client, and a client has at least one.
   Reconciliation and Device 360 pair within the active client; this replaces a per-org "paired organization".
 - With one client there is no client UI: the app looks as it did. A client switcher appears with two or more, and
-  Settings then groups orgs by client, with a client picker and a client name per org. A new org joins the active client
-  when that client has no org of its kind, else it is a client of its own.
+  Settings then groups orgs by client, with a client picker and a client name per org. A new org is a client of its own
+  until the operator moves it into another client: an org never joins a customer's client by itself, so two customers'
+  orgs are never read together unchosen. Adding a Mosyle org beside one Apple org therefore shows the switcher until the
+  move is made.
 - Switching client clears every screen, selection and in-memory read, as switching org does. No view, report, CSV or
   notification mixes clients, and each export names its client. No cross-client overview yet.
 - Existing orgs are grouped once (store version 2), the same way every time:

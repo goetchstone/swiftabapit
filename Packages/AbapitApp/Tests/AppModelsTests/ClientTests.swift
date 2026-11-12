@@ -122,3 +122,81 @@ struct ClientScreenTests {
         #expect(business.orgs.unverifiedNote == nil)
     }
 }
+
+/// The review of PR 18's findings on screen, each held by a test that failed on the reviewed code or killed its mutant.
+@Suite("Clients: the review's findings")
+@MainActor
+struct ClientReviewTests {
+    static func folder() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "swiftabapit-clients-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func model(_ dir: URL) -> OrgsModel {
+        let keychain = MemoryStore()
+        return OrgsModel(storage: .folder(dir), vault: Vault(store: keychain)) { account, _ in
+            AppleClient(account: account, vault: Vault(store: keychain), transport: AppleStub())
+        }
+    }
+
+    /// Finding 1: a Mosyle org added beside one Apple org is a client of its own, so the switcher shows and nothing reads the
+    /// two together until the operator moves it in; then there is one client again and no client UI.
+    @Test func anAddedOrgIsReadWithAnotherOnlyOnceMoved() async throws {
+        let world = try await World.make(profiles: [World.profile("a")])
+        try await world.vault.replaceSet([.mosyleAccessToken: Secret(World.mosyleAccount.accessToken), .mosyleEmail: Secret(World.mosyleAccount.email),
+                                          .mosylePassword: Secret(World.mosyleAccount.password)], for: "fleet")
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        #expect(world.orgs.showsClients && world.orgs.mosyleOrg == nil && !world.orgs.reconciles)
+        try world.orgs.move(added.id, toClient: try #require(world.orgs.store.client(of: "a")).id)
+        #expect(!world.orgs.showsClients && world.orgs.mosyleOrg?.id == added.id && world.orgs.reconciles)
+    }
+
+    /// Finding 2: a file the app can't read is never written over at launch, with an empty store or anything else.
+    @Test func aFileTheAppCantReadIsNeverWrittenOverAtLaunch() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appending(path: OrgStore.fileName)
+        try Data("not an org file".utf8).write(to: file)
+        let orgs = Self.model(dir)
+        #expect(orgs.problem == OrgStore.Failure.notAnOrgFile.message)
+        #expect(try String(contentsOf: file, encoding: .utf8) == "not an org file")
+    }
+
+    /// Finding 3: a move and a rename each reach the file, and the next launch reads them back.
+    @Test func aMoveAndARenameEachReachTheFile() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let v1 = #"{"version": 1, "active": "a", "orgs": [{"id": "a", "name": "A", "provider": "apple", "paired_org": "m"}, "#
+            + #"{"id": "b", "name": "B", "provider": "apple"}, {"id": "m", "name": "M", "provider": "mosyle"}]}"#
+        try Data(v1.utf8).write(to: dir.appending(path: OrgStore.fileName))
+        _ = Self.model(dir)
+        let orgs = Self.model(dir)
+        let b = try #require(orgs.store.client(of: "b")).id
+        try orgs.move("m", toClient: b)
+        #expect(try OrgStore.load(from: dir).client(of: "m")?.id == b, "the move alone is saved")
+        try orgs.renameClient(b, to: "North")
+        let reread = try OrgStore.load(from: dir)
+        #expect(reread.client(of: "m")?.id == b && reread[client: b]?.name == "North")
+    }
+
+    /// Findings 4 and 5: a move into the client the org is in, or picking the client on screen, clears nothing.
+    @Test func whatChangesNothingClearsNothing() async throws {
+        let world = try await World.make(mosyle: true)
+        world.orgs.select("m")
+        let generation = world.orgs.generation
+        let a = try #require(world.orgs.store.client(of: "a")).id
+        try world.orgs.move("m", toClient: a)
+        world.orgs.selectClient(a)
+        #expect(world.orgs.generation == generation && world.orgs.active?.id == "m")
+        // Moving the active org into a client of its own changes what is on screen: it reads again.
+        try world.orgs.move("m", toClient: nil)
+        #expect(world.orgs.generation == generation + 1 && world.orgs.activeClient?.orgs == ["m"])
+    }
+
+    /// Review mutant W2: an empty client name adds nothing to an export's file name.
+    @Test func anEmptyClientNameNamesNoFile() {
+        #expect(ScreenWords.filename("devices.csv", client: "") == "devices.csv")
+        #expect(ScreenWords.filename("devices.csv", client: nil) == "devices.csv")
+    }
+}

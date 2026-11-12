@@ -58,6 +58,7 @@ struct MosyleScreenTests {
         // A client whose MDM org is of a provider this version doesn't read.
         let other = OrgProfile(raw: ["id": .string("j"), "name": .string("J"), "provider": .string("jamf")])
         let jamf = try await World.make(profiles: [World.profile("a"), other])
+        try jamf.orgs.move("j", toClient: try #require(jamf.orgs.store.client(of: "a")).id)
         #expect(jamf.orgs.mosyleUnavailable?.why == "Org a's MDM organization, J, isn't a Mosyle Business organization this version reads.")
         #expect(jamf.orgs.mosyleUnavailable?.notInScope == true && jamf.orgs.mosyleOrg == nil)
     }

@@ -35,6 +35,9 @@ public struct OrgStore: Sendable, Equatable {
         fileVersion = Self.version
         (clients, migrationNotes) = Self.group(orgs, active: activeID)
         migrated = !orgs.isEmpty
+        // No active org recorded: the default client's lead, so the app opens on the client grouping made first (the
+        // review of PR 18: `active` fell back to the first org, which could be another client's Mosyle org).
+        if activeID == nil { self.activeID = clients.first.flatMap { $0.apple ?? $0.mdm } }
     }
 
     public var active: OrgProfile? { orgs.first { $0.id == activeID } ?? orgs.first }
@@ -106,20 +109,16 @@ public struct OrgStore: Sendable, Equatable {
         return slug
     }
 
-    /// Adds `profile`; the first org becomes active. An Apple org's client ID must be unique. It joins the active client
-    /// when that client has no org of its kind (an Apple org beside a Mosyle org, or the reverse), else it is a client of its
-    /// own, named after it.
+    /// Adds `profile`, as a client of its own named after it; the first org becomes active. An Apple org's client ID must
+    /// be unique. A new org never joins a client by itself: which customer an org belongs to is the operator's to say, by
+    /// moving it (`move`), so two customers' orgs are never read together unchosen (the review of PR 18: an Add joined the
+    /// active client, and with one client nothing on screen showed it or could undo it; defect 17).
     public mutating func add(_ profile: OrgProfile) throws(Failure) {
         guard self[profile.id] == nil else { throw .duplicateID(profile.id) }
         try checkClientID(profile, replacing: nil)
         orgs.append(profile)
         if activeID == nil { activeID = profile.id }
-        let slot = Client.Slot(profile)
-        if let index = activeClientIndex, !clients[index].has(slot) {
-            clients[index].set(slot, profile.id)
-        } else {
-            clients.append(newClient(for: profile))
-        }
+        clients.append(newClient(for: profile))
     }
 
     /// Replaces the profile with the same id.
@@ -141,6 +140,8 @@ public struct OrgStore: Sendable, Equatable {
             if clients[index].mdm == id { clients[index].mdm = nil }
         }
         clients.removeAll { $0.orgs.isEmpty }
+        // A note about how clients were made means nothing once there is one client left, and none shows with one.
+        if clients.count < 2, !migrationNotes.isEmpty { dismissMigrationNotes() }
     }
 
     // MARK: clients
@@ -151,8 +152,6 @@ public struct OrgStore: Sendable, Equatable {
 
     /// The active org's client.
     public var activeClient: Client? { active.flatMap { client(of: $0.id) } }
-
-    private var activeClientIndex: Int? { active.flatMap { org in clients.firstIndex { $0.holds(org.id) } } }
 
     /// Moves `org` to the client `target` (nil: a new client of its own, named after it), which must have no org of its
     /// kind. The client it leaves is removed when it is left with none.
@@ -190,7 +189,13 @@ public struct OrgStore: Sendable, Equatable {
         for index in orgs.indices where !orgs[index].pairedOrg.isEmpty { orgs[index].pairedOrg = "" }
     }
 
-    static func nameKey(_ name: String) -> String { name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    /// A client name as uniqueness compares it: trimmed, without case, and with `/` and `:` as `-`, the form an export's file
+    /// name takes (`ScreenWords.filename`), so two clients' files can never share a name, on a volume that ignores case too.
+    static func nameKey(_ name: String) -> String {
+        String(String.UnicodeScalarView(name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().unicodeScalars.map {
+            $0 == "/" || $0 == ":" ? "-" : $0
+        }))
+    }
 
     /// A client named after `profile` (its name, else its id), the name made unique with " (2)", " (3)"….
     private func newClient(for profile: OrgProfile) -> Client {
@@ -274,6 +279,15 @@ public struct OrgStore: Sendable, Equatable {
         for var client in clients {
             // A client with no id, or one already used, claims nothing: its orgs are left for the clients that hold them.
             guard !client.id.isEmpty, ids.insert(client.id).inserted else { continue }
+            // A name empty, or one another client before it has (as uniqueness compares names), is made unique as a new one is.
+            let trimmed = client.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let base = trimmed.isEmpty ? client.id : trimmed
+            var name = base, counter = 2
+            while kept.contains(where: { Self.nameKey($0.name) == Self.nameKey(name) }) {
+                name = "\(base) (\(counter))"
+                counter += 1
+            }
+            client.name = name
             for slot in [Client.Slot.apple, .mdm] {
                 guard let org = slot == .apple ? client.apple : client.mdm else { continue }
                 if let profile = self[org], Client.Slot(profile) == slot, seen.insert(org).inserted { continue }
@@ -325,17 +339,18 @@ public struct OrgStore: Sendable, Equatable {
         var store = OrgStore(orgs: usable, activeID: root["active"]?.string)
         store.fileVersion = version
         store.unaddressable = kept
-        if version >= 2 {
+        if version >= 2, let list = root["clients"]?.array {
             // Clients written by version 2 or later: read, then held to the rules; nothing is grouped again. A newer
             // version's file keeps its version, so `save` still refuses it.
-            store.clients = (root["clients"]?.array ?? []).compactMap(\.object).map(Client.init(raw:))
+            store.clients = list.compactMap(\.object).map(Client.init(raw:))
             store.migrationNotes = (root["migration_notes"]?.array ?? []).compactMap(\.string)
             store.migrated = false
             store.normalize()
-        } else {
+        } else if version < 2 {
             // Version 1: grouped once (`group`, done by `init` above); the app saves the store as version 2.
             store.fileVersion = Self.version
         }
+        // A version-2 or newer file with no clients is grouped as version 1 is (`init` above), its pairs kept together.
         for (key, value) in root where !["version", "active", "orgs", "clients", "migration_notes"].contains(key) { store.extras[key] = value }
         return store
     }

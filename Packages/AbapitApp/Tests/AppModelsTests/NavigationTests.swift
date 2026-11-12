@@ -184,6 +184,11 @@ struct NavigationTests {
         #expect(Set(narrow.filter { $0[2] == "first" }.map { $0[1] }) == inspected)
         #expect(narrow.contains { $0[1] == "overview" && $0[2].isEmpty })
         #expect(Set(specs.map { $0[0] }).count == specs.count, "two runs write one picture")
+        // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
+        // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
+        let demos = specs.map { $0.count > 4 ? $0[4] : "" }
+        #expect(demos.allSatisfy { ["", "1", "clients"].contains($0) }, "\(demos)")
+        #expect(Set(specs.filter { $0.count > 4 && $0[4] == "clients" }.map { $0[1] }) == ["overview", "settings"])
     }
 }
 
