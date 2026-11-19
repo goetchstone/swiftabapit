@@ -76,11 +76,20 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   truthy of serial and UDID, a number as well as a string, compared as Python's set compares: `1000`, `1e3` and
   `1000.0` are one key, `true` is `1`, a zero is no key; past `Int`'s range an integer and an equal float stay two,
   a recorded deviation). The stream sends no empty page.
-- **The column fallback** (Phase 7a review H3; the operator's decision, 2026-11-19). abapit sent only `os` and `page`.
+- **The column fallback** (Phase 7a review H3). abapit sent only `os` and `page`.
   Mosyle's in-console doc lists 27 of the 33 names as `specific_columns` names. It does not list six, which came from
   third-party research: `enrollment_type`, `currentconsolemanageduser`, `imei`, `meid`, `date_enroll` and
   `date_checkin` (`MosyleClient.undocumentedColumns`). One refused name fails every device list: live, on 2026-11-19, the
   list asking the 33 answered HTTP 400 (failure-log 2026-11-19).
+  - **Who decided what.** The operator decided, on 2026-11-19, what a refusal naming no column does: "we should go #2
+    the documented then try them I think we want to figure it all". That is: ask for the documented columns, then try
+    the undocumented ones to learn which Mosyle offers, and ask for every column only as the last resort. Everything
+    else here is proposed, for the operator to confirm:
+    - proposed by the implementing session: the 1 + 6 budget; trying on the page being read; not sending the request
+      with all six added (it would resend a list Mosyle refused); asking for every column when Mosyle names every column
+      asked for; starting the tries only from a page; keeping a try only for as many rows, or the same end; past the
+      tries, asking again for the same columns when Mosyle names every one asked for;
+    - proposed by the coordinating session: keeping the budget strict when a try is cancelled in flight.
   - **A refusal** is `UNKNOWN_COLUMNS`, read the same inside a 2xx or with HTTP 400, in the envelope or bare. Its names are
     the strings under `unknown_columns` (the doc's answer) together with the words of `info`, as one set.
   - **Naming columns asked for:** the list is asked again without exactly those.
@@ -88,8 +97,8 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     (rows, or the list's end); any other answer is the read's error, and the next read takes the tries up. Each of the
     six is then tried alone beside the columns Mosyle took, on that page. A column is kept only when Mosyle's answer
     reads as rows, as many as the page had, or as the end where the page was the end. A refusal refuses it; any other
-    answer (another status, fewer or more rows, no rows where there were rows) leaves it out untried, and the page stands
-    as read. The request with all six added is the one just refused, so it is not sent again, nor is any list Mosyle
+    answer (another status, fewer or more rows, no rows where there were rows, rows where the page was the end) leaves it
+    out untried, and the page stands as read. The request with all six added is the one just refused, so it is not sent again, nor is any list Mosyle
     refused. The answer is the last one Mosyle took.
   - **Every column** (no `specific_columns`) only when the documented columns themselves are refused unnamed, or every
     column asked for is named. Only the adapter's allowlist then keeps the bypass codes out, as it did for abapit.
@@ -101,16 +110,20 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
       for the same ones; the error, `columns`' words and `columnFallback` say exactly that;
     - naming none this app asked for (`.columnsRefused([])`): nothing changes.
     A try cancelled in flight still counts (the transport cancels it), so cancelling reads again and again while columns
-    are being learnt can leave some untried for the client's life: bounded, and said. The budget is kept strict on
-    purpose, rather than refunding a cancelled try (decided in PR 22's second review). What was learnt lives in memory for
-    the client's life (an org's session; Settings' Test makes a fresh client, so each Test learns afresh), never on disk.
+    are being learnt can leave some untried for the client's life: bounded, and said. The budget stays strict rather
+    than refunding a cancelled try (the coordinating session's proposal, for the operator to confirm). What was learnt
+    lives in memory for the client's life (an org's session; Settings' Test makes a fresh client, so each Test learns
+    afresh), never on disk.
   - **Shared:** two walks refused at once settle on one fallback and one set of tries; the others wait for the tries. A
     cancelled walk stops its tries between requests; a walk waiting on them then tries the rest. A try that fails fails
     the read, and the next read takes up the tries where they stopped. The ping asks as the list does and shares its
     fallback.
   - **Said:** each step is an error-level log line naming the columns (a test reads it back from the process's own log).
     `MosyleClient.columns` says which columns Mosyle refused, which it took and which were left untried (never one of
-    those among the ones it took): in Settings' Test, beside the devices and beside a failed device read.
+    those among the ones it took): in Settings' Test, beside the devices and beside a failed device read. Until a page
+    answers the columns asked for (after a refusal moved them, or a status answered them), it says what the next read
+    asks for, never that Mosyle took them; the flag that every column asked for was refused by name clears only on a
+    page, or a later refusal naming some of them.
   - **Mosyle's words:** any other 4xx or 5xx of a read carries Mosyle's `status` and `info` in its error
     (`MosyleAPIError.answered`). A top-level `status` is said only when shaped as a code, as inside a 200. Both are
     cleaned of control and format characters and cut at 64 and 200 characters. The log gets Mosyle's status only when it

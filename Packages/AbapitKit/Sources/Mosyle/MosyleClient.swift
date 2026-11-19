@@ -29,7 +29,8 @@ public enum MosyleColumnFallback: Sendable, Equatable {
 public struct MosyleColumns: Sendable, Equatable {
     /// In the adapter's order.
     public let refused: [String]
-    /// The columns asked for now, which Mosyle took (unless `everyAskedRefused`); nil once every column is asked for.
+    /// The columns asked for now (never one Mosyle refused, or one still to try); nil once every column is asked for.
+    /// Mosyle took them when `answered`.
     public let taken: [String]?
     /// Left out without a verdict, in the adapter's order: this session's tries were spent (`MosyleClient.columnTries`),
     /// Mosyle's answer to a try couldn't be read as the page, or a try failed (the next read tries it again).
@@ -37,9 +38,12 @@ public struct MosyleColumns: Sendable, Equatable {
     /// Past this session's tries, Mosyle refused every column asked for by name: a later read asks for the same ones, as
     /// there is nothing smaller to send.
     public let everyAskedRefused: Bool
+    /// Mosyle answered a page asked with `taken`: until it does (a refusal moved the columns, or a status answered them),
+    /// the words say what the next read asks for, never that Mosyle took it.
+    public let answered: Bool
 
-    public init(refused: [String], taken: [String]?, untried: [String], everyAskedRefused: Bool = false) {
-        (self.refused, self.taken, self.untried, self.everyAskedRefused) = (refused, taken, untried, everyAskedRefused)
+    public init(refused: [String], taken: [String]?, untried: [String], everyAskedRefused: Bool = false, answered: Bool = true) {
+        (self.refused, self.taken, self.untried, self.everyAskedRefused, self.answered) = (refused, taken, untried, everyAskedRefused, answered)
     }
 
     /// What Settings' Test says when Mosyle took every column asked for.
@@ -65,7 +69,8 @@ public struct MosyleColumns: Sendable, Equatable {
                              : "Mosyle refused the device column\(refused.count == 1 ? " \(list(refused)), so it was" : "s \(list(refused)), so they were") left out of the request.")
             // The columns Mosyle's doc doesn't list are the ones in doubt: which of them Mosyle took is what the live check reads.
             let doubtful = taken.filter(MosyleClient.undocumentedColumns.contains)
-            sentences.append(taken.isEmpty ? "It took none." : (untried.isEmpty ? "It took the other \(taken.count)" : "It took \(taken.count)")
+            let lead = answered ? "It took " : "The next read asks for "
+            sentences.append(taken.isEmpty ? "It took none." : lead + (untried.isEmpty ? "the other \(taken.count)" : "\(taken.count)")
                              + (doubtful.isEmpty ? "." : ", among them \(list(doubtful)), which Mosyle's doc doesn't list."))
         } else {
             sentences.append("Mosyle refused the requested device columns" + (refused.isEmpty ? "" : " (by name: \(list(refused)))")
@@ -103,8 +108,9 @@ public actor MosyleClient {
     /// third-party research), in the adapter's order. Asked for like the others; when Mosyle refuses
     /// a list without naming a column, each is tried alone.
     static let undocumentedColumns = ["enrollment_type", "currentconsolemanageduser", "imei", "meid", "date_enroll", "date_checkin"]
-    /// The requests one client may send because Mosyle refused device columns (operator, 2026-11-19): one to ask again
-    /// (without the named ones, for the documented ones, or for every column), and one per undocumented column tried alone.
+    /// The requests one client may send because Mosyle refused device columns: one to ask again (without the named ones,
+    /// for the documented ones, or for every column), and one per undocumented column tried alone. A proposal made with the
+    /// fix of 2026-11-19, for the operator to confirm; the operator decided only to try the columns.
     static let columnTries = 1 + undocumentedColumns.count
 
     public let org: String
@@ -122,6 +128,8 @@ public actor MosyleClient {
     /// Past the tries, Mosyle named every column asked for: a later read asks for the same ones, as nothing smaller can be
     /// sent; cleared by the next answer it takes.
     private var everyAskedRefused = false
+    /// Mosyle answered a page asked with `deviceColumns`: false from a refusal until the next page.
+    private var columnsAnswered = false
     /// Requests left to send because Mosyle refused columns (`columnTries`).
     private var triesLeft = MosyleClient.columnTries
     /// The tries in flight: every other walk waits for them, so every page carries the columns settled on.
@@ -300,7 +308,8 @@ public actor MosyleClient {
     }
 
     /// One page of a platform's devices, asking for the adapter's 33 columns until Mosyle refuses one (Phase 7a review H3;
-    /// operator, 2026-11-19). A refusal is `UNKNOWN_COLUMNS`, inside a 2xx or with HTTP 400 (seen live: a 400 for the
+    /// asking for the documented columns, then trying the others, on a refusal that names none is the operator's decision of
+    /// 2026-11-19; the rest is proposed, docs/domains/mosyle.md). A refusal is `UNKNOWN_COLUMNS`, inside a 2xx or with HTTP 400 (seen live: a 400 for the
     /// list asking 33 columns, its body unseen), and its names are the strings under `unknown_columns` (its doc's answer)
     /// together with the words of `info`, as one set:
     /// - naming columns asked for, it is asked again without exactly those;
@@ -318,19 +327,22 @@ public actor MosyleClient {
             if let learning { _ = try? await learning.value }
             let asked = deviceColumns
             let envelope = try await envelope(MosyleRead.devices(os: os, page: page, columns: asked))
-            guard let asked else { return envelope }
-            // The columns moved while this page was out (another walk's refusal or tries): ask again with them.
+            // The columns moved while this page was out (another walk's refusal or tries): ask again with them. Every column
+            // (nil) is where they end, so a refusal of every column is the read's error.
             if asked != deviceColumns || learning != nil { continue }
-            if envelope.status == .known(.unknownColumns) {
+            if envelope.status == .known(.unknownColumns), let asked {
                 try refuse(asked, envelope)
                 continue
             }
-            if everyAskedRefused {
-                everyAskedRefused = false
-                note()
+            // Only an answer that reads as a page is Mosyle taking the columns asked: a status (SERVICE_BUSY) isn't.
+            let read = Self.devicePage(envelope, os: os)
+            if read != nil, !columnsAnswered || everyAskedRefused {
+                (columnsAnswered, everyAskedRefused) = (true, false)
+                // Nothing to say until Mosyle refused a column.
+                if columns != nil { note() }
             }
             // Tries start only from a page that reads as one (rows, or the end): a status there is the read's error.
-            guard !trying.isEmpty, Self.devicePage(envelope, os: os) != nil else { return envelope }
+            guard !trying.isEmpty, read != nil else { return envelope }
             let tries = Task { try await self.tryEach(os: os, page: page, envelope) }
             learning = tries
             // The walk that started the tries stops them when it is cancelled; a walk waiting on them then tries the rest.
@@ -341,6 +353,7 @@ public actor MosyleClient {
     /// Mosyle refused `asked` (`devicesPage` says what follows each kind of refusal).
     private func refuse(_ asked: [String], _ envelope: MosyleEnvelope) throws {
         refusedAsks.insert(asked)
+        columnsAnswered = false
         let named = Self.named(envelope)
         let refused = asked.filter(named.contains), rest = asked.filter { !named.contains($0) }
         defer { note() }
@@ -361,7 +374,7 @@ public actor MosyleClient {
                 Self.log.error("Mosyle refused every one of the \(asked.count) device columns asked for by name (UNKNOWN_COLUMNS)\(before, privacy: .public), \(spent, privacy: .public); the next read asks for the same columns")
                 throw MosyleAPIError.everyAskedColumnRefused(count: asked.count, info: envelope.info)
             }
-            (refusedColumns, deviceColumns) = (refusedColumns + refused, rest)
+            (refusedColumns, deviceColumns, everyAskedRefused) = (refusedColumns + refused, rest, false)
             Self.log.error("Mosyle refused the device columns \(refused.joined(separator: ", "), privacy: .public) (UNKNOWN_COLUMNS) \(spent, privacy: .public); the next read asks without them")
             throw MosyleAPIError.columnsRefused(refused, info: envelope.info)
         }
@@ -437,7 +450,7 @@ public actor MosyleClient {
         let refused = MosyleAdapter.deviceColumns.filter(refusedColumns.contains)
         columns = MosyleColumns(refused: refused, taken: deviceColumns?.filter { !refused.contains($0) },
                                 untried: MosyleAdapter.deviceColumns.filter { untriedColumns.contains($0) || trying.contains($0) },
-                                everyAskedRefused: everyAskedRefused)
+                                everyAskedRefused: everyAskedRefused, answered: columnsAnswered)
     }
 
     /// A device list's answer read as a page of `os`'s list (rows, or its end); nil for anything else.
