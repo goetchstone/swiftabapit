@@ -2,7 +2,9 @@ import AppKit
 import Foundation
 
 /// The env-var screenshot harness (plan §6.5), debug builds only. Adapted from SwiftGamGui
-/// App/Spikes.swift:73-115 @ bfdb494. `ABAPIT_SNAPSHOT=<name>.png` renders the window's screen pane to a
+/// App/Spikes.swift:73-159 @ bfdb494: the picture (73-115), the checks (116-128) and the watchdog and quit
+/// (153-159) came in Phase 0; the sheet exit (141-152) came later, in PR #19; the window's minimum-height
+/// check (129-140) is still not ported. `ABAPIT_SNAPSHOT=<name>.png` renders the window's screen pane to a
 /// PNG and quits. The App Sandbox lets the app write only inside its container, so the picture goes to the
 /// container's temporary folder under that file name, the path is printed (`snapshot: <path>`), and
 /// `scripts/screenshots.sh` moves it out; `ABAPIT_SCREEN` picks the section (a `SidebarItem` raw value), `ABAPIT_SELECT=first`
@@ -84,10 +86,17 @@ enum Snapshots {
             print("snapshot: ABAPIT_SHEET asked for a sheet and none was attached, so the picture is not the sheet")
             exit(EXIT_FAILURE)
         }
-        // With a sheet open AppKit's quit doesn't finish, even with the sheet ended first (SwiftGamGui
+        // With a sheet open AppKit's quit didn't reliably finish, even with the sheet ended first (SwiftGamGui
         // App/Spikes.swift @ bfdb494, lines 141-151; failure-log 2026-11-18, "a sheet kept the snapshot run from
-        // quitting"). The picture and every check above are done, so a sheet run leaves here.
-        if window?.attachedSheet != nil { exit(EXIT_SUCCESS) }
+        // quitting"). The picture and every check above are done, so a sheet run leaves here. A sheet no run
+        // asked for fails instead: it would otherwise pass with the sheet in its picture (invariant 8).
+        if window?.attachedSheet != nil {
+            if ProcessInfo.processInfo.environment["ABAPIT_SHEET"] == nil {
+                print("snapshot: a sheet is attached that no run asked for")
+                exit(EXIT_FAILURE)
+            }
+            exit(EXIT_SUCCESS)
+        }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(10))
             print("snapshot: the app didn't quit within 10 s of its picture")
