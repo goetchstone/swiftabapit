@@ -691,6 +691,25 @@ struct MosyleFailureTests {
         #expect(Self.asked(harness.stub).dropFirst(before).allSatisfy { $0 == kept }, "a later read asks without it")
     }
 
+    /// Past the tries, a refusal naming every column asked for leaves nothing to ask without them (an empty list is never
+    /// sent), yet none of them is said taken: the error names them, and `columns` and its words keep them out of what Mosyle
+    /// took (mutant k of the review fixes: without `note()`'s filter they read as taken).
+    @Test func aRefusalPastTheTriesNamingEveryColumnKeepsNoneAsTaken() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        #expect(try await harness.devices().isEmpty, "the 27 and six tries: every one spent")
+        let asked = Self.adapter.filter { $0 != "imei" }
+        let body = JSONValue.dumps(.object(["unknown_columns": .array(asked.map(JSONValue.string)), "status": .string("UNKNOWN_COLUMNS"),
+                                            "info": .string("Unknown columns")]))
+        harness.stub.queue(400, for: "/v1/devices", body: body)
+        await #expect(throws: MosyleAPIError.columnsRefused(asked, info: "Unknown columns")) { _ = try await harness.devices() }
+        let columns = try #require(await harness.client.columns)
+        #expect(columns == MosyleColumns(refused: Self.adapter, taken: [], untried: []))
+        #expect(columns.words.hasSuffix("so they were left out of the request. It took the other 0."), "\(columns.words)")
+        #expect(!columns.words.contains("among them"), "\(columns.words)")
+        #expect(await harness.client.columnFallback == .without(Self.adapter))
+    }
+
     /// A try's answer is trusted only when it reads as the page did: rows, or the same end. A try answered with no rows where
     /// the page had rows, or with another status, leaves that column out untried and keeps the page as it was read (the
     /// review of PR 22: an end answered to the last try read three devices as none).
