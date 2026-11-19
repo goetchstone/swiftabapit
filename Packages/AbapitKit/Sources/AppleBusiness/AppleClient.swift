@@ -14,6 +14,36 @@ public struct Page<Item: Sendable>: Sendable {
     public let truncated: Bool
     /// Apple's `meta.paging.total`, when it gives one.
     public let total: Int?
+    /// A line the read says about how it was made, for the screen to show (invariant 8); nil when there is none. The
+    /// services' list says here that Apple refused its field list.
+    public let note: String?
+
+    public init(items: [Item], number: Int, truncated: Bool, total: Int?, note: String? = nil) {
+        self.items = items
+        self.number = number
+        self.truncated = truncated
+        self.total = total
+        self.note = note
+    }
+}
+
+/// Apple refused the services' field list (`fields[mdmServers]`), and what it said.
+public struct FieldListRefusal: Sendable, Equatable {
+    /// Apple's `detail`, control characters removed and cut to `FieldListRefusal.longestDetail` characters; nil when it gave none.
+    public let detail: String?
+    public static let longestDetail = 200
+
+    static func cleaned(_ detail: String?) -> String? {
+        guard let detail else { return nil }
+        let kept = detail.unicodeScalars.filter { scalar in
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator: false
+            default: true
+            }
+        }
+        let text = String(String.UnicodeScalarView(kept.prefix(longestDetail)))
+        return text.isEmpty ? nil : text
+    }
 }
 
 /// What a read probe found for one section: abapit's `probe_capabilities` rows.
@@ -39,6 +69,8 @@ public actor AppleClient {
     private let http: HTTPClient
     private let broker: TokenBroker
     private let pageCap: Int
+    /// Set once Apple has refused the services' field list: later reads skip the request that fails. In memory only.
+    public private(set) var servicesFieldRefusal: FieldListRefusal?
 
     public init(account: TokenBroker.Account, vault: Vault, transport: any Transport, limiter: RateLimiter,
                 pageCap: Int = AppleClient.defaultPageCap, bodyLimit: Int = HTTPClient.bodyLimit, now: @escaping @Sendable () -> Date = { Date() },
@@ -130,8 +162,57 @@ public actor AppleClient {
 
     // MARK: device management services
 
+    /// The services. Apple's live server refused the field list (`fields[mdmServers]`, 400 `PARAMETER_ERROR.INVALID`) on
+    /// 2026-11-19, although the contract allows every value in it. Then the list is read once more without `fields`, Apple's
+    /// default attributes, and the refusal is remembered so later reads skip the failing request. Each page of such a read
+    /// carries a note (`Page.note`): that Apple refused, and which requested attributes no service so far has (the last
+    /// page's note covers every service). A retry happens only before a page was given, once; any other failure is thrown.
     public nonisolated func services() -> AsyncThrowingStream<Page<MDMService>, any Error> {
-        pages(AppleRead.services(account.scope)).map(MDMService.init)
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await self.readServices { continuation.yield($0) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func readServices(_ yield: (Page<MDMService>) -> Void) async throws {
+        var bare = servicesFieldRefusal != nil
+        var yielded = false
+        var seen: Set<String> = []
+        var any = false
+        while true {
+            do {
+                try await walk(AppleRead.services(scope, fields: !bare), cursorPaging: false, linkagesOf: nil) { page, _ in
+                    for item in page.items { seen.formUnion(item.attributes.keys) }
+                    any = any || !page.items.isEmpty
+                    yielded = true
+                    yield(Page(items: page.items.map(MDMService.init), number: page.number, truncated: page.truncated, total: page.total,
+                               note: bare ? Self.servicesFieldNote(absent: any ? AppleRead.serviceFields.filter { !seen.contains($0) } : []) : nil))
+                }
+                return
+            } catch let error as AppleAPIError where !bare && !yielded && Self.refusesServiceFields(error) {
+                if case .badRequest(_, _, let detail) = error { servicesFieldRefusal = FieldListRefusal(detail: FieldListRefusal.cleaned(detail)) }
+                bare = true
+            }
+        }
+    }
+
+    /// Apple's refusal of the field list: a 400 `PARAMETER_ERROR.INVALID` whose `source.parameter` is `fields[mdmServers]`.
+    /// A 400 for another parameter or code, and any other status, stays an error.
+    static func refusesServiceFields(_ error: AppleAPIError) -> Bool {
+        if case .badRequest(let code, let parameter, _) = error { return code == "PARAMETER_ERROR.INVALID" && parameter == "fields[mdmServers]" }
+        return false
+    }
+
+    static func servicesFieldNote(absent: [String]) -> String {
+        "Apple refused the field list (fields[mdmServers]), so the services were read with Apple's default fields"
+            + (absent.isEmpty ? "." : ". Absent from every service: \(absent.joined(separator: ", ")).")
     }
 
     public func service(_ id: String) async throws -> MDMService {
@@ -557,7 +638,7 @@ extension AsyncThrowingStream where Element == Page<Resource>, Failure == any Er
             let task = Task {
                 do {
                     for try await page in self {
-                        continuation.yield(Page(items: page.items.map(transform), number: page.number, truncated: page.truncated, total: page.total))
+                        continuation.yield(Page(items: page.items.map(transform), number: page.number, truncated: page.truncated, total: page.total, note: page.note))
                     }
                     continuation.finish()
                 } catch {

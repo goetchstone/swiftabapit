@@ -7,7 +7,9 @@ import JSONAPI
 /// resource whether it ran and fully succeeded, how many items, and which attribute names and enum values this
 /// version doesn't know. It reports Apple's field names and enum values (each only when it is a word), statuses, counts,
 /// error codes (only when code-shaped) and documented parameter names, and this app's own words, never an item's data
-/// and never Apple's `detail` prose (which may echo an identifier), so its output can be pasted into an issue.
+/// and never Apple's `detail` prose (which may echo an identifier), so its output can be pasted into an issue. One
+/// exception: when Apple refuses the services' field list, its `detail` is shown (cleaned and cut to 200 characters,
+/// `FieldListRefusal`) so the next live run names the field Apple refused.
 public struct AcceptanceReport: Sendable, Equatable {
     /// How one check went. Only `.ok` is a read that ran and fully succeeded (Phase 1b review M5: with `orgDevices`
     /// forbidden the five per-device lines printed "ok … 0", and a list cut at the page cap printed "ok").
@@ -47,7 +49,7 @@ public struct AcceptanceReport: Sendable, Equatable {
         public let unknownPayloadKeys: [String]
         /// What was cut, where a loop stopped, Apple's error `code` (only when code-shaped) and `source.parameter` (only a
         /// documented one), the token endpoint's code, this app's words for a malformed answer, the Vault's guidance.
-        /// Never Apple's `detail`.
+        /// Never Apple's `detail`, except a refused services field list's (see above).
         public let note: String?
 
         public var ok: Bool { status == .ok }
@@ -97,10 +99,17 @@ extension AppleClient {
         lines.append(deviceList)
         var services: [MDMService] = []
         let serviceList = await Self.check("mdmServers") { found in
+            var fieldsNote: String?
             for try await page in self.services() {
                 services += try Self.typed(page.items)
                 found.count = services.count
                 found.cut(page)
+                fieldsNote = page.note
+            }
+            // Apple refused the field list: the note, and what Apple said, so the next live run names the field.
+            if let fieldsNote {
+                let said = await self.servicesFieldRefusal?.detail.map { " · Apple said: \($0)" } ?? ""
+                found.note = fieldsNote + said
             }
             found.keys = Set(services.flatMap(\.unreadAttributes))
             found.misread(services)

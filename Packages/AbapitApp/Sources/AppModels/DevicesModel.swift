@@ -125,6 +125,9 @@ public final class DevicesModel {
     public private(set) var deviceCount: [String: Int] = [:]
     /// Why some devices' service shows as Unknown, in words, once the services read has ended.
     private var unknownNote: String?
+    /// Said on the Services screen when Apple refused the services' field list and they were read with its default fields
+    /// (the last page's note, which covers every service); nil otherwise.
+    public private(set) var servicesFieldsNote: String?
 
     public var search = ""
     public var family = ""
@@ -314,6 +317,7 @@ public final class DevicesModel {
         servicesTruncated = false
         deviceCount = [:]
         unknownNote = nil
+        servicesFieldsNote = nil
     }
 
     /// Whether the load holding `token` may still write: not superseded, not cancelled. Checked after every await
@@ -350,6 +354,7 @@ public final class DevicesModel {
             for try await page in client.services() {
                 guard current(token) else { return }
                 list += page.items
+                servicesFieldsNote = page.note
                 services = list
                 servicesTruncated = page.truncated
                 servicesState = .loading(count: list.count)

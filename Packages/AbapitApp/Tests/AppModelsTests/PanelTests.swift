@@ -157,6 +157,33 @@ struct PanelTests {
         #expect(world.devices.unassignedCount == 2)
     }
 
+    /// Apple's live server refused the services' field list (failure-log 2026-11-19): the services are read with its default
+    /// fields, the Services screen has the note, and the devices' service column is as ever.
+    @Test func servicesReadWithDefaultFieldsSayWhy() async throws {
+        let world = try await World.make(devices: ["a": 3, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("s1", name: "Main MDM")])
+        stub.assign("ADEV0000000", to: "s1")
+        stub.refuseServiceFields()
+        world.devices.load()
+        await world.settled(2)
+        if case .loaded = world.devices.servicesState {} else { Issue.record("services: \(world.devices.servicesState)") }
+        #expect(world.devices.services.map(\.id) == ["s1"])
+        #expect(world.devices.servicesFieldsNote?.hasPrefix("Apple refused the field list (fields[mdmServers]), so the services were read with Apple's default fields") == true,
+                "\(world.devices.servicesFieldsNote ?? "nil")")
+        let by = Dictionary(uniqueKeysWithValues: world.devices.rows.map { ($0.serial, $0.assignment) })
+        #expect(by["ADEV0000000"] == .service("Main MDM"))
+    }
+
+    /// Without the refusal there is no note.
+    @Test func servicesReadWithFieldsHaveNoFieldsNote() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        world.stubs["a"]!.add(services: [World.service("s1", name: "Main MDM")])
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.servicesFieldsNote == nil)
+    }
+
     /// A role that can't read services: the Overview said "Services 0" and "every service has connected".
     @Test func refusedServicesShowNoCountsAndNoHealth() async throws {
         let world = try await World.make(devices: ["a": 5, "b": 0])

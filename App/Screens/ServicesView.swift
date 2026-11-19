@@ -14,6 +14,14 @@ struct ServicesView: View {
                          partial: model.servicesPartialCount) { model.load(force: true) }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
+            if let note = model.servicesFieldsNote {
+                Label(note, systemImage: "questionmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .padding(.bottom, 6)
+                    .accessibilityIdentifier("services.fieldsNote")
+            }
             Table(model.services) {
                 TableColumn("Service") { Text($0.name) }
                     .width(min: 140, ideal: 220)

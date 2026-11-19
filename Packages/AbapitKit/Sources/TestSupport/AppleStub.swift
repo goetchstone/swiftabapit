@@ -74,6 +74,7 @@ public final class AppleStub: Transport, Sendable {
         /// `mdmDevices/{id}/details` by the device's id.
         var details: [String: Resource] = [:]
         var includeRefusal = 400
+        var refusesServiceFields = false
         var repeatingCursors: Set<String> = []
         var forbiddenPaths: Set<String> = []
         var queued: [(path: String, status: Int, headers: [String: String], body: Data?)] = []
@@ -124,6 +125,10 @@ public final class AppleStub: Transport, Sendable {
     /// The status a blueprint read answers when its `include` names a relationship `forbid` refused: 400 unless set (what
     /// abapit saw), or 403.
     public func refuseIncludes(with status: Int) { state.withLock { $0.includeRefusal = status } }
+    /// The services list refuses `fields[mdmServers]` with a 400 `PARAMETER_ERROR.INVALID`, as Apple's live server did on
+    /// 2026-11-19 although the contract allows every value sent; which value it refuses is unknown. Off by default: the
+    /// stub otherwise follows the contract. A list read without `fields[mdmServers]` is served as ever.
+    public func refuseServiceFields() { state.withLock { $0.refusesServiceFields = true } }
     /// Every page under `path` names its own cursor as the next one, as a broken cursor would: the client must stop.
     public func repeatCursors(on path: String) { state.withLock { _ = $0.repeatingCursors.insert(path) } }
     /// Every request under `path` answers 403, as a role without that permission gets.
@@ -291,6 +296,12 @@ public final class AppleStub: Transport, Sendable {
             guard let service = state.withLock({ $0.assignments[id] }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(service)])]))
         case "/v1/mdmServers":
+            if query["fields[mdmServers]"] != nil, state.withLock({ $0.refusesServiceFields }) {
+                // Seen live 2026-11-19 although the contract allows every value sent; the refused value is unknown (the
+                // `detail` wasn't captured), so this one is written as the stub's other refused parameters are.
+                return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "A value isn't allowed in fields[mdmServers].",
+                                  parameter: "fields[mdmServers]")
+            }
             return page(state.withLock { $0.services }, url: url, query: query, host: host)
         case "/v1/mdmServers/{id}":
             guard let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
