@@ -47,10 +47,10 @@ public struct MosyleColumns: Sendable, Equatable {
     }
 
     /// What Settings' Test says when Mosyle took every column asked for.
-    public static let allTaken = "Mosyle took all \(MosyleAdapter.deviceColumns.count) device columns asked for."
+    public static let allTaken = "Mosyle took all \(MosyleClient.askedColumns.count) device columns asked for."
 
     public var fallback: MosyleColumnFallback {
-        taken.map { taken in .without(MosyleAdapter.deviceColumns.filter { !taken.contains($0) }) } ?? .everyColumn
+        taken.map { taken in .without(MosyleClient.askedColumns.filter { !taken.contains($0) }) } ?? .everyColumn
     }
 
     public var words: String {
@@ -104,13 +104,21 @@ public actor MosyleClient {
     public static let defaultPageCap = 200
     private static let log = Logger(subsystem: "io.github.goetchstone.swiftabapit", category: "mosyle")
 
-    /// The adapter's device columns that Mosyle's in-console doc doesn't list as `specific_columns` names (they came from
-    /// third-party research), in the adapter's order. Asked for like the others; when Mosyle refuses
-    /// a list without naming a column, each is tried alone.
-    static let undocumentedColumns = ["enrollment_type", "currentconsolemanageduser", "imei", "meid", "date_enroll", "date_checkin"]
+    /// The adapter's device column Mosyle refused on the live check of 2026-11-19 (Settings > Test, after PR #22: it took
+    /// the other 32, so it was refused by name or when tried alone, not recorded which). Never asked for, and never tried.
+    /// The adapter still maps it (`currentUser`, as `CurrentConsoleManagedUser`, which Mosyle's doc lists and Mosyle took,
+    /// carries the console user): a row that carries it is still read.
+    static let refusedLive = ["currentconsolemanageduser"]
+    /// The device columns asked for first: the adapter's, but those Mosyle refused live (32 of the adapter's 33).
+    static let askedColumns = MosyleAdapter.deviceColumns.filter { !refusedLive.contains($0) }
+    /// The columns asked for that Mosyle's in-console doc doesn't list as `specific_columns` names (they came from
+    /// third-party research), in the adapter's order, less `refusedLive`: five of the adapter's six. Asked for like the
+    /// others; when Mosyle refuses a list without naming a column, each is tried alone.
+    static let undocumentedColumns = ["enrollment_type", "imei", "meid", "date_enroll", "date_checkin"]
     /// The requests one client may send because Mosyle refused device columns: one to ask again (without the named ones,
-    /// for the documented ones, or for every column), and one per undocumented column tried alone. A proposal made with the
-    /// fix of 2026-11-19, for the operator to confirm; the operator decided only to try the columns.
+    /// for the documented ones, or for every column), and one per undocumented column tried alone (one fewer since
+    /// `refusedLive`: 1 + 5, the budget the code computes from the list). A proposal made with the fix of 2026-11-19, for
+    /// the operator to confirm; the operator decided only to try the columns.
     static let columnTries = 1 + undocumentedColumns.count
 
     public let org: String
@@ -118,7 +126,7 @@ public actor MosyleClient {
     private let pageCap: Int
     /// The device columns asked for: the adapter's, until Mosyle refuses one; nil once every column is asked for. Kept in
     /// memory for the client's life (an org's session), never stored.
-    private var deviceColumns: [String]? = MosyleAdapter.deviceColumns
+    private var deviceColumns: [String]? = MosyleClient.askedColumns
     /// What Mosyle refused, by name or when tried alone, and what was left out untried.
     private var refusedColumns: [String] = [], untriedColumns: [String] = []
     /// Columns Mosyle refused without naming one, still to be tried alone beside the columns it took.
@@ -307,7 +315,7 @@ public actor MosyleClient {
         }
     }
 
-    /// One page of a platform's devices, asking for the adapter's 33 columns until Mosyle refuses one (Phase 7a review H3;
+    /// One page of a platform's devices, asking for the adapter's columns (`askedColumns`: 32 since `refusedLive`) until Mosyle refuses one (Phase 7a review H3;
     /// asking for the documented columns, then trying the others, on a refusal that names none is the operator's decision of
     /// 2026-11-19; the rest is proposed, docs/domains/mosyle.md). A refusal is `UNKNOWN_COLUMNS`, inside a 2xx or with HTTP 400 (seen live: a 400 for the
     /// list asking 33 columns, its body unseen), and its names are the strings under `unknown_columns` (its doc's answer)
@@ -357,7 +365,7 @@ public actor MosyleClient {
         let named = Self.named(envelope)
         let refused = asked.filter(named.contains), rest = asked.filter { !named.contains($0) }
         defer { note() }
-        let earlier = MosyleAdapter.deviceColumns.filter(refusedColumns.contains)
+        let earlier = MosyleClient.askedColumns.filter(refusedColumns.contains)
         let before = earlier.isEmpty ? "" : ", after refusing \(earlier.joined(separator: ", "))"
         guard triesLeft > 0 else {
             // No request more. What was still to try is left out. What Mosyle named is kept as refused and a later read asks
@@ -387,7 +395,7 @@ public actor MosyleClient {
         } else if refused.isEmpty, !undocumented.isEmpty, !documented.isEmpty {
             // The request adding these together is the one just refused, so each is tried alone once Mosyle takes the rest.
             deviceColumns = documented
-            trying = MosyleAdapter.deviceColumns.filter { undocumented.contains($0) || trying.contains($0) }
+            trying = MosyleClient.askedColumns.filter { undocumented.contains($0) || trying.contains($0) }
             Self.log.error("Mosyle refused a device column (UNKNOWN_COLUMNS) without naming one this app asked for: asking for the ones its doc lists, then trying \(undocumented.joined(separator: ", "), privacy: .public) one at a time")
         } else {
             // The columns refused, when Mosyle named any it was asked for: the live check reads which, and a test tells its
@@ -413,12 +421,12 @@ public actor MosyleClient {
         defer {
             learning = nil
             note()
-            let untried = MosyleAdapter.deviceColumns.filter { self.untriedColumns.contains($0) || self.trying.contains($0) }
+            let untried = MosyleClient.askedColumns.filter { self.untriedColumns.contains($0) || self.trying.contains($0) }
             Self.log.error("Mosyle's device columns tried alone: took \(took.isEmpty ? "none" : took.joined(separator: ", "), privacy: .public); refused \(refused.isEmpty ? "none" : refused.joined(separator: ", "), privacy: .public); left untried \(untried.isEmpty ? "none" : untried.joined(separator: ", "), privacy: .public)")
         }
         while let column = trying.first, let base = deviceColumns {
             try Task.checkCancellation()
-            let asked = MosyleAdapter.deviceColumns.filter { base.contains($0) || $0 == column }
+            let asked = MosyleClient.askedColumns.filter { base.contains($0) || $0 == column }
             if refusedAsks.contains(asked) {
                 trying.removeFirst()
                 (refusedColumns, refused) = (refusedColumns + [column], refused + [column])
@@ -447,9 +455,9 @@ public actor MosyleClient {
 
     /// The columns as a screen says them: never one Mosyle refused, or one still to try, among those it took.
     private func note() {
-        let refused = MosyleAdapter.deviceColumns.filter(refusedColumns.contains)
+        let refused = MosyleClient.askedColumns.filter(refusedColumns.contains)
         columns = MosyleColumns(refused: refused, taken: deviceColumns?.filter { !refused.contains($0) },
-                                untried: MosyleAdapter.deviceColumns.filter { untriedColumns.contains($0) || trying.contains($0) },
+                                untried: MosyleClient.askedColumns.filter { untriedColumns.contains($0) || trying.contains($0) },
                                 everyAskedRefused: everyAskedRefused, answered: columnsAnswered)
     }
 

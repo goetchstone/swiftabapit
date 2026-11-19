@@ -93,7 +93,7 @@ struct SettingsView: View {
                             Button("Remove…", role: .destructive) { removing = profile }
                         }
                         if working == profile.id { ProgressView().controlSize(.small) }
-                        if let result = testResult[profile.id] { Text(result) }
+                        if let result = testResult[profile.id] { Text(result).textSelection(.enabled) }
                         #if DEBUG
                         Button("Run Acceptance Pass") { accept(profile) }.disabled(working != nil)
                             .help("Every read this version makes; reports counts and unknown field names, never data (plan §7)")
@@ -180,7 +180,7 @@ struct SettingsView: View {
                 Button("Remove…", role: .destructive) { removing = profile }
             }
             if working == profile.id { ProgressView().controlSize(.small) }
-            if let result = testResult[profile.id] { Text(result) }
+            if let result = testResult[profile.id] { Text(result).textSelection(.enabled) }
         }
         clientSection(profile)
     }

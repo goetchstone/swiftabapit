@@ -80,11 +80,11 @@ struct MosyleOrgTests {
             return await OrgsModel.testMosyle(client)
         }
         let connected = "Connected: the token, the admin account and the network work. "
-        #expect(try await test() == connected + "Mosyle took all 33 device columns asked for.")
+        #expect(try await test() == connected + "Mosyle took all 32 device columns asked for.")
         world.mosyleStub.lackColumns(["imei", "meid"], named: false)
         #expect(try await test() == connected
-                + "Mosyle refused the device columns imei and meid, so they were left out of the request. It took the other 31, among them "
-                + "enrollment_type, currentconsolemanageduser, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
+                + "Mosyle refused the device columns imei and meid, so they were left out of the request. It took the other 30, among them "
+                + "enrollment_type, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
         world.mosyleStub.queue(400, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"BAD_REQUEST","info":"Page size too large"}]}"#)
         #expect(try await test() == "Mosyle answered HTTP 400, which this app doesn't expect. Mosyle said: BAD_REQUEST: Page size too large")
         // A failure past a refusal says both: here every column refused unnamed, then the read itself.

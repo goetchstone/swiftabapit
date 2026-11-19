@@ -171,11 +171,11 @@ struct MosyleScreenTests {
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         #expect(world.mosyle.columnFallback == .without(["imei"]))
-        #expect(world.mosyle.note(.devices) == "Mosyle refused the device column imei, so it was left out of the request. It took the other 32, "
-                + "among them enrollment_type, currentconsolemanageduser, meid, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
+        #expect(world.mosyle.note(.devices) == "Mosyle refused the device column imei, so it was left out of the request. It took the other 31, "
+                + "among them enrollment_type, meid, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
     }
 
-    /// A device read that fails says where the columns stand beside its error: Mosyle refused the 33 and the 27 without
+    /// A device read that fails says where the columns stand beside its error: Mosyle refused the 32 and the 27 without
     /// naming one, then every column too.
     @Test func aFailedDeviceReadSaysTheColumnsBesideItsError() async throws {
         let world = try await World.make(mosyle: true)
