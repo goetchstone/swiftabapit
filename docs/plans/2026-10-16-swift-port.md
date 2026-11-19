@@ -9,8 +9,8 @@ offers). Not built: Phase 3 (history and snapshots), Needs attention, Apple's on
 (Phase 4 waits for the operator's answers to the write-path design). Verified live by the operator on 2026-11-19: S1's
 team build (a Personal Team, sandboxed; keychain and vault spikes passed), the first acceptance pass over Apple
 Business's reads (docs/domains/apple-reads.md), and Mosyle's login, which worked; Mosyle's device list was refused
-(HTTP 400) on that first check, and #22's fix waits for the next live check (docs/domains/mosyle.md, "Seen live,
-2026-11-19"). Apple School Manager is not verified on a live tenant. Written
+(HTTP 400) on that first check; #22's fix ran on the operator's re-check the same day: Mosyle took 32 of the 33 columns
+and refused `currentconsolemanageduser` (docs/domains/mosyle.md, "Answered live, 2026-11-19"). Apple School Manager is not verified on a live tenant. Written
 2026-10-16 at abapit `9875ee7` (branch `security-dependency-audit`) for agents with no session context.
 Mark each phase's **Status** line as it lands. The operator's answers to §0.2 are recorded there.
 
@@ -960,8 +960,10 @@ reads, and what they reveal, come before writes.
 1. **The live checks** (S1's team build, the operator). Done 2026-11-19: S1's team build and both spikes, the first
    acceptance pass over Apple Business's reads (answers in docs/domains/apple-reads.md), and Mosyle's login, which worked.
    The device list was refused (HTTP 400) on Mosyle's first live check; PR #22 (read Mosyle's reason, learn which
-   device columns it offers) is merged and waits for the next live check (docs/domains/mosyle.md, "Seen live,
-   2026-11-19"). Not done: that check, Apple School Manager, and every other check this plan lists per phase.
+   device columns it offers) is merged, and its live check ran on 2026-11-19: the list was refused with HTTP 400
+   `UNKNOWN_COLUMNS` naming no asked column, the 27 documented columns were taken, and the trials found Mosyle takes five
+   of the six others and refuses `currentconsolemanageduser` (docs/domains/mosyle.md, "Answered live, 2026-11-19").
+   Not done: Apple School Manager, and every other check this plan lists per phase.
 2. **Contract update to Business 2.8 and School 1.8**: the device list's `cursor` and filters, the three webhook reads,
    the new audit values. **Status:** merged (PR #15, 2026-11-11; drift issue #11): the contracts at
    Business 2.8 (65 endpoints) and School 1.8 (11); the new audit values, the three webhook types placed in Access &

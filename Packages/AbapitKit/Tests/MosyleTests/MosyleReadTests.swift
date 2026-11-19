@@ -35,7 +35,10 @@ struct MosyleReadTests {
         let body = try #require(request.body.flatMap { JSONValue.parse(String(decoding: $0, as: UTF8.self)) })
         #expect(body["options"]?["specific_columns"] == .array([.string("serial_number")]))
         let whole = try #require(MosyleRead.devices(os: "mac", page: 1).body.flatMap { JSONValue.parse(String(decoding: $0, as: UTF8.self)) })
-        #expect(whole["options"]?["specific_columns"] == .array(MosyleAdapter.deviceColumns.map(JSONValue.string)))
+        // The adapter's 33 less the column Mosyle refused live (2026-11-19); the adapter's own list is unchanged.
+        let asked = MosyleAdapter.deviceColumns.filter { $0 != "currentconsolemanageduser" }
+        #expect(whole["options"]?["specific_columns"] == .array(asked.map(JSONValue.string)))
+        #expect(asked.count == 32 && MosyleAdapter.deviceColumns.count == 33 && asked.contains("CurrentConsoleManagedUser"))
     }
 
     /// A request made anywhere else in the package is checked as Mosyle will read it.

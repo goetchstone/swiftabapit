@@ -85,6 +85,26 @@ struct MosyleStubTests {
                 "the control: one the test didn't name is taken")
     }
 
+    /// The stub refuses `currentconsolemanageduser` by default as live Mosyle did on 2026-11-19 (read from the app's own log:
+    /// HTTP 400, status `UNKNOWN_COLUMNS`, naming no column this app asked for; the body's `info` and `unknown_columns` were
+    /// never seen, so the stub sends the doc's shape with an empty `unknown_columns`), however it is asked and whatever
+    /// `lackColumns` names; the documented spelling, beside it, is taken.
+    @Test func theColumnLiveMosyleRefusedIsRefusedByDefaultNamingNone() async throws {
+        let stub = MosyleStub()
+        stub.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw"))
+        let jwt = try #require(try await Self.login(stub).1)
+        let alone = try #require(try await Self.refusal(stub, jwt, #"["serial_number", "currentconsolemanageduser"]"#))
+        #expect(alone == .object(["unknown_columns": .array([]), "status": .string("UNKNOWN_COLUMNS"), "info": .string("Unknown columns")]))
+        stub.lackColumns(["imei"], named: true)
+        let beside = try #require(try await Self.refusal(stub, jwt, #"["imei", "currentconsolemanageduser"]"#))
+        #expect(beside["unknown_columns"] == .array([.string("imei")]), "it is never one of the names")
+        #expect(stub.columnRefusals == 2)
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: ["accessToken": "access-token", "Authorization": jwt],
+                                      body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": ["CurrentConsoleManagedUser"]}}"#) == "DEVICES_NOTFOUND",
+                "the documented spelling is taken")
+        #expect(MosyleStub.refusedLive == "currentconsolemanageduser")
+    }
+
     @Test func aReadNeedsTheAccessTokenAndALiveJWTOfThisHost() async throws {
         let now = Now()
         let stub = MosyleStub(now: { now.value })
