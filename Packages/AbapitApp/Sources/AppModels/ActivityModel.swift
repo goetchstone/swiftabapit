@@ -68,6 +68,7 @@ public struct AuditFilter: Equatable, Sendable {
         case .tooLong: "The audit log is read at most \(Int(AuditQuery.longestSpan / 86_400)) days at a time."
         case .outOfRange: "The range must fall between 1970 and 9999."
         case .unknownType(let raw): "\(raw) isn't a type this version knows, so it isn't sent to Apple."
+        case .tooManyTypes: "Apple's audit log filters on one type at a time."
         case .notAnID: "An actor or subject ID is 1 to 128 letters, digits, -, _ and ., not starting with a dot, as Apple's IDs are."
         }
     }

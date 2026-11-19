@@ -64,16 +64,20 @@ struct AuditTests {
     }
 
     /// `filter[type]` takes Apple's types only: an `.unknown` one throws before a read can be built, so it never goes out.
-    /// Each type goes once, in the order given.
+    /// One type at most goes out, as Apple documents ("only one type in query is supported"); the same type twice is one.
     @Test func onlyApplesTypesAreFilteredOn() throws {
         #expect(throws: AuditQuery.Invalid.unknownType("FUTURE_TYPE")) {
             try AuditQuery(start: Self.noon, end: Self.noon.addingTimeInterval(1), types: [.known(.roleCreated), .unknown("FUTURE_TYPE")])
         }
-        // A value read from an event, spelt as Apple spells a known type, is that type.
-        let query = try AuditQuery(start: Self.noon, end: Self.noon.addingTimeInterval(1),
-                                   types: [OpenEnum("ROLE_UPDATED"), .known(.roleCreated), .known(.roleUpdated)])
-        #expect(query.types == [.roleUpdated, .roleCreated])
-        #expect(AppleRead.auditEvents(query).query.contains(QueryItem("filter[type]", "ROLE_UPDATED,ROLE_CREATED")))
+        // Two different types never go out: Apple's filter takes one (failure-log 2026-11-18).
+        #expect(throws: AuditQuery.Invalid.tooManyTypes) {
+            try AuditQuery(start: Self.noon, end: Self.noon.addingTimeInterval(1),
+                           types: [OpenEnum("ROLE_UPDATED"), .known(.roleCreated), .known(.roleUpdated)])
+        }
+        // A value read from an event, spelt as Apple spells a known type, is that type; given twice, it is one.
+        let query = try AuditQuery(start: Self.noon, end: Self.noon.addingTimeInterval(1), types: [OpenEnum("ROLE_UPDATED"), .known(.roleUpdated)])
+        #expect(query.types == [.roleUpdated])
+        #expect(AppleRead.auditEvents(query).query.contains(QueryItem("filter[type]", "ROLE_UPDATED")))
         #expect(!AppleRead.auditEvents(try AuditQuery(start: Self.noon, end: Self.noon.addingTimeInterval(1))).query.contains { $0.name == "filter[type]" })
         // A lookalike of a known type is unknown: compared byte for byte.
         #expect(throws: AuditQuery.Invalid.unknownType("ROLE_CREATE\u{1D403}")) {
@@ -114,7 +118,13 @@ struct AuditTests {
         #expect(try await ids(day) == ["E1", "E3", "E4", "E5"])
         #expect(try await ids(.last(days: 3, now: Self.noon)) == ["E1", "E2", "E3", "E4", "E5"])
         #expect(try await ids(.last(days: 1, now: Self.noon, types: [.known(.roleCreated)])) == ["E3"])
-        #expect(try await ids(.last(days: 1, now: Self.noon, types: [.known(.roleCreated), .known(.deviceAddedToOrg)])) == ["E1", "E3", "E4", "E5"])
+        #expect(try await ids(.last(days: 1, now: Self.noon, types: [.known(.deviceAddedToOrg)])) == ["E1", "E4", "E5"])
+        // Two types are refused before anything is sent: Apple's filter takes one.
+        let sent = harness.stub.requests.count
+        #expect(throws: AuditQuery.Invalid.tooManyTypes) {
+            try AuditQuery.last(days: 1, now: Self.noon, types: [.known(.roleCreated), .known(.deviceAddedToOrg)])
+        }
+        #expect(harness.stub.requests.count == sent)
         #expect(try await ids(.last(days: 1, now: Self.noon, actorID: "A2")) == ["E4"])
         #expect(try await ids(.last(days: 1, now: Self.noon, subjectID: "S2")) == ["E5"])
         #expect(try await ids(.last(days: 1, now: Self.noon, actorID: "A1", subjectID: "S1")) == ["E1", "E3"])
@@ -211,7 +221,9 @@ struct AuditTests {
         #expect(try await refused([start, end, ("filter[deviceId]", "X")]) == "filter[deviceId]")
         #expect(try await refused([start, end, ("limit", "1001")]) == "limit")
         #expect(try await refused([start, end, ("cursor", "MDow")]) == "cursor")
-        #expect(try await harness.raw("/v1/auditEvents", [start, end, ("filter[type]", "ROLE_CREATED,ROLE_UPDATED")]).status == 200)
+        // Apple: "only one type in query is supported". The stub refuses a second type (a 400 is assumed: check live).
+        #expect(try await refused([start, end, ("filter[type]", "ROLE_CREATED,ROLE_UPDATED")]) == "filter[type]")
+        #expect(try await harness.raw("/v1/auditEvents", [start, end, ("filter[type]", "ROLE_CREATED")]).status == 200)
     }
 
     /// A School org has no audit log: the read throws before anything is built, and nothing is sent.

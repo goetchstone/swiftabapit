@@ -227,7 +227,8 @@ org editor's save).
 - **Apple filters, the client doesn't** (plan §2.1: abapit filtered audit by subject itself). `AuditQuery` checks what
   goes out when it is made: both bounds cut to whole seconds, UTC, `Z`, the start before the end, at most 365 days
   (`longestSpan`, abapit's view cap), 1970 to 9999; `filter[type]` from `AuditEventType` only (an `.unknown` value
-  read from an event throws `.unknownType`), each once, joined by commas; `filter[actorId]` and `filter[subjectId]`
+  read from an event throws `.unknownType`), one type at most (the contract: "only one type in query is supported";
+  two different types throw `.tooManyTypes`, and the stub refuses a second type); `filter[actorId]` and `filter[subjectId]`
   one identifier each, `isPathSafe`'s shape, so a comma (a second value), `&`, `=`, `#`, `%`, a space, a line break or
   anything non-ASCII is refused, and `URL.make` percent-encodes every value anyway. The stub really filters by range,
   type, actor and subject.
@@ -382,7 +383,8 @@ org editor's save).
   - Does Apple cap the audit range? The client caps it at 365 days; the stub has no cap.
   - Is the audit range inclusive at both ends (the stub's choice), and is a range that ends before it starts a 400
     (the stub's choice; the client never sends one)?
-  - Does `filter[type]` take several types joined by commas (the contract types it `[string]`)?
+  - What does Apple answer to several types in `filter[type]`? The contract says "only one type in query is supported";
+    the stub answers 400 (assumed), and the client never sends more than one.
   - The shape of an actor's and a subject's id: the client refuses anything but letters, digits, `-`, `_` and `.`.
   - Does the audit log's next link carry the range and filters? The client never follows it.
   - Is a refused include a 400 (what abapit saw) or a 403, with which `code`? Both are handled.

@@ -47,8 +47,11 @@ struct ReadContractTests {
 
     /// Every Business-only read, each filter and include used.
     static var businessOnly: [ReadRequest] {
-        let query = try? AuditQuery(start: Date(timeIntervalSince1970: 1_792_000_000), end: Date(timeIntervalSince1970: 1_792_086_400),
-                                    types: AuditEventType.allCases.map(OpenEnum.init), actorID: "BUSINESSAPI.a1", subjectID: "C02X")
+        // One audit read per type (Apple's `filter[type]` takes one), the first with the actor and subject filters too.
+        let audits: [ReadRequest] = AuditEventType.allCases.enumerated().compactMap { index, type in
+            (try? AuditQuery(start: Date(timeIntervalSince1970: 1_792_000_000), end: Date(timeIntervalSince1970: 1_792_086_400), types: [.known(type)],
+                             actorID: index == 0 ? "BUSINESSAPI.a1" : nil, subjectID: index == 0 ? "C02X" : nil)).map(AppleRead.auditEvents)
+        }
         let deliveries = try? WebhookDeliveryQuery(createdAtOrAfter: Date(timeIntervalSince1970: 1_792_000_000),
                                                    createdBefore: Date(timeIntervalSince1970: 1_792_086_400),
                                                    states: WebhookDeliveryState.allCases.map(OpenEnum.init))
@@ -58,11 +61,22 @@ struct ReadContractTests {
             AppleRead.apps(), AppleRead.app(id: "361309726"), AppleRead.packages(), AppleRead.package(id: "P1"), AppleRead.blueprints(),
             AppleRead.blueprint(id: "B1"), AppleRead.blueprint(id: "B1", include: Set(Blueprint.Relationship.allCases)),
             AppleRead.configurations(), AppleRead.configuration(id: "C1"), AppleRead.mdmDevices(), AppleRead.mdmDeviceDetails(id: "D1"),
-            query.map(AppleRead.auditEvents), try? AppleRead.auditEvents(.last(days: 1)),
+            try? AppleRead.auditEvents(.last(days: 1)),
             AppleRead.webhooks(), AppleRead.webhook(id: "webhook-12345"), AppleRead.webhookDeliveries(id: "webhook-12345"),
             deliveries.flatMap { AppleRead.webhookDeliveries(id: "webhook-12345", $0) },
         ] + Blueprint.Relationship.allCases.map { AppleRead.blueprintMembers(id: "B1", $0) }
-        return reads.compactMap { $0 }
+        return reads.compactMap { $0 } + audits
+    }
+
+    /// Every audit type goes out in a read of its own, never two in one: Apple's contract says of `filter[type]` "only one
+    /// type in query is supported" (failure-log 2026-11-18). If Apple lifts the limit, the description moves and this says so.
+    @Test func everyAuditTypeIsSentAloneAsAppleDocuments() throws {
+        let sent = Self.businessOnly.flatMap(\.query).filter { $0.name == "filter[type]" }.map(\.value)
+        #expect(sent.count == AuditEventType.allCases.count && Set(sent) == Set(AuditEventType.allCases.map(\.rawValue)))
+        #expect(Self.businessOnly.contains { $0.query.contains { $0.name == "filter[actorId]" } && $0.query.contains { $0.name == "filter[subjectId]" } })
+        let audit = try #require(Self.endpoints(.business).first { $0["path"] as? String == "/v1/auditEvents" && $0["method"] as? String == "GET" })
+        let type = try #require((audit["parameters"] as? [[String: Any]] ?? []).first { $0["name"] as? String == "filter[type]" })
+        #expect((type["description"] as? String)?.contains("only one type in query is supported") == true)
     }
 
     @Test(arguments: [Scope.business, .school])
