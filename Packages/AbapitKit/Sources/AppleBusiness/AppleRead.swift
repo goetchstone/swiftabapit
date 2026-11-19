@@ -59,12 +59,17 @@ public enum AppleRead {
                     template: "/v1/orgDevices/{id}/relationships/assignedServer")
     }
 
-    /// The services, without their device relationships.
-    public static func services(_ scope: Scope) -> ReadRequest {
+    /// The attributes `services(_:)` asks for: all of the contract's `fields[mdmServers]` values but the `devices` relationship.
+    public static let serviceFields = ["serverName", "serverType", "status", "deviceCount", "lastConnectedDateTime", "lastConnectedIp",
+                                       "defaultProductFamilies", "enableMdmDisownFlag", "createdDateTime", "updatedDateTime"]
+
+    /// The services, without their device relationships. `fields: false` leaves out `fields[mdmServers]` and so reads Apple's
+    /// default fields: Apple's live server refused the field list on 2026-11-19 although the contract allows every value in
+    /// it (`AppleClient.services()` asks again this way, and says so).
+    public static func services(_ scope: Scope, fields: Bool = true) -> ReadRequest {
         ReadRequest(host: host(scope), path: "/v1/mdmServers",
-                    query: [QueryItem("fields[mdmServers]", "serverName,serverType,status,deviceCount,lastConnectedDateTime,lastConnectedIp,"
-                                      + "defaultProductFamilies,enableMdmDisownFlag,createdDateTime,updatedDateTime"),
-                            QueryItem("limit", String(pageLimit))])
+                    query: (fields ? [QueryItem("fields[mdmServers]", serviceFields.joined(separator: ","))] : [])
+                        + [QueryItem("limit", String(pageLimit))])
     }
 
     public static func service(_ scope: Scope, id: String) -> ReadRequest? {

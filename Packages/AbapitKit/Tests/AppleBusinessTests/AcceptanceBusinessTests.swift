@@ -24,7 +24,7 @@ struct AcceptanceBusinessTests {
 
     /// Apple refused the include and the blueprint was read without it: the line is the refusal's status with what was
     /// read, never `ok`, and says the members weren't read (invariant 8). The six relationship reads still run.
-    @Test(arguments: [(400, "error 400", "PARAMETER_ERROR.INVALID include"), (403, "forbidden", "FORBIDDEN_ERROR")])
+    @Test(arguments: [(400, "error 400", "PARAMETER_ERROR.ILLEGAL include"), (403, "forbidden", "FORBIDDEN_ERROR")])
     func aRefusedIncludeIsSaidNeverOk(status: Int, said: String, code: String) async throws {
         let (harness, report) = try await Self.pass { harness in
             harness.stub.forbid("/v1/users")

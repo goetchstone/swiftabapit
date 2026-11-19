@@ -74,6 +74,7 @@ public final class AppleStub: Transport, Sendable {
         /// `mdmDevices/{id}/details` by the device's id.
         var details: [String: Resource] = [:]
         var includeRefusal = 400
+        var refusesServiceFields = false
         var repeatingCursors: Set<String> = []
         var forbiddenPaths: Set<String> = []
         var queued: [(path: String, status: Int, headers: [String: String], body: Data?)] = []
@@ -124,6 +125,10 @@ public final class AppleStub: Transport, Sendable {
     /// The status a blueprint read answers when its `include` names a relationship `forbid` refused: 400 unless set (what
     /// abapit saw), or 403.
     public func refuseIncludes(with status: Int) { state.withLock { $0.includeRefusal = status } }
+    /// The services list refuses `fields[mdmServers]` with a 400 `PARAMETER_ERROR.INVALID`, as Apple's live server did on
+    /// 2026-11-19 although the contract allows every value sent; which value it refuses is unknown. Off by default: the
+    /// stub otherwise follows the contract. A list read without `fields[mdmServers]` is served as ever.
+    public func refuseServiceFields() { state.withLock { $0.refusesServiceFields = true } }
     /// Every page under `path` names its own cursor as the next one, as a broken cursor would: the client must stop.
     public func repeatCursors(on path: String) { state.withLock { _ = $0.repeatingCursors.insert(path) } }
     /// Every request under `path` answers 403, as a role without that permission gets.
@@ -291,7 +296,25 @@ public final class AppleStub: Transport, Sendable {
             guard let service = state.withLock({ $0.assignments[id] }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(service)])]))
         case "/v1/mdmServers":
-            return page(state.withLock { $0.services }, url: url, query: query, host: host)
+            if query["fields[mdmServers]"] != nil, state.withLock({ $0.refusesServiceFields }) {
+                // Seen live 2026-11-19 although the contract allows every value sent; the refused value is unknown (the
+                // `detail` wasn't captured), so this one is written as the stub's other refused parameters are.
+                return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "A value isn't allowed in fields[mdmServers].",
+                                  parameter: "fields[mdmServers]")
+            }
+            var services = state.withLock { $0.services }
+            if query["fields[mdmServers]"] == nil {
+                // A read without `fields` answers what Apple's own example of this list has (Tests/Fixtures/docc/business/get-mdm-servers.response.json):
+                // four attributes per service, no status, no lastConnectedDateTime, no deviceCount, so a screen can't count on the
+                // others (failure-log 2026-11-19). Whatever the switch: Apple answers a read without `fields` the same way.
+                let example: Set = ["serverName", "serverType", "createdDateTime", "updatedDateTime"]
+                services = services.map { service in
+                    var kept = JSONObject()
+                    for member in service.attributes where example.contains(member.key) { kept[member.key] = member.value }
+                    return Resource(type: service.type, id: service.id, attributes: kept, relationships: service.relationships)
+                }
+            }
+            return page(services, url: url, query: query, host: host)
         case "/v1/mdmServers/{id}":
             guard let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
@@ -365,13 +388,14 @@ public final class AppleStub: Transport, Sendable {
     private func collection(_ name: String) -> [Resource] { state.withLock { $0.collections[name] ?? [] } }
 
     /// Apple refuses a blueprint read whose `include` names a relationship the role can't read: abapit saw a role that
-    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`).
+    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`). The 400's
+    /// code is `PARAMETER_ERROR.ILLEGAL`, naming `include`: seen live 2026-11-19 (the `detail` and `title` are the stub's words).
     private func refusal(_ include: [String]) -> (Int, [String: String], Data)? {
         guard include.contains(where: { forbidden("/v1/\($0)") }) else { return nil }
         let status = state.withLock { $0.includeRefusal }
         return status == 403
             ? Self.error(403, "FORBIDDEN_ERROR", "This request is forbidden for security reasons", "The API account's role can't read an included relationship.")
-            : Self.error(status, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "An included relationship can't be read.", parameter: "include")
+            : Self.error(status, "PARAMETER_ERROR.ILLEGAL", "A parameter has an illegal value", "An included relationship can't be read.", parameter: "include")
     }
 
     /// A blueprint as `Blueprint` documents it: its six relationships with Apple's links, and for each included one its
@@ -529,9 +553,14 @@ public final class AppleStub: Transport, Sendable {
         var paging: JSONObject = ["limit": .number(String(limit))]
         if repeats || start + slice.count < items.count {
             let next = repeats ? start : start + slice.count
-            // As Apple's example: the next link carries the cursor alone (get-org-devices.response.json).
+            // As Apple's filtered example: the next link keeps the request's other parameters (`filter[...]`, `limit`, and so
+            // `fields[...]`) and sets only `cursor` (get-org-devices.response.2.json). A link that dropped them would give page 2
+            // of a read other attributes than page 1, which Apple's doesn't.
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))]
+            let kept = (components.queryItems ?? []).filter { $0.name != "cursor" }
+            // `cursor` first: the order of a query isn't Apple's to promise, and tests queue a failure for a later page by the
+            // prefix `<path>?cursor=`.
+            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))] + kept
             links["next"] = .string(components.url!.absoluteString)
             paging["nextCursor"] = .string(String(next))
         }

@@ -86,7 +86,8 @@ org editor's save).
   needs a hook in AbapitKit gets a public, debug-only one (`MemoryStore.holdNextKey()`), not a wrapper store.
 - **`fields[orgDevices]` can't name the MDM-migration attributes** (`isMdmMigrationCapable`,
   `mdmMigrationStatus`, `mdmMigrationDeadlineDateTime`), and the device table filters on them, so the device
-  list asks for every attribute. The services list uses sparse fields.
+  list asks for every attribute. The services list asks for sparse fields, and reads Apple's default fields when Apple
+  refuses that list (below, "Answered live 2026-11-19").
 - **Apple's device examples said `purchaseSourceUid` where its field list says `purchaseSourceId`** until 2.7 fixed
   them. The view always read the documented name; `ModelContractTests.knownUnread` is empty now, so a gap that comes back
   fails the example test until it is listed with its reason.
@@ -388,7 +389,8 @@ org editor's save).
     The stub refuses a second actor id or subject id the same way (400, assumed), from the same sentence in the contract.
   - The shape of an actor's and a subject's id: the client refuses anything but letters, digits, `-`, `_` and `.`.
   - Does the audit log's next link carry the range and filters? The client never follows it.
-  - Is a refused include a 400 (what abapit saw) or a 403, with which `code`? Both are handled.
+  - Is a refused include a 400 (what abapit saw) or a 403, with which `code`? Both are handled. Answered live 2026-11-19
+    for the blueprint's `include` of all six relationships: 400 `PARAMETER_ERROR.ILLEGAL include` (below).
   - How many members an included relationship lists without `limit[<name>]` (the stub: 10), whether an empty one
     comes as `data: []` (the pass reads a missing one as `not listed`), and whether `meta.paging` on an included
     relationship has `nextCursor` and `total`.
@@ -732,3 +734,31 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
 - Live (operator, Phase 2): the acceptance pass on a Business org, its 25 Business-only lines read whole and each
   "Assumed, check live" item above answered; a blueprint read with a role that can't read users (the fallback); a
   School org's pass sending no Business-only read.
+
+### Answered live 2026-11-19 (first acceptance pass on a real Apple Business org; no tenant data here)
+- **`GET /v1/mdmServers` with `fields[mdmServers]` answered 400 `PARAMETER_ERROR.INVALID`, `source.parameter`
+  `fields[mdmServers]`**, although every value the client sent is in the contract's `allowedValues` (2.6 and 2.8). Which
+  value Apple refuses is unknown: Apple's `detail` wasn't captured. The client now asks again once without
+  `fields[mdmServers]` (Apple's default attributes), keeps `limit`, remembers the refusal for the client's life (memory
+  only), and says so: `Page.note` on each page, the Services screen's note (`services.fieldsNote`), and the acceptance
+  pass's `mdmServers` line, which says which of the ten fields Apple's `detail` names, as whole identifiers (`Apple's reason mentions: a, b`, or that it mentions none or every
+  one, or gave no reason), never the `detail` itself. The note names the requested attributes no service came back with, and `Page.absent` carries them as
+  data: Apple's own example without `fields` has four attributes, so the Services column says "Not sent by Apple" for
+  `lastConnectedDateTime` (never "Never connected"), the Overview's quiet card says quiet services can't be judged, and
+  without `status` it says deleted services are counted. `AppleStub.refuseServiceFields()` makes the stub refuse the way Apple did.
+  A read that fails after some pages keeps what those services lack, worded for the services read. **Next live run:** read
+  the `Apple's reason mentions:` text on the `mdmServers` line (Apple's reason may mention the refused field), then decide whether the
+  field list can be fixed or dropped for good. Failure-log 2026-11-19, "Apple refused a field list its contract allows".
+- **`GET /v1/blueprints/{id}` with `include` of all six relationships answered 400 `PARAMETER_ERROR.ILLEGAL include`.**
+  The client's fallback (`AppleClient.blueprint`) read the blueprint without its members, and each relationship read
+  separately (`blueprints/{id}/relationships/<name>`) succeeded. So a refused include is a 400 on this org, and the
+  members can be read one relationship at a time. Whether the app should do that itself, instead of saying the members
+  weren't read, is not decided. The stub's include refusal now answers `PARAMETER_ERROR.ILLEGAL` naming `include`, as Apple did.
+- **The first attempts of several reads failed with `NSURLErrorNetworkConnectionLost` (-1005)**, because Apple's HTTP/2
+  server sent a `transfer-encoding: chunked` header, which HTTP/2 forbids. The client's retries recovered every one.
+  Nothing to change in the client; a transport error on a first attempt is expected on this server.
+- The stub's next link keeps the request's other parameters and sets `cursor` (first, so a test can queue a failure for a
+  later page by the prefix `<path>?cursor=`), as Apple's filtered example does (`get-org-devices.response.2.json`): a page 2
+  that dropped `fields[...]` would have other attributes than page 1.
+- Every other read ran and all 11 probes were `ok`, except `mdmServers/{id}/relationships/devices`, which was `skipped`
+  because the services list failed (the blueprint's `include` read answered 400, above, and its fallback read it).

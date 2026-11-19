@@ -77,7 +77,7 @@ struct BlueprintTests {
             Issue.record("the refusal read as members: \(read.members)")
             return
         }
-        #expect(status == 400 ? refused == .badRequest(code: "PARAMETER_ERROR.INVALID", parameter: "include", detail: "An included relationship can't be read.")
+        #expect(status == 400 ? refused == .badRequest(code: "PARAMETER_ERROR.ILLEGAL", parameter: "include", detail: "An included relationship can't be read.")
             : refused == .forbidden(code: "FORBIDDEN_ERROR"))
         let reads = harness.reads
         #expect(reads.count == 2 && reads[0].contains("include=") && !reads[1].contains("?"), "\(reads)")

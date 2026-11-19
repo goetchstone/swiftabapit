@@ -7,7 +7,9 @@ import JSONAPI
 /// resource whether it ran and fully succeeded, how many items, and which attribute names and enum values this
 /// version doesn't know. It reports Apple's field names and enum values (each only when it is a word), statuses, counts,
 /// error codes (only when code-shaped) and documented parameter names, and this app's own words, never an item's data
-/// and never Apple's `detail` prose (which may echo an identifier), so its output can be pasted into an issue.
+/// and never Apple's `detail` prose (which may echo an identifier), so its output can be pasted into an issue. When Apple
+/// refuses the services' field list, the line says which of the fields asked for its `detail` names (`FieldListRefusal`),
+/// never the `detail` itself.
 public struct AcceptanceReport: Sendable, Equatable {
     /// How one check went. Only `.ok` is a read that ran and fully succeeded (Phase 1b review M5: with `orgDevices`
     /// forbidden the five per-device lines printed "ok … 0", and a list cut at the page cap printed "ok").
@@ -97,11 +99,30 @@ extension AppleClient {
         lines.append(deviceList)
         var services: [MDMService] = []
         let serviceList = await Self.check("mdmServers") { found in
-            for try await page in self.services() {
-                services += try Self.typed(page.items)
-                found.count = services.count
-                found.cut(page)
+            var fieldsNote: String?, fieldsAbsent: [String] = []
+            // The refusal said, on a line that failed too (invariant 8), in words true of what was read: after pages, what
+            // was absent from the services read before the failure; before any page, that the read without the list failed.
+            func refusal(failed: Bool, read: Int) async -> String? {
+                guard let refused = await self.servicesFieldRefusal else { return nil }
+                let said = " · " + refused.said
+                guard failed else { return (fieldsNote ?? Self.servicesFieldNote(absent: [])) + said }
+                guard fieldsNote != nil else { return Self.servicesRefusedThenFailed + said }
+                return Self.servicesFieldNote(absent: fieldsAbsent, read: read) + said
             }
+            do {
+                for try await page in self.services() {
+                    services += try Self.typed(page.items)
+                    found.count = services.count
+                    found.cut(page)
+                    fieldsNote = page.note
+                    fieldsAbsent = AppleRead.serviceFields.filter { page.absent.contains($0) }
+                }
+            } catch {
+                found.keptOnFailure = await refusal(failed: true, read: services.count)
+                throw error
+            }
+            // Apple refused the field list: the note, and which fields its reason mentions (it may mention the refused one).
+            found.note = await refusal(failed: false, read: services.count)
             found.keys = Set(services.flatMap(\.unreadAttributes))
             found.misread(services)
             for service in services {
@@ -440,6 +461,8 @@ extension AppleClient {
         var position: String?
         /// Counts said on success ("1 of 4 unassigned").
         var note: String?
+        /// What a line that failed still says: the services' refused field list.
+        var keptOnFailure: String?
         /// Each configuration's `profileProblems`: said with a count (`profile not a string in 1 item`), never `ok` with
         /// nothing said (verifier round 2: a string `customSettingsValues` read `configurations/{id}: ok, 1 item`).
         var profileProblems: [Configuration.ProfileProblem] = []
@@ -515,7 +538,7 @@ extension AppleClient {
         } catch {
             let failed = acceptanceFailure(error)
             status = failed.status
-            notes = [found.position, failed.note]
+            notes = [found.position, failed.note, found.keptOnFailure]
         }
         let note = notes.compactMap { $0 }.joined(separator: " · ")
         return .init(resource: resource, status: status, count: counted ? found.count : nil,

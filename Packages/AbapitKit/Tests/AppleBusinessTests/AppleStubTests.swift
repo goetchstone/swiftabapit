@@ -121,7 +121,7 @@ struct AppleStubTests {
         let first = try await harness.raw("/v1/apps", [("limit", "2")])
         #expect(first.body?["data"]?.array?.compactMap { $0["id"]?.string } == ["A0", "A1"])
         #expect(first.body?["meta"]?["paging"]?["nextCursor"]?.string == "2" && first.body?["meta"]?["paging"]?["total"]?.int == 5)
-        #expect(first.body?["links"]?["next"]?.string == "https://api-business.apple.com/v1/apps?cursor=2")
+        #expect(first.body?["links"]?["next"]?.string == "https://api-business.apple.com/v1/apps?cursor=2&limit=2")
         let last = try await harness.raw("/v1/apps", [("limit", "2"), ("cursor", "4")])
         #expect(last.body?["data"]?.array?.compactMap { $0["id"]?.string } == ["A4"] && last.body?["links"]?["next"] == nil)
     }

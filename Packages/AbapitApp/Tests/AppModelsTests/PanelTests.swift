@@ -112,7 +112,7 @@ struct PanelTests {
             // A stamp ahead of this Mac's clock (skew) is today, never "-1 days ago" (verifier round 2, mutant V-todayFuture).
             service("ahead", stamp(-2 * 86_400)),
         ]
-        let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now)) })
+        let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now, lastConnectedSent: true)) })
         #expect(cells["unreadable"] == ServiceConnection(text: #"Unreadable date: "yesterday""#, isQuiet: true, spoken: #"Unreadable date: "yesterday""#))
         #expect(cells["deleted"] == ServiceConnection(text: "668 days ago", isQuiet: false, spoken: "668 days ago"))
         #expect(cells["absent"] == ServiceConnection(text: "Never connected", isQuiet: true, spoken: "Never connected"))
@@ -155,6 +155,104 @@ struct PanelTests {
         await world.settled(2)
         #expect(world.devices.serviceNote == nil)
         #expect(world.devices.unassignedCount == 2)
+    }
+
+    /// Apple's live server refused the services' field list (failure-log 2026-11-19): the services are read with its default
+    /// fields, the Services screen has the note, and the devices' service column is as ever.
+    @Test func servicesReadWithDefaultFieldsSayWhy() async throws {
+        let world = try await World.make(devices: ["a": 3, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: [World.service("s1", name: "Main MDM")])
+        stub.assign("ADEV0000000", to: "s1")
+        stub.refuseServiceFields()
+        world.devices.load()
+        await world.settled(2)
+        if case .loaded = world.devices.servicesState {} else { Issue.record("services: \(world.devices.servicesState)") }
+        #expect(world.devices.services.map(\.id) == ["s1"])
+        #expect(world.devices.servicesFieldsNote?.hasPrefix("Apple refused the field list (fields[mdmServers]), so the services were read with Apple's default fields") == true,
+                "\(world.devices.servicesFieldsNote ?? "nil")")
+        let by = Dictionary(uniqueKeysWithValues: world.devices.rows.map { ($0.serial, $0.assignment) })
+        #expect(by["ADEV0000000"] == .service("Main MDM"))
+    }
+
+    /// Services as Apple's own example sends them without `fields` (four attributes, failure-log 2026-11-19): no
+    /// `lastConnectedDateTime`, so none is "never connected" or quiet, and no `status`, so deleted ones can't be told apart.
+    /// Each screen says so in words (invariant 8).
+    @Test func servicesWithoutLastConnectedAreNeverCalledNeverConnected() async throws {
+        let world = try await World.make(devices: ["a": 2, "b": 0])
+        world.stubs["a"]!.add(services: [World.service("s1", name: "Main MDM"), World.service("s2", name: "Lab MDM")])
+        world.stubs["a"]!.refuseServiceFields()
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.lastConnectedNotSent && world.devices.statusNotSent)
+        #expect(world.devices.services.allSatisfy { $0.attributes["lastConnectedDateTime"] == nil && $0.attributes["status"] == nil })
+        let now = Date()
+        // The Services column: not "Never connected", not quiet, in words for VoiceOver too.
+        for service in world.devices.services {
+            let cell = DevicesModel.connection(of: service, now: now, lastConnectedSent: !world.devices.lastConnectedNotSent)
+            #expect(cell == ServiceConnection(text: "Not sent by Apple", isQuiet: false, spoken: "Apple did not send when this service last connected"))
+        }
+        // The Overview's card: no service judged quiet, and the words say why.
+        #expect(world.dashboard.quiet(now: now) == nil, "nothing can be judged, which is not \"none is quiet\"")
+        let words = try #require(world.dashboard.quietWords(now: now))
+        #expect(words.contains("Apple didn't send when the services last connected") && words.contains("can't be judged"), "\(words)")
+        #expect(!words.contains("Every service has connected"))
+    }
+
+    /// With `lastConnectedDateTime` sent but no `status`, a deleted service can't be skipped: the card says it counts them.
+    @Test func servicesWithoutStatusSayDeletedOnesAreCounted() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.queue(400, for: "/v1/mdmServers", body: #"{"errors":[{"status":"400","code":"PARAMETER_ERROR.INVALID","source":{"parameter":"fields[mdmServers]"}}]}"#)
+        stub.queue(200, for: "/v1/mdmServers", body: #"{"data":[{"type":"mdmServers","id":"s1","attributes":{"serverName":"Old","serverType":"MDM","lastConnectedDateTime":"2020-01-01T00:00:00Z"}}]}"#)
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.statusNotSent && !world.devices.lastConnectedNotSent)
+        let words = try #require(world.dashboard.quietWords())
+        #expect(words.contains("deleted services can't be told apart and are counted"), "\(words)")
+        #expect(world.dashboard.quiet()?.map(\.service.id) == ["s1"])
+    }
+
+    /// A later page fails after the services of the first were read and shown (a partial list, as the banner says): what
+    /// Apple left out of those stays true of them, so they still read "Not sent by Apple", none is quiet, and the note says
+    /// it covers the services read, not every service.
+    @Test func aFailedReadKeepsWhatTheServicesStillShownLack() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.add(services: (0...AppleRead.pageLimit).map { World.service("s\($0)", name: "Service \($0)") })
+        stub.refuseServiceFields()
+        for _ in 0..<6 { stub.queue(500, for: "/v1/mdmServers?cursor=") }
+        world.devices.load()
+        await world.settled(2)
+        if case .failed = world.devices.servicesState {} else { Issue.record("services: \(world.devices.servicesState)") }
+        #expect(world.devices.services.count == AppleRead.pageLimit && world.devices.servicesPartialCount == AppleRead.pageLimit)
+        #expect(world.devices.lastConnectedNotSent && world.devices.statusNotSent)
+        let note = try #require(world.devices.servicesFieldsNote)
+        #expect(note.contains("Absent from the \(AppleRead.pageLimit) services read:") && !note.contains("every service"), "\(note)")
+        for service in world.devices.services.prefix(3) {
+            #expect(DevicesModel.connection(of: service, now: Date(), lastConnectedSent: !world.devices.lastConnectedNotSent).text == "Not sent by Apple")
+        }
+        #expect(world.dashboard.quiet() == nil)
+    }
+
+    /// Nobody quiet and no `status`: two sentences, the second saying deleted services are counted.
+    @Test func noStatusAndNobodyQuietIsSaidInTwoSentences() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.queue(400, for: "/v1/mdmServers", body: #"{"errors":[{"status":"400","code":"PARAMETER_ERROR.INVALID","source":{"parameter":"fields[mdmServers]"}}]}"#)
+        stub.queue(200, for: "/v1/mdmServers", body: #"{"data":[{"type":"mdmServers","id":"s1","attributes":{"serverName":"New","serverType":"MDM","lastConnectedDateTime":"2999-01-01T00:00:00Z"}}]}"#)
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.dashboard.quietWords() == "Every service has connected in the last 30 days. Apple didn't send the services' status, so deleted services can't be told apart and are counted.")
+    }
+
+    /// Without the refusal there is no note.
+    @Test func servicesReadWithFieldsHaveNoFieldsNote() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        world.stubs["a"]!.add(services: [World.service("s1", name: "Main MDM")])
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.devices.servicesFieldsNote == nil)
     }
 
     /// A role that can't read services: the Overview said "Services 0" and "every service has connected".
