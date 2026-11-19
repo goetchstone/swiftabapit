@@ -187,7 +187,7 @@ public struct AuditQuery: Sendable, Equatable {
     /// The range's bounds, in whole seconds: both required, the start before the end.
     public let start: Date
     public let end: Date
-    /// `filter[type]`: Apple's types only, each once, in the order given.
+    /// `filter[type]`: one of Apple's types at most (Apple: "only one type in query is supported"); empty for none.
     public let types: [AuditEventType]
     /// `filter[actorId]` and `filter[subjectId]`: one id each, as Apple supports.
     public let actorID: String?
@@ -202,12 +202,15 @@ public struct AuditQuery: Sendable, Equatable {
         case outOfRange
         /// A type this version doesn't know: it never goes to Apple.
         case unknownType(String)
+        /// More than one type: Apple's `filter[type]` takes one ("only one type in query is supported").
+        case tooManyTypes
         /// An actor or subject id that isn't an identifier's shape (`AppleRead.isPathSafe`).
         case notAnID
     }
 
     /// The range cut to whole seconds (a timestamp says no fraction), and the filters checked: `types` must be Apple's
-    /// (an `.unknown` one throws, so a raw value read from an event never goes out unchecked), and an id must have an
+    /// (an `.unknown` one throws, so a raw value read from an event never goes out unchecked) and one type at most (the
+    /// same type given twice is one; two different types throw `.tooManyTypes`), and an id must have an
     /// identifier's shape: letters, digits, `-`, `_` and `.`, which a comma (Apple's list separator), `&`, `=`, `#`, `%`, a
     /// space, a line break or anything non-ASCII don't.
     public init(start: Date, end: Date, types: [OpenEnum<AuditEventType>] = [], actorID: String? = nil, subjectID: String? = nil) throws(Invalid) {
@@ -220,6 +223,7 @@ public struct AuditQuery: Sendable, Equatable {
             guard let value = type.known else { throw .unknownType(type.rawValue) }
             if !known.contains(value) { known.append(value) }
         }
+        guard known.count <= 1 else { throw .tooManyTypes }
         for id in [actorID, subjectID].compactMap({ $0 }) where !AppleRead.isPathSafe(id) { throw .notAnID }
         self.start = Date(timeIntervalSince1970: from)
         self.end = Date(timeIntervalSince1970: to)

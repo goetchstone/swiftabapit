@@ -24,7 +24,10 @@ Act on the items your diff touches.
    Unknown keys are ignored; unknown enum values survive as `.unknown(raw)`.
 6. **The stub lies (#5)**: `AppleStub`/`MosyleStub` must fail the way the API fails — status, error
    body (`ErrorResponse`, Mosyle's envelope-in-200), headers. A failure mode comes from the contract or
-   a recording, never from convention (SwiftGamGui failure-log 2026-10-12).
+   a recording, never from convention (SwiftGamGui failure-log 2026-10-12). Read each parameter's
+   `description` in the contract, not only its type: a limit Apple states in words (the audit log's `filter[type]`:
+   "only one type in query is supported") is the contract, and the stub refuses what it rules out (failure-log
+   2026-11-18).
 7. **Parity (#6)**: a ported behaviour is held to `Tests/Fixtures/parity/`; never regenerate a golden to
    make Swift pass. Compare bytes (`Array($0.utf8)`), never `String ==` (canonical equivalence hides
    the difference). A deliberate deviation is recorded in the golden's `abapit` field and listed.
