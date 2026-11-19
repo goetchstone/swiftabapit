@@ -80,6 +80,14 @@ enum Snapshots {
             print("snapshot: ABAPIT_SELECT asked for the first row and the screen selected none, so no inspector shows")
             exit(EXIT_FAILURE)
         }
+        if ProcessInfo.processInfo.environment["ABAPIT_SHEET"] != nil, window?.attachedSheet == nil {
+            print("snapshot: ABAPIT_SHEET asked for a sheet and none was attached, so the picture is not the sheet")
+            exit(EXIT_FAILURE)
+        }
+        // With a sheet open AppKit's quit doesn't finish, even with the sheet ended first (SwiftGamGui
+        // App/Spikes.swift @ bfdb494, lines 141-151; failure-log 2026-11-18, "a sheet kept the snapshot run from
+        // quitting"). The picture and every check above are done, so a sheet run leaves here.
+        if window?.attachedSheet != nil { exit(EXIT_SUCCESS) }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(10))
             print("snapshot: the app didn't quit within 10 s of its picture")
