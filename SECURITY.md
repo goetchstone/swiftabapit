@@ -40,11 +40,12 @@ an attacker who already has root or can modify the app bundle.
 
 ## Properties the code is expected to hold
 
-Each is an invariant in [CLAUDE.md](CLAUDE.md); a change that breaks one is a bug, and tests guard them.
+Each is an invariant in [CLAUDE.md](CLAUDE.md); a change that breaks one is a bug. Tests guard the ones that are built. The write path, its audit records and the
+model rules are not built yet, so no test guards them yet.
 
 - **Keys live in the Keychain** (data-protection, this device only, user presence). Bearer tokens, signed
   assertions and Mosyle sessions live only in memory and are never printed.
-- **One write path**: a planner builds the exact request, the operator confirms the preview, a guard inside
+- **One write path** (planned; no write is built yet): a planner builds the exact request, the operator confirms the preview, a guard inside
   the executor checks it again, and the held bytes are what is sent and audited. The ticket the transport
   requires is `package`-scoped; source-scan tests cover what the compiler can't see.
 - **No listener, App Sandbox on, five allowlisted hosts**, hardened runtime, exact entitlements.

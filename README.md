@@ -8,15 +8,37 @@
 **abapit** as a native macOS app: a sandboxed SwiftUI front end for the
 [Apple Business API](https://developer.apple.com/documentation/applebusinessapi) (2.8), the
 [Apple School Manager API](https://developer.apple.com/documentation/appleschoolmanagerapi) (1.8) and
-Mosyle Business, for Mac admins. It replaces [abapit](https://github.com/goetchstone/abapit), the
-Python web tool, and its tests hold it to abapit's behaviour where abapit was right.
+Mosyle Business, for Mac admins. It replaces abapit, an earlier Python web tool, and its tests hold it
+to abapit's behaviour where abapit was right.
 
-**Status: Phase 0 — scaffold.** Nothing talks to Apple or Mosyle yet. The repo has the project, the
-package graph, CI, the Apple API contract manifests generated from Apple's own documentation, and the
-parity goldens from frozen abapit. The plan and its phases are in
+**Status: in progress; reads only, and no write exists.** The app reads Apple Business, Apple School Manager and
+Mosyle Business: devices, people, content, Apple MDM, activity, Mosyle's lists and the Apple-against-Mosyle
+reconciliation with Device 360, with CSV export, clients and a built-in demo organization. All of it is tested against
+strict stubs, Apple's published API contracts and parity goldens from abapit. The operator checked parts of it on live
+organizations on 2026-11-19: the build signs and provisions with the App Sandbox on, the Keychain and vault spikes
+passed, the first pass over Apple Business's reads ran (its answers are in
+[docs/domains/apple-reads.md](docs/domains/apple-reads.md)) and Mosyle's login worked. Mosyle's device list waits for an
+open pull request, and Apple School Manager is not verified on a live tenant. The write path, history and snapshots,
+Needs attention and Apple's on-device model are planned, not built; the write path waits for the operator's answers to
+its design. The plan and its Status lines are in
 [docs/plans/2026-10-16-swift-port.md](docs/plans/2026-10-16-swift-port.md).
 
 Not affiliated with Apple or Mosyle.
+
+## Screens
+
+Drawn by CI from the built-in demo organization, which holds no real data; the full set is in
+[docs/screenshots](docs/screenshots).
+
+![The Overview](docs/screenshots/overview.png)
+
+![Devices](docs/screenshots/devices.png)
+
+![Mosyle](docs/screenshots/mosyle.png)
+
+![Apple against Mosyle](docs/screenshots/reconciliation.png)
+
+![Settings](docs/screenshots/settings.png)
 
 ## How it's built to be safe
 
@@ -25,15 +47,16 @@ Not affiliated with Apple or Mosyle.
   else. App Sandbox and the hardened runtime are on; `scripts/check_app.sh` checks the exact entitlements.
 - **Keys in the Keychain.** An Apple API key is imported once into the data-protection Keychain, this Mac
   only, behind Touch ID; tokens and signed assertions live only in memory. Mosyle credentials too.
-- **One write path.** Every change is planned, shown as the exact request it will send, confirmed by you,
-  checked again, and then that held request is sent and audited. Nothing else in the app can send a write.
-- **On-device AI only drafts**, except a short, off-by-default list of single-device actions you can switch
-  on per organization (play a sound, request a location, assign one device).
+- **One write path (planned; no write is built yet).** Every change will be planned, shown as the exact request it
+  will send, confirmed by you, checked again, and then that held request is sent and audited. Nothing else in the app
+  will be able to send a write.
+- **On-device AI will only draft (planned; not built yet)**, except a short, off-by-default list of single-device
+  actions you can switch on per organization (play a sound, request a location, assign one device).
 - **Zero third-party dependencies.**
 
 ## Building
 
-macOS 27 and Xcode 27.
+macOS 27 and Xcode 27. There are no downloadable builds yet: you build it yourself.
 
 ```bash
 scripts/test.sh
@@ -41,9 +64,9 @@ xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -derivedDataPath build/
 ```
 
 An ad-hoc build can't use the data-protection Keychain. To store keys, sign with your team (a free
-Personal Team works): create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM`, `CODE_SIGN_IDENTITY =
-Apple Development` and `CODE_SIGN_ENTITLEMENTS = Config/abapit-Team.entitlements`, then build once in
-Xcode so it provisions the keychain access group.
+Personal Team works, verified 2026-11-19 with the App Sandbox on): create `Config/Local.xcconfig` with
+`DEVELOPMENT_TEAM`, `CODE_SIGN_IDENTITY = Apple Development` and `CODE_SIGN_ENTITLEMENTS = Config/abapit-Team.entitlements`, then build once in
+Xcode so it provisions the keychain access group. A Personal Team build expires after 7 days, so rebuild it weekly.
 
 ## Clients and schools
 

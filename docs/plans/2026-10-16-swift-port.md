@@ -1,6 +1,14 @@
 # Plan: port abapit to a native Swift macOS app
 
-**Status: IN PROGRESS — Phase 0 under way in `goetchstone/swiftabapit` (2026-10-16).** Written
+**Status: IN PROGRESS (this line updated 2026-11-19; the build order is §8.0).** Merged to `main`: Phase 0 (PR #1), 1a
+(#3), 1b (#5, #6, #7), 7a (#8), 2a (#10), 2b (#12), profile masking (#13), the build order (#14), the 2.8/1.8 contract
+(#15), Mosyle's screens and the reconciliation (#16), the Mosyle org editor (#17), clients (#18), the add-org customer
+question (#19), the audit log's one-type rule (#20) and the services' default-fields fallback (#21). Open: #22 (Mosyle's
+device columns). Not built: Phase 3 (history and snapshots), Needs attention, Apple's on-device model, and every write
+(Phase 4 waits for the operator's answers to the write-path design). Verified live by the operator on 2026-11-19: S1's
+team build (a Personal Team, sandboxed; keychain and vault spikes passed), the first acceptance pass over Apple
+Business's reads (docs/domains/apple-reads.md), and Mosyle's login; Mosyle's device list waits for #22, and Apple
+School Manager is not verified on a live tenant. Written
 2026-10-16 at abapit `9875ee7` (branch `security-dependency-audit`) for agents with no session context.
 Mark each phase's **Status** line as it lands. The operator's answers to §0.2 are recorded there.
 
@@ -245,7 +253,7 @@ These rows follow D4. The full matrix is in Appendix C.
 | 14 | Config quirks: strict `Org(**json)` breaks on new fields; editing a Mosyle org wipes its role; the logs token can't be cleared; `team_id` is not settable; removing an org orphans tokens, history and logs; demo mode writes the real config | Versioned, tolerant `orgs.json`. Every field is editable and clearable. Removing an org offers to delete its Keychain items, history and logs. Demo uses an in-memory store | 1 |
 | 15 | Configuration platforms can't be cleared on edit; the configuration delete "blast radius" is only a platform count | PATCH sends the full platform list; blast radius = blueprints that reference the configuration | 5 |
 | 16 | List truncation at `max_pages` is only logged | Shown in the UI as "showing N of ≥M" | 1 |
-| 17 | Device 360 merges with the **first** org of the other provider | The operator picks the paired org (remembered per org) | 7 |
+| 17 | Device 360 merges with the **first** org of the other provider | An Apple org and its Mosyle org belong to one client, which the operator chooses (§8.0, "Clients") | 7 |
 | 18 | No local record of the app's own writes | Audit begin/end records (§3.8) | 4 |
 | 19 | Mosyle disk-size unit unclear, and numbers/booleans arrive as strings (`"is_supervised":"1"`, `"battery":"0.81"`, `"total_disk":"64.0000000000"` GB). Several fields are JSON inside strings | Typed adapter with explicit units; JSON-in-string fields decoded | 7 |
 | 20 | Write probes treat 400/404/409/422 as "allowed": a heuristic | Keep it, but label it "inferred". Run it only on an explicit **Permissions** click, because POSTs may be rate-limited hard (§3.3) | 4 |
@@ -564,7 +572,7 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
 | State | Where | Lifetime |
 |---|---|---|
 | Apple keys (interactive; D5 unattended), Mosyle token/email/password/logs token | Keychain (§3.4.1, §3.5) | Until the operator removes them |
-| Org profiles: id, name, provider, scope, client ID, key ID, team ID, role, capabilities + probed date, learned rate limit, paired org | `Application Support/<App>/orgs.json`. Versioned, tolerant decode, `0600`, atomic write (SwiftGamGui's `SignatureStore` pattern) | Persistent; **no secrets** |
+| Org profiles: id, name, provider, scope, client ID, key ID, team ID, role, capabilities + probed date, learned rate limit; and the clients the orgs belong to (§8.0, "Clients"; an old `paired_org` is kept only until Settings has shown how it was grouped) | `Application Support/<App>/orgs.json`. Versioned, tolerant decode, `0600`, atomic write (SwiftGamGui's `SignatureStore` pattern) | Persistent; **no secrets** |
 | Bearer tokens, Mosyle JWTs, signed assertions | Actor memory | ≤ 1 h / 24 h / 8 h; gone on quit |
 | Read caches | Memory, keyed `(orgID, generation, resource)` with `fetchedAt`; LRU-bounded | Session. **Stale data always shows its age** |
 | Held previews | Inside `Executor`. Single use, 15-minute TTL, at most 8 held, cleared when the generation changes | Memory |
@@ -947,26 +955,28 @@ Sizes are changed lines, excluding generated fixtures and contract JSON. Calibra
 This order replaces the numeric one; the phase numbers stay as names. Most of what this app is for reads data, so
 reads, and what they reveal, come before writes.
 
-1. **The live checks** (S1's team build, the operator): nothing has yet read a real tenant.
+1. **The live checks** (S1's team build, the operator). Done 2026-11-19: S1's team build and both spikes, the first
+   acceptance pass over Apple Business's reads (answers in docs/domains/apple-reads.md), and Mosyle's login. Not done:
+   Mosyle's device list (PR #22), Apple School Manager, and every other check this plan lists per phase.
 2. **Contract update to Business 2.8 and School 1.8**: the device list's `cursor` and filters, the three webhook reads,
-   the new audit values. **Status:** built on branch `contract-2.8` (2026-11-11; drift issue #11): the contracts at
+   the new audit values. **Status:** merged (PR #15, 2026-11-11; drift issue #11): the contracts at
    Business 2.8 (65 endpoints) and School 1.8 (11); the new audit values, the three webhook types placed in Access &
    Security; `DeviceFilter`, checked when made, and the device list paged by cursor; the three webhook reads with their
    models (URLs shown only as scheme and host, the receiver's body and any secret withheld), the strict stub and three
-   acceptance-pass lines. No screen, and no webhooks probe until one (apple-reads runbook, "Webhooks"). Live checks wait
-   for S1's team build. The phase's adversarial review (2026-11-11) found a delivery withholding only the keys it knew
+   acceptance-pass lines. No screen, and no webhooks probe until one (apple-reads runbook, "Webhooks"). S1's team build passed
+   2026-11-19; the live checks are the operator's. The phase's adversarial review (2026-11-11) found a delivery withholding only the keys it knew
    and a masked URL hiding the change it was masked to show; fixed on the branch (failure-log 2026-11-11): a delivery
    withholds every attribute it doesn't read and masks the URLs in its error message, every masked URL carries a per-run
    tag, the audit mask walks every payload and both names, and §3.4.4's write probes include the webhooks.
 3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.
-   **Status:** built on branch `mosyle-screens` (2026-11-11): the three reads 7a lacked, each request from its source
+   **Status:** merged (built 2026-11-11): the three reads 7a lacked, each request from its source
    (custom attributes and the admin log's answers have none, so they are read loudly and named fields not read are said);
    `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
    reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
    half and the demo's paired Mosyle org (PR #16, merged 2026-11-12). Then, on `mosyle-org-editor`, the Mosyle org editor
    and its credential storage (PR #17, merged 2026-11-12). The pair picker was replaced by clients (below, "Clients"; PR
    #18, merged 2026-11-12): an Apple org and its Mosyle org belong to one client. Adding an org now asks which customer it
-   is for (built on `add-to-client`). Decisions the session
+   is for (PR #19, merged 2026-11-19). Decisions the session
    proposed, not the operator's (in the PR): only the active client's Mosyle org is read; a Mosyle org's sidebar is Mosyle
    and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
@@ -1122,11 +1132,10 @@ with one maintainer, a CODEOWNERS review rule would block every merge (RULE-FEED
 
 ### Phase 1: Apple core
 
-**Status:** split in two for review size (2026-10-16). **1a** (package: Vault, Orgs, Wire, HTTPCore, JSONAPI,
-AppleModels for devices/coverage/locks/services, AppleBusiness reads and probes, the strict AppleStub): on
-branch `phase-1a-apple-core`. **1b** (the app: Devices, Find, inspector, services, minimal dashboard,
-Settings with key import, CSV with the allowlist, the demo org, the acceptance pass): next. Live checks wait
-for S1's team build.
+**Status:** merged: 1a in PR #3 (2026-10-16); 1b in PR #5, its review fixes in PR #6 (2026-10-17) and the integration review in PR #7 (2026-10-30). Split in two for review size (2026-10-16). **1a** (package: Vault, Orgs, Wire, HTTPCore, JSONAPI,
+AppleModels for devices/coverage/locks/services, AppleBusiness reads and probes, the strict AppleStub). **1b** (the app: Devices, Find, inspector, services, minimal dashboard,
+Settings with key import, CSV with the allowlist, the demo org, the acceptance pass). S1's team build passed 2026-11-19; the
+live checks below are the operator's.
 
 **Owns:** `Vault/`, `HTTPCore/`, `JSONAPI/`, `AppleModels/` (device + MDM-service types),
 `AppleBusiness/`, `TestSupport/AppleStub*`, `App/Screens/{Devices,DeviceInspector,MDMServices,Settings,Dashboard(stub)}`.
@@ -1172,11 +1181,11 @@ the JWS code.
 
 ### Phase 2: Apple read parity and new reads
 
-**Status:** split in two for review size (2026-10-30). **2a** merged (package: AppleModels for people, content, Apple
+**Status:** merged: 2a in PR #10 (2026-10-31); 2b in PR #12 (2026-11-07). Split in two for review size (2026-10-30). **2a** (package: AppleModels for people, content, Apple
 MDM and audit events with typed payloads, and a custom setting's profile shown with its secrets masked; every Phase 2 read
 in AppleRead/AppleClient, School-gated, with the blueprint include fallback and the audit log's checked range, filters
 and cursor paging; the strict AppleStub for them; the acceptance pass over them; Reports' audit digests with the new
-Access & Security view, services not connected in N days and recent events). **2b** on branch `phase-2b-screens`
+Access & Security view, services not connected in N days and recent events). **2b**
 (2026-10-31: a scaffold, then five screen units built in parallel and merged): the People, Content, Apple MDM, Activity
 and Dashboard screens over their screen models in Packages/AbapitApp, each list its own panel and load token, every state
 said in words (loading, refused, cut at the page cap, failed and partial, a School org's not in scope, never an empty
@@ -1206,8 +1215,8 @@ surviving mutants. Round 3 (every finding low) in `fix(2b): verifier round 3, �
 mutants (five of them Apple MDM's pause and resume) and a fix for an older flaky test; an inner scheme with one slash, a
 backslash or none, a path segment's user and password, a blank inside a Location's query, fragment or parameter, a
 second address's password, a scheme-less location's query before a glued scheme, and a blueprint's package names
-masked. Not changed: one Apple MDM model for every window (apple-reads runbook). Live checks wait for S1's
-team build. Since §8.0's step 2 (`contract-2.8`): 53 audit types, the three webhook ones in Access & Security; the device
+masked. Not changed: one Apple MDM model for every window (apple-reads runbook). S1's team build passed 2026-11-19; the
+first acceptance pass over Apple Business ran that day (apple-reads runbook). Since §8.0's step 2 (`contract-2.8`): 53 audit types, the three webhook ones in Access & Security; the device
 list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' three among them.
 
 **Owns:** `AppleModels/` (remaining types), `AppleBusiness/` reads, `Reports/{stats,audit}`,
@@ -1391,9 +1400,9 @@ operator has a device they mean to release; a strict-stub test is the only cover
 
 ### Phase 7: Mosyle reads, Logs Stream, reconciliation, Device 360
 
-**Status:** split. **7a** (MosyleModels, `MosyleRead`, `MosyleSession`, `MosyleClient` reads, the strict
-`MosyleStub`): merged. The rest of the reads, the reports, the screens, Device 360 and the demo fleet: built on
-`mosyle-screens` (§8.0 step 3). **7b** (the Logs Stream drain, `LogsStore`) and the collectors: after Phase 3's store.
+**Status:** 7a merged (PR #8, 2026-10-30); the screens merged (PR #16, 2026-11-12); 7b not started. Split. **7a** (MosyleModels, `MosyleRead`, `MosyleSession`, `MosyleClient` reads, the strict
+`MosyleStub`): merged. The rest of the reads, the reports, the screens, Device 360 and the demo fleet: merged
+(PR #16; §8.0 step 3). **7b** (the Logs Stream drain, `LogsStore`) and the collectors: after Phase 3's store.
 Live checks wait for the operator.
 
 **Owns:** `Mosyle/`, `MosyleModels/`, `Reports/{reconcile,mosylePosture,timeline}`,
@@ -1409,7 +1418,7 @@ Live checks wait for the operator.
   parser.
 - **Reports**: OS breakdown, stale check-ins (golden parity), reconciliation (golden parity), and a
   device-group compliance view.
-- **Device 360 merge** with an operator-chosen paired org.
+- **Device 360 merge** within the active client (§8.0, "Clients").
 - **Mosyle snapshot collectors** (defect 6).
 - **Mosyle demo fleet.**
 
