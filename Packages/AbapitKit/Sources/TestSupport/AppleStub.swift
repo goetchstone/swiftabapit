@@ -553,9 +553,14 @@ public final class AppleStub: Transport, Sendable {
         var paging: JSONObject = ["limit": .number(String(limit))]
         if repeats || start + slice.count < items.count {
             let next = repeats ? start : start + slice.count
-            // As Apple's example: the next link carries the cursor alone (get-org-devices.response.json).
+            // As Apple's filtered example: the next link keeps the request's other parameters (`filter[...]`, `limit`, and so
+            // `fields[...]`) and sets only `cursor` (get-org-devices.response.2.json). A link that dropped them would give page 2
+            // of a read other attributes than page 1, which Apple's doesn't.
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))]
+            let kept = (components.queryItems ?? []).filter { $0.name != "cursor" }
+            // `cursor` first: the order of a query isn't Apple's to promise, and tests queue a failure for a later page by the
+            // prefix `<path>?cursor=`.
+            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))] + kept
             links["next"] = .string(components.url!.absoluteString)
             paging["nextCursor"] = .string(String(next))
         }

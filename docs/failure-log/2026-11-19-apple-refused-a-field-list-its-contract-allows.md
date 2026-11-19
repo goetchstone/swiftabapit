@@ -37,5 +37,5 @@
     `PanelTests` (the false "Never connected", deleted services, the note and absent set kept for the services shown after a
     failed page). `connection(of:)` and `LastConnected` have no default for `sent`, so a view that forgets it doesn't compile.
   - Still only a stub: the live answer to the read without `fields` is unverified until the next live run, and the refused
-    field stays unknown until that run's `Apple named:` text is read. The apple-reads runbook records this, the blueprint
+    field stays unknown until that run's `Apple's reason mentions:` text is read. The apple-reads runbook records this, the blueprint
     `include` refusal and the dropped connections seen the same day.

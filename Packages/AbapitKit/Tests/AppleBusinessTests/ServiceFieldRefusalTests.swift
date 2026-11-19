@@ -83,6 +83,23 @@ struct ServiceFieldRefusalTests {
         #expect(requests.count == 3, "\(requests)")
         #expect(requests.dropFirst().allSatisfy { !$0.contains("fields") }, "\(requests)")
         #expect(pages.allSatisfy { $0.note?.hasPrefix(Self.said) == true })
+        // Page 2 of the fallback read is the example's four attributes too.
+        #expect(Set(pages[1].items[0].attributes.keys) == ["serverName", "serverType", "createdDateTime", "updatedDateTime"])
+        #expect(pages[1].absent.contains("status") && pages[1].absent.contains("lastConnectedDateTime"))
+    }
+
+    /// Apple's next link keeps the request's parameters (get-org-devices.response.2.json): page 2 of a normal read still asks for
+    /// `fields[mdmServers]`, with one `limit`, and its services have every attribute the stub holds.
+    @Test func pageTwoOfANormalReadKeepsTheFieldsAndTheirAttributes() async throws {
+        let harness = try await Self.harness(refusing: false, services: AppleRead.pageLimit + 1)
+        let pages = try await Self.read(harness.client)
+        #expect(pages.map(\.items.count) == [AppleRead.pageLimit, 1])
+        let requests = Self.listRequests(harness)
+        #expect(requests.count == 2, "\(requests)")
+        #expect(requests[1].contains("cursor=") && requests[1].contains("fields"), "\(requests)")
+        #expect(requests[1].components(separatedBy: "limit=").count == 2, "exactly one limit: \(requests[1])")
+        #expect(pages[1].items[0].attributes.keys.contains("status") && pages[1].items[0].attributes.keys.contains("lastConnectedDateTime"))
+        #expect(pages.allSatisfy { $0.note == nil && $0.absent.isEmpty })
     }
 
     @Test func withTheSwitchOffNothingChanges() async throws {
@@ -124,7 +141,7 @@ struct ServiceFieldRefusalTests {
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
         #expect(line.status == .ok && line.count == 2)
         #expect(line.note?.hasPrefix(Self.said) == true, "\(line.note ?? "nil")")
-        #expect(line.note?.hasSuffix(" · Apple's reason named none of the fields asked for") == true, "\(line.note ?? "nil")")
+        #expect(line.note?.hasSuffix(" · Apple's reason mentions none of the fields asked for") == true, "\(line.note ?? "nil")")
         // The services' own device lists are still read.
         #expect(report.lines.first { $0.resource == "mdmServers/{id}/relationships/devices" }?.status == .ok, "\(report.text)")
     }
@@ -137,7 +154,7 @@ struct ServiceFieldRefusalTests {
         harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: detail, parameter: "fields[mdmServers]"))
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
-        #expect(line.note?.hasSuffix(" · Apple named: deviceCount, lastConnectedIp") == true, "\(line.note ?? "nil")")
+        #expect(line.note?.hasSuffix(" · Apple's reason mentions: deviceCount, lastConnectedIp") == true, "\(line.note ?? "nil")")
         for word in ["jane", "example.com", "TESTD", "Acme", "aren't allowed"] { #expect(!report.text.contains(word), "\(word) in \(report.text)") }
         #expect(report.text.split(separator: "\n").count == report.lines.count, "a line was forged: \(report.text)")
     }
@@ -151,7 +168,7 @@ struct ServiceFieldRefusalTests {
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
         #expect(line.status == .error("error 500"), "\(report.text)")
-        #expect(line.note == "Apple refused the field list (fields[mdmServers]); the read without it then failed · Apple named: status", "\(line.note ?? "nil")")
+        #expect(line.note == "Apple refused the field list (fields[mdmServers]); the read without it then failed · Apple's reason mentions: status", "\(line.note ?? "nil")")
     }
 
     /// A walk that fails after pages were read says what is absent from the services read, not from every service.
@@ -163,18 +180,18 @@ struct ServiceFieldRefusalTests {
         #expect(line.status == .error("error 500") && line.count == AppleRead.pageLimit, "\(report.text)")
         let note = try #require(line.note)
         #expect(note.contains("Absent from the \(AppleRead.pageLimit) services read: status,") && !note.contains("every service"), "\(note)")
-        #expect(note.hasSuffix(" · Apple's reason named none of the fields asked for"), "\(note)")
+        #expect(note.hasSuffix(" · Apple's reason mentions none of the fields asked for"), "\(note)")
     }
 
     /// Which fields Apple's reason names: whole identifiers, whatever the case; none, all, or no reason said so.
     @Test(arguments: [
-        ("Check the statuses of your request", " · Apple's reason named none of the fields asked for"),
-        ("xstatus and statuses and deviceCounts", " · Apple's reason named none of the fields asked for"),
-        ("Check the status of your request", " · Apple named: status"),
-        ("serverName isn't allowed", " · Apple named: serverName"),
-        ("SERVERNAME, Status; (lastConnectedIp)", " · Apple named: serverName, status, lastConnectedIp"),
+        ("Check the statuses of your request", " · Apple's reason mentions none of the fields asked for"),
+        ("xstatus and statuses and deviceCounts", " · Apple's reason mentions none of the fields asked for"),
+        ("Check the status of your request", " · Apple's reason mentions: status"),
+        ("serverName isn't allowed", " · Apple's reason mentions: serverName"),
+        ("SERVERNAME, Status; (lastConnectedIp)", " · Apple's reason mentions: serverName, status, lastConnectedIp"),
         ("serverName,serverType,status,deviceCount,lastConnectedDateTime,lastConnectedIp,defaultProductFamilies,enableMdmDisownFlag,createdDateTime,updatedDateTime",
-         " · Apple's reason named every field asked for"),
+         " · Apple's reason mentions every field asked for"),
         ("", " · Apple gave no reason"),
         ("  \n", " · Apple gave no reason"),
     ])

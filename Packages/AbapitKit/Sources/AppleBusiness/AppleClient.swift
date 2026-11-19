@@ -56,8 +56,8 @@ public struct FieldListRefusal: Sendable, Equatable {
     /// The acceptance pass's words for it.
     var said: String {
         if gaveNoReason { return "Apple gave no reason" }
-        if named.count == AppleRead.serviceFields.count { return "Apple's reason named every field asked for" }
-        return named.isEmpty ? "Apple's reason named none of the fields asked for" : "Apple named: \(named.joined(separator: ", "))"
+        if named.count == AppleRead.serviceFields.count { return "Apple's reason mentions every field asked for" }
+        return named.isEmpty ? "Apple's reason mentions none of the fields asked for" : "Apple's reason mentions: \(named.joined(separator: ", "))"
     }
 }
 

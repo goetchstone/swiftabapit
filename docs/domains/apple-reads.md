@@ -741,13 +741,13 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   value Apple refuses is unknown: Apple's `detail` wasn't captured. The client now asks again once without
   `fields[mdmServers]` (Apple's default attributes), keeps `limit`, remembers the refusal for the client's life (memory
   only), and says so: `Page.note` on each page, the Services screen's note (`services.fieldsNote`), and the acceptance
-  pass's `mdmServers` line, which says which of the ten fields Apple's `detail` names, as whole identifiers (`Apple named: a, b`, or that it named none or every
+  pass's `mdmServers` line, which says which of the ten fields Apple's `detail` names, as whole identifiers (`Apple's reason mentions: a, b`, or that it mentions none or every
   one, or gave no reason), never the `detail` itself. The note names the requested attributes no service came back with, and `Page.absent` carries them as
   data: Apple's own example without `fields` has four attributes, so the Services column says "Not sent by Apple" for
   `lastConnectedDateTime` (never "Never connected"), the Overview's quiet card says quiet services can't be judged, and
   without `status` it says deleted services are counted. `AppleStub.refuseServiceFields()` makes the stub refuse the way Apple did.
   A read that fails after some pages keeps what those services lack, worded for the services read. **Next live run:** read
-  the `Apple named:` text on the `mdmServers` line (Apple's reason may name the refused field), then decide whether the
+  the `Apple's reason mentions:` text on the `mdmServers` line (Apple's reason may mention the refused field), then decide whether the
   field list can be fixed or dropped for good. Failure-log 2026-11-19, "Apple refused a field list its contract allows".
 - **`GET /v1/blueprints/{id}` with `include` of all six relationships answered 400 `PARAMETER_ERROR.ILLEGAL include`.**
   The client's fallback (`AppleClient.blueprint`) read the blueprint without its members, and each relationship read
@@ -757,5 +757,8 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
 - **The first attempts of several reads failed with `NSURLErrorNetworkConnectionLost` (-1005)**, because Apple's HTTP/2
   server sent a `transfer-encoding: chunked` header, which HTTP/2 forbids. The client's retries recovered every one.
   Nothing to change in the client; a transport error on a first attempt is expected on this server.
+- The stub's next link keeps the request's other parameters and sets `cursor` (first, so a test can queue a failure for a
+  later page by the prefix `<path>?cursor=`), as Apple's filtered example does (`get-org-devices.response.2.json`): a page 2
+  that dropped `fields[...]` would have other attributes than page 1.
 - Every other read ran and all 11 probes were `ok`, except `mdmServers/{id}/relationships/devices`, which was `skipped`
   because the services list failed (the blueprint's `include` read answered 400, above, and its fallback read it).

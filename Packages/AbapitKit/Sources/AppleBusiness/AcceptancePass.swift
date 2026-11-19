@@ -121,7 +121,7 @@ extension AppleClient {
                 found.keptOnFailure = await refusal(failed: true, read: services.count)
                 throw error
             }
-            // Apple refused the field list: the note, and which fields its reason named (Apple's reason may name the refused one).
+            // Apple refused the field list: the note, and which fields its reason mentions (it may mention the refused one).
             found.note = await refusal(failed: false, read: services.count)
             found.keys = Set(services.flatMap(\.unreadAttributes))
             found.misread(services)
