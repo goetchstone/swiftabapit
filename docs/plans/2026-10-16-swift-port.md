@@ -3,12 +3,14 @@
 **Status: IN PROGRESS (this line updated 2026-11-19; the build order is §8.0).** Merged to `main`: Phase 0 (PR #1), 1a
 (#3), 1b (#5, #6, #7), 7a (#8), 2a (#10), 2b (#12), profile masking (#13), the build order (#14), the 2.8/1.8 contract
 (#15), Mosyle's screens and the reconciliation (#16), the Mosyle org editor (#17), clients (#18), the add-org customer
-question (#19), the audit log's one-type rule (#20) and the services' default-fields fallback (#21). Open: #22 (Mosyle's
-device columns). Not built: Phase 3 (history and snapshots), Needs attention, Apple's on-device model, and every write
+question (#19), the audit log's one-type rule (#20), the services' default-fields fallback (#21: the list asks again without
+the field list when Apple refuses it) and Mosyle's device columns (#22: read Mosyle's reason, learn which columns it
+offers). Not built: Phase 3 (history and snapshots), Needs attention, Apple's on-device model, and every write
 (Phase 4 waits for the operator's answers to the write-path design). Verified live by the operator on 2026-11-19: S1's
 team build (a Personal Team, sandboxed; keychain and vault spikes passed), the first acceptance pass over Apple
-Business's reads (docs/domains/apple-reads.md), and Mosyle's login; Mosyle's device list waits for #22, and Apple
-School Manager is not verified on a live tenant. Written
+Business's reads (docs/domains/apple-reads.md), and Mosyle's login, which worked; Mosyle's device list was refused
+(HTTP 400) on that first check, and #22's fix waits for the next live check (docs/domains/mosyle.md, "Seen live,
+2026-11-19"). Apple School Manager is not verified on a live tenant. Written
 2026-10-16 at abapit `9875ee7` (branch `security-dependency-audit`) for agents with no session context.
 Mark each phase's **Status** line as it lands. The operator's answers to §0.2 are recorded there.
 
@@ -956,8 +958,10 @@ This order replaces the numeric one; the phase numbers stay as names. Most of wh
 reads, and what they reveal, come before writes.
 
 1. **The live checks** (S1's team build, the operator). Done 2026-11-19: S1's team build and both spikes, the first
-   acceptance pass over Apple Business's reads (answers in docs/domains/apple-reads.md), and Mosyle's login. Not done:
-   Mosyle's device list (PR #22), Apple School Manager, and every other check this plan lists per phase.
+   acceptance pass over Apple Business's reads (answers in docs/domains/apple-reads.md), and Mosyle's login, which worked.
+   The device list was refused (HTTP 400) on Mosyle's first live check; PR #22 (read Mosyle's reason, learn which
+   device columns it offers) is merged and waits for the next live check (docs/domains/mosyle.md, "Seen live,
+   2026-11-19"). Not done: that check, Apple School Manager, and every other check this plan lists per phase.
 2. **Contract update to Business 2.8 and School 1.8**: the device list's `cursor` and filters, the three webhook reads,
    the new audit values. **Status:** merged (PR #15, 2026-11-11; drift issue #11): the contracts at
    Business 2.8 (65 endpoints) and School 1.8 (11); the new audit values, the three webhook types placed in Access &
@@ -965,7 +969,7 @@ reads, and what they reveal, come before writes.
    models (URLs shown only as scheme and host, the receiver's body and any secret withheld), the strict stub and three
    acceptance-pass lines. No screen, and no webhooks probe until one (apple-reads runbook, "Webhooks"). S1's team build passed
    2026-11-19; the live checks are the operator's. The phase's adversarial review (2026-11-11) found a delivery withholding only the keys it knew
-   and a masked URL hiding the change it was masked to show; fixed on the branch (failure-log 2026-11-11): a delivery
+   and a masked URL hiding the change it was masked to show; fixed before it merged in PR #15 (failure-log 2026-11-11): a delivery
    withholds every attribute it doesn't read and masks the URLs in its error message, every masked URL carries a per-run
    tag, the audit mask walks every payload and both names, and §3.4.4's write probes include the webhooks.
 3. **Mosyle's screens and Apple-against-Mosyle reconciliation** (Phase 7). Its collectors and `LogsStore` follow Phase 3's store.

@@ -17,8 +17,10 @@ reconciliation with Device 360, with CSV export, clients and a built-in demo org
 strict stubs, Apple's published API contracts and parity goldens from abapit. The operator checked parts of it on live
 organizations on 2026-11-19: the build signs and provisions with the App Sandbox on, the Keychain and vault spikes
 passed, the first pass over Apple Business's reads ran (its answers are in
-[docs/domains/apple-reads.md](docs/domains/apple-reads.md)) and Mosyle's login worked. Mosyle's device list waits for an
-open pull request, and Apple School Manager is not verified on a live tenant. The write path, history and snapshots,
+[docs/domains/apple-reads.md](docs/domains/apple-reads.md)) and Mosyle's login worked. Mosyle's device list was refused
+(HTTP 400) on that first check; the fix (read Mosyle's reason, learn which device columns it offers) is merged and waits
+for the next live check ([docs/domains/mosyle.md](docs/domains/mosyle.md)). Apple's services list asks again with Apple's
+default fields when Apple refuses its field list. Apple School Manager is not verified on a live tenant. The write path, history and snapshots,
 Needs attention and Apple's on-device model are planned, not built; the write path waits for the operator's answers to
 its design. The plan and its Status lines are in
 [docs/plans/2026-10-16-swift-port.md](docs/plans/2026-10-16-swift-port.md).

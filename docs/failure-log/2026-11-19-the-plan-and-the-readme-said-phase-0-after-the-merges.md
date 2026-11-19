@@ -11,7 +11,7 @@
 - **Why not caught:** `end-of-session` item 4 asks for the Status line, not for what it says once the PR merges, and no
   check reads the plan or the README against what `main` holds. `CLAUDE.md` tells every session to read these lines first,
   so a session read Phase 1b as "next".
-- **Fix:** this PR rewrote the Status lines, the README's status and SECURITY.md's wording to say what is built, what is
+- **Fix:** https://github.com/goetchstone/swiftabapit/pull/23 (branch `docs-truth`) rewrote the Status lines, the README's status and SECURITY.md's wording to say what is built, what is
   planned and what was verified live, and records the 2026-11-19 spike results in `docs/domains/auth-keychain.md`.
 - **Prevention:** nothing mechanical yet; no check compares a Status line with the merged pull requests. The split
   phases' Status lines now lead with the merged state, so the session-start digest's first 110 characters show it.
