@@ -575,6 +575,20 @@ public final class OrgsModel {
         save()
     }
 
+    /// Settings' Test of a Mosyle org, in words: a login and the first page of Macs with `client` (a fresh one,
+    /// `mosyleClient(for:)`), and which device columns Mosyle refused and which it took, after a failure too: the live check
+    /// of 2026-11-19 showed only "400".
+    public static func testMosyle(_ client: MosyleClient) async -> String {
+        do {
+            try await client.ping()
+            let columns = await client.columns
+            return "Connected: the token, the admin account and the network work. " + (columns?.words ?? MosyleColumns.allTaken)
+        } catch {
+            let columns = await client.columns
+            return [message(error), columns?.words].compactMap { $0 }.joined(separator: "\n")
+        }
+    }
+
     /// An error in the operator's words.
     public static func message(_ error: any Error) -> String {
         switch error {

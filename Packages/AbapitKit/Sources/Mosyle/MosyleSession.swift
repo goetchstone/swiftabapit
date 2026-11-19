@@ -212,9 +212,13 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
     case http(HTTPFailure)
     case vault(String)
     case wrongHost(String)
+    /// A read's 4xx or 5xx whose body carried Mosyle's own `status` or `info`: the error, with them (`said`). The 2026-11-19
+    /// live check saw only "400" where Mosyle's answer said why.
+    indirect case answered(MosyleAPIError, said: String)
 
     public var message: String {
         switch self {
+        case .answered(let error, let said): "\(error.message) Mosyle said: \(said)"
         case .unauthorized:
             "Mosyle refused this organization's credentials, even after a fresh login. If the access token is restricted to "
                 + "certain IP addresses, this Mac's may not be one."
@@ -224,7 +228,8 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
         case .login(let status): "Mosyle's login refused the email, password or access token (HTTP \(status))."
         case .noToken: "Mosyle's login answered without a token."
         case .invalidMethod: "Mosyle refused the request's method (INVALID_METHOD)."
-        case .status(let status, let info): "Mosyle answered \(status.rawValue)\(info.map { ": \($0)" } ?? ".")"
+        case .status(let status, let info):
+            "Mosyle answered \(Self.clean(status.rawValue, limit: 64) ?? "a status")\(info.flatMap { Self.clean($0, limit: 200) }.map { ": \($0)" } ?? ".")"
         case .malformed(let reason): "Mosyle's answer couldn't be read as a list: \(reason). Nothing was read from it."
         case .notARead(let template): "\(template) isn't a Mosyle read this app may send, so it wasn't sent."
         case .rateLimited: "Mosyle is rate-limiting this organization. Try again in a minute."
@@ -235,5 +240,50 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
         case .vault(let guidance): guidance
         case .wrongHost(let host): "A request for \(host) was refused: it isn't this organization's Mosyle service."
         }
+    }
+
+    /// Mosyle's own words in a read's 4xx or 5xx answer: `status: info`, each `clean`ed, at most 64 and 200 scalars; nil
+    /// when its body has neither as a string. Never a login's (its body may hold what was sent: `MosyleCredentialTests`).
+    static func said(_ body: Data) -> String? {
+        let (status, info) = parts(body)
+        let words = [status.flatMap { clean($0, limit: 64) }, info.flatMap { clean($0, limit: 200) }].compactMap { $0 }
+        return words.isEmpty ? nil : words.joined(separator: ": ")
+    }
+
+    /// Mosyle's status in a body when it is shaped as a code (ASCII capitals, digits and `_`, 1 to 64 of them): the only
+    /// part of an answer that isn't a 2xx logged as public.
+    static func code(_ body: Data) -> String? {
+        guard let status = parts(body).status, (1...64).contains(status.utf8.count),
+              status.utf8.allSatisfy({ (0x41...0x5A).contains($0) || (0x30...0x39).contains($0) || $0 == 0x5F }) else { return nil }
+        return status
+    }
+
+    /// `text` as a screen may show it: control, format, separator, private-use and unassigned characters out (a line
+    /// break or a bidi override can't forge or reorder the message), whitespace trimmed, at most `limit` scalars (`…` after
+    /// a cut); nil when nothing is left.
+    static func clean(_ text: String, limit: Int) -> String? {
+        let kept = String.UnicodeScalarView(text.unicodeScalars.filter { scalar in
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator, .privateUse, .surrogate, .unassigned: false
+            default: true
+            }
+        })
+        let trimmed = String(kept).trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        guard trimmed.unicodeScalars.count > limit else { return trimmed }
+        return String(String.UnicodeScalarView(trimmed.unicodeScalars.prefix(limit))).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
+    /// The `status` and `info` of a body: the entry's (`response[0]`, or `response` as an object), else the top level's,
+    /// where an `OK` says nothing (Mosyle sends it on errors too). No other field: a `message` may hold anything.
+    private static func parts(_ body: Data) -> (status: String?, info: String?) {
+        guard let root = JSONValue.parse(String(decoding: body, as: UTF8.self))?.object else { return (nil, nil) }
+        let entry: JSONObject? = switch root["response"] {
+        case .array(let items)?: items.first?.object
+        case .object(let object)?: object
+        default: nil
+        }
+        if let entry, entry["status"]?.string != nil || entry["info"]?.string != nil { return (entry["status"]?.string, entry["info"]?.string) }
+        return (root["status"]?.string.flatMap { $0.utf8.elementsEqual("OK".utf8) ? nil : $0 }, root["info"]?.string)
     }
 }

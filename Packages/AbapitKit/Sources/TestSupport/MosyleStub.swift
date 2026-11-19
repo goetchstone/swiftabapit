@@ -20,8 +20,8 @@ import Wire
 ///   401 `{"error": …}`. A Logs Stream read that has both is unhandled: the read itself arrives with LogsDrain (7b).
 /// - Lists page at **50 rows whatever `page_size` asks** (abapit recorded `"page_size":50`; it asked for 500 and
 ///   stopped after the first short page: defect 2). Devices need `os` (else `MISSING_DATA`), refuse a column not in
-///   `deviceColumns` (`UNKNOWN_COLUMNS`), answer `DEVICES_NOTFOUND` past the end, and return only `specific_columns`
-///   when given. Device groups answer with an object, not a list.
+///   `deviceColumns` or told to `lackColumns` (HTTP 400, `UNKNOWN_COLUMNS`: see `devices`), answer `DEVICES_NOTFOUND`
+///   past the end, and return only `specific_columns` when given. Device groups answer with an object, not a list.
 /// - The top-level `"status": "OK"` is sent on errors too, as Mosyle does.
 public final class MosyleStub: Transport, Sendable {
     public struct Account: Sendable {
@@ -50,8 +50,9 @@ public final class MosyleStub: Transport, Sendable {
     /// were the adapter's, so `UNKNOWN_COLUMNS` could never fire). The names: the device-list fields abapit's
     /// `mosyle.py` read at the parity pin (`_FIELD_MAP`, `_DATE_MAP`, `os` and `device_type` for the family), the
     /// Activation Lock bypass codes (plan §2.3 defect 1), and the lost-mode location (plan §2.2). abapit read these
-    /// from responses and never sent `specific_columns`, so none is confirmed as a request column: that is a named
-    /// Phase 7 live check (docs/domains/mosyle.md).
+    /// from responses and never sent `specific_columns`. Mosyle's in-console doc lists all but `undocumentedColumns` as
+    /// `specific_columns` names; whether Mosyle takes those is a named live check
+    /// (docs/domains/mosyle.md). This Mosyle takes every one unless a test says otherwise (`lackColumns`): assumed.
     public static let deviceColumns: Set<String> = [
         "serial_number", "deviceudid", "device_name", "device_model", "device_model_name", "model_name", "osversion", "status",
         "enrollment_type", "ManagementStatus", "userid", "useremail", "username", "CurrentConsoleManagedUser",
@@ -61,6 +62,13 @@ public final class MosyleStub: Transport, Sendable {
         "os", "device_type",
         "activation_bypass", "activation_bypass_mdm",
         "latitude", "longitude",
+    ]
+    /// The columns above that Mosyle's in-console doc doesn't list as `specific_columns` names (six came from third-party
+    /// research, and the doc lists `activation_bypass` but not `activation_bypass_mdm`). Written out
+    /// here, not taken from the client. Which of them the real Mosyle takes is unknown: a test makes this one refuse any
+    /// of them with `lackColumns`.
+    public static let undocumentedColumns: Set<String> = [
+        "enrollment_type", "currentconsolemanageduser", "imei", "meid", "date_enroll", "date_checkin", "activation_bypass_mdm",
     ]
 
     private struct Queued {
@@ -143,7 +151,8 @@ public final class MosyleStub: Transport, Sendable {
     /// Which one each list sends is unconfirmed (docs/domains/mosyle.md); the device list always answers
     /// `DEVICES_NOTFOUND` (abapit's recorded envelope).
     public func endLists(with status: String, for path: String) { state.withLock { $0.endOfList[path] = status } }
-    /// This Mosyle lacks these device columns: asking for one is `UNKNOWN_COLUMNS`, its `info` naming them or not.
+    /// This Mosyle lacks these device columns: asking for one is refused (`devices`), its `unknown_columns` naming every
+    /// unknown column asked for, or (`named: false`) empty, as in the example of Mosyle's doc.
     public func lackColumns(_ names: Set<String>, named: Bool = true) {
         state.withLock {
             $0.lacking = names
@@ -195,7 +204,7 @@ public final class MosyleStub: Transport, Sendable {
     /// Every list request's body, for asserting on `specific_columns` and paging.
     public var bodies: [JSONObject] { state.withLock { $0.bodies } }
     public var logins: Int { state.withLock { $0.logins } }
-    /// How many device lists were refused `UNKNOWN_COLUMNS`.
+    /// How many device lists were refused `UNKNOWN_COLUMNS` (by `lackColumns` or a column not in `deviceColumns`).
     public var columnRefusals: Int { state.withLock { $0.columnRefusals } }
 
     // MARK: Transport
@@ -390,6 +399,11 @@ public final class MosyleStub: Transport, Sendable {
         return (200, [:], Self.entry(["logs": .array(rows.map(JSONValue.object)), "rows": .number(String(rows.count))]))
     }
 
+    /// The device list. A request asking for a column this Mosyle lacks is refused with the answer Mosyle's doc shows
+    /// (`unknown_columns`, `status` `UNKNOWN_COLUMNS`, `info` "Unknown columns"; the doc's own example names none, which
+    /// `lackColumns(_:named: false)` sends) inside the usual envelope, with HTTP 400. Both are assumed: the doc gives no HTTP
+    /// code, and on 2026-11-19 the live list asking 33 columns was answered 400 with a body nobody saw. (A 200 with the
+    /// status is `failEnvelope`'s.)
     private func devices(_ options: JSONObject) -> (Int, [String: String], Data) {
         guard let os = options["os"]?.string, !os.isEmpty else { return (200, [:], Self.entry(Self.missing("os"))) }
         var columns: [String]?
@@ -399,8 +413,8 @@ public final class MosyleStub: Transport, Sendable {
             let unknown = asked.filter { !Self.deviceColumns.contains($0) || lacking.contains($0) }
             guard unknown.isEmpty, asked.count == names.count else {
                 state.withLock { $0.columnRefusals += 1 }
-                let info = named ? "Unknown columns: \(unknown.joined(separator: ", "))" : "Unknown columns"
-                return (200, [:], Self.entry(["status": .string("UNKNOWN_COLUMNS"), "info": .string(info)]))
+                return (400, [:], Self.entry(["unknown_columns": .array(named ? unknown.map(JSONValue.string) : []),
+                                              "status": .string("UNKNOWN_COLUMNS"), "info": .string("Unknown columns")]))
             }
             columns = asked
         }

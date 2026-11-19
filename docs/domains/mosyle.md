@@ -76,15 +76,32 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
   truthy of serial and UDID, a number as well as a string, compared as Python's set compares: `1000`, `1e3` and
   `1000.0` are one key, `true` is `1`, a zero is no key; past `Int`'s range an integer and an equal float stay two,
   a recorded deviation). The stream sends no empty page.
-- **The column fallback** (Phase 7a review H3): no source confirms any of the 33 names as a `specific_columns` name
-  (abapit sent only `os` and `page`), and one wrong name would fail every device list. On `UNKNOWN_COLUMNS` the
-  client asks again without the columns Mosyle's `info` names, the first time; else, or on a second refusal, without
-  `specific_columns`, so only the adapter's allowlist keeps the bypass codes out (as it did for abapit); a third
-  refusal is the error. An empty `specific_columns` is never sent: Mosyle naming every column is every column. Two
-  walks refused at once settle on one fallback (the second asks again with the first's). The ping asks as the list
-  does and shares its fallback. Each step is an error-level log line naming the columns (a test reads it back from
-  the process's own log) and `MosyleClient.columnFallback`, for a screen to show. Failing closed was rejected: it
-  trades a whole lost list for codes the adapter drops anyway.
+- **The column fallback** (Phase 7a review H3; the operator's decision, 2026-11-19). abapit sent only `os` and `page`.
+  Mosyle's in-console doc lists 27 of the 33 names as `specific_columns` names. It does not list six, which came from
+  third-party research: `enrollment_type`, `currentconsolemanageduser`, `imei`, `meid`, `date_enroll` and
+  `date_checkin` (`MosyleClient.undocumentedColumns`). One refused name fails every device list: live, on 2026-11-19, the
+  list asking the 33 answered HTTP 400 (failure-log 2026-11-19).
+  - **A refusal** is `UNKNOWN_COLUMNS`, read the same inside a 2xx or with HTTP 400, in the envelope or bare. Its names are
+    the strings under `unknown_columns` (the doc's answer) together with the words of `info`, as one set.
+  - **Naming columns asked for:** the list is asked again without exactly those.
+  - **Naming none:** the list is asked for the 27. Once Mosyle takes them, each of the six is tried alone beside the
+    columns it took, on that page, and kept if Mosyle takes it. The request with all six added is the one just refused, so
+    it is not sent again, nor is any list Mosyle refused. The answer is the last one Mosyle took.
+  - **Every column** (no `specific_columns`) only when the documented columns themselves are refused unnamed, or every
+    column asked for is named. Only the adapter's allowlist then keeps the bypass codes out, as it did for abapit.
+  - **Bounded:** a refusal can bring at most seven more requests per client (1 + 6). With none left, a refusal is the
+    error, and a column not yet tried is left out and said. What was learnt lives in memory for the client's life (an
+    org's session; Settings' Test makes a fresh client, so each Test learns afresh), never on disk.
+  - **Shared:** two walks refused at once settle on one fallback and one set of tries; the others wait for the tries. The
+    ping asks as the list does and shares its fallback.
+  - **Said:** each step is an error-level log line naming the columns (a test reads it back from the process's own log).
+    `MosyleClient.columns` says which columns Mosyle refused, which it took and which were left untried: in Settings'
+    Test, beside the devices and beside a failed device read.
+  - **Mosyle's words:** any other 4xx or 5xx of a read carries Mosyle's `status` and `info` in its error
+    (`MosyleAPIError.answered`). Both are cleaned of control and format characters and cut at 64 and 200 characters. The
+    log gets Mosyle's status only when it is shaped as a code, and never its `info`.
+  - An empty `specific_columns` is never sent. Failing closed was rejected: it trades a whole lost list for codes the
+    adapter drops anyway.
 - **Paging**: from page 1 until the list's own end-of-list status, an empty page, a page that adds nothing new (users
   and groups are deduplicated by id, or by the whole row without one: a tenant that wraps past its end served 60
   users as 6000, review L2), or the cap (200 pages). New rows on the cap's page mark the result `truncated` (a full
@@ -243,12 +260,23 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
 - **A no-op `sleep` with the real clock makes `RateLimiter.acquire` spin** until real time refills the bucket (the
   first Mosyle tests took 12 s). Tests give the limiter a clock its sleep advances.
 - **Assumed, check live (Phase 7 live check):**
-  - **Every device column name in `specific_columns`** (the adapter's 33: abapit's `_FIELD_MAP` and `_DATE_MAP`
-    sources, `os`, `device_type`). abapit read them from responses and never sent `specific_columns`; in particular
-    whether both `CurrentConsoleManagedUser` and `currentconsolemanageduser` are accepted, and `os` and `device_type`
-    as columns. Also whether `UNKNOWN_COLUMNS`'s `info` names the columns (the stub's does; the fallback works either
-    way). `MosyleStub.deviceColumns` is the stub's guess at Mosyle's list, with `activation_bypass_mdm` (plan defect
-    1) and `latitude`/`longitude` (plan §2.2).
+  - **The device columns in `specific_columns`** (the adapter's 33: abapit's `_FIELD_MAP` and `_DATE_MAP` sources, `os`,
+    `device_type`; Mosyle's doc lists 27 of them).
+    - **Seen live, 2026-11-19 (Settings → Test, before this fix):** the login answered 200. The device list for Macs,
+      page 1, asking for the 33 answered HTTP 400. Its body was not seen: the client threw it away and said only "400".
+    - **Assumed since:**
+      - that a refusal is HTTP 400 (seen only on the request asking the 33, with its body unseen), or inside a 2xx;
+      - that it is shaped as the doc's example (`unknown_columns`, `status` `UNKNOWN_COLUMNS`, `info`), inside the
+        envelope or bare;
+      - whether `unknown_columns` or `info` names the columns (both are read);
+      - that Mosyle checks the columns before it looks for devices, so a platform with none still refuses;
+      - that a column Mosyle takes on one platform it takes on all: the client learns once, on whichever platform refuses
+        first.
+    - **Unknown, and the next Test answers it:** which of the six Mosyle takes. The stub takes all of them unless a test
+      says otherwise (`MosyleStub.undocumentedColumns`). The next Test says which Mosyle refused and took, or, if the 400
+      was something else, Mosyle's own status and info. The log has a line for each step.
+    - `MosyleStub.deviceColumns` is the stub's guess at Mosyle's list. It adds `activation_bypass_mdm` (plan defect 1;
+      the doc lists only `activation_bypass`) and `latitude`/`longitude` (plan §2.2).
   - **Each list's end-of-list status**, past the last row: `DEVICES_NOTFOUND` (abapit's recorded envelope) and
     `USERGROUP_NOTFOUND` (plan §3.5) have sources; `USERS_NOTFOUND`, `USER_NOTFOUND`, `USERGROUPS_NOTFOUND`,
     `DEVICEGROUPS_NOTFOUND` and `DEVICEGROUP_NOTFOUND` are guesses. An empty list also ends a walk; any other

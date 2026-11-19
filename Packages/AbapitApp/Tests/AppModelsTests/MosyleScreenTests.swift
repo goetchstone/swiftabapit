@@ -171,7 +171,22 @@ struct MosyleScreenTests {
         world.mosyle.load()
         await eventually("devices") { Self.loaded(world.mosyle.devices.state) }
         #expect(world.mosyle.columnFallback == .without(["imei"]))
-        #expect(world.mosyle.note(.devices) == "Mosyle refused the columns imei, so they were left out of the request.")
+        #expect(world.mosyle.note(.devices) == "Mosyle refused the device column imei, so it was left out of the request. It took the other 32, "
+                + "among them enrollment_type, currentconsolemanageduser, meid, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
+    }
+
+    /// A device read that fails says where the columns stand beside its error: Mosyle refused the 33 and the 27 without
+    /// naming one, then every column too.
+    @Test func aFailedDeviceReadSaysTheColumnsBesideItsError() async throws {
+        let world = try await World.make(mosyle: true)
+        world.mosyleStub.add(devices: [Self.device("MAC1")], os: "mac")
+        for _ in 0..<3 { world.mosyleStub.failEnvelope("UNKNOWN_COLUMNS", for: "/v1/devices") }
+        world.mosyle.load()
+        await eventually("failed") { if case .failed = world.mosyle.devices.state { true } else { false } }
+        #expect(world.mosyle.devices.state == .failed("Mosyle answered UNKNOWN_COLUMNS: stubbed"))
+        #expect(world.mosyle.columnFallback == .everyColumn)
+        #expect(world.mosyle.note(.devices)
+                == "Mosyle refused the requested device columns, so every column was asked for; only the fields this app keeps are shown.")
     }
 
     @Test func aGroupsMembersAreReadWhenChosenAndNamedByTheirDevices() async throws {
