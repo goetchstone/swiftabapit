@@ -13,17 +13,21 @@
 - **Why not caught:** the stub answered a column refusal with HTTP 200 and named the columns inside `info`. No source shows
   that shape. Mosyle's doc shows the refusal as `unknown_columns`, `status` `UNKNOWN_COLUMNS` and `info` "Unknown columns",
   and gives no HTTP code. Because the stub agreed with the client's guess, every fallback test passed on an answer the live
-  tenant doesn't send. No test drove a 4xx with a Mosyle body.
-- **Fix:** branch `mosyle-columns-live`, `fix(mosyle): read Mosyle's 400, learn which device columns it offers, and say so`.
+  tenant doesn't send. No test read a 4xx's Mosyle body: `a405IsInvalidMethod` drove the stub's 405 body, but checked
+  only the status.
+- **Fix:** https://github.com/goetchstone/swiftabapit/pull/22 (branch `mosyle-columns-live`): `fix(mosyle): read Mosyle's
+  400, learn which device columns it offers, and say so`, then its review's fixes.
   - **Refusals:** a refusal is read the same inside a 2xx or with HTTP 400, in the envelope or bare. Its names are
     `unknown_columns` together with the words of `info`.
   - **The column steps (the operator's decision, 2026-11-19):** a refusal that names columns drops exactly those. A
     refusal that names none asks for the 27 documented columns. Once Mosyle takes those, each of the six is tried alone
-    beside them, and the ones Mosyle takes are kept in memory for the client's life. Every column is asked for only when
-    the documented columns themselves are refused without a name. A refusal can bring at most seven more requests per
-    client (1 + 6). With none left, a refusal is the error.
+    beside them, and the ones Mosyle takes are kept in memory for the client's life; a try's answer counts only when it
+    reads as the page did. Every column is asked for only when the documented columns themselves are refused without a
+    name, or when Mosyle names every column asked for. A refusal can bring at most seven more requests per client
+    (1 + 6). With none left, a refusal is the error, naming what Mosyle named, which is still kept as refused.
   - **Other errors:** any other 4xx or 5xx of a read carries Mosyle's `status` and `info`, cleaned and cut
-    (`MosyleAPIError.answered`). The log gets only Mosyle's status code, never its `info`.
+    (`MosyleAPIError.answered`); a top-level `status` only when shaped as a code. The log gets only Mosyle's status
+    code, never its `info`.
   - **What is said:** Settings → Test, the devices' note and a failed device read say which columns Mosyle refused, which
     it took, and which were left out untried.
 - **Prevention:** the stub now answers a column refusal with HTTP 400 and the doc's body. It can refuse any of the

@@ -85,21 +85,27 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     the strings under `unknown_columns` (the doc's answer) together with the words of `info`, as one set.
   - **Naming columns asked for:** the list is asked again without exactly those.
   - **Naming none:** the list is asked for the 27. Once Mosyle takes them, each of the six is tried alone beside the
-    columns it took, on that page, and kept if Mosyle takes it. The request with all six added is the one just refused, so
-    it is not sent again, nor is any list Mosyle refused. The answer is the last one Mosyle took.
+    columns it took, on that page. A column is kept only when Mosyle's answer reads as rows, or as the same end as the
+    answer without it. A refusal refuses it; any other answer (another status, no rows where there were rows) leaves it
+    out untried and keeps the page as read. The request with all six added is the one just refused, so it is not sent
+    again, nor is any list Mosyle refused. The answer is the last one Mosyle took.
   - **Every column** (no `specific_columns`) only when the documented columns themselves are refused unnamed, or every
     column asked for is named. Only the adapter's allowlist then keeps the bypass codes out, as it did for abapit.
   - **Bounded:** a refusal can bring at most seven more requests per client (1 + 6). With none left, a refusal is the
-    error, and a column not yet tried is left out and said. What was learnt lives in memory for the client's life (an
-    org's session; Settings' Test makes a fresh client, so each Test learns afresh), never on disk.
-  - **Shared:** two walks refused at once settle on one fallback and one set of tries; the others wait for the tries. The
-    ping asks as the list does and shares its fallback.
+    error (`MosyleAPIError.columnsRefused`, naming what Mosyle named). What it named is still kept as refused, so a later
+    read asks without it, and a column not yet tried is left out and said. What was learnt lives in memory for the
+    client's life (an org's session; Settings' Test makes a fresh client, so each Test learns afresh), never on disk.
+  - **Shared:** two walks refused at once settle on one fallback and one set of tries; the others wait for the tries. A
+    cancelled walk stops its tries between requests; a walk waiting on them then tries the rest. A try that fails fails
+    the read, and the next read takes up the tries where they stopped. The ping asks as the list does and shares its
+    fallback.
   - **Said:** each step is an error-level log line naming the columns (a test reads it back from the process's own log).
-    `MosyleClient.columns` says which columns Mosyle refused, which it took and which were left untried: in Settings'
-    Test, beside the devices and beside a failed device read.
+    `MosyleClient.columns` says which columns Mosyle refused, which it took and which were left untried (never one of
+    those among the ones it took): in Settings' Test, beside the devices and beside a failed device read.
   - **Mosyle's words:** any other 4xx or 5xx of a read carries Mosyle's `status` and `info` in its error
-    (`MosyleAPIError.answered`). Both are cleaned of control and format characters and cut at 64 and 200 characters. The
-    log gets Mosyle's status only when it is shaped as a code, and never its `info`.
+    (`MosyleAPIError.answered`). A top-level `status` is said only when shaped as a code, as inside a 200. Both are
+    cleaned of control and format characters and cut at 64 and 200 characters. The log gets Mosyle's status only when it
+    is shaped as a code, and never its `info`, a refusal's included.
   - An empty `specific_columns` is never sent. Failing closed was rejected: it trades a whole lost list for codes the
     adapter drops anyway.
 - **Paging**: from page 1 until the list's own end-of-list status, an empty page, a page that adds nothing new (users
