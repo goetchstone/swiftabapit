@@ -964,8 +964,9 @@ reads, and what they reveal, come before writes.
    `Contracts/mosyle/operations.json`; abapit's reconciliation, OS breakdown, stale devices and device timeline, held to the
    reports golden with hand-written edges; the Mosyle screen (eight lists), the Reconciliation screen, Device 360's Mosyle
    half and the demo's paired Mosyle org (PR #16, merged 2026-11-12). Then, on `mosyle-org-editor`, the Mosyle org editor
-   and its credential storage (PR #17, merged 2026-11-12). The pair picker was replaced by clients (below, "Clients"; built
-   on `client-grouping`): an Apple org and its Mosyle org belong to one client. Decisions the session
+   and its credential storage (PR #17, merged 2026-11-12). The pair picker was replaced by clients (below, "Clients"; PR
+   #18, merged 2026-11-12): an Apple org and its Mosyle org belong to one client. Adding an org now asks which customer it
+   is for (built on `add-to-client`). Decisions the session
    proposed, not the operator's (in the PR): only the active client's Mosyle org is read; a Mosyle org's sidebar is Mosyle
    and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
@@ -1001,10 +1002,23 @@ Phase 5's.
   Business) now; a Google Workspace domain later. Every org belongs to exactly one client, and a client has at least one.
   Reconciliation and Device 360 pair within the active client; this replaces a per-org "paired organization".
 - With one client there is no client UI: the app looks as it did. A client switcher appears with two or more, and
-  Settings then groups orgs by client, with a client picker and a client name per org. A new org is a client of its own
-  until the operator moves it into another client: an org never joins a customer's client by itself, so two customers'
-  orgs are never read together unchosen. Adding a Mosyle org beside one Apple org therefore shows the switcher until the
-  move is made.
+  Settings then groups orgs by client, with a client picker and a client name per org.
+- **Adding an org asks which customer it is for** (the operator, 2026-11-12, "lets do it right"; the details below are
+  the parent session's proposal, not the operator's). An org never joins a customer's client by itself, so two customers'
+  orgs are never read together unchosen (defect 17):
+  - Both add sheets, Apple and Mosyle, ask whenever some client has room for the org's kind. The options are each such
+    client by name, then "A new client". Nothing is preselected, and Add stays disabled until there is an answer. When no
+    client has room, nothing is asked and the org is a client of its own.
+  - With one client the question names the other org ("The same customer as …", "A different customer"), never "client".
+  - `OrgStore.add` takes the client, refused as a move is (no such client, or one with an org of that kind) and whole or
+    not at all. The model refuses an Add with no answer while a client has room, checks the answer again once the
+    credentials are stored, and removes them if it no longer holds. An answer whose client was filled or removed while
+    the sheet was open is never taken for another: the sheet says so and asks again.
+  - Settings shows an org grouped with another even with one client ("Grouped with …"), with Separate to make it a
+    different customer's, so a join can always be seen and undone. With two or more clients, the picker does that. A
+    client an org leaves, by Separate or removal, takes the name of the org that stays, unless the operator named it.
+  - A client holds at most one org of each kind and an org is in exactly one client. Grouping, the question and Separate
+    never touch the Keychain; an Add stores its org's own secrets, as before.
 - Switching client clears every screen, selection and in-memory read, as switching org does. No view, report, CSV or
   notification mixes clients, and each export names its client. No cross-client overview yet.
 - Existing orgs are grouped once (store version 2), the same way every time:
@@ -1015,6 +1029,9 @@ Phase 5's.
   - A Mosyle org paired with nothing is a client with no Apple org. Names never collide (" (2)").
   - The new file is written atomically and the old one stays readable if that fails; Keychain items, keyed by org, are
     never touched and keep the Vault's protections.
+- **Open question**: Mosyle Fuse MSP: whether one API token spans several customers is unknown and unverified; if it
+  does, one Mosyle connection would feed many clients, which the client model doesn't support yet. Not built: the model
+  stays one Mosyle org per client.
 
 **Schools** (operator, 2026-11-12): a school's own staff, and anyone who manages schools, are a first-class audience.
 

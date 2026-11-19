@@ -67,7 +67,7 @@ struct ClientScreenTests {
         #expect(world.orgs.mosyleOrg == nil && world.orgs.generation == generation + 1)
         world.orgs.selectClient(b)
         #expect(world.orgs.mosyleOrg?.id == "m")
-        #expect(throws: OrgsModel.SaveFailure.refused("Org b already has an organization of that kind: a client has one Apple organization and one MDM organization.")) {
+        #expect(throws: OrgsModel.SaveFailure.refused("Org b already has an organization of that kind: a customer has one Apple organization and one MDM organization.")) {
             try world.orgs.move("a", toClient: b)
         }
         try world.orgs.renameClient(b, to: "North")
@@ -140,13 +140,14 @@ struct ClientReviewTests {
         }
     }
 
-    /// Finding 1: a Mosyle org added beside one Apple org is a client of its own, so the switcher shows and nothing reads the
-    /// two together until the operator moves it in; then there is one client again and no client UI.
+    /// Finding 1: a Mosyle org added beside one Apple org never joins its client unasked. Answered "a different customer",
+    /// it is a client of its own, so the switcher shows and nothing reads the two together until the operator moves it in;
+    /// then there is one client again and no client UI (the add sheet's question: `ClientAddTests`).
     @Test func anAddedOrgIsReadWithAnotherOnlyOnceMoved() async throws {
         let world = try await World.make(profiles: [World.profile("a")])
         try await world.vault.replaceSet([.mosyleAccessToken: Secret(World.mosyleAccount.accessToken), .mosyleEmail: Secret(World.mosyleAccount.email),
                                           .mosylePassword: Secret(World.mosyleAccount.password)], for: "fleet")
-        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil)
+        let added = try await world.orgs.saveMosyle(MosyleOrgTests.draft("Fleet"), editing: nil, client: .new)
         #expect(world.orgs.showsClients && world.orgs.mosyleOrg == nil && !world.orgs.reconciles)
         try world.orgs.move(added.id, toClient: try #require(world.orgs.store.client(of: "a")).id)
         #expect(!world.orgs.showsClients && world.orgs.mosyleOrg?.id == added.id && world.orgs.reconciles)

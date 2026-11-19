@@ -401,8 +401,8 @@ public final class AppleStub: Transport, Sendable {
     }
 
     /// `GET auditEvents`: both timestamps required (400 as Apple's contract marks them), each ISO 8601; the events in
-    /// the range, of the types asked, by the actor and of the subject asked, a cursor at a time. Apple filters, so the
-    /// stub really does.
+    /// the range, of the one type asked (a second type is refused: Apple supports one), by the actor and of the subject
+    /// asked, a cursor at a time. Apple filters, so the stub really does.
     private func auditEvents(url: URL, query: [String: String], host: APIHost) -> (Int, [String: String], Data) {
         for name in ["filter[startTimestamp]", "filter[endTimestamp]"] where query[name] == nil {
             return Self.error(400, "PARAMETER_ERROR.REQUIRED", "A parameter is required", "\(name) is required.", parameter: name)
@@ -416,6 +416,16 @@ public final class AppleStub: Transport, Sendable {
         // Assumed: a range that ends before it starts is refused (check live).
         guard start <= end else {
             return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "The range ends before it starts.", parameter: "filter[endTimestamp]")
+        }
+        // Apple's contract: "only one type in query is supported". Apple documents the limit, not its answer to a second
+        // type: a 400 naming the parameter is assumed (check live).
+        if query["filter[type]"]?.contains(",") == true {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Only one type in query is supported.", parameter: "filter[type]")
+        }
+        // The same sentence is in the contract for an actor id and a subject id ("only one actor id in query is supported");
+        // the same assumed 400 (check live).
+        for (name, noun) in [("filter[actorId]", "actor id"), ("filter[subjectId]", "subject id")] where query[name]?.contains(",") == true {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Only one \(noun) in query is supported.", parameter: name)
         }
         let types = query["filter[type]"].map { Set($0.split(separator: ",").map(String.init)) }
         func same(_ attribute: JSONValue?, _ asked: String?) -> Bool {

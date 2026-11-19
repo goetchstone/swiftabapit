@@ -187,8 +187,13 @@ struct NavigationTests {
         // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
         // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
         let demos = specs.map { $0.count > 4 ? $0[4] : "" }
-        #expect(demos.allSatisfy { ["", "1", "clients"].contains($0) }, "\(demos)")
+        #expect(demos.allSatisfy { ["", "1", "clients", "apple"].contains($0) }, "\(demos)")
         #expect(Set(specs.filter { $0.count > 4 && $0[4] == "clients" }.map { $0[1] }) == ["overview", "settings"])
+        // A run's sheet (its sixth field) is one Settings opens: each add sheet drawn once, with its customer question, in a
+        // demo where some client has room for that kind (`apple`: the Mosyle sheet names the Apple org; `clients`: the Apple
+        // sheet lists the client with no Apple org).
+        let sheets = specs.filter { $0.count > 5 }.map { "\($0[1]):\($0[4]):\($0[5])" }
+        #expect(sheets.sorted() == ["settings:apple:add-mosyle", "settings:clients:add-apple"], "\(sheets)")
     }
 }
 

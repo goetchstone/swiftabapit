@@ -2,13 +2,16 @@ import AppKit
 import Foundation
 
 /// The env-var screenshot harness (plan §6.5), debug builds only. Adapted from SwiftGamGui
-/// App/Spikes.swift:73-115 @ bfdb494. `ABAPIT_SNAPSHOT=<name>.png` renders the window's screen pane to a
+/// App/Spikes.swift:73-159 @ bfdb494: the picture (73-115), the checks (116-128) and the watchdog and quit
+/// (153-159) came in Phase 0; the sheet exit (141-152) came later, in PR #19; the window's minimum-height
+/// check (129-140) is still not ported. `ABAPIT_SNAPSHOT=<name>.png` renders the window's screen pane to a
 /// PNG and quits. The App Sandbox lets the app write only inside its container, so the picture goes to the
 /// container's temporary folder under that file name, the path is printed (`snapshot: <path>`), and
 /// `scripts/screenshots.sh` moves it out; `ABAPIT_SCREEN` picks the section (a `SidebarItem` raw value), `ABAPIT_SELECT=first`
 /// the first row of the screen's table (each screen's `selectsFirstRow` hook, Screens/FirstRowSelection.swift), `ABAPIT_WINDOW` the size
 /// (`WIDTHxHEIGHT` or `smallest`) and `ABAPIT_DEMO=1` fills it from the demo org (strict stubs, memory
-/// only; `ABAPIT_DEMO=clients` adds a second client). Environment variables, not launch arguments: AppKit reads `-key value` arguments as defaults,
+/// only; `ABAPIT_DEMO=clients` adds a second client, `apple` leaves the Mosyle org out), and `ABAPIT_SHEET` opens Settings'
+/// add sheet (`add-apple`, `add-mosyle`), which is drawn in the window's place. Environment variables, not launch arguments: AppKit reads `-key value` arguments as defaults,
 /// and a bare path left over is taken as a document to open. CI runs it (`scripts/screenshots.sh`); it
 /// never runs on the operator's screen.
 enum Snapshots {
@@ -78,6 +81,21 @@ enum Snapshots {
         if selecting, !FirstRowSelected.yet {
             print("snapshot: ABAPIT_SELECT asked for the first row and the screen selected none, so no inspector shows")
             exit(EXIT_FAILURE)
+        }
+        if ProcessInfo.processInfo.environment["ABAPIT_SHEET"] != nil, window?.attachedSheet == nil {
+            print("snapshot: ABAPIT_SHEET asked for a sheet and none was attached, so the picture is not the sheet")
+            exit(EXIT_FAILURE)
+        }
+        // With a sheet open AppKit's quit didn't reliably finish, even with the sheet ended first (SwiftGamGui
+        // App/Spikes.swift @ bfdb494, lines 141-151; failure-log 2026-11-18, "a sheet kept the snapshot run from
+        // quitting"). The picture and every check above are done, so a sheet run leaves here. A sheet no run
+        // asked for fails instead: it would otherwise pass with the sheet in its picture (invariant 8).
+        if window?.attachedSheet != nil {
+            if ProcessInfo.processInfo.environment["ABAPIT_SHEET"] == nil {
+                print("snapshot: a sheet is attached that no run asked for")
+                exit(EXIT_FAILURE)
+            }
+            exit(EXIT_SUCCESS)
         }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(10))
