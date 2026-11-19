@@ -12,10 +12,26 @@ import TestSupport
 struct ServiceFieldRefusalTests {
     static let said = "Apple refused the field list (fields[mdmServers]), so the services were read with Apple's default fields"
 
-    /// The harness's services, each with the attributes `Harness.service` gives (five of the ten requested).
+    /// A service as Apple's own example of the list has it (`Tests/Fixtures/docc/business/get-mdm-servers.response.json`):
+    /// four attributes, no status, no `lastConnectedDateTime`, no device count.
+    static func example(_ id: String, name: String) -> Resource {
+        Resource(type: "mdmServers", id: id, attributes: ["serverName": .string(name), "serverType": .string("MDM"),
+                                                          "createdDateTime": .string("2025-05-01T03:21:44.685Z"),
+                                                          "updatedDateTime": .string("2025-05-01T03:21:46.284Z")])
+    }
+
+    /// The harness's services, with the stub holding the full attributes of `Harness.service`, which the stub answers
+    /// without `fields` as the example has them (four) when `refusing`.
     static func harness(refusing: Bool, services: Int = 2) async throws -> Harness {
         let harness = try await Harness()
-        harness.stub.add(services: (0..<services).map { Harness.service("SVC\($0)", name: "Service \($0)") })
+        harness.stub.add(services: (0..<services).map { index in
+            // What the stub holds is the full read's: the example's four, and the attributes it lacks.
+            var full = Self.example("SVC\(index)", name: "Service \(index)").attributes
+            full["status"] = .string("ACTIVE")
+            full["deviceCount"] = .number("2")
+            full["lastConnectedDateTime"] = .string("2026-10-01T00:00:00Z")
+            return Resource(type: "mdmServers", id: "SVC\(index)", attributes: full)
+        })
         if refusing { harness.stub.refuseServiceFields() }
         return harness
     }
@@ -38,10 +54,13 @@ struct ServiceFieldRefusalTests {
         #expect(requests.count == 2, "\(requests)")
         #expect(requests[0].contains("fields") && requests[0].contains("limit=1000"), "\(requests)")
         #expect(!requests[1].contains("fields") && requests[1].contains("limit=1000"), "\(requests)")
-        // `Harness.service` sends five of the ten requested attributes: the others are said as absent.
-        let absent = "lastConnectedIp, defaultProductFamilies, enableMdmDisownFlag, createdDateTime, updatedDateTime"
+        // The stub answers without `fields` with the example's four attributes: the others are said as absent, as data too.
+        let absent = "status, deviceCount, lastConnectedDateTime, lastConnectedIp, defaultProductFamilies, enableMdmDisownFlag"
         #expect(pages.last?.note == Self.said + ". Absent from every service: \(absent).", "\(pages.last?.note ?? "nil")")
-        #expect(await harness.client.servicesFieldRefusal?.detail == "A value isn't allowed in fields[mdmServers].")
+        #expect(pages.last?.absent == Set(absent.components(separatedBy: ", ")))
+        #expect(pages.flatMap(\.items).allSatisfy { Set($0.attributes.keys) == ["serverName", "serverType", "createdDateTime", "updatedDateTime"] })
+        // Apple's `detail` ("A value isn't allowed in fields[mdmServers].") names none of the ten fields.
+        #expect(await harness.client.servicesFieldRefusal?.named == [])
     }
 
     @Test func theRefusalIsRememberedForLaterReads() async throws {
@@ -99,28 +118,55 @@ struct ServiceFieldRefusalTests {
         #expect(Self.listRequests(harness).count == 2, "\(Self.listRequests(harness))")
     }
 
-    @Test func theAcceptancePassLineCarriesTheNoteAndAppleSaid() async throws {
+    @Test func theAcceptancePassLineCarriesTheNoteAndWhatApplesReasonNamed() async throws {
         let harness = try await Self.harness(refusing: true)
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
         #expect(line.status == .ok && line.count == 2)
         #expect(line.note?.hasPrefix(Self.said) == true, "\(line.note ?? "nil")")
-        #expect(line.note?.hasSuffix(" · Apple said: A value isn't allowed in fields[mdmServers].") == true, "\(line.note ?? "nil")")
+        #expect(line.note?.hasSuffix(" · Apple's reason named none of the fields asked for") == true, "\(line.note ?? "nil")")
         // The services' own device lists are still read.
         #expect(report.lines.first { $0.resource == "mdmServers/{id}/relationships/devices" }?.status == .ok, "\(report.text)")
     }
 
-    /// Apple's `detail` is shown cut and without control characters: nothing in it can forge a line.
-    @Test func appleSaidIsBoundedAndHasNoControlCharacters() async throws {
+    /// Apple's `detail` never reaches the pass's text: only which of the ten fields it names, however it is worded. An email,
+    /// a serial-like string and an org name in it are dropped.
+    @Test func appleDetailNeverReachesThePassOnlyTheFieldsItNames() async throws {
         let harness = try await Self.harness(refusing: false)
-        let detail = "bad\u{7}\nvalue\u{2028}here " + String(repeating: "x", count: 500)
+        let detail = "jane.doe@example.com asked for TESTD0000000 of Acme Org: lastConnectedIp and deviceCount aren't allowed\n\u{7}"
         harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: detail, parameter: "fields[mdmServers]"))
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
-        let note = try #require(line.note)
-        let said = try #require(note.components(separatedBy: " · Apple said: ").last)
-        #expect(said == String(("badvaluehere " + String(repeating: "x", count: 500)).prefix(FieldListRefusal.longestDetail)), "\(said)")
-        #expect(!report.text.unicodeScalars.contains { $0.properties.generalCategory == .control && $0 != "\n" })
+        #expect(line.note?.hasSuffix(" · Apple named: deviceCount, lastConnectedIp") == true, "\(line.note ?? "nil")")
+        for word in ["jane", "example.com", "TESTD", "Acme", "aren't allowed"] { #expect(!report.text.contains(word), "\(word) in \(report.text)") }
         #expect(report.text.split(separator: "\n").count == report.lines.count, "a line was forged: \(report.text)")
+    }
+
+    /// A refusal followed by a retry that fails: the line is the failure, and still says what Apple refused.
+    @Test func aRetryThatFailsKeepsTheRefusalOnTheLine() async throws {
+        let harness = try await Self.harness(refusing: false)
+        harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: "status", parameter: "fields[mdmServers]"))
+        for _ in 0..<6 { harness.stub.queue(500, for: "/v1/mdmServers") }
+        let report = await harness.client.acceptancePass()
+        let line = try #require(report.lines.first { $0.resource == "mdmServers" })
+        #expect(line.status == .error("error 500"), "\(report.text)")
+        #expect(line.note?.contains(Self.said) == true && line.note?.hasSuffix(" · Apple named: status") == true, "\(line.note ?? "nil")")
+    }
+
+    /// A refusal on a later page isn't the field list refused on the first read: the walk has yielded, so it is an error, not a
+    /// second read of the first page (a retry would repeat page 1 for a screen to append twice).
+    @Test func aRefusalOnALaterPageIsAnErrorNotARestart() async throws {
+        let harness = try await Self.harness(refusing: false, services: AppleRead.pageLimit + 1)
+        harness.stub.queue(400, for: "/v1/mdmServers?cursor=", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: "x", parameter: "fields[mdmServers]"))
+        var yielded = 0
+        do {
+            for try await page in harness.client.services() { yielded += page.items.count }
+            Issue.record("the read ended without an error")
+        } catch let error as AppleAPIError {
+            guard case .badRequest(_, "fields[mdmServers]", _) = error else { Issue.record("\(error)"); return }
+        }
+        #expect(yielded == AppleRead.pageLimit, "page 1 was yielded \(yielded) services' worth")
+        #expect(Self.listRequests(harness).count == 2, "\(Self.listRequests(harness))")
+        #expect(await harness.client.servicesFieldRefusal == nil)
     }
 }

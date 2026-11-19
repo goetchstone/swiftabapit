@@ -32,7 +32,7 @@ struct ServicesView: View {
                 // The count read, else Apple's own attribute, else a dash: never a zero nobody counted.
                 TableColumn("Devices") { service in Text((model.deviceCount[service.id] ?? service.deviceCount).map { $0.formatted() } ?? "—") }
                     .width(min: 60, ideal: 70)
-                TableColumn("Last connected") { service in LastConnected(service: service) }
+                TableColumn("Last connected") { service in LastConnected(service: service, sent: !model.lastConnectedNotSent) }
                     .width(min: 120, ideal: 180)
                 TableColumn("From") { Text($0.lastConnectedIP ?? "—").monospaced() }
                     .width(min: 90, ideal: 120)
@@ -46,15 +46,17 @@ struct ServicesView: View {
 /// A service's last connection in the model's words (Phase 2b review L4): a flag is said in words beside its colour.
 struct LastConnected: View {
     let service: MDMService
+    /// False when Apple's default fields left `lastConnectedDateTime` out.
+    var sent = true
 
     var body: some View {
-        let connection = DevicesModel.connection(of: service, now: Date())
+        let connection = DevicesModel.connection(of: service, now: Date(), lastConnectedSent: sent)
         if connection.isQuiet {
             Label(connection.text, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
                 .accessibilityLabel(connection.spoken)
         } else {
-            Text(connection.text)
+            Text(connection.text).accessibilityLabel(connection.spoken)
         }
     }
 }

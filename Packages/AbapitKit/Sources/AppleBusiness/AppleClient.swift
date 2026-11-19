@@ -17,33 +17,34 @@ public struct Page<Item: Sendable>: Sendable {
     /// A line the read says about how it was made, for the screen to show (invariant 8); nil when there is none. The
     /// services' list says here that Apple refused its field list.
     public let note: String?
+    /// The attributes asked for that no item so far has, when `note` is set: data for the screens, which must not read an
+    /// absent `lastConnectedDateTime` as "never connected" or an absent `status` as "not deleted".
+    public let absent: Set<String>
 
-    public init(items: [Item], number: Int, truncated: Bool, total: Int?, note: String? = nil) {
+    public init(items: [Item], number: Int, truncated: Bool, total: Int?, note: String? = nil, absent: Set<String> = []) {
         self.items = items
         self.number = number
         self.truncated = truncated
         self.total = total
         self.note = note
+        self.absent = absent
     }
 }
 
-/// Apple refused the services' field list (`fields[mdmServers]`), and what it said.
+/// Apple refused the services' field list (`fields[mdmServers]`). `named` is which of the fields asked for (`AppleRead.serviceFields`)
+/// Apple's `detail` names, in that order; the `detail` itself is never kept or shown, since Apple's prose may echo an
+/// identifier or a name.
 public struct FieldListRefusal: Sendable, Equatable {
-    /// Apple's `detail`, control characters removed and cut to `FieldListRefusal.longestDetail` characters; nil when it gave none.
-    public let detail: String?
-    public static let longestDetail = 200
+    public let named: [String]
 
-    static func cleaned(_ detail: String?) -> String? {
-        guard let detail else { return nil }
-        let kept = detail.unicodeScalars.filter { scalar in
-            switch scalar.properties.generalCategory {
-            case .control, .format, .lineSeparator, .paragraphSeparator: false
-            default: true
-            }
-        }
-        let text = String(String.UnicodeScalarView(kept.prefix(longestDetail)))
-        return text.isEmpty ? nil : text
+    init(named: [String]) { self.named = named }
+
+    static func naming(_ detail: String?) -> FieldListRefusal {
+        FieldListRefusal(named: AppleRead.serviceFields.filter { detail?.contains($0) == true })
     }
+
+    /// The acceptance pass's words for it.
+    var said: String { named.isEmpty ? "Apple's reason named none of the fields asked for" : "Apple named: \(named.joined(separator: ", "))" }
 }
 
 /// What a read probe found for one section: abapit's `probe_capabilities` rows.
@@ -165,8 +166,8 @@ public actor AppleClient {
     /// The services. Apple's live server refused the field list (`fields[mdmServers]`, 400 `PARAMETER_ERROR.INVALID`) on
     /// 2026-11-19, although the contract allows every value in it. Then the list is read once more without `fields`, Apple's
     /// default attributes, and the refusal is remembered so later reads skip the failing request. Each page of such a read
-    /// carries a note (`Page.note`): that Apple refused, and which requested attributes no service so far has (the last
-    /// page's note covers every service). A retry happens only before a page was given, once; any other failure is thrown.
+    /// carries a note (`Page.note`) and the attributes no service so far has (`Page.absent`; the last page's cover
+    /// every service). A retry happens only before a page was given, once; any other failure is thrown.
     public nonisolated func services() -> AsyncThrowingStream<Page<MDMService>, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -192,12 +193,13 @@ public actor AppleClient {
                     for item in page.items { seen.formUnion(item.attributes.keys) }
                     any = any || !page.items.isEmpty
                     yielded = true
+                    let absent = any ? AppleRead.serviceFields.filter { !seen.contains($0) } : []
                     yield(Page(items: page.items.map(MDMService.init), number: page.number, truncated: page.truncated, total: page.total,
-                               note: bare ? Self.servicesFieldNote(absent: any ? AppleRead.serviceFields.filter { !seen.contains($0) } : []) : nil))
+                               note: bare ? Self.servicesFieldNote(absent: absent) : nil, absent: bare ? Set(absent) : []))
                 }
                 return
             } catch let error as AppleAPIError where !bare && !yielded && Self.refusesServiceFields(error) {
-                if case .badRequest(_, _, let detail) = error { servicesFieldRefusal = FieldListRefusal(detail: FieldListRefusal.cleaned(detail)) }
+                if case .badRequest(_, _, let detail) = error { servicesFieldRefusal = FieldListRefusal.naming(detail) }
                 bare = true
             }
         }
@@ -638,7 +640,7 @@ extension AsyncThrowingStream where Element == Page<Resource>, Failure == any Er
             let task = Task {
                 do {
                     for try await page in self {
-                        continuation.yield(Page(items: page.items.map(transform), number: page.number, truncated: page.truncated, total: page.total, note: page.note))
+                        continuation.yield(Page(items: page.items.map(transform), number: page.number, truncated: page.truncated, total: page.total, note: page.note, absent: page.absent))
                     }
                     continuation.finish()
                 } catch {

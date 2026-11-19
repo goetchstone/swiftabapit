@@ -128,6 +128,14 @@ public final class DevicesModel {
     /// Said on the Services screen when Apple refused the services' field list and they were read with its default fields
     /// (the last page's note, which covers every service); nil otherwise.
     public private(set) var servicesFieldsNote: String?
+    /// The attributes asked for that no service came back with, when the field list was refused (`Page.absent`). Empty
+    /// otherwise, and after a failed read: what a later page might have had isn't known.
+    public private(set) var servicesAbsent: Set<String> = []
+
+    /// Apple sent no `lastConnectedDateTime` for any service (default fields): "never connected" can't be said of one.
+    public var lastConnectedNotSent: Bool { servicesAbsent.contains("lastConnectedDateTime") }
+    /// Apple sent no `status` for any service: a deleted service can't be told from another.
+    public var statusNotSent: Bool { servicesAbsent.contains("status") }
 
     public var search = ""
     public var family = ""
@@ -221,7 +229,9 @@ public final class DevicesModel {
 
     /// `service`'s Last connected cell at `now`: `QuietServices`' rule over `QuietServices.defaultDays`, so the Services
     /// screen flags exactly what the Overview's quiet card lists at its default.
-    public static func connection(of service: MDMService, now: Date = Date()) -> ServiceConnection {
+    public static func connection(of service: MDMService, now: Date = Date(), lastConnectedSent: Bool = true) -> ServiceConnection {
+        // Apple's default fields have no `lastConnectedDateTime`: not "never connected", and not quiet.
+        guard lastConnectedSent else { return ServiceConnection(text: "Not sent by Apple", isQuiet: false, spoken: "Apple did not send when this service last connected") }
         let last = QuietServices.lastConnected(service)
         let quiet = !QuietServices([service], now: now).rows.isEmpty
         let text = lastConnected(last, of: service, now: now)
@@ -318,6 +328,7 @@ public final class DevicesModel {
         deviceCount = [:]
         unknownNote = nil
         servicesFieldsNote = nil
+        servicesAbsent = []
     }
 
     /// Whether the load holding `token` may still write: not superseded, not cancelled. Checked after every await
@@ -355,6 +366,7 @@ public final class DevicesModel {
                 guard current(token) else { return }
                 list += page.items
                 servicesFieldsNote = page.note
+                servicesAbsent = page.absent
                 services = list
                 servicesTruncated = page.truncated
                 servicesState = .loading(count: list.count)
@@ -362,6 +374,9 @@ public final class DevicesModel {
         } catch {
             guard current(token) else { return }
             servicesState = LoadState(after: error)
+            // A note from the pages read before the failure would name only what those pages lacked.
+            servicesFieldsNote = nil
+            servicesAbsent = []
             assignments = .unreadable
             rows = rows.map { DeviceRow($0.device, assignment: .unknown) }
             unknownNote = servicesState == .forbidden

@@ -741,16 +741,18 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   value Apple refuses is unknown: Apple's `detail` wasn't captured. The client now asks again once without
   `fields[mdmServers]` (Apple's default attributes), keeps `limit`, remembers the refusal for the client's life (memory
   only), and says so: `Page.note` on each page, the Services screen's note (`services.fieldsNote`), and the acceptance
-  pass's `mdmServers` line with Apple's `detail` (cleaned, at most 200 characters). The note names the requested
-  attributes no service came back with. `AppleStub.refuseServiceFields()` makes the stub refuse the way Apple did.
-  **Next live run:** read the `Apple said:` text on the `mdmServers` line to learn the refused field, then decide whether
+  pass's `mdmServers` line, which says which of the ten fields Apple's `detail` names (`Apple named: a, b`), never the
+  `detail` itself. The note names the requested attributes no service came back with, and `Page.absent` carries them as
+  data: Apple's own example without `fields` has four attributes, so the Services column says "Not sent by Apple" for
+  `lastConnectedDateTime` (never "Never connected"), the Overview's quiet card says quiet services can't be judged, and
+  without `status` it says deleted services are counted. `AppleStub.refuseServiceFields()` makes the stub refuse the way Apple did.
+  **Next live run:** read the `Apple named:` text on the `mdmServers` line to learn the refused field, then decide whether
   the field list can be fixed or dropped for good. Failure-log 2026-11-19, "Apple refused a field list its contract allows".
 - **`GET /v1/blueprints/{id}` with `include` of all six relationships answered 400 `PARAMETER_ERROR.ILLEGAL include`.**
   The client's fallback (`AppleClient.blueprint`) read the blueprint without its members, and each relationship read
   separately (`blueprints/{id}/relationships/<name>`) succeeded. So a refused include is a 400 on this org, and the
   members can be read one relationship at a time. Whether the app should do that itself, instead of saying the members
-  weren't read, is not decided. The stub's include refusal still answers `PARAMETER_ERROR.INVALID`; the code Apple uses
-  is `PARAMETER_ERROR.ILLEGAL include`, which the client classifies on status alone.
+  weren't read, is not decided. The stub's include refusal now answers `PARAMETER_ERROR.ILLEGAL` naming `include`, as Apple did.
 - **The first attempts of several reads failed with `NSURLErrorNetworkConnectionLost` (-1005)**, because Apple's HTTP/2
   server sent a `transfer-encoding: chunked` header, which HTTP/2 forbids. The client's retries recovered every one.
   Nothing to change in the client; a transport error on a first attempt is expected on this server.

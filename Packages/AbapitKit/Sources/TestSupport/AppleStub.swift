@@ -302,7 +302,19 @@ public final class AppleStub: Transport, Sendable {
                 return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "A value isn't allowed in fields[mdmServers].",
                                   parameter: "fields[mdmServers]")
             }
-            return page(state.withLock { $0.services }, url: url, query: query, host: host)
+            var services = state.withLock { $0.services }
+            if state.withLock({ $0.refusesServiceFields }) {
+                // Apple's own example of this list, sent without `fields` (Tests/Fixtures/docc/business/get-mdm-servers.response.json),
+                // has only these four attributes per service: no status, no lastConnectedDateTime, no deviceCount. A read without
+                // `fields` answers the same, so a screen can't count on the others (failure-log 2026-11-19).
+                let example: Set = ["serverName", "serverType", "createdDateTime", "updatedDateTime"]
+                services = services.map { service in
+                    var kept = JSONObject()
+                    for member in service.attributes where example.contains(member.key) { kept[member.key] = member.value }
+                    return Resource(type: service.type, id: service.id, attributes: kept, relationships: service.relationships)
+                }
+            }
+            return page(services, url: url, query: query, host: host)
         case "/v1/mdmServers/{id}":
             guard let service = state.withLock({ $0.services.first { $0.id == id } }) else { return Self.notFound(path) }
             return (200, [:], Self.json(["data": service.asJSON]))
@@ -376,13 +388,14 @@ public final class AppleStub: Transport, Sendable {
     private func collection(_ name: String) -> [Resource] { state.withLock { $0.collections[name] ?? [] } }
 
     /// Apple refuses a blueprint read whose `include` names a relationship the role can't read: abapit saw a role that
-    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`).
+    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`). The 400's
+    /// code is `PARAMETER_ERROR.ILLEGAL`, naming `include`: seen live 2026-11-19 (the `detail` and `title` are the stub's words).
     private func refusal(_ include: [String]) -> (Int, [String: String], Data)? {
         guard include.contains(where: { forbidden("/v1/\($0)") }) else { return nil }
         let status = state.withLock { $0.includeRefusal }
         return status == 403
             ? Self.error(403, "FORBIDDEN_ERROR", "This request is forbidden for security reasons", "The API account's role can't read an included relationship.")
-            : Self.error(status, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "An included relationship can't be read.", parameter: "include")
+            : Self.error(status, "PARAMETER_ERROR.ILLEGAL", "A parameter has an illegal value", "An included relationship can't be read.", parameter: "include")
     }
 
     /// A blueprint as `Blueprint` documents it: its six relationships with Apple's links, and for each included one its

@@ -135,13 +135,23 @@ public final class DashboardModel {
     /// connected" is never said of a list nobody read.
     public func quiet(now: Date = Date()) -> [QuietServices.Row]? {
         guard devices.servicesUnread == nil else { return nil }
+        // Apple's default fields have no `lastConnectedDateTime`: nobody can be judged quiet (`quietWords` says so).
+        guard !devices.lastConnectedNotSent else { return [] }
         return QuietServices(devices.services, now: now, days: quietDays).rows
     }
 
     /// The quiet-services card's words: why nothing is counted, or that none is quiet.
     public func quietWords(now: Date = Date()) -> String? {
         if let why = devices.servicesUnread { return why }
-        return quiet(now: now)?.isEmpty == true ? "Every service has connected in the last \(quietDays.formatted()) days, deleted ones aside." : nil
+        if devices.lastConnectedNotSent {
+            return "Apple didn't send when the services last connected (it was asked for its default fields only), so quiet services can't be judged."
+        }
+        // Without `status` a deleted service is counted: said, never silently.
+        let deleted = devices.statusNotSent ? " Apple didn't send the services' status, so deleted services can't be told apart and are counted." : ""
+        if quiet(now: now)?.isEmpty == true {
+            return "Every service has connected in the last \(quietDays.formatted()) days," + (devices.statusNotSent ? "" : " deleted ones aside.") + deleted
+        }
+        return deleted.isEmpty ? nil : String(deleted.dropFirst())
     }
 
     /// When a quiet service last connected, in words: never, a date this app can't read (shown raw), or whole days ago, as
