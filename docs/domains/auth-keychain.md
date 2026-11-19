@@ -36,18 +36,23 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   `team=none`. The leftover cleanup and `SecItemAdd` of the `kSecClassKey` both returned **-34018**
   (`errSecMissingEntitlement`); no prompt appeared; the spike printed the "sign with your team" guidance and
   exited 2. As SwiftGamGui saw unsandboxed: the sandbox adds no new failure on the ad-hoc path.
-- **Personal Team, sandboxed:** **pending — needs the operator.** One build inside Xcode (so it
-  provisions the access group) and one Touch ID. Steps:
+- **Personal Team, sandboxed (2026-11-19, the operator's build on macOS 27, Xcode 27, a Personal Team):** the build
+  signed and provisioned the app with the App Sandbox on. `ABAPIT_SPIKE=keychain` passed: `sandboxed=true`, the team
+  shown as "a Personal Team" (never its ID), the key added (status 0), two signatures verified, the second without a
+  prompt (about 2 ms), the delete 0 and a second delete -25300 (`errSecItemNotFound`). `ABAPIT_SPIKE=vault` passed: two
+  signatures verified (the second inside the session, so no prompt), the Mosyle token held this-device-only with an
+  access control, the inventory listing the two items, and empty after the remove. This is the only check so far of
+  `KeychainStore`'s DER-to-raw conversion against the real Keychain. The steps, for anyone repeating it:
   1. Create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM = <your team>`,
      `CODE_SIGN_IDENTITY = Apple Development`, `CODE_SIGN_ENTITLEMENTS = Config/abapit-Team.entitlements`.
   2. Open `SwiftAbapit.xcodeproj`, build the `abapit` scheme (Debug) once in Xcode.
   3. In Terminal: `ABAPIT_SPIKE=keychain <DerivedData>/Build/Products/Debug/abapit.app/Contents/MacOS/abapit`
-     and answer Touch ID. Paste the printed lines (no secrets are printed) into this section.
+     and answer Touch ID. The printed lines hold no secrets.
   4. Then `ABAPIT_SPIKE=vault …/abapit` (Phase 1a): the app's own `KeychainStore` and `Vault` end to end on a
      throwaway org (`swiftabapit-spike`, service `swiftabapit-spike`) — a key stored, two signatures verified
      (the second inside the session, so no second prompt), a password stored, the inventory listed, everything
-     removed. It is the only check of `KeychainStore`'s DER-to-raw conversion before a live token mint: the
-     offline suite runs `MemoryStore`, and an ad-hoc build gets -34018 (seen 2026-10-16).
+     removed.
+  A Personal Team build expires after 7 days: rebuild weekly.
 
 ## Gotchas (inherited from SwiftGamGui, each a test when Phase 1 builds the Vault)
 
@@ -103,5 +108,5 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 
 ## Testing / live-verification status
 
-- S1 team build: pending (operator).
+- S1 team build, the keychain spike and the vault spike: passed 2026-11-19 (operator; results above).
 - Assertion reuse (plan §3.4.2) and the token rate: Phase 1 live checks (operator).
