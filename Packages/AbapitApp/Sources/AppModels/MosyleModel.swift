@@ -225,8 +225,10 @@ public final class MosyleModel {
     public private(set) var deviceGroups = Listing<PersonRow>()
     public private(set) var attributes = Listing<RecordRow>()
     public private(set) var adminLog = Listing<RecordRow>()
-    /// Set when Mosyle refused a device column this app asks for, and it asked again without: said beside the devices.
-    public private(set) var columnFallback: MosyleColumnFallback?
+    /// Set when Mosyle refused a device column this app asks for: which it refused and which it took, said beside the
+    /// devices, after a failed read too.
+    public private(set) var columns: MosyleColumns?
+    public var columnFallback: MosyleColumnFallback? { columns?.fallback }
 
     public var selectedDevice: String?
     public var selectedGroup: String? {
@@ -316,9 +318,9 @@ public final class MosyleModel {
                         listing.state = .loading(count: listing.rows.count)
                         self.devices = listing
                     }
-                    let fallback = await client.columnFallback
+                    let columns = await client.columns
                     guard let self, self.current(token) else { return }
-                    self.columnFallback = fallback
+                    self.columns = columns
                     self.devices.state = .loaded(at: Date())
                 case .users:
                     let page = try await client.users()
@@ -341,7 +343,10 @@ public final class MosyleModel {
             } catch is CancellationError {
                 return
             } catch {
+                // A failed device read says where the columns stand too: a refusal may be why it failed.
+                let columns = list == .devices ? await client.columns : nil
                 guard let self, self.current(token) else { return }
+                if list == .devices { self.columns = columns }
                 self.set(list, state: Self.state(after: error))
             }
         }
@@ -397,7 +402,7 @@ public final class MosyleModel {
         token += 1
         (devices, users, userGroups, deviceGroups) = (Listing(), Listing(), Listing(), Listing())
         (attributes, adminLog) = (Listing(), Listing())
-        columnFallback = nil
+        columns = nil
         members.show(nil, filter: nil)
     }
 
@@ -474,12 +479,7 @@ public final class MosyleModel {
             }
         }
         switch tab {
-        case .devices:
-            switch columnFallback {
-            case .without(let columns)?: lines.append("Mosyle refused the columns \(columns.joined(separator: ", ")), so they were left out of the request.")
-            case .everyColumn?: lines.append("Mosyle refused a requested column, so every column was asked for; only the fields this app keeps are shown.")
-            case nil: break
-            }
+        case .devices: if let columns { lines.append(columns.words) }
         case .users, .userGroups, .deviceGroups: break
         case .attributes: unread(attributes.unread)
         case .adminLog:

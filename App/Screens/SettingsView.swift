@@ -265,12 +265,7 @@ struct SettingsView: View {
         working = profile.id
         Task {
             defer { working = nil }
-            do {
-                try await client.ping()
-                testResult[profile.id] = "Connected: the token, the admin account and the network work."
-            } catch {
-                testResult[profile.id] = OrgsModel.message(error)
-            }
+            testResult[profile.id] = await OrgsModel.testMosyle(client)
         }
     }
 

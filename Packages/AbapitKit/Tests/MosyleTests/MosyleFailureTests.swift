@@ -276,10 +276,11 @@ struct MosyleFailureTests {
         #expect(harness.stub.logins == 2, "the held read's 403 was for the first login: the second is kept")
     }
 
+    /// A 405 is `INVALID_METHOD`, with what Mosyle's answer said (the stub's body: plan §3.5 names the status).
     @Test func a405IsInvalidMethod() async throws {
         let harness = try await Harness()
         harness.stub.queue(405, for: "/v1/devices")
-        await #expect(throws: MosyleAPIError.invalidMethod) { try await harness.client.ping() }
+        await #expect(throws: MosyleAPIError.answered(.invalidMethod, said: "INVALID_METHOD: Method not allowed")) { try await harness.client.ping() }
     }
 
     /// A 429 is retried up to `HTTPClient.attempts` times; past that the client says it is rate-limited.
@@ -352,8 +353,8 @@ struct MosyleFailureTests {
         #expect(await harness.client.columnFallback == nil)
     }
 
-    /// The columns Mosyle names as unknown are dropped once, loudly, and the list still reads. A name with an
-    /// underscore is one name (most columns have one).
+    /// The columns Mosyle names as unknown are dropped, loudly, and the list still reads. A name with an underscore is
+    /// one name (most columns have one).
     @Test func aColumnMosyleNamesIsDropped() async throws {
         let harness = try await Harness()
         let lacking: Set = ["currentconsolemanageduser", "wifi_mac_address"]
@@ -366,8 +367,78 @@ struct MosyleFailureTests {
         #expect(columns == MosyleAdapter.deviceColumns.filter { !lacking.contains($0) })
     }
 
-    /// The named drop happens once: a later refusal, even one naming a column, asks for every column (bounded).
-    @Test func aSecondRefusalAsksForEveryColumn() async throws {
+    // MARK: the columns, as seen live (2026-11-19: the list asking 33 columns was answered HTTP 400, its body unseen)
+
+    static let adapter = MosyleAdapter.deviceColumns
+    static let six = MosyleClient.undocumentedColumns
+    static let documented = adapter.filter { !six.contains($0) }
+    /// The adapter's columns that are in `base` or `extra`, in the adapter's order: what the client asks for.
+    static func with(_ base: [String], _ extra: String...) -> [String] { adapter.filter { base.contains($0) || extra.contains($0) } }
+    /// Each device list request the stub answered itself, by the columns it asked for (nil: every column).
+    static func asked(_ stub: MosyleStub) -> [[String]?] {
+        stub.bodies.filter { $0["operation"] == .string("list") }.map { $0["options"]?["specific_columns"]?.array?.compactMap(\.string) }
+    }
+    /// No request names a bypass code; only an every-column walk sends one without `specific_columns` (invariant 11).
+    static func noCodeAsked(_ stub: MosyleStub, everyColumn: Bool = false, _ location: SourceLocation = #_sourceLocation) {
+        let asked = Self.asked(stub)
+        #expect(!asked.isEmpty, sourceLocation: location)
+        #expect(!asked.contains { ($0 ?? []).contains { $0.hasPrefix("activation_bypass") } }, "a bypass code was asked for", sourceLocation: location)
+        if !everyColumn { #expect(!asked.contains(nil), "every column was asked for", sourceLocation: location) }
+    }
+
+    /// The two lists the client keeps apart: the six Mosyle's doc doesn't list are the adapter's, in its order, and the
+    /// stub's own list of them (written out there) with the bypass code the doc doesn't list either.
+    @Test func theUndocumentedColumnsAreTheAdaptersAndTheStubs() {
+        #expect(Self.six == Self.adapter.filter(Self.six.contains) && Self.six.count == 6 && Self.documented.count == 27)
+        #expect(MosyleStub.undocumentedColumns == Set(Self.six).union(["activation_bypass_mdm"]))
+        #expect(MosyleStub.undocumentedColumns.isSubset(of: MosyleStub.deviceColumns))
+        #expect(MosyleClient.columnTries == 7)
+    }
+
+    /// Mosyle's refusal reaches the fallback however it comes: inside a 200 or with HTTP 400 (seen live), in the envelope
+    /// or bare (the three keys of the example in Mosyle's doc), its names under `unknown_columns` (the 2026-11-19 live
+    /// check: the 400 was `.unexpected` and its body thrown away, so the fallback never ran).
+    @Test(arguments: [
+        (200, #"{"status":"OK","response":[{"unknown_columns":["meid"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#),
+        (400, #"{"status":"OK","response":[{"unknown_columns":["meid"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#),
+        (400, #"{"unknown_columns":["meid"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}"#),
+    ])
+    func aRefusalReachesTheFallbackAt200Or400(status: Int, body: String) async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        harness.stub.queue(status, for: "/v1/devices", body: body)
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        #expect(await harness.client.columnFallback == .without(["meid"]))
+        #expect(Self.asked(harness.stub).allSatisfy { $0 == Self.adapter.filter { $0 != "meid" } })
+        Self.noCodeAsked(harness.stub)
+    }
+
+    /// Named, exactly those are dropped, in one more request: the six Mosyle's doc doesn't list, named as its doc shows the
+    /// answer (before 2026-11-19 the names were read from `info` only, and this refusal asked for every column).
+    @Test func theColumnsMosyleNamesAreDroppedExactly() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(Set(Self.six))
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        #expect(await harness.client.columnFallback == .without(Self.six))
+        #expect(harness.stub.columnRefusals == 1)
+        #expect(Array(Self.asked(harness.stub).prefix(2)) == [Self.adapter, Self.documented])
+        #expect(Self.asked(harness.stub).dropFirst().allSatisfy { $0 == Self.documented })
+        Self.noCodeAsked(harness.stub)
+    }
+
+    /// A name inside `info` (no source shows Mosyle writes one there) is dropped as well.
+    @Test func aColumnNamedInsideInfoIsDroppedToo() async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns: imei, meid"}]}"#)
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        #expect(await harness.client.columnFallback == .without(["imei", "meid"]))
+    }
+
+    /// A later refusal naming columns drops those too (proposed with the fix of 2026-11-19: only the documented columns
+    /// refused unnamed lead to every column, as the operator decided every column is the last resort).
+    @Test func aSecondNamedRefusalDropsThoseToo() async throws {
         let harness = try await Harness()
         harness.stub.lackColumns(["currentconsolemanageduser"])
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
@@ -375,8 +446,47 @@ struct MosyleFailureTests {
         #expect(await harness.client.columnFallback == .without(["currentconsolemanageduser"]))
         harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns: device_name"}]}"#)
         #expect(try await harness.devices().flatMap(\.items).count == 3)
-        #expect(await harness.client.columnFallback == .everyColumn)
-        #expect(harness.stub.bodies.last?["options"]?["specific_columns"] == nil)
+        #expect(await harness.client.columnFallback == .without(["device_name", "currentconsolemanageduser"]))
+        #expect(Self.asked(harness.stub).last == Self.adapter.filter { $0 != "device_name" && $0 != "currentconsolemanageduser" })
+        Self.noCodeAsked(harness.stub)
+    }
+
+    /// Unnamed, the list is asked for the 27 columns Mosyle's doc lists; once Mosyle takes them, each of the six is tried
+    /// alone beside the ones it took, on that page, and the ones it takes are kept: one request more than the bound's 1 + 6
+    /// is the first. Every later page asks for those. The page read is the last answer Mosyle took.
+    @Test func anUnnamedRefusalTriesEachUndocumentedColumnAlone() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei", "meid"], named: false)
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        let items = try await harness.devices().flatMap(\.items)
+        #expect(items.count == 3)
+        let (d, kept) = (Self.documented, Self.adapter.filter { $0 != "imei" && $0 != "meid" })
+        let tries = [Self.adapter, d, Self.with(d, "enrollment_type"), Self.with(d, "enrollment_type", "currentconsolemanageduser"),
+                     Self.with(d, "enrollment_type", "currentconsolemanageduser", "imei"), Self.with(d, "enrollment_type", "currentconsolemanageduser", "meid"),
+                     Self.with(d, "enrollment_type", "currentconsolemanageduser", "date_enroll"), kept]
+        let asked = Self.asked(harness.stub)
+        #expect(Array(asked.prefix(8)) == tries, "\(asked)")
+        #expect(asked.count == 12 && asked.dropFirst(8).allSatisfy { $0 == kept }, "mac 1 and 2, tvOS, visionOS: \(asked)")
+        #expect(harness.stub.columnRefusals == 3)
+        let columns = try #require(await harness.client.columns)
+        #expect(columns == MosyleColumns(refused: ["imei", "meid"], taken: kept, untried: []))
+        #expect(await harness.client.columnFallback == .without(["imei", "meid"]))
+        #expect(items.allSatisfy { $0.attributes["lastCheckIn"] != nil }, "the rows carry the columns kept")
+        Self.noCodeAsked(harness.stub)
+    }
+
+    /// A list Mosyle refused is never sent again: with the others taken, the last of the six would make the very list it
+    /// refused, so that one is refused without a request.
+    @Test func theListMosyleRefusedIsntAskedAgain() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["date_checkin"], named: false)
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        let asked = Self.asked(harness.stub), kept = Self.adapter.filter { $0 != "date_checkin" }
+        #expect(asked.filter { $0 == Self.adapter }.count == 1)
+        #expect(asked.count == 7 + 4 && asked[6] == kept && asked.dropFirst(6).allSatisfy { $0 == kept }, "\(asked)")
+        #expect(harness.stub.columnRefusals == 1)
+        #expect(await harness.client.columns == MosyleColumns(refused: ["date_checkin"], taken: kept, untried: []))
     }
 
     /// Mosyle naming every column asked for leaves nothing to ask: every column, never an empty `specific_columns`.
@@ -387,10 +497,11 @@ struct MosyleFailureTests {
         #expect(try await harness.devices().flatMap(\.items).count == 3)
         #expect(await harness.client.columnFallback == .everyColumn && harness.stub.columnRefusals == 1)
         #expect(!harness.stub.bodies.contains { $0["options"]?["specific_columns"] == .array([]) })
+        Self.noCodeAsked(harness.stub, everyColumn: true)
     }
 
     /// Two walks refused at once settle on one fallback: the second asks again with what the first chose, rather than
-    /// taking its own refusal as a second one and asking for every column.
+    /// taking its own refusal as a second one.
     @Test func walksRefusedTogetherShareOneFallback() async throws {
         let harness = try await Harness()
         harness.stub.lackColumns(["currentconsolemanageduser"])
@@ -413,6 +524,35 @@ struct MosyleFailureTests {
         #expect(await client.columnFallback == .without(["currentconsolemanageduser"]))
     }
 
+    /// Two walks refused unnamed at once try the columns once: the second waits for the first's tries, then reads with
+    /// the columns they kept.
+    @Test func walksRefusedTogetherTryTheColumnsOnce() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei", "meid"], named: false)
+        harness.stub.add(devices: Self.devices(60, os: "ios"), os: "ios")
+        harness.stub.holdRequests(to: "/v1/devices", fromPage: 1)
+        let client = harness.client
+        func count() async throws -> Int {
+            var count = 0
+            for try await page in client.devices() { count += page.items.count }
+            return count
+        }
+        async let first = count()
+        async let second = count()
+        let out = { harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count }
+        for _ in 0..<300 where out() < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(out() == 2, "both walks have their first page out")
+        harness.stub.release()
+        #expect(try await [first, second] == [60, 60])
+        #expect(harness.stub.columnRefusals == 4, "each walk's 33, then imei and meid once")
+        let d = Self.documented, asked = Self.asked(harness.stub)
+        let tries = [Self.with(d, "enrollment_type"), Self.with(d, "enrollment_type", "currentconsolemanageduser"),
+                     Self.with(d, "enrollment_type", "currentconsolemanageduser", "imei"), Self.with(d, "enrollment_type", "currentconsolemanageduser", "meid"),
+                     Self.with(d, "enrollment_type", "currentconsolemanageduser", "date_enroll")]
+        for tried in tries { #expect(asked.filter { $0 == tried }.count == 1, "tried once: \(asked)") }
+        #expect(await client.columnFallback == .without(["imei", "meid"]))
+    }
+
     /// The ping asks as the device list does and falls back as it does: a ping of `serial_number` alone said
     /// `UNKNOWN_COLUMNS` where the list degraded and read.
     @Test func aPingFallsBackAsTheListDoes() async throws {
@@ -423,10 +563,10 @@ struct MosyleFailureTests {
         #expect(await harness.client.columnFallback == .without(["serial_number"]))
     }
 
-    /// Each fallback is an error-level line naming the columns: the Phase 7 live check reads it, and a debug line is
-    /// never kept (Phase 7a's verification: lowering both lines survived). Read back from this process's own log, so
-    /// each line is this test's own, whole: two columns no other test refuses (round 3: the lines of the tests
-    /// running beside it passed for its own, and logging only two or more columns, or only a first refusal, survived).
+    /// Each step is an error-level line naming the columns: the live check reads it, and a debug line is never kept
+    /// (Phase 7a's verification: lowering both lines survived). Read back from this process's own log, so each line is
+    /// this test's own, whole: columns no other test refuses (round 3: the lines of the tests running beside it passed for
+    /// its own, and logging only two or more columns, or only a first refusal, survived).
     @Test func theFallbackIsLoggedAsAnError() async throws {
         let since = Date().addingTimeInterval(-1)
         let harness = try await Harness()
@@ -436,37 +576,395 @@ struct MosyleFailureTests {
         harness.stub.queue(200, for: "/v1/devices",
                            body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns: ethernet_mac_address"}]}"#)
         _ = try await harness.devices()
-        #expect(await harness.client.columnFallback == .everyColumn)
+        #expect(await harness.client.columnFallback == .without(["bluetooth_mac_address", "ethernet_mac_address"]))
+        let tried = try await Harness()
+        tried.stub.lackColumns(["meid", "date_enroll"], named: false)
+        _ = try await tried.devices()
+        // The documented columns asked alone, then every column (the line that says the bypass codes may come back), after
+        // Mosyle named lostmode_status and imei: no other test refuses those two together (the review of PR 22: lowering
+        // either line to debug survived).
+        let whole = try await Harness()
+        whole.stub.queue(200, for: "/v1/devices",
+                         body: #"{"status":"OK","response":[{"unknown_columns":["lostmode_status","imei"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#)
+        whole.stub.lackColumns(["device_type"], named: false)
+        _ = try await whole.devices()
+        #expect(await whole.client.columnFallback == .everyColumn)
         let store = try OSLogStore(scope: .currentProcessIdentifier)
         let entries = try store.getEntries(at: store.position(date: since),
                                            matching: NSPredicate(format: "subsystem == %@ AND category == %@", "io.github.goetchstone.swiftabapit", "mosyle"))
         let errors = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.level == .error }.map(\.composedMessage)
         #expect(errors.contains("Mosyle refused the device columns bluetooth_mac_address (UNKNOWN_COLUMNS): asking without them"), "\(errors)")
-        #expect(errors.contains("Mosyle refused the device columns ethernet_mac_address (UNKNOWN_COLUMNS) after an earlier fallback: asking for "
-                                + "every column; only the adapter's allowlist now keeps the Activation Lock bypass codes out"), "\(errors)")
+        #expect(errors.contains("Mosyle refused the device columns ethernet_mac_address (UNKNOWN_COLUMNS): asking without them"), "\(errors)")
+        #expect(errors.contains("Mosyle's device columns tried alone: took enrollment_type, currentconsolemanageduser, imei, date_checkin; "
+                                + "refused meid, date_enroll; left untried none"), "\(errors)")
+        #expect(errors.contains("Mosyle refused the device columns lostmode_status, imei (UNKNOWN_COLUMNS): asking without them"), "\(errors)")
+        #expect(errors.contains("Mosyle refused a device column (UNKNOWN_COLUMNS) without naming one this app asked for: asking for the ones its "
+                                + "doc lists, then trying enrollment_type, currentconsolemanageduser, meid, date_enroll, date_checkin one at a time"),
+                "\(errors)")
+        #expect(errors.contains("Mosyle refused the 26 device columns asked for (UNKNOWN_COLUMNS) without naming one, after refusing "
+                                + "lostmode_status, imei: asking for every column; only the adapter's allowlist now keeps the Activation Lock "
+                                + "bypass codes out"), "\(errors)")
     }
 
-    /// Unnamed, the list is asked for whole, and only the adapter's allowlist keeps the bypass codes out (invariant 11).
-    @Test func aColumnMosyleDoesntNameDropsTheColumnsAndTheCodesStillStayOut() async throws {
+    /// The lines past the tries, and the tries' summary after a failed try, read back at error level, whole (the second
+    /// review of PR 22: lowering the past-the-tries line, dropping its names, or counting the columns still to try out of the
+    /// summary all survived). The columns are ones no other test refuses: available_disk; meid and date_enroll named before
+    /// a failed try.
+    @Test func theLinesPastTheTriesAreLoggedAsErrors() async throws {
+        let since = Date().addingTimeInterval(-1)
+        let spent = try await Harness()
+        spent.stub.lackColumns(["imei"], named: false)
+        _ = try await spent.devices()
+        func refusal(_ names: [String]) -> String {
+            JSONValue.dumps(.object(["unknown_columns": .array(names.map(JSONValue.string)), "status": .string("UNKNOWN_COLUMNS"),
+                                     "info": .string("Unknown columns")]))
+        }
+        spent.stub.queue(400, for: "/v1/devices", body: refusal(["available_disk"]))
+        await #expect(throws: MosyleAPIError.columnsRefused(["available_disk"], info: "Unknown columns")) { _ = try await spent.devices() }
+        spent.stub.queue(400, for: "/v1/devices", body: refusal([]))
+        await #expect(throws: MosyleAPIError.columnsRefused([], info: "Unknown columns")) { _ = try await spent.devices() }
+        let left = Self.adapter.filter { $0 != "imei" && $0 != "available_disk" }
+        spent.stub.queue(400, for: "/v1/devices", body: refusal(left))
+        await #expect(throws: MosyleAPIError.everyAskedColumnRefused(count: 31, info: "Unknown columns")) { _ = try await spent.devices() }
+        // A try that fails: the summary counts the columns still to try as untried.
+        let failed = try await Harness()
+        failed.stub.queue(200, for: "/v1/devices",
+                          body: #"{"status":"OK","response":[{"unknown_columns":["meid","date_enroll"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#)
+        failed.stub.lackColumns(["imei"], named: false)
+        failed.stub.queue(500, for: "/v1/devices", skipping: 2)
+        await #expect(throws: MosyleAPIError.server(status: 500)) { _ = try await failed.devices() }
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let entries = try store.getEntries(at: store.position(date: since),
+                                           matching: NSPredicate(format: "subsystem == %@ AND category == %@", "io.github.goetchstone.swiftabapit", "mosyle"))
+        let errors = entries.compactMap { $0 as? OSLogEntryLog }.filter { $0.level == .error }.map(\.composedMessage)
+        #expect(errors.contains("Mosyle refused the device columns available_disk (UNKNOWN_COLUMNS) with this session's 7 tries spent: the "
+                                + "read fails; the next read asks without them"), "\(errors)")
+        #expect(errors.contains("Mosyle refused the 31 device columns asked for (UNKNOWN_COLUMNS) without naming one this app asked for, "
+                                + "after refusing available_disk, imei, with this session's 7 tries spent: the read fails"), "\(errors)")
+        #expect(errors.contains("Mosyle refused every one of the 31 device columns asked for by name (UNKNOWN_COLUMNS), after refusing "
+                                + "available_disk, imei, with this session's 7 tries spent: the read fails; the next read asks for the same "
+                                + "columns"), "\(errors)")
+        #expect(errors.contains("Mosyle's device columns tried alone: took none; refused none; left untried enrollment_type, "
+                                + "currentconsolemanageduser, imei, date_checkin"), "\(errors)")
+    }
+
+    /// Unnamed when only the documented columns were asked for, the list is asked for whole, and only the adapter's
+    /// allowlist keeps the bypass codes out (invariant 11): the 33, the 27, then every column.
+    @Test func theDocumentedColumnsRefusedUnnamedAskForEveryColumn() async throws {
         let harness = try await Harness()
         harness.stub.lackColumns(["device_type"], named: false)
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         let items = try await harness.devices().flatMap(\.items)
         #expect(items.count == 3)
         #expect(await harness.client.columnFallback == .everyColumn)
-        #expect(harness.stub.bodies.last?["options"]?["specific_columns"] == nil)
+        #expect(await harness.client.columns == MosyleColumns(refused: [], taken: nil, untried: []))
+        let asked = Self.asked(harness.stub)
+        #expect(Array(asked.prefix(3)) == [Self.adapter, Self.documented, nil] && asked.dropFirst(2).allSatisfy { $0 == nil }, "\(asked)")
+        Self.noCodeAsked(harness.stub, everyColumn: true)
         for item in items {
             #expect(!JSONValue.dumps(.object(item.attributes)).contains("SECRET"))
             #expect(Set(item.attributes.keys).isSubset(of: MosyleAdapter.deviceAttributes))
         }
     }
 
-    /// The fallback is bounded: a refusal with nothing left to drop is the error, after two requests, not a loop.
+    /// The fallback is bounded: a refusal with nothing left to drop is the error, after three requests (the 33, the 27 and
+    /// every column), not a loop. A refusal inside a 200 is read as one at 400.
     @Test func aRefusalWithNothingLeftToDropIsTheError() async throws {
         let harness = try await Harness()
         for _ in 0..<3 { harness.stub.failEnvelope("UNKNOWN_COLUMNS", for: "/v1/devices") }
         await #expect(throws: MosyleAPIError.status(.known(.unknownColumns), info: "stubbed")) { _ = try await harness.devices() }
-        #expect(harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count == 2)
+        #expect(harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count == 3)
+        #expect(await harness.client.columnFallback == .everyColumn)
+    }
+
+    /// The requests a refusal brings are bounded per client (1 + 6, a proposal for the operator to confirm): with all six
+    /// refused unnamed the tries are spent, and a later refusal is the error with no request more; a session whose tries
+    /// ran out mid-way leaves the rest out untried and says so.
+    @Test func theTriesAreBoundedPerClient() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(Set(Self.six), named: false)
+        #expect(try await harness.devices().isEmpty)
+        let asked = Self.asked(harness.stub)
+        let sent: [[String]] = [Self.adapter, Self.documented] + Self.six.map { Self.with(Self.documented, $0) }
+        #expect(asked == (sent + Array(repeating: Self.documented, count: 3)).map { Optional($0) },
+                "the 33, the 27, each of the six; then macOS, tvOS, visionOS: \(asked)")
+        #expect(await harness.client.columns == MosyleColumns(refused: Self.six, taken: Self.documented, untried: []))
+        harness.stub.failEnvelope("UNKNOWN_COLUMNS", for: "/v1/devices")
+        let before = harness.stub.requests.count
+        await #expect(throws: MosyleAPIError.columnsRefused([], info: "stubbed")) { _ = try await harness.devices() }
+        #expect(harness.stub.requests.count == before + 1, "no request more once the tries are spent")
+
+        // Two named refusals (one inside a 200, one bare at 400) spend two tries; the documented ask a third; four are left.
+        let cut = try await Harness()
+        cut.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"unknown_columns":["device_name"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}]}"#)
+        cut.stub.queue(400, for: "/v1/devices", body: #"{"unknown_columns":["model_name"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}"#)
+        cut.stub.lackColumns(["imei"], named: false)
+        cut.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await cut.devices().flatMap(\.items).count == 3)
+        let d = Self.documented.filter { $0 != "device_name" && $0 != "model_name" }
+        let kept = Self.with(d, "enrollment_type", "currentconsolemanageduser", "meid")
+        let columns = try #require(await cut.client.columns)
+        #expect(columns == MosyleColumns(refused: ["device_name", "model_name", "imei"], taken: kept, untried: ["date_enroll", "date_checkin"]))
+        #expect(columns.words == "Mosyle refused the device columns device_name, model_name and imei, so they were left out of the request. "
+                + "It took 28, among them enrollment_type, currentconsolemanageduser and meid, which Mosyle's doc doesn't list. "
+                + "Left out untried: date_enroll and date_checkin.")
+        #expect(await cut.client.columnFallback == .without(["device_name", "model_name", "imei", "date_enroll", "date_checkin"]))
+        Self.noCodeAsked(cut.stub)
+    }
+
+    /// Once the tries are spent a refusal is the error, yet what Mosyle named is kept: refused, out of what it took, named
+    /// in the error, and a later read asks without it (the review of PR 22: the names were lost, and the words said the
+    /// refused column was taken).
+    @Test func aRefusalPastTheTriesKeepsWhatMosyleNamed() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await harness.devices().flatMap(\.items).count == 3, "the 27 and six tries: every one spent")
+        harness.stub.queue(400, for: "/v1/devices", body: #"{"unknown_columns":["battery"],"status":"UNKNOWN_COLUMNS","info":"Unknown columns"}"#)
+        await #expect(throws: MosyleAPIError.columnsRefused(["battery"], info: "Unknown columns")) { _ = try await harness.devices() }
+        let kept = Self.adapter.filter { $0 != "imei" && $0 != "battery" }
+        let columns = try #require(await harness.client.columns)
+        #expect(columns == MosyleColumns(refused: ["battery", "imei"], taken: kept, untried: [], answered: false))
+        #expect(columns.words.hasPrefix("Mosyle refused the device columns battery and imei, so they were left out of the request. The next read "
+                                        + "asks for the other 31"), "\(columns.words)")
+        #expect(MosyleAPIError.columnsRefused(["battery"], info: "Unknown columns").message == "Mosyle refused the device column battery "
+                + "(UNKNOWN_COLUMNS) after this session's tries at other columns were spent. The next read asks without it. Mosyle said: "
+                + "Unknown columns")
+        #expect(MosyleAPIError.columnsRefused([], info: nil).message == "Mosyle refused a device column without naming one this app asked "
+                + "for (UNKNOWN_COLUMNS) after this session's tries at other columns were spent.")
+        let before = Self.asked(harness.stub).count
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        #expect(Self.asked(harness.stub).dropFirst(before).allSatisfy { $0 == kept }, "a later read asks without it")
+        #expect(await harness.client.columns?.words.hasPrefix("Mosyle refused the device columns battery and imei, so they were left out of "
+                                                               + "the request. It took the other 31") == true, "taken once a page answered")
+    }
+
+    /// Past the tries, a refusal naming every column asked for leaves nothing smaller to send (an empty list never is), so
+    /// a later read asks for the same columns, and the error, `columns`, its words and `columnFallback` say exactly that:
+    /// none of them is said left out, or taken (the reviews of PR 22: first they read as taken, then as left out while the
+    /// next read asked for them all).
+    @Test func aRefusalPastTheTriesNamingEveryColumnAsksForThemAgain() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        #expect(try await harness.devices().isEmpty, "the 27 and six tries: every one spent")
+        let asked = Self.adapter.filter { $0 != "imei" }
+        let body = JSONValue.dumps(.object(["unknown_columns": .array(asked.map(JSONValue.string)), "status": .string("UNKNOWN_COLUMNS"),
+                                            "info": .string("Unknown columns")]))
+        harness.stub.queue(400, for: "/v1/devices", body: body)
+        await #expect(throws: MosyleAPIError.everyAskedColumnRefused(count: 32, info: "Unknown columns")) { _ = try await harness.devices() }
+        #expect(MosyleAPIError.everyAskedColumnRefused(count: 32, info: "Unknown columns").message == "Mosyle refused all 32 device columns "
+                + "asked for, by name (UNKNOWN_COLUMNS), after this session's tries at other columns were spent. The next read asks for the "
+                + "same 32, as there is nothing smaller to send. Mosyle said: Unknown columns")
+        let columns = try #require(await harness.client.columns)
+        #expect(columns == MosyleColumns(refused: ["imei"], taken: asked, untried: [], everyAskedRefused: true, answered: false))
+        #expect(columns.words == "Mosyle refused the device column imei, so it was left out of the request. Then it refused all 32 device "
+                + "columns asked for, by name, once this session's tries were spent; the next read asks for the same 32, as there is "
+                + "nothing smaller to send.")
+        #expect(await harness.client.columnFallback == .without(["imei"]), "what is sent: every column but imei")
+        let before = Self.asked(harness.stub).count
+        #expect(try await harness.devices().isEmpty)
+        #expect(Self.asked(harness.stub).dropFirst(before).allSatisfy { $0 == asked }, "the same columns, asked again")
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: asked, untried: []), "taken once Mosyle takes them")
+    }
+
+    /// A try's answer is trusted only when it reads as the page did: as many rows, or the end where the page was the end. A
+    /// try answered with no rows, fewer or more rows where the page had three, or with another status, leaves that column out
+    /// untried and keeps the page as it was read (the reviews of PR 22: an end answered to the last try read three devices as
+    /// none, and one row as one).
+    @Test(arguments: [#"{"status":"OK","response":[{"status":"DEVICES_NOTFOUND","info":"No devices found"}]}"#,
+                      #"{"status":"OK","response":[{"status":"MISSING_DATA","info":"Missing os"}]}"#,
+                      #"{"status":"OK","response":[{"devices":[{"serial_number":"ONE"}],"rows":1}]}"#,
+                      #"{"status":"OK","response":[{"devices":[{"serial_number":"T0"},{"serial_number":"T1"},{"serial_number":"T2"},{"serial_number":"T3"}],"rows":4}]}"#])
+    func aTryIsTrustedOnlyWhenItReadsAsThePage(body: String) async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        harness.stub.add(devices: Self.devices(3, os: "ios"), os: "ios")
+        // The 33, the 27, then the tries: date_checkin's, the last, is the eighth request.
+        harness.stub.queue(200, for: "/v1/devices", body: body, skipping: 7)
+        #expect(try await harness.devices().flatMap(\.items).count == 3, "the page as read before the last try")
+        let kept = Self.with(Self.documented, "enrollment_type", "currentconsolemanageduser", "meid", "date_enroll")
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: kept, untried: ["date_checkin"]))
+        #expect(Self.asked(harness.stub).count == 11 && Self.asked(harness.stub).dropFirst(7).allSatisfy { $0 == kept },
+                "iOS page 2, macOS, tvOS and visionOS ask without it: \(Self.asked(harness.stub))")
+    }
+
+    /// A try answered with rows where the page was the end (an empty platform) isn't kept either: the page stands, empty
+    /// (the third review of PR 22: that mutant of the rule survived).
+    @Test func aTryWithRowsWhereThePageWasTheEndIsntKept() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"devices":[{"serial_number":"ONE"}],"rows":1}]}"#, skipping: 7)
+        #expect(try await harness.devices().flatMap(\.items).isEmpty, "the page as read: the end")
+        let kept = Self.with(Self.documented, "enrollment_type", "currentconsolemanageduser", "meid", "date_enroll")
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: kept, untried: ["date_checkin"]))
+    }
+
+    /// The flag that every column asked for was refused by name holds until a page answers (a status isn't one), or a later
+    /// refusal names only some of them; the words follow (the third review of PR 22: a SERVICE_BUSY read as "It took the
+    /// other 32", and a refusal of battery kept "it refused all 31").
+    @Test func theEveryAskedFlagClearsOnlyOnAPageOrANamedRefusal() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        #expect(try await harness.devices().isEmpty, "the 27 and six tries: every one spent")
+        let asked = Self.adapter.filter { $0 != "imei" }
+        func refusal(_ names: [String]) -> String {
+            JSONValue.dumps(.object(["unknown_columns": .array(names.map(JSONValue.string)), "status": .string("UNKNOWN_COLUMNS"),
+                                     "info": .string("Unknown columns")]))
+        }
+        harness.stub.queue(400, for: "/v1/devices", body: refusal(asked))
+        await #expect(throws: MosyleAPIError.everyAskedColumnRefused(count: 32, info: "Unknown columns")) { _ = try await harness.devices() }
+        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"SERVICE_BUSY"}]}"#)
+        await #expect(throws: MosyleAPIError.status(.unknown("SERVICE_BUSY"), info: nil)) { _ = try await harness.devices() }
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: asked, untried: [], everyAskedRefused: true, answered: false),
+                "a status isn't Mosyle taking the columns")
+        harness.stub.queue(400, for: "/v1/devices", body: refusal(["battery"]))
+        await #expect(throws: MosyleAPIError.columnsRefused(["battery"], info: "Unknown columns")) { _ = try await harness.devices() }
+        let kept = asked.filter { $0 != "battery" }
+        let named = try #require(await harness.client.columns)
+        #expect(named == MosyleColumns(refused: ["battery", "imei"], taken: kept, untried: [], answered: false))
+        #expect(named.words == "Mosyle refused the device columns battery and imei, so they were left out of the request. The next read asks "
+                + "for the other 31, among them enrollment_type, currentconsolemanageduser, meid, date_enroll and date_checkin, which Mosyle's "
+                + "doc doesn't list.")
+        #expect(try await harness.devices().isEmpty)
+        #expect(await harness.client.columns == MosyleColumns(refused: ["battery", "imei"], taken: kept, untried: []), "a page answered")
+    }
+
+    /// The tries start only from a page that reads as one: a status answered to the 27 (here `SERVICE_BUSY`) is the read's
+    /// error, with no try sent and the six still to try, on an empty platform and with devices alike (the second review of
+    /// PR 22: on an empty platform every try read as the end and five columns were left untried for the session; with
+    /// devices a try's rows replaced the error). The next read takes up the tries.
+    @Test(arguments: [false, true])
+    func theTriesStartOnlyFromAPage(devices: Bool) async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        if devices { harness.stub.add(devices: Self.devices(3, os: "ios"), os: "ios") }
+        harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"SERVICE_BUSY"}]}"#, skipping: 1)
+        await #expect(throws: MosyleAPIError.status(.unknown("SERVICE_BUSY"), info: nil)) { _ = try await harness.devices() }
+        #expect(harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count == 2, "the 33 and the 27; no try")
+        let busy = try #require(await harness.client.columns)
+        #expect(busy == MosyleColumns(refused: [], taken: Self.documented, untried: Self.six, answered: false))
+        #expect(busy.words == "Mosyle refused a device column without naming it. The next read asks for 27. Left out untried: "
+                + "enrollment_type, currentconsolemanageduser, imei, meid, date_enroll and date_checkin.", "never \"It took 27\": no page answered them")
+        #expect(try await harness.devices().flatMap(\.items).count == (devices ? 3 : 0))
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: Self.adapter.filter { $0 != "imei" }, untried: []))
+    }
+
+    /// A try that fails fails the read; the columns still to try are said untried, never taken, and the next read takes up
+    /// the tries where they stopped, with the tries that are left (the failed one counted).
+    @Test func aFailedTryLeavesTheRestUntriedUntilTheNextRead() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei"], named: false)
+        harness.stub.queue(500, for: "/v1/devices", skipping: 2)
+        await #expect(throws: MosyleAPIError.server(status: 500)) { _ = try await harness.devices() }
+        let columns = try #require(await harness.client.columns)
+        #expect(columns == MosyleColumns(refused: [], taken: Self.documented, untried: Self.six))
+        #expect(columns.words == "Mosyle refused a device column without naming it. It took 27. Left out untried: enrollment_type, "
+                + "currentconsolemanageduser, imei, meid, date_enroll and date_checkin.")
+        harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await harness.devices().flatMap(\.items).count == 3)
+        let kept = Self.with(Self.documented, "enrollment_type", "currentconsolemanageduser", "meid", "date_enroll")
+        #expect(await harness.client.columns == MosyleColumns(refused: ["imei"], taken: kept, untried: ["date_checkin"]))
+    }
+
+    /// A walk cancelled while its first try is out sends no further try (the review of PR 22: the tries ran on in their own
+    /// task, five requests after the cancel), and the columns it didn't try are said untried.
+    @Test func cancellingTheWalkStopsItsTries() async throws {
+        let harness = try await Harness()
+        harness.stub.lackColumns(["imei", "meid"], named: false)
+        harness.stub.holdRequests(to: "/v1/devices", fromPage: 1, skipping: 2)
+        let client = harness.client
+        let walk = Task { for try await _ in client.devices() {} }
+        let asked = { harness.stub.requests.filter { $0.hasSuffix("/v1/devices list") }.count }
+        for _ in 0..<300 where asked() < 3 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(asked() == 3, "the 33, the 27 and the first try, held")
+        walk.cancel()
+        try await Task.sleep(for: .milliseconds(50))
+        harness.stub.release()
+        _ = await walk.result
+        for _ in 0..<30 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(asked() == 3, "\(asked()) requests: a try was sent after the walk was cancelled")
+        let rest = Self.six.filter { $0 != "enrollment_type" }
+        #expect(await client.columns == MosyleColumns(refused: [], taken: Self.with(Self.documented, "enrollment_type"), untried: rest))
+    }
+
+    /// What a screen says of the columns (Settings' Test, the devices' note, beside a failed read): which Mosyle refused,
+    /// which it took (the six in doubt by name), which were left out untried, or that every column was asked for.
+    @Test func theColumnsAreSaidInWords() {
+        let kept = Self.adapter.filter { $0 != "imei" }
+        #expect(MosyleColumns(refused: ["imei"], taken: kept, untried: []).words
+                == "Mosyle refused the device column imei, so it was left out of the request. It took the other 32, among them "
+                + "enrollment_type, currentconsolemanageduser, meid, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
+        #expect(MosyleColumns(refused: Self.six, taken: Self.documented, untried: []).words
+                == "Mosyle refused the device columns enrollment_type, currentconsolemanageduser, imei, meid, date_enroll and date_checkin, "
+                + "so they were left out of the request. It took the other 27.")
+        #expect(MosyleColumns(refused: [], taken: nil, untried: []).words
+                == "Mosyle refused the requested device columns, so every column was asked for; only the fields this app keeps are shown.")
+        #expect(MosyleColumns(refused: ["imei"], taken: nil, untried: []).words
+                == "Mosyle refused the requested device columns (by name: imei), so every column was asked for; only the fields this app keeps are shown.")
+        #expect(MosyleColumns(refused: Self.adapter, taken: [], untried: []).words.hasSuffix("so they were left out of the request. It took none."))
+        #expect(MosyleColumns(refused: [], taken: Self.documented, untried: [], everyAskedRefused: true).words
+                == "Mosyle refused all 27 device columns asked for, by name, once this session's tries were spent; the next read asks for "
+                + "the same 27, as there is nothing smaller to send.")
+        #expect(MosyleColumns.allTaken == "Mosyle took all 33 device columns asked for.")
+    }
+
+    // MARK: Mosyle's own words in an answer that isn't a 2xx
+
+    /// A read's 4xx or 5xx says Mosyle's own `status` and `info` (the 2026-11-19 live check showed only "400"): the entry's,
+    /// else the top level's, never another field; control and format characters out, trimmed, cut at 64 and 200.
+    @Test func aRefusedReadSaysMosylesOwnWords() async throws {
+        let harness = try await Harness()
+        let junk = [0x0A, 0x202E, 0x200B, 0x07].map { String(Character(UnicodeScalar($0)!)) }.joined()
+        func entry(_ fields: JSONObject) -> String { JSONValue.dumps(.object(["status": .string("OK"), "response": .array([.object(fields)])])) }
+        harness.stub.queue(400, for: "/v1/devices", body: entry(["status": .string(" BAD\(junk)_PAGE "),
+                                                                 "info": .string("Page \(junk)size " + String(repeating: "x", count: 300))]))
+        let said = "BAD_PAGE: Page size " + String(repeating: "x", count: 190) + "\u{2026}"
+        await #expect(throws: MosyleAPIError.answered(.unexpected(status: 400), said: said)) { try await harness.client.ping() }
+        #expect(MosyleAPIError.answered(.unexpected(status: 400), said: said).message
+                == "Mosyle answered HTTP 400, which this app doesn't expect. Mosyle said: " + said)
+        // At the top level, and after the session's one fresh login for a 403; Mosyle's `message` is never said.
+        let top = #"{"status":"ERROR","message":"MESSAGE-CANARY","info":"Not allowed"}"#
+        for _ in 0..<2 { harness.stub.queue(403, for: "/v1/devices", body: top) }
+        await #expect(throws: MosyleAPIError.answered(.forbidden, said: "ERROR: Not allowed")) { try await harness.client.ping() }
+        harness.stub.queue(500, for: "/v1/devices", body: entry(["status": .string("SERVER_DOWN")]))
+        await #expect(throws: MosyleAPIError.answered(.server(status: 500), said: "SERVER_DOWN")) { try await harness.client.ping() }
+        // Nothing of Mosyle's own: the error as it was. A top-level status is said only when shaped as a code, as inside a
+        // 200 (the review of PR 22).
+        harness.stub.queue(400, for: "/v1/devices", body: #"{"error":"x","status":"OK"}"#)
+        await #expect(throws: MosyleAPIError.unexpected(status: 400)) { try await harness.client.ping() }
+        harness.stub.queue(400, for: "/v1/devices", body: #"{"status":"Invalid token for this org"}"#)
+        await #expect(throws: MosyleAPIError.unexpected(status: 400)) { try await harness.client.ping() }
+        harness.stub.queue(400, for: "/v1/devices", body: #"{"status":"Invalid token for this org","info":"Try again"}"#)
+        await #expect(throws: MosyleAPIError.answered(.unexpected(status: 400), said: "Try again")) { try await harness.client.ping() }
+        // Inside a 200, a status of the list's own is said cleaned too.
+        harness.stub.queue(200, for: "/v1/devices", body: entry(["status": .string("NEW\(junk)_CODE"), "info": .string("x\(junk)y")]))
+        do {
+            try await harness.client.ping()
+            Issue.record("a new status read as a list")
+        } catch let error as MosyleAPIError {
+            #expect(error.message == "Mosyle answered NEW_CODE: xy")
+        }
+    }
+
+    /// A 400's body is never logged as public past Mosyle's status code: its `info` is Mosyle's own text, a column refusal's
+    /// included (named, unnamed, and past the tries).
+    @Test func aRefusedReadsInfoIsNeverLogged() async throws {
+        let since = Date().addingTimeInterval(-1)
+        let harness = try await Harness()
+        harness.stub.queue(400, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"LOGCHECK_7Q","info":"INFO-CANARY-7Q"}]}"#)
+        await #expect(throws: MosyleAPIError.answered(.unexpected(status: 400), said: "LOGCHECK_7Q: INFO-CANARY-7Q")) { try await harness.client.ping() }
+        let refusals = try await Harness()
+        refusals.stub.queue(400, for: "/v1/devices", body: #"{"unknown_columns":["asset_tag"],"status":"UNKNOWN_COLUMNS","info":"REFUSAL-CANARY-7Q"}"#)
+        refusals.stub.queue(400, for: "/v1/devices", body: #"{"unknown_columns":[],"status":"UNKNOWN_COLUMNS","info":"REFUSAL-CANARY-7Q"}"#)
+        refusals.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
+        #expect(try await refusals.devices().flatMap(\.items).count == 3, "a named drop, the 27, and the tries: every one spent")
+        refusals.stub.queue(400, for: "/v1/devices", body: #"{"unknown_columns":[],"status":"UNKNOWN_COLUMNS","info":"REFUSAL-CANARY-7Q"}"#)
+        await #expect(throws: MosyleAPIError.columnsRefused([], info: "REFUSAL-CANARY-7Q")) { _ = try await refusals.devices() }
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let logged = try store.getEntries(at: store.position(date: since)).compactMap { ($0 as? OSLogEntryLog)?.composedMessage }
+        #expect(logged.contains("Mosyle answered HTTP 400 to /v1/devices list, its status LOGCHECK_7Q"), "\(logged.filter { $0.contains("Mosyle") })")
+        #expect(logged.contains("Mosyle answered HTTP 400 to /v1/devices list, its status UNKNOWN_COLUMNS"))
+        #expect(!logged.contains { $0.contains("INFO-CANARY-7Q") || $0.contains("REFUSAL-CANARY-7Q") })
     }
 
     // MARK: L2, dedupe
