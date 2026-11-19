@@ -71,6 +71,10 @@ public final class MosyleStub: Transport, Sendable {
         "enrollment_type", "currentconsolemanageduser", "imei", "meid", "date_enroll", "date_checkin", "activation_bypass_mdm",
     ]
 
+    /// The one column the real Mosyle refused live (2026-11-19), whichever list asks for it: refused with the answer seen,
+    /// naming none (`unknown_columns` empty), as `lackColumns(_:named: false)` does. Written out here, not taken from the client.
+    public static let refusedLive = "currentconsolemanageduser"
+
     private struct Queued {
         let path: String
         let host: APIHost?
@@ -412,7 +416,7 @@ public final class MosyleStub: Transport, Sendable {
         return (200, [:], Self.entry(["logs": .array(rows.map(JSONValue.object)), "rows": .number(String(rows.count))]))
     }
 
-    /// The device list. A request asking for a column this Mosyle lacks is refused with the answer Mosyle's doc shows
+    /// The device list. A request asking `refusedLive` is refused as Mosyle refused it live. A request asking for a column this Mosyle lacks is refused with the answer Mosyle's doc shows
     /// (`unknown_columns`, `status` `UNKNOWN_COLUMNS`, `info` "Unknown columns"; the doc's own example names none, which
     /// `lackColumns(_:named: false)` sends) inside the usual envelope, with HTTP 400. Both are assumed: the doc gives no HTTP
     /// code, and on 2026-11-19 the live list asking 33 columns was answered 400 with a body nobody saw. (A 200 with the
@@ -424,7 +428,10 @@ public final class MosyleStub: Transport, Sendable {
             let asked = names.compactMap(\.string)
             let (lacking, named) = state.withLock { ($0.lacking, $0.namesLacking) }
             let unknown = asked.filter { !Self.deviceColumns.contains($0) || lacking.contains($0) }
-            guard unknown.isEmpty, asked.count == names.count else {
+            // Live, 2026-11-19: Mosyle refused `currentconsolemanageduser` with HTTP 400, status `UNKNOWN_COLUMNS`, naming no
+            // column this app asked for (the app's own log; the body's `info` and `unknown_columns` were never seen).
+            let refusedLive = asked.contains(Self.refusedLive)
+            guard unknown.isEmpty, !refusedLive, asked.count == names.count else {
                 state.withLock { $0.columnRefusals += 1 }
                 return (400, [:], Self.entry(["unknown_columns": .array(named ? unknown.map(JSONValue.string) : []),
                                               "status": .string("UNKNOWN_COLUMNS"), "info": .string("Unknown columns")]))

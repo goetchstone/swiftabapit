@@ -15,7 +15,8 @@ public struct MosylePage: Sendable {
 
 /// What the device list asks for after Mosyle refused a requested column (`UNKNOWN_COLUMNS`; Phase 7a review H3).
 public enum MosyleColumnFallback: Sendable, Equatable {
-    /// Every column but these: the ones Mosyle refused, by name or when tried alone, and any left out untried.
+    /// The columns asked for first (`MosyleClient.askedColumns`) but these: the ones Mosyle refused, by name or when tried
+    /// alone, and any left out untried.
     case without([String])
     /// No `specific_columns`: Mosyle refused the columns its doc lists without naming one, or named every column asked
     /// for. The adapter's allowlist is then all that keeps the Activation Lock bypass codes out (invariant 11), as it was
@@ -104,13 +105,10 @@ public actor MosyleClient {
     public static let defaultPageCap = 200
     private static let log = Logger(subsystem: "io.github.goetchstone.swiftabapit", category: "mosyle")
 
-    /// The adapter's device column Mosyle refused on the live check of 2026-11-19 (Settings > Test, after PR #22: it took
-    /// the other 32, so it was refused by name or when tried alone, not recorded which). Never asked for, and never tried.
-    /// The adapter still maps it (`currentUser`, as `CurrentConsoleManagedUser`, which Mosyle's doc lists and Mosyle took,
-    /// carries the console user): a row that carries it is still read.
-    static let refusedLive = ["currentconsolemanageduser"]
-    /// The device columns asked for first: the adapter's, but those Mosyle refused live (32 of the adapter's 33).
-    static let askedColumns = MosyleAdapter.deviceColumns.filter { !refusedLive.contains($0) }
+    /// The device column Mosyle refused live, and the columns asked for without it (`MosyleRead.refusedLive`,
+    /// `MosyleRead.askedColumns`: the list request builds from them too).
+    static let refusedLive = MosyleRead.refusedLive
+    static let askedColumns = MosyleRead.askedColumns
     /// The columns asked for that Mosyle's in-console doc doesn't list as `specific_columns` names (they came from
     /// third-party research), in the adapter's order, less `refusedLive`: five of the adapter's six. Asked for like the
     /// others; when Mosyle refuses a list without naming a column, each is tried alone.

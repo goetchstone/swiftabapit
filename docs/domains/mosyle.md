@@ -88,7 +88,7 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     the documented then try them I think we want to figure it all". That is: ask for the documented columns, then try
     the undocumented ones to learn which Mosyle offers, and ask for every column only as the last resort. Everything
     else here is proposed, for the operator to confirm:
-    - proposed by the implementing session: the 1 + 5 budget (1 + 6 until the live answer left one column untried; the
+    - proposed by the implementing session: the 1 + 5 budget (1 + 6 until the live answer refused one column; the
       budget is computed from the list); trying on the page being read; not sending the request
       with all five added (it would resend a list Mosyle refused); asking for every column when Mosyle names every column
       asked for; starting the tries only from a page; keeping a try only for as many rows, or the same end; past the
@@ -301,7 +301,7 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     - **Seen live, 2026-11-19 (Settings → Test, before this fix):** the login answered 200. The device list for Macs,
       page 1, asking for the 33 answered HTTP 400. Its body was not seen: the client threw it away and said only "400".
     - **Assumed since:**
-      - that a refusal is HTTP 400 (seen only on the request asking the 33, with its body unseen), or inside a 2xx;
+      - that a refusal can also come inside a 2xx (HTTP 400 is seen live, below);
       - that it is shaped as the doc's example (`unknown_columns`, `status` `UNKNOWN_COLUMNS`, `info`), inside the
         envelope or bare;
       - whether `unknown_columns` or `info` names the columns (both are read);
@@ -312,11 +312,18 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
       list, Mosyle took `enrollment_type`, `imei`, `meid`, `date_enroll` and `date_checkin` and refused
       `currentconsolemanageduser`. The documented `CurrentConsoleManagedUser` carries the console user, so nothing is lost
       (the adapter maps both spellings to `currentUser`, and still reads the lower-case one if Mosyle ever sends it).
-      Not recorded: whether Mosyle named the refused column or the tries found it (the Test's words could not be copied;
-      Settings now lets them be selected). Answered by this, so no longer assumed: which of the six Mosyle takes, and
-      whether both spellings of the console user are accepted (they are not: only `CurrentConsoleManagedUser`). Still
-      assumed: everything in the list above. The stub takes all of them unless a test says otherwise
-      (`MosyleStub.undocumentedColumns`; it is unchanged). The log has a line for each step.
+      The Test's words could not be copied, but the app's own log for the two Test runs (13:26; column names and statuses
+      only) says it: the list was refused with HTTP 400, status `UNKNOWN_COLUMNS`, naming no column this app asked for
+      (the log line "without naming one"); the 27 documented columns were then taken; the trial adding
+      `currentconsolemanageduser` was refused the same way, so the trials found it, not Mosyle's naming; the summary
+      read took five, refused that one, left none untried. Each Test, a fresh client, learned it again.
+      Answered by this, so no longer assumed: which of the six Mosyle takes; the HTTP code of a refusal (400); that the
+      first refusal named none of the columns asked for; whether both spellings of the console user are accepted (they
+      are not: only `CurrentConsoleManagedUser`). The next healthy Test no longer asks for that column, so it won't
+      exercise the refusal path. Still assumed: the contents of the body's `info` and `unknown_columns` (never logged,
+      never seen), and the rest of the list above. The stub now refuses `currentconsolemanageduser` by default as seen
+      (HTTP 400, `UNKNOWN_COLUMNS`, `unknown_columns` empty: `MosyleStub.refusedLive`) and takes the other undocumented
+      columns unless a test says otherwise (`MosyleStub.undocumentedColumns`). The log has a line for each step.
     - `MosyleStub.deviceColumns` is the stub's guess at Mosyle's list. It adds `activation_bypass_mdm` (plan defect 1;
       the doc lists only `activation_bypass`) and `latitude`/`longitude` (plan §2.2).
   - **Each list's end-of-list status**, past the last row: `DEVICES_NOTFOUND` (abapit's recorded envelope) and

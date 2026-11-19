@@ -357,7 +357,7 @@ struct MosyleFailureTests {
     /// one name (most columns have one).
     @Test func aColumnMosyleNamesIsDropped() async throws {
         let harness = try await Harness()
-        let lacking: Set = ["bluetooth_mac_address", "wifi_mac_address"]
+        let lacking: Set = ["userid", "wifi_mac_address"]
         harness.stub.lackColumns(lacking)
         harness.stub.add(devices: Self.devices(120, os: "mac"), os: "mac")
         #expect(try await harness.devices().flatMap(\.items).count == 120)
@@ -415,8 +415,8 @@ struct MosyleFailureTests {
         #expect(!asked.contains { ($0 ?? []).contains(Self.refusedLive) })
     }
 
-    /// No trial, nor any later ask, names it: not when every undocumented column is tried, and not when Mosyle refuses
-    /// every column unnamed (the walk ends asking for every column, which names none).
+    /// No trial, nor any later ask, names it: the 32, the 27, then exactly five trials (one per undocumented column, in the
+    /// adapter's order), whether Mosyle takes some of them or refuses all five (the walk then settles on the 27).
     @Test(arguments: [["imei", "meid"], ["enrollment_type", "imei", "meid", "date_enroll", "date_checkin"]])
     func noTrialNamesTheColumnMosyleRefusedLive(lacking: [String]) async throws {
         let harness = try await Harness()
@@ -424,9 +424,11 @@ struct MosyleFailureTests {
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         _ = try await harness.devices()
         let asked = Self.asked(harness.stub)
-        #expect(asked.count >= 7, "the 32, the 27, and each of the five: \(asked)")
+        #expect(asked.count == 2 + 5 + 4, "the 32, the 27, five trials, then macOS 2, tvOS, visionOS: \(asked)")
         #expect(!asked.contains { ($0 ?? []).contains(Self.refusedLive) }, "\(asked)")
-        #expect(asked.dropFirst(2).prefix(5).count == 5, "five trials, not six")
+        for (column, trial) in zip(Self.tried, asked.dropFirst(2).prefix(5)) {
+            #expect(Set(trial ?? []).contains(column), "the trial of \(column): \(asked)")
+        }
     }
 
     /// A row that carries the column still reads: the adapter maps it to `currentUser` (the field map is unchanged), as
@@ -483,14 +485,14 @@ struct MosyleFailureTests {
     /// refused unnamed lead to every column, as the operator decided every column is the last resort).
     @Test func aSecondNamedRefusalDropsThoseToo() async throws {
         let harness = try await Harness()
-        harness.stub.lackColumns(["bluetooth_mac_address"])
+        harness.stub.lackColumns(["is_supervised"])
         harness.stub.add(devices: Self.devices(3, os: "mac"), os: "mac")
         #expect(try await harness.devices().flatMap(\.items).count == 3)
-        #expect(await harness.client.columnFallback == .without(["bluetooth_mac_address"]))
+        #expect(await harness.client.columnFallback == .without(["is_supervised"]))
         harness.stub.queue(200, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"UNKNOWN_COLUMNS","info":"Unknown columns: device_name"}]}"#)
         #expect(try await harness.devices().flatMap(\.items).count == 3)
-        #expect(await harness.client.columnFallback == .without(["device_name", "bluetooth_mac_address"]))
-        #expect(Self.asked(harness.stub).last == Self.adapter.filter { $0 != "device_name" && $0 != "bluetooth_mac_address" })
+        #expect(await harness.client.columnFallback == .without(["device_name", "is_supervised"]))
+        #expect(Self.asked(harness.stub).last == Self.adapter.filter { $0 != "device_name" && $0 != "is_supervised" })
         Self.noCodeAsked(harness.stub)
     }
 
@@ -547,7 +549,7 @@ struct MosyleFailureTests {
     /// taking its own refusal as a second one.
     @Test func walksRefusedTogetherShareOneFallback() async throws {
         let harness = try await Harness()
-        harness.stub.lackColumns(["bluetooth_mac_address"])
+        harness.stub.lackColumns(["total_disk"])
         harness.stub.add(devices: Self.devices(60, os: "ios"), os: "ios")
         harness.stub.holdRequests(to: "/v1/devices", fromPage: 1)
         let client = harness.client
@@ -564,7 +566,7 @@ struct MosyleFailureTests {
         harness.stub.release()
         #expect(try await [first, second] == [60, 60])
         #expect(harness.stub.columnRefusals == 2)
-        #expect(await client.columnFallback == .without(["bluetooth_mac_address"]))
+        #expect(await client.columnFallback == .without(["total_disk"]))
     }
 
     /// Two walks refused unnamed at once try the columns once: the second waits for the first's tries, then reads with
@@ -803,7 +805,7 @@ struct MosyleFailureTests {
         #expect(columns.words == "Mosyle refused the device column imei, so it was left out of the request. Then it refused all 31 device "
                 + "columns asked for, by name, once this session's tries were spent; the next read asks for the same 31, as there is "
                 + "nothing smaller to send.")
-        #expect(await harness.client.columnFallback == .without(["imei"]), "what is sent: every column but imei")
+        #expect(await harness.client.columnFallback == .without(["imei"]), "what is sent: the columns asked for first, but imei")
         let before = Self.asked(harness.stub).count
         #expect(try await harness.devices().isEmpty)
         #expect(Self.asked(harness.stub).dropFirst(before).allSatisfy { $0 == asked }, "the same columns, asked again")

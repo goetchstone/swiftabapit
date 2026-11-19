@@ -69,9 +69,19 @@ public enum MosyleRead {
         return request.host == (request.path == "/v1/logsstream" ? .mosyleLogs : .mosyle)
     }
 
-    /// One page of one platform's devices, the adapter's columns only (defect 1: no bypass codes requested).
+    /// The device column Mosyle refused on the live check of 2026-11-19 (Settings > Test, after PR #22). Seen in the app's
+    /// own log: the list for Macs asking it, beside the documented columns, was answered HTTP 400 with status
+    /// `UNKNOWN_COLUMNS` naming no column this app asked for (the trial adding it found it); Mosyle took the other 32.
+    /// Never asked for, never tried. The adapter still maps it (`currentUser`, as `CurrentConsoleManagedUser`, which
+    /// Mosyle's doc lists and Mosyle took, carries the console user): a row that carries it is still read.
+    static let refusedLive = ["currentconsolemanageduser"]
+    /// The columns the device list asks for first: the adapter's, less `refusedLive` (32 of the adapter's 33).
+    static let askedColumns = MosyleAdapter.deviceColumns.filter { !refusedLive.contains($0) }
+
+    /// One page of one platform's devices, the adapter's columns only, less the one Mosyle refused live (defect 1: no
+    /// bypass codes requested).
     public static func devices(os: String, page: Int) -> ReadRequest {
-        devices(os: os, page: page, columns: MosyleAdapter.deviceColumns)
+        devices(os: os, page: page, columns: askedColumns)
     }
 
     /// The same, asking for `columns` (only those the adapter keeps), or with no `specific_columns` at all (nil):
