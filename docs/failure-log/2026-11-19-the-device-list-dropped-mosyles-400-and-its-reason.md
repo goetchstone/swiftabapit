@@ -21,10 +21,13 @@
     `unknown_columns` together with the words of `info`.
   - **The column steps (the operator's decision, 2026-11-19):** a refusal that names columns drops exactly those. A
     refusal that names none asks for the 27 documented columns. Once Mosyle takes those, each of the six is tried alone
-    beside them, and the ones Mosyle takes are kept in memory for the client's life; a try's answer counts only when it
-    reads as the page did. Every column is asked for only when the documented columns themselves are refused without a
-    name, or when Mosyle names every column asked for. A refusal can bring at most seven more requests per client
-    (1 + 6). With none left, a refusal is the error, naming what Mosyle named, which is still kept as refused.
+    beside them, and the ones Mosyle takes are kept in memory for the client's life. The tries start only when the
+    answer to the 27 reads as rows or as the list's end. A try is kept only when its answer reads as rows, as many as that
+    page had, or as the end where the page was the end; any other answer leaves the column untried and the page stands.
+    Every column is asked for only when the documented columns themselves are refused without a name, or when Mosyle
+    names every column asked for. A refusal can bring at most seven more requests per client (1 + 6). With none left, a
+    refusal is the error: columns it names are kept as refused, unless it names every column asked for, when the next
+    read asks for the same ones and says so.
   - **Other errors:** any other 4xx or 5xx of a read carries Mosyle's `status` and `info`, cleaned and cut
     (`MosyleAPIError.answered`); a top-level `status` only when shaped as a code. The log gets only Mosyle's status
     code, never its `info`.

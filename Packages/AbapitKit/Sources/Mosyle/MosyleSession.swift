@@ -216,16 +216,24 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
     /// live check saw only "400" where Mosyle's answer said why.
     indirect case answered(MosyleAPIError, said: String)
     /// The device list refused once this session's tries at other columns were spent: the columns Mosyle named (none when
-    /// it named none), and its `info`.
+    /// it named none this app asked for), and its `info`. A later read asks without the named ones.
     case columnsRefused([String], info: String?)
+    /// The same, Mosyle naming every one of the `count` columns asked for: a later read asks for the same ones, as there is
+    /// nothing smaller to send.
+    case everyAskedColumnRefused(count: Int, info: String?)
 
     public var message: String {
         switch self {
         case .answered(let error, let said): "\(error.message) Mosyle said: \(said)"
         case .columnsRefused(let columns, let info):
-            (columns.isEmpty ? "Mosyle refused a device column without naming it"
+            (columns.isEmpty ? "Mosyle refused a device column without naming one this app asked for"
                 : "Mosyle refused the device column\(columns.count == 1 ? "" : "s") \(columns.joined(separator: ", "))")
                 + " (UNKNOWN_COLUMNS) after this session's tries at other columns were spent."
+                + (columns.isEmpty ? "" : " The next read asks without \(columns.count == 1 ? "it" : "them").")
+                + (info.flatMap { Self.clean($0, limit: 200) }.map { " Mosyle said: \($0)" } ?? "")
+        case .everyAskedColumnRefused(let count, let info):
+            "Mosyle refused all \(count) device columns asked for, by name (UNKNOWN_COLUMNS), after this session's tries at other columns "
+                + "were spent. The next read asks for the same \(count), as there is nothing smaller to send."
                 + (info.flatMap { Self.clean($0, limit: 200) }.map { " Mosyle said: \($0)" } ?? "")
         case .unauthorized:
             "Mosyle refused this organization's credentials, even after a fresh login. If the access token is restricted to "
