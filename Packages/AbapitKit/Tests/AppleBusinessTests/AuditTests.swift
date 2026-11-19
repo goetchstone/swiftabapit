@@ -223,6 +223,8 @@ struct AuditTests {
         #expect(try await refused([start, end, ("cursor", "MDow")]) == "cursor")
         // Apple: "only one type in query is supported". The stub refuses a second type (a 400 is assumed: check live).
         #expect(try await refused([start, end, ("filter[type]", "ROLE_CREATED,ROLE_UPDATED")]) == "filter[type]")
+        #expect(try await refused([start, end, ("filter[actorId]", "A1,A2")]) == "filter[actorId]")
+        #expect(try await refused([start, end, ("filter[subjectId]", "S1,S2")]) == "filter[subjectId]")
         #expect(try await harness.raw("/v1/auditEvents", [start, end, ("filter[type]", "ROLE_CREATED")]).status == 200)
     }
 

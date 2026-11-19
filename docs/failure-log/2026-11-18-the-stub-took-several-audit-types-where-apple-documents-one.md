@@ -10,15 +10,17 @@
   - No screen sent two types (the Activity filter holds one), so nothing was wrong on screen.
 - **Cause:** e1f09eb (Phase 2a, 2026-10-30) read the parameter's type, `[string]`, and not its description. The same
   commit did read the descriptions of `filter[actorId]` and `filter[subjectId]` ("only one actor id in query is
-  supported") and held each to one. The runbook listed several types as a question to check live when the contract had
-  already answered it.
+  supported"), and the client held each to one id; the stub did not refuse a second, which this PR also fixes. The runbook
+  listed several types as a question to check live when the contract had already answered it.
 - **Why not caught:** the contract tests compare each sent value with `allowedValues` after splitting it on commas, so a
   list of allowed types passed. No test read a parameter's description for a limit. The stub was written from the same
   reading as the client, so the two agreed (invariant 5; failure-log 2026-10-16, "the Mosyle stub agreed with the client").
-- **Fix:** branch `fix-audit-one-type`.
+- **Fix:** https://github.com/goetchstone/swiftabapit/pull/20 (branch `audit-one-type`).
   - `AuditQuery` throws `.tooManyTypes` for two different types; the same type given twice is one.
-  - The Activity screen says the refusal in words.
-  - The stub refuses a `filter[type]` that holds a comma with a 400 naming the parameter.
+  - `ActivityModel` has words for the refusal; no screen can trigger it today, because the Activity picker selects one
+    type.
+  - The stub refuses a `filter[type]`, `filter[actorId]` or `filter[subjectId]` that holds a comma with a 400 naming the
+    parameter.
   - The three tests that pinned several types expect the refusal, and the contract test sends each type in a read of its
     own.
 - **Prevention:**

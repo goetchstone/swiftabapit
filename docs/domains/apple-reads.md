@@ -385,6 +385,7 @@ org editor's save).
     (the stub's choice; the client never sends one)?
   - What does Apple answer to several types in `filter[type]`? The contract says "only one type in query is supported";
     the stub answers 400 (assumed), and the client never sends more than one.
+    The stub refuses a second actor id or subject id the same way (400, assumed), from the same sentence in the contract.
   - The shape of an actor's and a subject's id: the client refuses anything but letters, digits, `-`, `_` and `.`.
   - Does the audit log's next link carry the range and filters? The client never follows it.
   - Is a refused include a 400 (what abapit saw) or a 403, with which `code`? Both are handled.

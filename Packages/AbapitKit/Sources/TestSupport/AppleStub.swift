@@ -422,6 +422,11 @@ public final class AppleStub: Transport, Sendable {
         if query["filter[type]"]?.contains(",") == true {
             return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Only one type in query is supported.", parameter: "filter[type]")
         }
+        // The same sentence is in the contract for an actor id and a subject id ("only one actor id in query is supported");
+        // the same assumed 400 (check live).
+        for (name, noun) in [("filter[actorId]", "actor id"), ("filter[subjectId]", "subject id")] where query[name]?.contains(",") == true {
+            return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "Only one \(noun) in query is supported.", parameter: name)
+        }
         let types = query["filter[type]"].map { Set($0.split(separator: ",").map(String.init)) }
         func same(_ attribute: JSONValue?, _ asked: String?) -> Bool {
             asked.map { asked in attribute?.string.map { $0.utf8.elementsEqual(asked.utf8) } ?? false } ?? true
