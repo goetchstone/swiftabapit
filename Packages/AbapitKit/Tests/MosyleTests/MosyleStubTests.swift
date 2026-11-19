@@ -46,6 +46,45 @@ struct MosyleStubTests {
         return root?["response"]?.array?.first?["status"]?.string ?? root?["response"]?["status"]?.string
     }
 
+    /// The entry of the stub's answer to a device list asking for `columns` (a JSON array), which must be a column refusal:
+    /// HTTP 400, as the live list asking 33 columns was answered on 2026-11-19 (its body unseen; the code is assumed).
+    static func refusal(_ stub: MosyleStub, _ jwt: String, _ columns: String) async throws -> JSONValue? {
+        var request = URLRequest(url: URL(string: "https://businessapi.mosyle.com/v1/devices")!)
+        request.httpMethod = "POST"
+        request.setValue("access-token", forHTTPHeaderField: "accessToken")
+        request.setValue(jwt, forHTTPHeaderField: "Authorization")
+        request.httpBody = Data(#"{"operation": "list", "options": {"os": "mac", "specific_columns": \#(columns)}}"#.utf8)
+        let (data, response) = try await stub.send(request, limit: 1 << 20)
+        #expect(response.statusCode == 400)
+        let root = JSONValue.parse(String(decoding: data, as: UTF8.self))
+        #expect(root?["status"] == .string("OK"), "OK at the top on errors too")
+        return root?["response"]?.array?.first
+    }
+
+    /// A refused column is answered as Mosyle's doc shows it, with HTTP 400 (both assumed: the doc gives no code, and the
+    /// live 400's body was unseen): the names under `unknown_columns` (empty when the stub is told not to name them, as in
+    /// the doc's own example), `status` `UNKNOWN_COLUMNS` and an `info` that names none. Any of the columns the doc doesn't
+    /// list can be refused, and only when a test says so.
+    @Test func aRefusedColumnIsAnsweredAsMosylesDocShows() async throws {
+        let stub = MosyleStub()
+        stub.register(.init(accessToken: "access-token", email: "admin@example.com", password: "pw"))
+        let jwt = try #require(try await Self.login(stub).1)
+        let named = try #require(try await Self.refusal(stub, jwt, #"["serial_number", "no_such_column", "imei"]"#))
+        #expect(named == .object(["unknown_columns": .array([.string("no_such_column")]), "status": .string("UNKNOWN_COLUMNS"),
+                                  "info": .string("Unknown columns")]))
+        stub.lackColumns(["imei", "date_enroll"], named: false)
+        let unnamed = try #require(try await Self.refusal(stub, jwt, #"["serial_number", "imei"]"#))
+        #expect(unnamed == .object(["unknown_columns": .array([]), "status": .string("UNKNOWN_COLUMNS"), "info": .string("Unknown columns")]))
+        stub.lackColumns(["imei", "date_enroll"])
+        let listed = try #require(try await Self.refusal(stub, jwt, #"["date_enroll", "serial_number", "imei"]"#))
+        #expect(listed["unknown_columns"] == .array([.string("date_enroll"), .string("imei")]), "every unknown column asked for, as asked")
+        #expect(stub.columnRefusals == 3)
+        #expect(MosyleStub.undocumentedColumns.isSubset(of: MosyleStub.deviceColumns) && MosyleStub.undocumentedColumns.count == 7)
+        #expect(try await Self.status(stub, path: "/v1/devices", headers: ["accessToken": "access-token", "Authorization": jwt],
+                                      body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": ["date_checkin"]}}"#) == "DEVICES_NOTFOUND",
+                "the control: one the test didn't name is taken")
+    }
+
     @Test func aReadNeedsTheAccessTokenAndALiveJWTOfThisHost() async throws {
         let now = Now()
         let stub = MosyleStub(now: { now.value })
@@ -101,8 +140,7 @@ struct MosyleStubTests {
         #expect(try await Self.status(stub, path: "/v1/devices", headers: auth, body: #"{"operation": "list", "options": {"os": ""}}"#) == "MISSING_DATA")
         #expect(try await Self.status(stub, path: "/v1/devicegroups", headers: auth,
                                       body: #"{"operation": "list_devicegroup", "options": {"os": "", "page": 1}}"#) == "MISSING_DATA")
-        #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
-                                      body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": [1]}}"#) == "UNKNOWN_COLUMNS")
+        #expect(try await Self.refusal(stub, jwt, #"[1]"#)?["status"] == .string("UNKNOWN_COLUMNS"), "a column name that isn't a string")
         #expect(stub.columnRefusals == 1)
         #expect(try await Self.status(stub, path: "/v1/devices", headers: auth,
                                       body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": ["serial_number"]}}"#) == "DEVICES_NOTFOUND",
@@ -190,6 +228,6 @@ struct MosyleStubTests {
         let jwt = try #require(try await Self.login(stub).1)
         let (status, _) = try await Self.post(stub, path: "/v1/devices", headers: ["accessToken": "access-token", "Authorization": jwt],
                                               body: #"{"operation": "list", "options": {"os": "mac", "specific_columns": ["no_such_column"]}}"#)
-        #expect(status == 200 && stub.columnRefusals == 1)
+        #expect(status == 400 && stub.columnRefusals == 1)
     }
 }

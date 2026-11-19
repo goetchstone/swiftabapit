@@ -67,6 +67,32 @@ struct MosyleOrgTests {
         try await #require(world.orgs.mosyleClient).ping()
     }
 
+    /// Settings' Test says which device columns Mosyle refused and which it took, and Mosyle's own words when it refuses
+    /// the read (the 2026-11-19 live check: Test said only "400"). Each Test is a fresh client, so each learns afresh.
+    @Test func aTestSaysWhichColumnsMosyleRefusedAndTook() async throws {
+        let world = try await World.make(mosyle: true)
+        guard let profile = world.orgs.store["m"] else {
+            Issue.record("no Mosyle org m")
+            return
+        }
+        func test() async throws -> String {
+            let client = try #require(world.orgs.mosyleClient(for: profile))
+            return await OrgsModel.testMosyle(client)
+        }
+        let connected = "Connected: the token, the admin account and the network work. "
+        #expect(try await test() == connected + "Mosyle took all 33 device columns asked for.")
+        world.mosyleStub.lackColumns(["imei", "meid"], named: false)
+        #expect(try await test() == connected
+                + "Mosyle refused the device columns imei and meid, so they were left out of the request. It took the other 31, among them "
+                + "enrollment_type, currentconsolemanageduser, date_enroll and date_checkin, which Mosyle's doc doesn't list.")
+        world.mosyleStub.queue(400, for: "/v1/devices", body: #"{"status":"OK","response":[{"status":"BAD_REQUEST","info":"Page size too large"}]}"#)
+        #expect(try await test() == "Mosyle answered HTTP 400, which this app doesn't expect. Mosyle said: BAD_REQUEST: Page size too large")
+        // A failure past a refusal says both: here every column refused unnamed, then the read itself.
+        for _ in 0..<3 { world.mosyleStub.failEnvelope("UNKNOWN_COLUMNS", for: "/v1/devices") }
+        #expect(try await test() == "Mosyle answered UNKNOWN_COLUMNS: stubbed\nMosyle refused the requested device columns, so every column was asked "
+                + "for; only the fields this app keeps are shown.")
+    }
+
     /// Two Adds of one name get two ids, and an Add never takes an id the Keychain still holds items under.
     @Test func anAddNeverTakesAnIdInUse() async throws {
         let world = try await World.make(mosyle: true)
