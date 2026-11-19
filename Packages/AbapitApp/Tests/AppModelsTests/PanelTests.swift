@@ -112,7 +112,7 @@ struct PanelTests {
             // A stamp ahead of this Mac's clock (skew) is today, never "-1 days ago" (verifier round 2, mutant V-todayFuture).
             service("ahead", stamp(-2 * 86_400)),
         ]
-        let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now)) })
+        let cells = Dictionary(uniqueKeysWithValues: services.map { ($0.id, DevicesModel.connection(of: $0, now: now, lastConnectedSent: true)) })
         #expect(cells["unreadable"] == ServiceConnection(text: #"Unreadable date: "yesterday""#, isQuiet: true, spoken: #"Unreadable date: "yesterday""#))
         #expect(cells["deleted"] == ServiceConnection(text: "668 days ago", isQuiet: false, spoken: "668 days ago"))
         #expect(cells["absent"] == ServiceConnection(text: "Never connected", isQuiet: true, spoken: "Never connected"))
@@ -193,7 +193,7 @@ struct PanelTests {
             #expect(cell == ServiceConnection(text: "Not sent by Apple", isQuiet: false, spoken: "Apple did not send when this service last connected"))
         }
         // The Overview's card: no service judged quiet, and the words say why.
-        #expect(world.dashboard.quiet(now: now)?.isEmpty == true)
+        #expect(world.dashboard.quiet(now: now) == nil, "nothing can be judged, which is not \"none is quiet\"")
         let words = try #require(world.dashboard.quietWords(now: now))
         #expect(words.contains("Apple didn't send when the services last connected") && words.contains("can't be judged"), "\(words)")
         #expect(!words.contains("Every service has connected"))
@@ -213,18 +213,37 @@ struct PanelTests {
         #expect(world.dashboard.quiet()?.map(\.service.id) == ["s1"])
     }
 
-    /// A page of services that read before a later page failed left a note naming only what those pages lacked.
-    @Test func aFailedReadKeepsNoPartialNote() async throws {
+    /// A later page fails after the services of the first were read and shown (a partial list, as the banner says): what
+    /// Apple left out of those stays true of them, so they still read "Not sent by Apple", none is quiet, and the note says
+    /// it covers the services read, not every service.
+    @Test func aFailedReadKeepsWhatTheServicesStillShownLack() async throws {
         let world = try await World.make(devices: ["a": 1, "b": 0])
         let stub = world.stubs["a"]!
         stub.add(services: (0...AppleRead.pageLimit).map { World.service("s\($0)", name: "Service \($0)") })
         stub.refuseServiceFields()
-        stub.queue(500, for: "/v1/mdmServers?cursor=")
         for _ in 0..<6 { stub.queue(500, for: "/v1/mdmServers?cursor=") }
         world.devices.load()
         await world.settled(2)
         if case .failed = world.devices.servicesState {} else { Issue.record("services: \(world.devices.servicesState)") }
-        #expect(world.devices.servicesFieldsNote == nil && world.devices.servicesAbsent.isEmpty)
+        #expect(world.devices.services.count == AppleRead.pageLimit && world.devices.servicesPartialCount == AppleRead.pageLimit)
+        #expect(world.devices.lastConnectedNotSent && world.devices.statusNotSent)
+        let note = try #require(world.devices.servicesFieldsNote)
+        #expect(note.contains("Absent from the \(AppleRead.pageLimit) services read:") && !note.contains("every service"), "\(note)")
+        for service in world.devices.services.prefix(3) {
+            #expect(DevicesModel.connection(of: service, now: Date(), lastConnectedSent: !world.devices.lastConnectedNotSent).text == "Not sent by Apple")
+        }
+        #expect(world.dashboard.quiet() == nil)
+    }
+
+    /// Nobody quiet and no `status`: two sentences, the second saying deleted services are counted.
+    @Test func noStatusAndNobodyQuietIsSaidInTwoSentences() async throws {
+        let world = try await World.make(devices: ["a": 1, "b": 0])
+        let stub = world.stubs["a"]!
+        stub.queue(400, for: "/v1/mdmServers", body: #"{"errors":[{"status":"400","code":"PARAMETER_ERROR.INVALID","source":{"parameter":"fields[mdmServers]"}}]}"#)
+        stub.queue(200, for: "/v1/mdmServers", body: #"{"data":[{"type":"mdmServers","id":"s1","attributes":{"serverName":"New","serverType":"MDM","lastConnectedDateTime":"2999-01-01T00:00:00Z"}}]}"#)
+        world.devices.load()
+        await world.settled(2)
+        #expect(world.dashboard.quietWords() == "Every service has connected in the last 30 days. Apple didn't send the services' status, so deleted services can't be told apart and are counted.")
     }
 
     /// Without the refusal there is no note.

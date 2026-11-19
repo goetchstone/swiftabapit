@@ -129,7 +129,7 @@ public final class DevicesModel {
     /// (the last page's note, which covers every service); nil otherwise.
     public private(set) var servicesFieldsNote: String?
     /// The attributes asked for that no service came back with, when the field list was refused (`Page.absent`). Empty
-    /// otherwise, and after a failed read: what a later page might have had isn't known.
+    /// otherwise. After a failed read it is what the services read lack (they stay on screen).
     public private(set) var servicesAbsent: Set<String> = []
 
     /// Apple sent no `lastConnectedDateTime` for any service (default fields): "never connected" can't be said of one.
@@ -229,7 +229,7 @@ public final class DevicesModel {
 
     /// `service`'s Last connected cell at `now`: `QuietServices`' rule over `QuietServices.defaultDays`, so the Services
     /// screen flags exactly what the Overview's quiet card lists at its default.
-    public static func connection(of service: MDMService, now: Date = Date(), lastConnectedSent: Bool = true) -> ServiceConnection {
+    public static func connection(of service: MDMService, now: Date = Date(), lastConnectedSent: Bool) -> ServiceConnection {
         // Apple's default fields have no `lastConnectedDateTime`: not "never connected", and not quiet.
         guard lastConnectedSent else { return ServiceConnection(text: "Not sent by Apple", isQuiet: false, spoken: "Apple did not send when this service last connected") }
         let last = QuietServices.lastConnected(service)
@@ -374,9 +374,11 @@ public final class DevicesModel {
         } catch {
             guard current(token) else { return }
             servicesState = LoadState(after: error)
-            // A note from the pages read before the failure would name only what those pages lacked.
-            servicesFieldsNote = nil
-            servicesAbsent = []
+            // The services read stay on screen, and what Apple left out of them stays true of them: kept, worded for the
+            // services read, not for every service (a later page might have had what these lack).
+            if servicesFieldsNote != nil {
+                servicesFieldsNote = AppleClient.servicesFieldNote(absent: AppleRead.serviceFields.filter { servicesAbsent.contains($0) }, read: list.count)
+            }
             assignments = .unreadable
             rows = rows.map { DeviceRow($0.device, assignment: .unknown) }
             unknownNote = servicesState == .forbidden

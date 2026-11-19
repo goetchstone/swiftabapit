@@ -131,12 +131,13 @@ public final class DashboardModel {
     }
 
     /// The services not connected in `quietDays` at `now`, by Reports' rule (`QuietServices`: deleted ones skipped, never
-    /// connected and unreadable first, then the oldest); nil unless the services were read whole, so "every service has
+    /// connected and unreadable first, then the oldest); nil unless the services were read whole and Apple sent when they last connected, so "every service has
     /// connected" is never said of a list nobody read.
     public func quiet(now: Date = Date()) -> [QuietServices.Row]? {
         guard devices.servicesUnread == nil else { return nil }
-        // Apple's default fields have no `lastConnectedDateTime`: nobody can be judged quiet (`quietWords` says so).
-        guard !devices.lastConnectedNotSent else { return [] }
+        // Apple's default fields have no `lastConnectedDateTime`: nobody can be judged quiet, which is not "none is quiet"
+        // (`quietWords` says so).
+        guard !devices.lastConnectedNotSent else { return nil }
         return QuietServices(devices.services, now: now, days: quietDays).rows
     }
 
@@ -149,7 +150,7 @@ public final class DashboardModel {
         // Without `status` a deleted service is counted: said, never silently.
         let deleted = devices.statusNotSent ? " Apple didn't send the services' status, so deleted services can't be told apart and are counted." : ""
         if quiet(now: now)?.isEmpty == true {
-            return "Every service has connected in the last \(quietDays.formatted()) days," + (devices.statusNotSent ? "" : " deleted ones aside.") + deleted
+            return "Every service has connected in the last \(quietDays.formatted()) days" + (devices.statusNotSent ? "." : ", deleted ones aside.") + deleted
         }
         return deleted.isEmpty ? nil : String(deleted.dropFirst())
     }

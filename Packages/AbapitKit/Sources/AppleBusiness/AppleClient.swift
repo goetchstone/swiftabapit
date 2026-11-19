@@ -36,15 +36,29 @@ public struct Page<Item: Sendable>: Sendable {
 /// identifier or a name.
 public struct FieldListRefusal: Sendable, Equatable {
     public let named: [String]
+    /// Apple's `detail` was missing or empty.
+    public let gaveNoReason: Bool
 
-    init(named: [String]) { self.named = named }
+    init(named: [String], gaveNoReason: Bool = false) {
+        self.named = named
+        self.gaveNoReason = gaveNoReason
+    }
 
+    /// A field is named when it is a whole identifier of the `detail` (bounded by characters that aren't letters, digits or
+    /// `_`), whatever its case: `xstatus` and `statuses` name nothing. An English word that is also a field's name
+    /// (`status`) counts: the line says what the detail names, and Apple's reason may name the refused field.
     static func naming(_ detail: String?) -> FieldListRefusal {
-        FieldListRefusal(named: AppleRead.serviceFields.filter { detail?.contains($0) == true })
+        let words = Set((detail ?? "").lowercased().split { !($0.isLetter || $0.isNumber || $0 == "_") }.map(String.init))
+        return FieldListRefusal(named: AppleRead.serviceFields.filter { words.contains($0.lowercased()) },
+                                gaveNoReason: words.isEmpty)
     }
 
     /// The acceptance pass's words for it.
-    var said: String { named.isEmpty ? "Apple's reason named none of the fields asked for" : "Apple named: \(named.joined(separator: ", "))" }
+    var said: String {
+        if gaveNoReason { return "Apple gave no reason" }
+        if named.count == AppleRead.serviceFields.count { return "Apple's reason named every field asked for" }
+        return named.isEmpty ? "Apple's reason named none of the fields asked for" : "Apple named: \(named.joined(separator: ", "))"
+    }
 }
 
 /// What a read probe found for one section: abapit's `probe_capabilities` rows.
@@ -212,10 +226,15 @@ public actor AppleClient {
         return false
     }
 
-    static func servicesFieldNote(absent: [String]) -> String {
+    /// The note of a read with default fields. `read` is how many services the attributes were absent from when that is
+    /// fewer than all (a read that failed part-way), else "every service".
+    public static func servicesFieldNote(absent: [String], read: Int? = nil) -> String {
         "Apple refused the field list (fields[mdmServers]), so the services were read with Apple's default fields"
-            + (absent.isEmpty ? "." : ". Absent from every service: \(absent.joined(separator: ", ")).")
+            + (absent.isEmpty ? "." : ". Absent from \(read.map { "the \($0) services read" } ?? "every service"): \(absent.joined(separator: ", ")).")
     }
+
+    /// What the acceptance pass says when the read without `fields` failed before any page.
+    static let servicesRefusedThenFailed = "Apple refused the field list (fields[mdmServers]); the read without it then failed"
 
     public func service(_ id: String) async throws -> MDMService {
         guard let read = AppleRead.service(scope, id: id) else { throw AppleAPIError.notFound }

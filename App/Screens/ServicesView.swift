@@ -46,8 +46,8 @@ struct ServicesView: View {
 /// A service's last connection in the model's words (Phase 2b review L4): a flag is said in words beside its colour.
 struct LastConnected: View {
     let service: MDMService
-    /// False when Apple's default fields left `lastConnectedDateTime` out.
-    var sent = true
+    /// False when Apple's default fields left `lastConnectedDateTime` out. No default: a call that forgets it is a compile error.
+    let sent: Bool
 
     var body: some View {
         let connection = DevicesModel.connection(of: service, now: Date(), lastConnectedSent: sent)

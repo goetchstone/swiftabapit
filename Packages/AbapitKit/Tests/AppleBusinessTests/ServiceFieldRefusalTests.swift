@@ -142,7 +142,8 @@ struct ServiceFieldRefusalTests {
         #expect(report.text.split(separator: "\n").count == report.lines.count, "a line was forged: \(report.text)")
     }
 
-    /// A refusal followed by a retry that fails: the line is the failure, and still says what Apple refused.
+    /// A refusal followed by a retry that fails before any page: the line is the failure, and says what is true: Apple
+    /// refused the list and the read without it then failed. It doesn't say the services were read.
     @Test func aRetryThatFailsKeepsTheRefusalOnTheLine() async throws {
         let harness = try await Self.harness(refusing: false)
         harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: "status", parameter: "fields[mdmServers]"))
@@ -150,7 +151,55 @@ struct ServiceFieldRefusalTests {
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
         #expect(line.status == .error("error 500"), "\(report.text)")
-        #expect(line.note?.contains(Self.said) == true && line.note?.hasSuffix(" · Apple named: status") == true, "\(line.note ?? "nil")")
+        #expect(line.note == "Apple refused the field list (fields[mdmServers]); the read without it then failed · Apple named: status", "\(line.note ?? "nil")")
+    }
+
+    /// A walk that fails after pages were read says what is absent from the services read, not from every service.
+    @Test func aWalkThatFailsLaterSaysWhatTheServicesReadLack() async throws {
+        let harness = try await Self.harness(refusing: true, services: AppleRead.pageLimit + 1)
+        for _ in 0..<6 { harness.stub.queue(500, for: "/v1/mdmServers?cursor=") }
+        let report = await harness.client.acceptancePass()
+        let line = try #require(report.lines.first { $0.resource == "mdmServers" })
+        #expect(line.status == .error("error 500") && line.count == AppleRead.pageLimit, "\(report.text)")
+        let note = try #require(line.note)
+        #expect(note.contains("Absent from the \(AppleRead.pageLimit) services read: status,") && !note.contains("every service"), "\(note)")
+        #expect(note.hasSuffix(" · Apple's reason named none of the fields asked for"), "\(note)")
+    }
+
+    /// Which fields Apple's reason names: whole identifiers, whatever the case; none, all, or no reason said so.
+    @Test(arguments: [
+        ("Check the statuses of your request", " · Apple's reason named none of the fields asked for"),
+        ("xstatus and statuses and deviceCounts", " · Apple's reason named none of the fields asked for"),
+        ("Check the status of your request", " · Apple named: status"),
+        ("serverName isn't allowed", " · Apple named: serverName"),
+        ("SERVERNAME, Status; (lastConnectedIp)", " · Apple named: serverName, status, lastConnectedIp"),
+        ("serverName,serverType,status,deviceCount,lastConnectedDateTime,lastConnectedIp,defaultProductFamilies,enableMdmDisownFlag,createdDateTime,updatedDateTime",
+         " · Apple's reason named every field asked for"),
+        ("", " · Apple gave no reason"),
+        ("  \n", " · Apple gave no reason"),
+    ])
+    func appleNamedIsWholeFieldNames(detail: String, said: String) async throws {
+        let harness = try await Self.harness(refusing: false)
+        harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: detail, parameter: "fields[mdmServers]"))
+        let line = try #require(await harness.client.acceptancePass().lines.first { $0.resource == "mdmServers" })
+        #expect(line.note?.hasSuffix(said) == true, "\(line.note ?? "nil")")
+    }
+
+    /// No `detail` at all is no reason, too.
+    @Test func aRefusalWithoutADetailGaveNoReason() async throws {
+        let harness = try await Self.harness(refusing: false)
+        harness.stub.queue(400, for: "/v1/mdmServers", body: #"{"errors":[{"status":"400","code":"PARAMETER_ERROR.INVALID","source":{"parameter":"fields[mdmServers]"}}]}"#)
+        let line = try #require(await harness.client.acceptancePass().lines.first { $0.resource == "mdmServers" })
+        #expect(line.note?.hasSuffix(" · Apple gave no reason") == true, "\(line.note ?? "nil")")
+    }
+
+    /// The stub answers a read without `fields[mdmServers]` as Apple's example does, whether or not the switch is on.
+    @Test func aReadWithoutFieldsAnswersTheExamplesFourAttributes() async throws {
+        let harness = try await Self.harness(refusing: false)
+        harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: "x", parameter: "fields[mdmServers]"))
+        let pages = try await Self.read(harness.client)
+        #expect(pages.flatMap(\.items).allSatisfy { Set($0.attributes.keys) == ["serverName", "serverType", "createdDateTime", "updatedDateTime"] })
+        #expect(pages.last?.absent.contains("status") == true)
     }
 
     /// A refusal on a later page isn't the field list refused on the first read: the walk has yielded, so it is an error, not a

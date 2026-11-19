@@ -303,10 +303,10 @@ public final class AppleStub: Transport, Sendable {
                                   parameter: "fields[mdmServers]")
             }
             var services = state.withLock { $0.services }
-            if state.withLock({ $0.refusesServiceFields }) {
-                // Apple's own example of this list, sent without `fields` (Tests/Fixtures/docc/business/get-mdm-servers.response.json),
-                // has only these four attributes per service: no status, no lastConnectedDateTime, no deviceCount. A read without
-                // `fields` answers the same, so a screen can't count on the others (failure-log 2026-11-19).
+            if query["fields[mdmServers]"] == nil {
+                // A read without `fields` answers what Apple's own example of this list has (Tests/Fixtures/docc/business/get-mdm-servers.response.json):
+                // four attributes per service, no status, no lastConnectedDateTime, no deviceCount, so a screen can't count on the
+                // others (failure-log 2026-11-19). Whatever the switch: Apple answers a read without `fields` the same way.
                 let example: Set = ["serverName", "serverType", "createdDateTime", "updatedDateTime"]
                 services = services.map { service in
                     var kept = JSONObject()

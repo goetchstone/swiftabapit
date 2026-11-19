@@ -99,11 +99,15 @@ extension AppleClient {
         lines.append(deviceList)
         var services: [MDMService] = []
         let serviceList = await Self.check("mdmServers") { found in
-            var fieldsNote: String?
-            // The refusal said, on a line that failed too: a retry that fails keeps what Apple refused (invariant 8).
-            func refusal() async -> String? {
+            var fieldsNote: String?, fieldsAbsent: [String] = []
+            // The refusal said, on a line that failed too (invariant 8), in words true of what was read: after pages, what
+            // was absent from the services read before the failure; before any page, that the read without the list failed.
+            func refusal(failed: Bool, read: Int) async -> String? {
                 guard let refused = await self.servicesFieldRefusal else { return nil }
-                return (fieldsNote ?? Self.servicesFieldNote(absent: [])) + " · " + refused.said
+                let said = " · " + refused.said
+                guard failed else { return (fieldsNote ?? Self.servicesFieldNote(absent: [])) + said }
+                guard fieldsNote != nil else { return Self.servicesRefusedThenFailed + said }
+                return Self.servicesFieldNote(absent: fieldsAbsent, read: read) + said
             }
             do {
                 for try await page in self.services() {
@@ -111,13 +115,14 @@ extension AppleClient {
                     found.count = services.count
                     found.cut(page)
                     fieldsNote = page.note
+                    fieldsAbsent = AppleRead.serviceFields.filter { page.absent.contains($0) }
                 }
             } catch {
-                found.keptOnFailure = await refusal()
+                found.keptOnFailure = await refusal(failed: true, read: services.count)
                 throw error
             }
-            // Apple refused the field list: the note, and which fields its reason named, so the next live run knows.
-            found.note = await refusal()
+            // Apple refused the field list: the note, and which fields its reason named (Apple's reason may name the refused one).
+            found.note = await refusal(failed: false, read: services.count)
             found.keys = Set(services.flatMap(\.unreadAttributes))
             found.misread(services)
             for service in services {

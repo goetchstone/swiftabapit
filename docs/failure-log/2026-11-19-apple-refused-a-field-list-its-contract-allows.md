@@ -23,15 +23,19 @@
     `lastConnectedDateTime`, so every service read as "Never connected" and quiet, with no reason, and deleted services were
     no longer skipped. Now a service whose `lastConnectedDateTime` Apple didn't send reads "Not sent by Apple", isn't quiet,
     and the Overview's card says quiet services can't be judged; without `status` the card says deleted services are counted.
-    A failed read keeps no partial note.
+    A read that fails after some pages keeps what those services lack (they stay on screen), worded "absent from the N
+    services read", on the screen and on the pass line; a retry that fails before any page says so, not that the services
+    were read. Apple's reason is matched by whole field names, not substrings, and a missing or empty `detail` is said.
 - **Prevention:**
   - `AppleStub.refuseServiceFields()`, off by default (the stub otherwise follows the contract). With it on, the read
     without `fields` answers only the example's four attributes (`Tests/Fixtures/docc/business/get-mdm-servers.response.json`),
-    so the stub no longer serves a default read fuller than Apple's example, which is how the false alarm would have passed.
+    whenever the request has no `fields[mdmServers]`, switch or not, so the stub no longer serves a default read fuller than
+    Apple's example, which is how the false alarm would have passed.
     The blueprint include refusal now answers `PARAMETER_ERROR.ILLEGAL`, as it did live.
   - `ServiceFieldRefusalTests` (the retry, the memory, paging, a refusal on a later page being an error, other errors left
-    alone, the pass line, no `detail` in the pass, the failing retry) and `PanelTests` (the false "Never connected", deleted
-    services, the partial note).
+    alone, the pass line, no `detail` in the pass, the failing retry, a walk failing after pages, whole-name matching) and
+    `PanelTests` (the false "Never connected", deleted services, the note and absent set kept for the services shown after a
+    failed page). `connection(of:)` and `LastConnected` have no default for `sent`, so a view that forgets it doesn't compile.
   - Still only a stub: the live answer to the read without `fields` is unverified until the next live run, and the refused
     field stays unknown until that run's `Apple named:` text is read. The apple-reads runbook records this, the blueprint
     `include` refusal and the dropped connections seen the same day.
