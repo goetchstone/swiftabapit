@@ -138,6 +138,38 @@ are below.
   full-width U+FF1D or `"\u{2212}1"` as a formula wasn't tested; the wider guard costs a `'` on such a cell
   either way. A leading combining mark isn't skipped: it shows on its own, and no trimmer drops it.
 
+## Fleet reports (Phase 3, built on branch `phase-3-new-reports`)
+
+Pure, deterministic reports in `Reports/`: no UI, no store, no Apple reads of their own. They take what a screen or a
+sweep already read, and each says how much of it it was given. No abapit counterpart, so no golden: the tests hold
+them. Files: `ReportRead.swift` (`ListRead`, `DeviceRead`), `ActivationLockReport`, `MigrationReport`, `ServiceHealth`,
+`WarrantyReport`, `ReportCatalog`, `ExportFleet` (the CSV columns and rows).
+
+- **The input says what was read** (invariant 8). `ListRead` is `.whole`, `.partly("showing 500 of at least 800")` or
+  `.notRead("why")`, and the report's first line repeats it. A per-device read is `DeviceRead.read(value)` or
+  `.notRead(why)`; a device not read is never an answer about it.
+- **Activation Lock**: groups `lock:USER` ("blocks redeploy and release"), `lock:MDM`, `lock:<raw>` for any other type
+  (shown raw), `unlocked`, `unclear` (read, but no `isLocked`), `not-read`. Not read is counted apart and said "not counted as
+  unlocked". A `USER` type on a device that isn't locked doesn't block.
+- **MDM migration**: groups `status:REQUESTED|STARTED|SUCCESS|FAILED`, `status:<raw>`, `no-status` (some migration data, no
+  status), `no-data` (none sent); `past-due` spans groups. Days are whole days (10 days ahead is 10; a second short is 9);
+  past due is before now and not `SUCCESS`; an unreadable deadline is shown raw and is never past due.
+- **Service health**: `healthy` (ACTIVE and not quiet by `QuietServices`' rule), `quiet`, `inactive`, `deleted` (never
+  healthy), `other-status` (raw), `cannot-judge`. Services read with default fields: `notSent` lists the attributes Apple sent
+  for no service, and a service that needs one is `cannot-judge`, never "never connected". The device count is the
+  relationship's (`exactly` or `atLeast`), else Apple's `deviceCount`, else "not read".
+- **Out of warranty** keeps three things apart: `no-active-coverage` (records read, none ACTIVE), `no-record` (the read was
+  empty: may mean no AppleCare, not expired; apple-reads, "Answered live 2026-11-20"), and `estimated-past-limit` (an
+  estimate: order date plus one calendar year, the assumption stated in `WarrantyReport.assumption`, made only for devices
+  without active coverage). `not-read` gets no estimate and is never "out of warranty". There is no single out-of-warranty number.
+- **`ReportCatalog`** is the list a later Siri step maps spoken requests onto (plan §5): id, title, the filter tokens, the inputs
+  and the CSV columns. `problems(_:tokens:)` refuses a token not listed, so the model picks and never computes.
+- **CSV**: `ExportPolicy.{activationLockReport,migrationReport,serviceHealth,warrantyReport}`. Each cell is computed; no source
+  attribute is copied beyond the named identifying ones, so a bypass code or nested secret can't leave; a test per report
+  plants canaries. The service export never carries `lastConnectedIp`.
+- **Not decided here**: whether Apple lists the standard limited warranty as a coverage (a live check); the estimate stays an
+  estimate until then.
+
 ## Testing / live-verification status
 
 - Goldens: `csv.json` (88 cases, 43 listed deviations: containers as JSON, and 6 for the wider guard; and

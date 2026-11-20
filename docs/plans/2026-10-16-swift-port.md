@@ -1291,7 +1291,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** not started.
+**Status:** not started; new reports built on branch `phase-3-new-reports` (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI yet).
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.
