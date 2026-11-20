@@ -319,39 +319,36 @@ public actor AppleClient {
         isBusiness ? pages(AppleRead.blueprints()).map(Blueprint.init) : Self.failed(.notInScope(.blueprints))
     }
 
-    /// One blueprint, with the members of `include` (abapit's `blueprint`). Apple refuses the whole read when the role
-    /// can't read one of the included relationships (abapit saw a 403 on users and user groups turn into a 400): on a
-    /// 400 or a 403, and only when something was included, it is read once more without the include, and the answer
-    /// says so (`Members.refused`, invariant 8), never as if the blueprint had no members. Any other failure is thrown,
-    /// and so is a failure of the second read.
-    public func blueprint(_ id: String, include: Set<Blueprint.Relationship> = []) async throws -> BlueprintRead {
+    /// One blueprint with its members, read one relationship at a time: the blueprint without `include` (Apple's live server
+    /// refused the include of all six on 2026-11-19 and again on 2026-11-20: 400 `PARAMETER_ERROR.ILLEGAL include`), then each
+    /// of the six relationships' own list (`blueprints/{id}/relationships/<name>`, every page, which Apple served), so no
+    /// request Apple is known to refuse is sent first. Members come as ids only: nothing is included, so none is named.
+    /// A relationship that comes back cut by the page cap says so (`Blueprint.Related.isTruncated`). A relationship Apple
+    /// refuses (a 400 or a 403: a role that can't read users) makes the answer `.refused`, never a count of the others as if
+    /// they were the blueprint's members; any other failure is thrown.
+    public func blueprintWithMembers(_ id: String) async throws -> BlueprintRead {
         try businessOnly(.blueprints)
-        guard let read = AppleRead.blueprint(id: id, include: include) else { throw AppleAPIError.notFound }
-        var document: Document
-        var refused: AppleAPIError?
-        do {
-            document = try await documentOf(read)
-        } catch let error as AppleAPIError where !include.isEmpty && Self.refusesInclude(error) {
-            guard let bare = AppleRead.blueprint(id: id) else { throw AppleAPIError.notFound }
-            document = try await documentOf(bare)
-            refused = error
-        }
-        let blueprint = try Blueprint(resource: Self.resource(of: document, read.template))
-        if let refused { return BlueprintRead(blueprint: blueprint, members: .refused(refused)) }
+        guard let read = AppleRead.blueprint(id: id) else { throw AppleAPIError.notFound }
+        let blueprint = try Blueprint(resource: Self.resource(of: try await documentOf(read), read.template))
         var related: [Blueprint.Relationship: Blueprint.Related] = [:]
-        for relationship in include {
+        for relationship in Blueprint.Relationship.allCases {
+            var linkages: [Linkage] = []
+            var cut = false
             do {
-                related[relationship] = try blueprint.related(relationship)
-            } catch {
-                throw AppleAPIError.malformed("the blueprint's \(relationship.rawValue)")
+                for try await page in blueprintMemberIDs(id, relationship) {
+                    linkages += page.items.map { Linkage(type: relationship.resourceType, id: $0) }
+                    cut = page.truncated || (page.total.map { $0 > linkages.count } ?? false)
+                }
+            } catch let error as AppleAPIError where Self.refusesMembersRead(error) {
+                return BlueprintRead(blueprint: blueprint, members: .refused(error))
             }
+            related[relationship] = Blueprint.Related(linkages: linkages, isTruncated: cut)
         }
-        // A profile Apple includes with a configuration is withheld as `Configuration` withholds it (Phase 2a review M2).
-        return BlueprintRead(blueprint: blueprint, members: .read(related: related, included: document.included.map(Configuration.withholdingProfile)))
+        return BlueprintRead(blueprint: blueprint, members: .read(related: related))
     }
 
-    /// Apple's answer to an include it won't serve: a 400 (what abapit saw) or a 403. Nothing else is retried.
-    static func refusesInclude(_ error: AppleAPIError) -> Bool {
+    /// Apple's answer to a members read it won't serve: a 400 or a 403 (a role that can't read users). Nothing else is said as a refusal.
+    static func refusesMembersRead(_ error: AppleAPIError) -> Bool {
         switch error {
         case .badRequest, .forbidden: true
         default: false
@@ -632,22 +629,20 @@ public actor AppleClient {
     }
 }
 
-/// One blueprint as `AppleClient.blueprint(_:include:)` read it.
+/// One blueprint as `AppleClient.blueprintWithMembers(_:)` read it.
 public struct BlueprintRead: Sendable {
     public let blueprint: Blueprint
-    /// What was read of its members. Only `.read` holds any, so a count needs that case: a refused include once left an
+    /// What was read of its members. Only `.read` holds any, so a count needs that case: a refusal once left an
     /// empty `related` beside a separate flag, and `related[.users]?.linkages.count ?? 0` read "no members" (Phase 2a
     /// review L5; RULE-FEEDBACK 2026-10-17: the type, not a reviewer, refuses the zero).
     public let members: Members
 
     public enum Members: Sendable, Equatable {
-        /// The include was served, or nothing was asked. `related` has each included relationship Apple listed, with its
-        /// linkages and whether the include's limit cut it; one Apple sent links for only is absent, which says nothing
-        /// of its members. `included` is the resources Apple included, in its order, a configuration's profile withheld
-        /// (`Configuration.withholdingProfile`).
-        case read(related: [Blueprint.Relationship: Blueprint.Related], included: [Resource])
-        /// Apple refused the include (a 400 or a 403) and the blueprint was read again without it: its members weren't
-        /// read, and the screen says so (invariant 8), with "your role can't read this" for a 403.
+        /// Each of the six relationships' list was read: its linkages (ids only, nothing is included to name them) and whether
+        /// the page cap cut it.
+        case read(related: [Blueprint.Relationship: Blueprint.Related])
+        /// Apple refused one relationship's list (a 400 or a 403): no member of any is shown or counted, and the screen
+        /// says so (invariant 8), with "your role can't read this" for a 403.
         case refused(AppleAPIError)
     }
 }

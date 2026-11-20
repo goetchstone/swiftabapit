@@ -46,6 +46,49 @@ struct ServiceFieldRefusalTests {
         return pages
     }
 
+    /// The first read asks for the nine fields Apple accepts and none for `deviceCount`, which Apple's live server refused on
+    /// 2026-11-20: one request, no note, nothing absent, no refusal remembered. Undone (`deviceCount` back in
+    /// `AppleRead.serviceFields`), the stub refuses it and the read takes two requests and says so.
+    @Test func aNormalReadSendsOneRequestWithNineFieldsAndNoDeviceCount() async throws {
+        let harness = try await Self.harness(refusing: false)
+        let pages = try await Self.read(harness.client)
+        let requests = Self.listRequests(harness)
+        #expect(requests.count == 1, "\(requests)")
+        let asked = try #require(requests[0].removingPercentEncoding?.components(separatedBy: "fields[mdmServers]=").last?.components(separatedBy: "&").first)
+        #expect(asked.split(separator: ",").count == 9 && !asked.contains("deviceCount"), "\(asked)")
+        #expect(AppleRead.serviceFields.count == 9 && !AppleRead.serviceFields.contains("deviceCount"))
+        #expect(pages.allSatisfy { $0.note == nil && $0.absent.isEmpty }, "\(pages.map { $0.note ?? "nil" })")
+        #expect(await harness.client.servicesFieldRefusal == nil)
+    }
+
+    /// The stub refuses a field list that names `deviceCount` by default, as Apple's live server did, with the 400
+    /// `PARAMETER_ERROR.INVALID` shape and a reason that mentions the field; a list without it is served.
+    @Test func theStubRefusesAFieldListNamingDeviceCountByDefault() async throws {
+        let harness = try await Self.harness(refusing: false)
+        let refused = try await harness.raw("/v1/mdmServers", [("fields[mdmServers]", "serverName,deviceCount"), ("limit", "10")])
+        #expect(refused.status == 400)
+        let error = try #require(refused.body?["errors"]?.array?.first)
+        #expect(error["code"]?.string == "PARAMETER_ERROR.INVALID" && error["source"]?["parameter"]?.string == "fields[mdmServers]")
+        #expect(error["detail"]?.string?.contains("deviceCount") == true)
+        let served = try await harness.raw("/v1/mdmServers", [("fields[mdmServers]", "serverName,status"), ("limit", "10")])
+        #expect(served.status == 200)
+    }
+
+    /// The stub's other way to answer a read without `fields[mdmServers]`: what Apple's live default fields carried
+    /// (2026-11-20), every attribute but `deviceCount`, beside the example's four (the default, the stricter case). The
+    /// fallback still reads the two the same way: the model, the notes and `absent` follow what came.
+    @Test func theLiveDefaultFieldsAreEverythingButDeviceCount() async throws {
+        let harness = try await Self.harness(refusing: true)
+        harness.stub.serveLiveDefaultServiceFields()
+        let pages = try await Self.read(harness.client)
+        let items = pages.flatMap(\.items)
+        #expect(items.count == 2)
+        #expect(items.allSatisfy { Set($0.attributes.keys) == ["serverName", "serverType", "createdDateTime", "updatedDateTime", "status", "lastConnectedDateTime"] })
+        #expect(items.allSatisfy { $0.deviceCount == nil && $0.status != nil && $0.lastConnected != nil })
+        // The fields `Harness` services don't hold are the only ones said absent; `status` and `lastConnectedDateTime` came.
+        #expect(pages.last?.absent == ["lastConnectedIp", "defaultProductFamilies", "enableMdmDisownFlag"], "\(pages.last?.absent ?? [])")
+    }
+
     @Test func aRefusedFieldListIsReadAgainWithoutFieldsAndSaid() async throws {
         let harness = try await Self.harness(refusing: true)
         let pages = try await Self.read(harness.client)
@@ -55,11 +98,11 @@ struct ServiceFieldRefusalTests {
         #expect(requests[0].contains("fields") && requests[0].contains("limit=1000"), "\(requests)")
         #expect(!requests[1].contains("fields") && requests[1].contains("limit=1000"), "\(requests)")
         // The stub answers without `fields` with the example's four attributes: the others are said as absent, as data too.
-        let absent = "status, deviceCount, lastConnectedDateTime, lastConnectedIp, defaultProductFamilies, enableMdmDisownFlag"
+        let absent = "status, lastConnectedDateTime, lastConnectedIp, defaultProductFamilies, enableMdmDisownFlag"
         #expect(pages.last?.note == Self.said + ". Absent from every service: \(absent).", "\(pages.last?.note ?? "nil")")
         #expect(pages.last?.absent == Set(absent.components(separatedBy: ", ")))
         #expect(pages.flatMap(\.items).allSatisfy { Set($0.attributes.keys) == ["serverName", "serverType", "createdDateTime", "updatedDateTime"] })
-        // Apple's `detail` ("A value isn't allowed in fields[mdmServers].") names none of the ten fields.
+        // Apple's `detail` ("A value isn't allowed in fields[mdmServers].") names none of the nine fields.
         #expect(await harness.client.servicesFieldRefusal?.named == [])
     }
 
@@ -146,15 +189,15 @@ struct ServiceFieldRefusalTests {
         #expect(report.lines.first { $0.resource == "mdmServers/{id}/relationships/devices" }?.status == .ok, "\(report.text)")
     }
 
-    /// Apple's `detail` never reaches the pass's text: only which of the ten fields it names, however it is worded. An email,
+    /// Apple's `detail` never reaches the pass's text: only which of the nine fields it names, however it is worded. An email,
     /// a serial-like string and an org name in it are dropped.
     @Test func appleDetailNeverReachesThePassOnlyTheFieldsItNames() async throws {
         let harness = try await Self.harness(refusing: false)
-        let detail = "jane.doe@example.com asked for TESTD0000000 of Acme Org: lastConnectedIp and deviceCount aren't allowed\n\u{7}"
+        let detail = "jane.doe@example.com asked for TESTD0000000 of Acme Org: lastConnectedIp and status aren't allowed\n\u{7}"
         harness.stub.queue(400, for: "/v1/mdmServers", body: AcceptancePassTests.errorBody(400, code: "PARAMETER_ERROR.INVALID", detail: detail, parameter: "fields[mdmServers]"))
         let report = await harness.client.acceptancePass()
         let line = try #require(report.lines.first { $0.resource == "mdmServers" })
-        #expect(line.note?.hasSuffix(" · Apple's reason mentions: deviceCount, lastConnectedIp") == true, "\(line.note ?? "nil")")
+        #expect(line.note?.hasSuffix(" · Apple's reason mentions: status, lastConnectedIp") == true, "\(line.note ?? "nil")")
         for word in ["jane", "example.com", "TESTD", "Acme", "aren't allowed"] { #expect(!report.text.contains(word), "\(word) in \(report.text)") }
         #expect(report.text.split(separator: "\n").count == report.lines.count, "a line was forged: \(report.text)")
     }
@@ -186,11 +229,11 @@ struct ServiceFieldRefusalTests {
     /// Which fields Apple's reason names: whole identifiers, whatever the case; none, all, or no reason said so.
     @Test(arguments: [
         ("Check the statuses of your request", " · Apple's reason mentions none of the fields asked for"),
-        ("xstatus and statuses and deviceCounts", " · Apple's reason mentions none of the fields asked for"),
+        ("xstatus and statuses and deviceCount", " · Apple's reason mentions none of the fields asked for"),
         ("Check the status of your request", " · Apple's reason mentions: status"),
         ("serverName isn't allowed", " · Apple's reason mentions: serverName"),
         ("SERVERNAME, Status; (lastConnectedIp)", " · Apple's reason mentions: serverName, status, lastConnectedIp"),
-        ("serverName,serverType,status,deviceCount,lastConnectedDateTime,lastConnectedIp,defaultProductFamilies,enableMdmDisownFlag,createdDateTime,updatedDateTime",
+        ("serverName,serverType,status,lastConnectedDateTime,lastConnectedIp,defaultProductFamilies,enableMdmDisownFlag,createdDateTime,updatedDateTime",
          " · Apple's reason mentions every field asked for"),
         ("", " · Apple gave no reason"),
         ("  \n", " · Apple gave no reason"),

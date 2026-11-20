@@ -29,6 +29,13 @@ struct ContentInspectorView: View {
                             .accessibilityIdentifier("content.inspector.membersNote")
                     }
                 }
+                if let note = detail.membersListNote {
+                    Section("Members") {
+                        Label(note, systemImage: "number")
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("content.inspector.membersListNote")
+                    }
+                }
                 ForEach(detail.members) { group in
                     Section(group.title) {
                         Text(group.summary)

@@ -269,8 +269,6 @@ struct ModelContractTests {
         #expect(blueprint.name == "Engineering Onboarding" && blueprint.summary == "Updated description")
         #expect(blueprint.status == .known(.active) && blueprint.appLicenseDeficient == false)
         #expect(blueprint.created != nil && blueprint.updated != nil)
-        // Apple's write answers carry links only: nothing was included, so no relationship was read.
-        for relationship in Blueprint.Relationship.allCases { #expect(try blueprint.related(relationship) == nil) }
 
         let configuration = try Configuration(resource: #require(Self.example("get-configuration-information").resource))
         #expect(configuration.name == "Wi-Fi Configuration" && configuration.type == .known(.customSetting))

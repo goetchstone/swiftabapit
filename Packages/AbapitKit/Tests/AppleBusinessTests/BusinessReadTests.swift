@@ -72,8 +72,8 @@ struct BusinessReadTests {
     }
 
     /// A custom setting's profile reaches no public value: not the view's resource or attributes, its custom settings'
-    /// object, a description or dump of either, the list (were Apple to send the profile there), a blueprint's included
-    /// configuration, or the acceptance pass's text. Only `profileText` shows it, masked (Phase 2a review M2: a key=value
+    /// object, a description or dump of either, the list (were Apple to send the profile there), a blueprint's member
+    /// read (ids only), or the acceptance pass's text. Only `profileText` shows it, masked (Phase 2a review M2: a key=value
     /// dump of `configuration.attributes` printed the Wi-Fi password).
     @Test func aCustomSettingsProfileReachesNoPublicValue() async throws {
         let canary = "canary-\(UUID().uuidString)"
@@ -109,12 +109,10 @@ struct BusinessReadTests {
         let listed = try await Harness.all(harness.client.configurations())
         #expect(listed.count == 1 && !leaks(Self.printed(listed)) && listed.first?.customSettings?.profileText?.text.contains(ProfileText.mask) == true)
 
-        // A blueprint's included configuration.
-        let read = try await harness.client.blueprint("BP1", include: [.configurations])
-        let members = try BlueprintTests.members(read)
-        let included = try #require(members.included.first { $0.id == "C1" })
-        #expect(included.attributes["customSettingsValues"]?["configurationProfile"] == .string(CustomSettingsValues.withheld))
-        #expect(!leaks(Self.printed(read)) && !leaks(JSONValue.array(members.included.map(\.asJSON)).jsonText))
+        // A blueprint's members are read as ids, one relationship at a time: the configuration is an id, nothing of its profile.
+        let read = try await harness.client.blueprintWithMembers("BP1")
+        #expect(try BlueprintTests.members(read)[.configurations]?.linkages.map(\.id) == ["C1"])
+        #expect(!leaks(Self.printed(read)))
 
         // The acceptance pass reads the custom setting alone, and its text names its keys and none of its values.
         let report = await harness.client.acceptancePass()
@@ -235,8 +233,8 @@ struct BusinessReadTests {
         let harness = try await Harness()
         let reads: [() async throws -> Void] = [
             { _ = try await harness.client.user(id) }, { _ = try await harness.client.userGroup(id) }, { _ = try await harness.client.organizationalUnit(id) },
-            { _ = try await harness.client.app(id) }, { _ = try await harness.client.package(id) }, { _ = try await harness.client.blueprint(id) },
-            { _ = try await harness.client.blueprint(id, include: [.apps]) }, { _ = try await harness.client.configuration(id) },
+            { _ = try await harness.client.app(id) }, { _ = try await harness.client.package(id) }, { _ = try await harness.client.blueprintWithMembers(id) },
+            { _ = try await harness.client.configuration(id) },
             { _ = try await harness.client.mdmDeviceDetails(id) }, { _ = try await Harness.all(harness.client.userGroupMemberIDs(id)) },
             { _ = try await Harness.all(harness.client.organizationalUnitMemberIDs(id)) },
             { _ = try await Harness.all(harness.client.blueprintMemberIDs(id, .orgDevices)) },
@@ -259,7 +257,7 @@ struct BusinessReadTests {
             (.orgUnits, { _ = try await Harness.all(client.organizationalUnitMemberIDs("O1")) }),
             (.apps, { _ = try await Harness.all(client.apps()) }), (.apps, { _ = try await client.app("1") }),
             (.packages, { _ = try await Harness.all(client.packages()) }), (.packages, { _ = try await client.package("P1") }),
-            (.blueprints, { _ = try await Harness.all(client.blueprints()) }), (.blueprints, { _ = try await client.blueprint("B1", include: [.apps]) }),
+            (.blueprints, { _ = try await Harness.all(client.blueprints()) }), (.blueprints, { _ = try await client.blueprintWithMembers("B1") }),
             (.blueprints, { _ = try await Harness.all(client.blueprintMemberIDs("B1", .apps)) }),
             (.configurations, { _ = try await Harness.all(client.configurations()) }), (.configurations, { _ = try await client.configuration("C1") }),
             (.mdmEnrolled, { _ = try await Harness.all(client.mdmDevices()) }), (.mdmEnrolled, { _ = try await client.mdmDeviceDetails("D1") }),

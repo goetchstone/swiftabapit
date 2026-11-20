@@ -43,8 +43,8 @@ public struct ContentPackage: ResourceView {
 }
 
 /// `blueprints`: a set of apps, packages and configurations for a set of devices, users and groups (Business only).
-/// Its members come as linkages (`blueprints/{id}/relationships/<name>`), or with the blueprint when the read asks
-/// for them (`include`, capped per relationship by `limit[<name>]`).
+/// Its members come as linkages (`blueprints/{id}/relationships/<name>`), one relationship at a time: Apple's live server
+/// refused `include` on the blueprint (2026-11-19, 2026-11-20).
 public struct Blueprint: ResourceView {
     public static let resourceType = "blueprints"
     public static let fields = ["name", "description", "status", "appLicenseDeficient", "createdDateTime", "updatedDateTime"]
@@ -77,49 +77,18 @@ public struct Blueprint: ResourceView {
         }
     }
 
-    /// What a read with `include` said of one relationship.
+    /// What a relationship's own list said: its members, and whether the page cap cut it.
     public struct Related: Sendable, Equatable {
         /// The members Apple listed, in its order.
         public let linkages: [Linkage]
-        /// Apple says the blueprint holds more than it listed (its `meta.paging` has a next cursor, or a total past
-        /// the count): the include's limit cut it, and the screen says "showing N of ≥M" (invariant 8).
+        /// The list was cut: the page cap stopped the read, or Apple's `meta.paging.total` is past the count. The screen
+        /// says "showing N of ≥M" (invariant 8).
         public let isTruncated: Bool
 
         public init(linkages: [Linkage], isTruncated: Bool) {
             self.linkages = linkages
             self.isTruncated = isTruncated
         }
-    }
-
-    /// A relationship whose `data` isn't a list of linkages of its own type: never read as an empty one (failure-log
-    /// 2026-10-16, "a list that wasn't a list read as none").
-    public struct Malformed: Error, Equatable, Sendable {
-        public let relationship: Relationship
-        public init(relationship: Relationship) { self.relationship = relationship }
-    }
-
-    /// The members Apple listed for `relationship`, when the read included it; nil when Apple sent links only (a read
-    /// without `include`, and every write's answer), which says nothing about the members. `package`: nil reads the same
-    /// after a refused include, so the app counts members through `BlueprintRead.members`, which says the refusal
-    /// (verifier round 3 of the Phase 2a fixes: `related(.users)?.linkages.count ?? 0` read a refusal as no members).
-    package func related(_ relationship: Relationship) throws(Malformed) -> Related? {
-        guard let value = resource.relationships[relationship.rawValue] else { return nil }
-        guard let object = value.object else { throw Malformed(relationship: relationship) }
-        guard let data = object["data"] else { return nil }
-        let linkages = data.list { item in
-            Linkage(item).flatMap { $0.type.utf8.elementsEqual(relationship.resourceType.utf8) ? $0 : nil }
-        }
-        guard let linkages else { throw Malformed(relationship: relationship) }
-        let paging = object["meta"]?["paging"]
-        let more = paging?["nextCursor"]?.string.map { !$0.isEmpty } ?? false
-        let total = paging?["total"]?.int.map { $0 > linkages.count } ?? false
-        return Related(linkages: linkages, isTruncated: more || total)
-    }
-
-    /// The resources of `relationship`'s type among a read's `included`, in Apple's order. For one blueprint's read
-    /// (`GET blueprints/{id}?include=…`), where everything included is this blueprint's, as abapit grouped them.
-    public func included(_ relationship: Relationship, from included: [Resource]) -> [Resource] {
-        included.filter { $0.type.utf8.elementsEqual(relationship.resourceType.utf8) }
     }
 }
 

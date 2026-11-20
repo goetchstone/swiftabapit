@@ -81,57 +81,7 @@ struct ViewTests {
 
     // MARK: Blueprints
 
-    static func included(_ relationship: String, _ ids: [String], meta: JSONObject? = nil) -> JSONValue {
-        var object: JSONObject = ["data": .array(ids.map { .object(["type": .string(relationship), "id": .string($0)]) })]
-        if let meta { object["meta"] = .object(meta) }
-        return .object(object)
-    }
-
-    @Test func aBlueprintReadsItsIncludedRelationships() throws {
-        let blueprint = Blueprint(resource: Self.resource("blueprints", ["name": .string("Onboarding")], relationships: [
-            "apps": Self.included("apps", ["361309726", "409201541"]),
-            "users": Self.included("users", ["u1"], meta: ["paging": .object(["nextCursor": .string("abc"), "limit": .number("1")])]),
-            "userGroups": Self.included("userGroups", ["g1", "g2"], meta: ["paging": .object(["total": .number("5")])]),
-            "orgDevices": Self.included("orgDevices", [], meta: ["paging": .object(["total": .number("0"), "nextCursor": .string("")])]),
-            "packages": .object(["links": .object(["self": .string("https://api-business.apple.com/v1/blueprints/b/relationships/packages")])]),
-        ]))
-        let apps = try #require(try blueprint.related(.apps))
-        #expect(apps.linkages == [Linkage(type: "apps", id: "361309726"), Linkage(type: "apps", id: "409201541")])
-        #expect(!apps.isTruncated)
-        // Apple says there is more than it included (a next cursor, or a total past what came): the screen says so.
-        #expect(try blueprint.related(.users)?.isTruncated == true)
-        #expect(try blueprint.related(.userGroups)?.isTruncated == true)
-        #expect(try blueprint.related(.orgDevices) == Blueprint.Related(linkages: [], isTruncated: false))
-        // Links only, or nothing: not included, so not read. Never "none".
-        #expect(try blueprint.related(.packages) == nil)
-        #expect(try blueprint.related(.configurations) == nil)
-    }
-
-    /// A relationship's `data` that isn't a list of linkages of its own type is malformed, never an empty list (failure-log
-    /// 2026-10-16, "a list that wasn't a list read as none").
-    @Test(arguments: [
-        JSONValue.object(["data": .object([:])]), .object(["data": .null]), .object(["data": .string("apps")]),
-        .object(["data": .array([.object(["type": .string("apps")])])]),
-        .object(["data": .array([.object(["type": .string("packages"), "id": .string("p1")])])]),
-        .object(["data": .array([.object(["type": .string("apps"), "id": .string("a1")]), .number("1")])]),
-        .string("apps"),
-    ])
-    func aRelationshipThatIsntALinkageListIsMalformed(value: JSONValue) {
-        let blueprint = Blueprint(resource: Self.resource("blueprints", [:], relationships: ["apps": value]))
-        #expect(throws: Blueprint.Malformed(relationship: .apps)) { try blueprint.related(.apps) }
-    }
-
-    @Test func aBlueprintsIncludedResourcesAreFoundByType() throws {
-        let included = [
-            Resource(type: "apps", id: "a1", attributes: ["name": .string("Pages")]),
-            Resource(type: "configurations", id: "c1"),
-            Resource(type: "apps", id: "a2"),
-            Resource(type: "app\u{73}\u{301}", id: "a3"),
-        ]
-        let blueprint = Blueprint(resource: Self.resource("blueprints", [:]))
-        #expect(blueprint.included(.apps, from: included).map(\.id) == ["a1", "a2"])
-        #expect(blueprint.included(.configurations, from: included).map(\.id) == ["c1"])
-        #expect(blueprint.included(.users, from: included).isEmpty)
+    @Test func aBlueprintRelationshipsTypesAreTheModelsOwn() {
         #expect(Blueprint.Relationship.apps.resourceType == ContentApp.resourceType)
         #expect(Blueprint.Relationship.orgDevices.resourceType == OrgDevice.resourceType)
         #expect(Blueprint.Relationship.users.resourceType == User.resourceType)

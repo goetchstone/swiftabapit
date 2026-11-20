@@ -59,7 +59,7 @@ struct ReadContractTests {
             AppleRead.users(), AppleRead.user(id: "U1"), AppleRead.userGroups(), AppleRead.userGroup(id: "G1"), AppleRead.userGroupMembers(id: "G1"),
             AppleRead.organizationalUnits(), AppleRead.organizationalUnit(id: "O1"), AppleRead.organizationalUnitMembers(id: "O1"),
             AppleRead.apps(), AppleRead.app(id: "361309726"), AppleRead.packages(), AppleRead.package(id: "P1"), AppleRead.blueprints(),
-            AppleRead.blueprint(id: "B1"), AppleRead.blueprint(id: "B1", include: Set(Blueprint.Relationship.allCases)),
+            AppleRead.blueprint(id: "B1"),
             AppleRead.configurations(), AppleRead.configuration(id: "C1"), AppleRead.mdmDevices(), AppleRead.mdmDeviceDetails(id: "D1"),
             try? AppleRead.auditEvents(.last(days: 1)),
             AppleRead.webhooks(), AppleRead.webhook(id: "webhook-12345"), AppleRead.webhookDeliveries(id: "webhook-12345"),
@@ -137,11 +137,9 @@ struct ReadContractTests {
         #expect(Set(Self.reads(.business).map(\.template)) == documented.subtracting(["/v1/orgDeviceActivities/{id}"]))
     }
 
-    /// The include names come from the closed enum, in its order, each with Apple's maximum `limit[<name>]`; none asked,
-    /// none sent.
-    @Test func aBlueprintIncludesOnlyApplesRelationshipsAtTheirMaximum() throws {
-        let read = try #require(AppleRead.blueprint(id: "B1", include: [.users, .apps]))
-        #expect(read.query == [QueryItem("include", "apps,users"), QueryItem("limit[apps]", "1000"), QueryItem("limit[users]", "1000")])
+    /// A blueprint is read with no query at all (Apple refused `include` on it live, twice); its relationships are the closed
+    /// enum's six, each read from its own path.
+    @Test func aBlueprintIsReadWithNoQueryAndSixRelationships() throws {
         #expect(AppleRead.blueprint(id: "B1")?.query == [])
         #expect(Blueprint.Relationship.allCases.map(\.rawValue) == ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"])
     }
@@ -152,7 +150,7 @@ struct ReadContractTests {
         let built: [ReadRequest?] = [
             AppleRead.user(id: id), AppleRead.userGroup(id: id), AppleRead.userGroupMembers(id: id), AppleRead.organizationalUnit(id: id),
             AppleRead.organizationalUnitMembers(id: id), AppleRead.app(id: id), AppleRead.package(id: id), AppleRead.blueprint(id: id),
-            AppleRead.blueprint(id: id, include: [.apps]), AppleRead.configuration(id: id), AppleRead.mdmDeviceDetails(id: id),
+            AppleRead.configuration(id: id), AppleRead.mdmDeviceDetails(id: id),
             AppleRead.webhook(id: id), AppleRead.webhookDeliveries(id: id),
         ] + Blueprint.Relationship.allCases.map { AppleRead.blueprintMembers(id: id, $0) }
         #expect(built.allSatisfy { $0 == nil }, "\(id.debugDescription)")

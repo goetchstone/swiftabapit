@@ -225,8 +225,8 @@ extension AppleClient {
     }
 
     /// Each Business-only list, whole, with what this version doesn't know of its items; then the first item of each read
-    /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint with every
-    /// relationship included, and each relationship's own list; a configuration, a custom setting when there is one; an
+    /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint and each of its
+    /// relationships' own list (the blueprint read with no `include`); a configuration, a custom setting when there is one; an
     /// Apple-managed device's details), the last day's audit events, cursor by cursor, and the webhooks, the first read
     /// alone with its last day's deliveries and their events. A School org has none of these: each line says so, and
     /// nothing is sent.
@@ -419,13 +419,14 @@ extension AppleClient {
         }
     }
 
-    /// The first blueprint with every relationship included. When Apple refused the include and the blueprint was read
-    /// without it, the line is that refusal's status, never `ok`: its members weren't read (invariant 8). A relationship the
-    /// include's limit cut, or one Apple didn't list, is `truncated`.
+    /// The first blueprint with its members, as the app reads it: the blueprint with no `include`, then each relationship's own
+    /// list (`AppleClient.blueprintWithMembers`; Apple refused the include on 2026-11-19 and 2026-11-20). When Apple refused a
+    /// relationship's list, the line is that refusal's status, never `ok`: the members weren't read (invariant 8). A
+    /// relationship the page cap cut is `truncated`.
     private func blueprintCheck(_ list: (line: AcceptanceReport.Line, items: [Blueprint]), unless skip: String?) async -> AcceptanceReport.Line {
         await Self.check("blueprints/{id}", unless: skip ?? (list.items.isEmpty ? Self.none("blueprint to read", list.line) : nil)) { found in
             let id = list.items[0].id
-            let read = try await self.blueprint(Self.sendable(id), include: Set(Blueprint.Relationship.allCases))
+            let read = try await self.blueprintWithMembers(Self.sendable(id))
             let blueprint = try Self.typed([read.blueprint], asked: id)[0]
             found.count = 1
             found.keys = Set(blueprint.unreadAttributes)
@@ -434,13 +435,12 @@ extension AppleClient {
             case .refused(let refused):
                 let failed = Self.acceptanceFailure(refused)
                 found.status = failed.status
-                found.note = ["the include was refused, so the blueprint was read without its members", failed.note].compactMap { $0 }.joined(separator: " · ")
-            case .read(let related, _):
+                found.note = ["a members read was refused, so the blueprint's members weren't read", failed.note].compactMap { $0 }.joined(separator: " · ")
+            case .read(let related):
                 let all = Blueprint.Relationship.allCases
-                let cut = all.filter { related[$0]?.isTruncated == true }.map(\.rawValue), unlisted = all.filter { related[$0] == nil }.map(\.rawValue)
-                found.truncation = [cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the include's limit",
-                                    unlisted.isEmpty ? nil : "\(unlisted.joined(separator: ", ")) not listed"].compactMap { $0 }.joined(separator: " · ").nonEmpty
-                // A relationship Apple didn't list has no count to say: a dash, never 0 (Phase 2a review L5's class).
+                let cut = all.filter { related[$0]?.isTruncated == true }.map(\.rawValue)
+                found.truncation = cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the page cap"
+                // A relationship with no read has no count to say: a dash, never 0 (Phase 2a review L5's class).
                 found.note = all.map { "\($0.rawValue) \(related[$0].map { String($0.linkages.count) } ?? "-")" }.joined(separator: ", ")
             }
         }
@@ -451,7 +451,7 @@ extension AppleClient {
         var count = 0
         var keys: Set<String> = []
         var payloadKeys: Set<String> = []
-        /// The status a read that returned says, when not `ok` or `truncated`: a blueprint read again without its include.
+        /// The status a read that returned says, when not `ok` or `truncated`: a blueprint whose members read was refused.
         var status: AcceptanceReport.Status?
         /// `field=value`s as the text shows them; only `unknown(_:_:)` adds one.
         private(set) var values: Set<String> = []

@@ -59,8 +59,12 @@ public enum AppleRead {
                     template: "/v1/orgDevices/{id}/relationships/assignedServer")
     }
 
-    /// The attributes `services(_:)` asks for: all of the contract's `fields[mdmServers]` values but the `devices` relationship.
-    public static let serviceFields = ["serverName", "serverType", "status", "deviceCount", "lastConnectedDateTime", "lastConnectedIp",
+    /// The attributes `services(_:)` asks for: the contract's `fields[mdmServers]` values but the `devices` relationship and
+    /// `deviceCount`. Apple's live server refused a list naming `deviceCount` on 2026-11-20 (its reason named the field), and
+    /// its default fields carry the other nine; a service's device count is the app's own count of the relationship read
+    /// (`mdmServers/{id}/relationships/devices`), so Apple's attribute isn't needed. `MDMService.deviceCount` still reads it
+    /// if Apple ever sends it.
+    public static let serviceFields = ["serverName", "serverType", "status", "lastConnectedDateTime", "lastConnectedIp",
                                        "defaultProductFamilies", "enableMdmDisownFlag", "createdDateTime", "updatedDateTime"]
 
     /// The services, without their device relationships. `fields: false` leaves out `fields[mdmServers]` and so reads Apple's
@@ -110,15 +114,10 @@ public enum AppleRead {
     /// The blueprints, without their members (abapit's list asked for none either).
     public static func blueprints() -> ReadRequest { list("/v1/blueprints") }
 
-    /// One blueprint, with the members of `include` listed and their resources included, each relationship asked for
-    /// at the most Apple sends (`limit[<name>]`, maximum 1000): what that cuts, `Blueprint.Related.isTruncated` says. The
-    /// names come from `Blueprint.Relationship`, a closed enum of Apple's six, in its order.
-    public static func blueprint(id: String, include: Set<Blueprint.Relationship> = []) -> ReadRequest? {
-        let included = Blueprint.Relationship.allCases.filter(include.contains)
-        let query = included.isEmpty ? [] : [QueryItem("include", included.map(\.rawValue).joined(separator: ","))]
-            + included.map { QueryItem("limit[\($0.rawValue)]", String(pageLimit)) }
-        return single("/v1/blueprints/{id}", id, query: query)
-    }
+    /// One blueprint, with no query: Apple's live server refused `include` on it twice (2026-11-19 and 2026-11-20: 400
+    /// `PARAMETER_ERROR.ILLEGAL`, `source.parameter` `include`), so the members are read one relationship at a time
+    /// (`blueprintMembers`).
+    public static func blueprint(id: String) -> ReadRequest? { single("/v1/blueprints/{id}", id) }
 
     /// A blueprint's members of one relationship, as linkages of its type.
     public static func blueprintMembers(id: String, _ relationship: Blueprint.Relationship) -> ReadRequest? {
