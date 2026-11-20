@@ -34,7 +34,7 @@ enum Instant {
 /// there and not as uncovered (an unread device isn't an unprotected one); a device with an active record is covered
 /// whatever the sweep said. With none it is abapit's report. And `unreadableEnd`: an active record whose
 /// `endDateTime` is there (not null) but isn't a date, counted apart as `QuietServices` counts `unreadable`; abapit
-/// quietly took it as never expiring (a recorded deviation, in the code only: Apple types the field as a date-time).
+/// quietly took it as never expiring (a deviation recorded in `docs/domains/history.md`, with no golden case: Apple types the field as a date-time).
 /// A missing or null end is still never expiring. `days` is held to 0...1825 (abapit's route allowed 1...1825; the
 /// golden calls 0).
 public struct CoverageReport: Sendable {

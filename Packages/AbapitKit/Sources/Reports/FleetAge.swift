@@ -18,7 +18,8 @@ import MosyleModels
 /// output beside the corrected one.
 ///
 /// `notRead` names the devices whose AppleCare sweep failed. A candidate with no active record that is among them has
-/// `covered` nil (not read, said apart; the export's cell is empty) and is counted in `notReadCandidates`, never in
+/// `covered` nil and `notRead` true (said apart; the export's cell reads `not read`, where no coverage data leaves it
+/// empty) and is counted in `notReadCandidates`, never in
 /// `uncoveredCandidates`: an unread device is not an unprotected one. Callers must say who wasn't read, so a missing
 /// entry can't pass for a read one. `years` is held to 0...10 (abapit's route allowed 1...10; the golden calls 0).
 public struct FleetAgeReport: Sendable {
@@ -41,6 +42,9 @@ public struct FleetAgeReport: Sendable {
         public let ageYears: Double
         /// Nil when there is no coverage data.
         public let covered: Bool?
+        /// The device has no active record and its coverage sweep failed: `covered` is nil because it is unknown, not
+        /// because there is no coverage data.
+        public let notRead: Bool
     }
 
     public let buckets: [Bucket]
@@ -82,7 +86,8 @@ public struct FleetAgeReport: Sendable {
                     covered: covered.flatMap { set -> Bool? in
                         let id = Instant.bytes(device.id)
                         return set.contains(id) ? true : (unreadBytes.contains(id) ? nil : false)
-                    })))
+                    },
+                    notRead: covered.map { !$0.contains(Instant.bytes(device.id)) && unreadBytes.contains(Instant.bytes(device.id)) } ?? false)))
             }
         }
         // Python's sort is stable and keys on the rounded age: equal rounded ages keep the input order.
@@ -91,7 +96,7 @@ public struct FleetAgeReport: Sendable {
         buckets = zip(Self.labels, counts).map { Bucket(label: $0, count: $1) }
         bucketMax = counts.max() ?? 0
         uncoveredCandidates = covered == nil ? nil : candidates.filter { $0.covered == false }.count
-        notReadCandidates = covered == nil ? 0 : candidates.filter { c in unreadBytes.contains(Instant.bytes(c.serial)) && c.covered == nil }.count
+        notReadCandidates = covered == nil ? 0 : candidates.filter(\.notRead).count
         self.undated = undated
         self.years = years
         hasCoverageData = covered != nil

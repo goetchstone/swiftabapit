@@ -133,7 +133,7 @@ public enum SnapshotDiff {
     /// Python's number equality: two integers exactly (any length); two floats as doubles; an integer and a float
     /// exactly, so `10**16 == 1e16` and `2**53 + 1 != 2.0**53`. Two `NaN`s are equal (the operator's decision): abapit's
     /// `json.loads` hands every `NaN` the same object, and a container's `==` takes identity first, so abapit sees no
-    /// change between two snapshots that hold `NaN` in the same place. (A `NaN` that is itself a field, in an item that
+    /// change between two snapshots that hold `NaN` in the same place. (A listed deviation: a `NaN` that is itself a field, in an item that
     /// has another change, abapit would list, since `nan != nan`; here it is no change, as in a list.)
     static func sameNumber(_ x: String, _ y: String) -> Bool {
         switch (isInteger(x), isInteger(y)) {

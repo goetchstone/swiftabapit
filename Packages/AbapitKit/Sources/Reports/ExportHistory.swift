@@ -4,7 +4,7 @@ import JSONAPI
 extension ExportPolicy {
     /// The refresh-candidates export (invariant 11: an allowlist), abapit's `/export/refresh-candidates.csv` columns
     /// in its order: `serialNumber`, `deviceModel`, `productFamily`, `ordered`, `ageYears`, `activeCoverage`
-    /// (`True`, `False`, or empty: no coverage data, or the device's sweep failed).
+    /// (`True`, `False`, `not read` when the device's coverage sweep failed, or empty when there is no coverage data).
     public static let refreshCandidates = Columns([
         "serialNumber", "deviceModel", "productFamily", "ordered", "ageYears", "activeCoverage",
     ])
@@ -24,7 +24,7 @@ public enum ExportHistory {
             CSV.Item(id: candidate.serial, attributes: [
                 "serialNumber": .string(candidate.serial), "deviceModel": candidate.model, "productFamily": candidate.family,
                 "ordered": candidate.ordered, "ageYears": .number(String(candidate.ageYears)),
-                "activeCoverage": candidate.covered.map(JSONValue.bool) ?? .null,
+                "activeCoverage": candidate.notRead ? .string("not read") : (candidate.covered.map(JSONValue.bool) ?? .null),
             ])
         }, columns: ExportPolicy.refreshCandidates)
     }

@@ -76,9 +76,10 @@ are below.
   is 6 cases): a boolean is not a number, so `true` against `1` is a change (asked "should swiftabapit report true <-> 1
   as a change", answer "Report it (Recommended)"); an item is changed only when a field really changed, so `null`
   against a missing field is no change and yields no item (answer "Only real changes (Recommended)"). `1` against `1.0`
-  is still no change. Two `NaN`s are equal (not a deviation: abapit's `json.loads` shares one `NaN` object and a
+  is still no change. Two `NaN`s are equal (abapit's `json.loads` shares one `NaN` object and a
   container's `==` takes identity first, so abapit sees no change either; only a `NaN` that is itself a field, in an item
-  with another change, abapit would list, since `nan != nan`; the port treats it as no change). The generator's
+  with another change, abapit would list, since `nan != nan`; the port treats it as no change: **a listed deviation**,
+  unreachable from Apple's or Mosyle's JSON, with no golden case). The generator's
   `strict_equal` has the same blind spot: a golden case for `NaN` is a follow-up for the generator.
 - **`CoverageReport`** is `coverage_report`: an `ACTIVE` record (exactly) covers its serial; an end between now and
   now + days, both ends included, to the microsecond (`Instant` works in whole microseconds, as a `Date`'s `Double` can't);
@@ -98,15 +99,16 @@ are below.
 - **Who wasn't read** (`notRead`, no default: a caller must say, so a missing entry can't pass for a read one): both
   reports take the serials whose AppleCare sweep failed. A device with no active record that is among them is `notRead`
   in `CoverageReport`, and `covered` nil in `FleetAgeReport` (counted in `notReadCandidates`, never in
-  `uncoveredCandidates`; the export's cell is empty, not `False`). A later PR (the collector and the Reports screen, after
+  `uncoveredCandidates`; the refresh-candidates CSV writes `not read` in `activeCoverage`, where no coverage data leaves it
+  empty and a read device says `True` or `False`). A later PR (the collector and the Reports screen, after
   PR #29 merges) aligns both with #29's `DeviceRead`/`ListRead`, which treat a missing entry as not read; this PR imports
   none of it.
 - **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
   allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
 - **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
   isn't a date (a number, an empty string, text) is counted apart, as `QuietServices` counts `unreadable`. abapit quietly
-  took it as never expiring: a recorded deviation, in the code only (Apple types the field as a date-time, so no golden
-  case). A missing or null end is still never expiring.
+  took it as never expiring: a recorded deviation with no golden case (Apple types the field as a date-time;
+  none is needed). A missing or null end is still never expiring.
 - **`ExportHistory`** writes abapit's two CSVs through `CSV.text`, so the allowlist columns (`ExportPolicy.
   refreshCandidates`, `coverageExpiring`), the denylist and the formula guard apply as for every export. A coverage
   record's other attributes never leave (abapit chose these seven keys too).

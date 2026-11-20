@@ -45,11 +45,15 @@ struct ExportHistoryTests {
         #expect(!text.contains("CANARY"))
     }
 
-    /// A candidate whose sweep failed is written with no coverage cell, not `False`.
-    @Test func aCandidateNotReadHasAnEmptyCoverageCell() {
+    /// A candidate whose sweep failed is written `not read`, not `False` and not empty; no coverage data stays empty.
+    @Test func aCandidateNotReadSaysSo() {
         let devices = ["D1", "D2"].map { Resource(type: "orgDevices", id: $0, attributes: ["orderDateTime": .string("2019-01-01T00:00:00Z")]) }
         let report = FleetAgeReport(devices: devices, applecare: [], years: 1, now: CoverageFleetAgeTests.now, notRead: ["D2"])
         let rows = ExportHistory.refreshCandidates(report).split(separator: "\r\n").dropFirst().map(String.init)
-        #expect(rows == ["D1,D1,,,2019-01-01T00:00:00Z,7.8,False", "D2,D2,,,2019-01-01T00:00:00Z,7.8,"])
+        // With no coverage data at all nothing is "not read": the cell is empty for both.
+        let none = FleetAgeReport(devices: devices, applecare: nil, years: 1, now: CoverageFleetAgeTests.now, notRead: ["D2"])
+        #expect(ExportHistory.refreshCandidates(none).split(separator: "\r\n").dropFirst().map(String.init)
+                == ["D1,D1,,,2019-01-01T00:00:00Z,7.8,", "D2,D2,,,2019-01-01T00:00:00Z,7.8,"])
+        #expect(rows == ["D1,D1,,,2019-01-01T00:00:00Z,7.8,False", "D2,D2,,,2019-01-01T00:00:00Z,7.8,not read"])
     }
 }
