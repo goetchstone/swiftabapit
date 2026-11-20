@@ -1,3 +1,4 @@
+import AppleModels
 import Foundation
 import JSONAPI
 
@@ -46,13 +47,32 @@ func byBytes(_ a: String, _ b: String) -> Bool { a.utf8.lexicographicallyPrecede
 /// "yes" and "no" for a CSV cell, and nothing for a value Apple didn't send.
 func yesNo(_ flag: Bool?) -> String { flag.map { $0 ? "yes" : "no" } ?? "" }
 
+/// `value` as JSON text for a CSV cell or a screen: every value under a key that holds a secret stem (`ExportPolicy.isSensitive`,
+/// at any depth) is replaced by the same withheld marker the audit payloads use, never shown (invariants 3 and 11). A value
+/// nested deeper than `AuditEvent.maskDepth` is withheld whole.
+func shownJSON(_ value: JSONValue, depth: Int = 0) -> String { masking(value, depth: depth).jsonText }
+
+func masking(_ value: JSONValue, depth: Int) -> JSONValue {
+    switch value {
+    case .array(let items):
+        return depth >= AuditEvent.maskDepth ? .string(AuditEvent.withheld) : .array(items.map { masking($0, depth: depth + 1) })
+    case .object(let object):
+        guard depth < AuditEvent.maskDepth else { return .string(AuditEvent.withheld) }
+        var walked = JSONObject()
+        for (key, inner) in object { walked[key] = ExportPolicy.isSensitive(key) ? .string(AuditEvent.withheld) : masking(inner, depth: depth + 1) }
+        return .object(walked)
+    default:
+        return value
+    }
+}
+
 /// What Apple sent for `key`, in words: nil when it is absent or null; a string as it is; any other value as its JSON text.
 /// A value that was sent is never shown as "not sent" (review, item 8).
 func sent(_ object: JSONObject, _ key: String) -> String? {
     switch object[key] {
     case nil, .null?: nil
     case .string(let text)?: text
-    case let value?: value.jsonText
+    case let value?: shownJSON(value)
     }
 }
 
@@ -60,9 +80,9 @@ func sent(_ object: JSONObject, _ key: String) -> String? {
 func sentRaw(_ object: JSONObject, _ key: String) -> String? {
     switch object[key] {
     case nil, .null?: nil
-    case let value?: value.jsonText
+    case let value?: shownJSON(value)
     }
 }
 
 /// A value that isn't a date `ISODate` reads, as the Services screen shows it: its JSON text.
-func unreadableDate(_ value: JSONValue) -> String { value.jsonText }
+func unreadableDate(_ value: JSONValue) -> String { shownJSON(value) }

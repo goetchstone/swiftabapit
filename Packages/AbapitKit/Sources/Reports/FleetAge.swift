@@ -8,20 +8,21 @@ import MosyleModels
 /// Age is `timedelta.days / 365.25` from `orderDateTime`, else `addedToOrgDateTime` (a value that is empty or
 /// doesn't read as a date falls through to the next); a device with neither is undated. `timedelta.days` floors, so a
 /// device ordered 100.5 days ahead is -101 days. `ageYears` is `round(age, 1)` (`Python.round1`), and candidates sort
-/// by that rounded age, descending, equal ages in input order. Coverage is the set of `serialNumber`s whose record is
-/// exactly `ACTIVE`; without coverage data (`applecare` is nil) `covered` is nil, and an empty list is data, with
-/// every candidate uncovered.
+/// by that rounded age, descending, equal ages in input order. A device is covered when one of its own records is
+/// exactly `ACTIVE`; without coverage data (`coverage` is nil) `covered` is nil.
 ///
 /// One listed deviation, the generator's correction (`corrected_fleet_age`; not one of the operator's two
 /// diff decisions): a device ordered more than 365 days ahead is "< 1 yr", never a candidate. abapit's
 /// `bucket_labels[min(int(age), 4)]` read `int(-1.2) = -1` as the last bucket, "4+ yrs". The golden keeps abapit's
 /// output beside the corrected one.
 ///
-/// `notRead` names the devices whose AppleCare sweep failed. A candidate with no active record that is among them has
-/// `covered` nil and `notRead` true (said apart; the export's cell reads `not read`, where no coverage data leaves it
-/// empty) and is counted in `notReadCandidates`, never in
-/// `uncoveredCandidates`: an unread device is not an unprotected one. Callers must say who wasn't read, so a missing
-/// entry can't pass for a read one. `years` is held to 0...10 (abapit's route allowed 1...10; the golden calls 0).
+/// Read as the fleet reports do (invariant 8). `list` says how much of the device list this was given, and `coverage`, nil
+/// when no coverage was swept, holds the sweep's read of each device by device id: `.read(records)` is its AppleCare
+/// records, and `.notRead(why)` or no entry (the sweep never reached it) is not read. A candidate with no active record
+/// that is not read has `covered` nil and `notRead` true (the export's cell reads `not read`, where no coverage data leaves
+/// it empty) and is counted in `notReadCandidates`, never in `uncoveredCandidates`: an unread device is not an
+/// unprotected one. An empty map is data too: no device has an entry, so every one is not read. `years` is held to 0...10
+/// (abapit's route allowed 1...10; the golden calls 0).
 public struct FleetAgeReport: Sendable {
     /// The most years a refresh plan looks back (abapit's route: `min(years, 10)`).
     public static let maximumYears = 10
@@ -47,6 +48,8 @@ public struct FleetAgeReport: Sendable {
         public let notRead: Bool
     }
 
+    /// How much of the device list this was given. A list that wasn't read judges nothing.
+    public let list: ListRead
     public let buckets: [Bucket]
     public let bucketMax: Int
     public let candidates: [Candidate]
@@ -57,13 +60,16 @@ public struct FleetAgeReport: Sendable {
     public let years: Int
     public let hasCoverageData: Bool
 
-    public init(devices: [Resource], applecare: [Resource]?, years requested: Int, now: Date, notRead unread: [String]) {
+    public init(devices listed: [Resource], coverage: [String: DeviceRead<[Resource]>]?, years requested: Int, now: Date, list: ListRead = .whole) {
+        self.list = list
+        let devices = list.isNotRead ? [] : listed
         let years = min(max(requested, 0), Self.maximumYears)
-        let unreadBytes = Set(unread.map(Instant.bytes))
-        var covered: Set<[UInt8]>?
-        if let applecare {
-            covered = Set(applecare.filter { $0.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") }
-                .compactMap { $0.attributes["serialNumber"]?.string.map(Instant.bytes) })
+        /// A device's state: true or false when its records were read, nil when they weren't.
+        // By bytes, as the rest of this module compares ids (a `Dictionary` takes NFC and NFD for one key).
+        let reads = coverage.map { map in Dictionary(map.map { (Instant.bytes($0.key), $0.value) }) { first, _ in first } }
+        func state(_ device: Resource) -> Bool? {
+            guard case .read(let records)? = reads?[Instant.bytes(device.id)] else { return nil }
+            return records.contains { $0.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") }
         }
         let start = Instant.micros(now)
         var counts = [Int](repeating: 0, count: Self.labels.count)
@@ -83,11 +89,7 @@ public struct FleetAgeReport: Sendable {
                     serial: device.id, model: attrs["deviceModel"] ?? .string(""), family: attrs["productFamily"] ?? .string(""),
                     ordered: order.isTruthy ? order : (attrs["addedToOrgDateTime"] ?? .null),
                     ageYears: Python.round1(age),
-                    covered: covered.flatMap { set -> Bool? in
-                        let id = Instant.bytes(device.id)
-                        return set.contains(id) ? true : (unreadBytes.contains(id) ? nil : false)
-                    },
-                    notRead: covered.map { !$0.contains(Instant.bytes(device.id)) && unreadBytes.contains(Instant.bytes(device.id)) } ?? false)))
+                    covered: state(device), notRead: coverage != nil && state(device) == nil)))
             }
         }
         // Python's sort is stable and keys on the rounded age: equal rounded ages keep the input order.
@@ -95,11 +97,23 @@ public struct FleetAgeReport: Sendable {
             .map(\.candidate)
         buckets = zip(Self.labels, counts).map { Bucket(label: $0, count: $1) }
         bucketMax = counts.max() ?? 0
-        uncoveredCandidates = covered == nil ? nil : candidates.filter { $0.covered == false }.count
-        notReadCandidates = covered == nil ? 0 : candidates.filter(\.notRead).count
+        uncoveredCandidates = coverage == nil ? nil : candidates.filter { $0.covered == false }.count
+        notReadCandidates = coverage == nil ? 0 : candidates.filter(\.notRead).count
         self.undated = undated
         self.years = years
-        hasCoverageData = covered != nil
+        hasCoverageData = coverage != nil
+    }
+
+    /// The list's read state first, then the counts. A list that wasn't read says only that.
+    public var words: [String] {
+        if list.isNotRead { return [list.words] }
+        var lines = [list.words, "\(candidates.count) devices are \(years) or more years old; \(undated) have no readable date and are not aged."]
+        if hasCoverageData {
+            lines.append("\(uncoveredCandidates ?? 0) of the candidates have no active coverage; \(notReadCandidates) had their coverage unread: counted as neither covered nor uncovered.")
+        } else {
+            lines.append("No coverage data was read: nothing is said about coverage.")
+        }
+        return lines
     }
 
     /// `int(age)` (toward zero), at most 4, and at least 0: a device ordered more than a year ahead is "< 1 yr".

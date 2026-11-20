@@ -42,6 +42,9 @@ public struct WarrantyReport: Sendable {
         public let device: OrgDevice
         public let kind: Kind
         public let estimate: Estimate
+        /// Active rows only: the `endDateTime` of each ACTIVE record that was sent and isn't a date, as JSON text. Such a
+        /// record is covered, but when it ends is not known, and the export says so (invariant 10).
+        public let unreadableEnds: [String]
         public var id: String { device.id }
 
         /// The filter token: `active`, `no-active-coverage`, `no-record`, `status-unknown`, `not-read`.
@@ -84,12 +87,23 @@ public struct WarrantyReport: Sendable {
             case .active, .notRead, .statusUnknown: estimate = .notMade
             case .noActiveCoverage, .noRecord: estimate = Self.estimate(device, now: now)
             }
-            return Row(device: device, kind: kind, estimate: estimate)
+            return Row(device: device, kind: kind, estimate: estimate, unreadableEnds: Self.unreadableEnds(coverage[device.id], kind))
         }
         let order = Self.fixedGroups
         rows = built.sorted { a, b in
             let (x, y) = (order.firstIndex(of: a.group) ?? 0, order.firstIndex(of: b.group) ?? 0)
             return x != y ? x < y : byBytes(a.device.serialNumber, b.device.serialNumber)
+        }
+    }
+
+    /// The unreadable `endDateTime`s of a device's ACTIVE records, for an active row: present, not null, and not a date.
+    static func unreadableEnds(_ coverage: DeviceRead<[AppleCareCoverage]>?, _ kind: Kind) -> [String] {
+        guard case .active = kind, case .read(let records)? = coverage else { return [] }
+        return records.filter { $0.status == .known(.active) }.compactMap { record in
+            switch record.attributes["endDateTime"] {
+            case nil, .null?: nil
+            case let value?: ISODate.parse(value.string) == nil ? unreadableDate(value) : nil
+            }
         }
     }
 

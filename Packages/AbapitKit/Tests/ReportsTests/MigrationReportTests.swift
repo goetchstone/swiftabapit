@@ -158,6 +158,19 @@ struct MigrationReportTests {
         #expect(results == ["D3,D1,D2,A1,A2"])
     }
 
+    /// Two devices that share a serial and everything else sort by id, whichever came first: the last key of the order.
+    @Test func devicesSharingASerialAreOrderedByIdWhateverTheInputOrder() {
+        func twin(_ id: String) -> OrgDevice {
+            OrgDevice(resource: Resource(type: "orgDevices", id: id, attributes: ["serialNumber": .string("SAME"), "mdmMigrationStatus": .string("REQUESTED"),
+                                                                                  "mdmMigrationDeadlineDateTime": .string("2026-12-01T08:00:00Z")]))
+        }
+        let (low, high) = (twin("id-1"), twin("id-2"))
+        #expect(MigrationReport([high, low], now: Fleet.now).rows.map(\.device.id) == ["id-1", "id-2"])
+        #expect(MigrationReport([low, high], now: Fleet.now).rows.map(\.device.id) == ["id-1", "id-2"])
+        // By bytes, not by value: "id-10" sorts before "id-9".
+        #expect(MigrationReport([twin("id-9"), twin("id-10")], now: Fleet.now).rows.map(\.device.id) == ["id-10", "id-9"])
+    }
+
     @Test func theCSVOfAnUnreadListJudgesNothing() throws {
         let late = Self.device("L", status: "FAILED", deadline: Fleet.stamp(-Self.day - 60))
         let row = try #require(Fleet.table(CSV.text(MigrationReport([late], now: Fleet.now, list: .notRead("failed")).csvItems, columns: ExportPolicy.migrationReport))["L"])

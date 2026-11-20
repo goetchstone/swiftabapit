@@ -243,9 +243,9 @@ events in phase 2a; their notes are below.
   `strict_equal` has the same blind spot: a golden case for `NaN` is a follow-up for the generator.
 - **`CoverageReport`** is `coverage_report`: an `ACTIVE` record (exactly) covers its serial; an end between now and
   now + days, both ends included, to the microsecond (`Instant` works in whole microseconds, as a `Date`'s `Double` can't);
-  `days_left` is `timedelta.days` (floor); soonest first, equal days in input order. Added, not in abapit: `notRead`, the
-  serials whose coverage sweep failed. A device with no active record that is in it is `notRead`, never `uncovered`
-  (an unread device is not an unprotected one); with none given the report is abapit's.
+  `days_left` is `timedelta.days` (floor); soonest first; equal days keep the order of the records as the device list reaches them (the device list's order, then keys matching no listed device by bytes, then the record's own order within a device; abapit's was the flat list's order, and the two agree on the goldens: **a recorded deviation**). Added, not in abapit: `notRead`, the
+  devices whose coverage wasn't read (see "Read as the fleet reports do" below); never `uncovered` (an unread device is not
+  an unprotected one); with every device read it is abapit's.
 - **`FleetAgeReport`** is `fleet_age_report`: age is `timedelta.days / 365.25` (days floored) from `orderDateTime`, else
   `addedToOrgDateTime` (a value that is empty or doesn't read as a date falls through, but `ordered` shows the order
   text when it is truthy, even unreadable); `ageYears` is `Python.round1`, and candidates (age at least `years`)
@@ -256,13 +256,17 @@ events in phase 2a; their notes are below.
   clamped, so a device ahead by days is not a candidate even at `years` 0. The generator's correction is right only for
   `int(age) = -1` (a device 366 to 730 days ahead): a case 731 or more days ahead (`int(age) = -2`, abapit's index -2, "3-4
   yrs") would be corrected from the wrong bucket. A follow-up for the generator; the port clamps every negative to "< 1 yr".
-- **Who wasn't read** (`notRead`, no default: a caller must say, so a missing entry can't pass for a read one): both
-  reports take the serials whose AppleCare sweep failed. A device with no active record that is among them is `notRead`
-  in `CoverageReport`, and `covered` nil in `FleetAgeReport` (counted in `notReadCandidates`, never in
-  `uncoveredCandidates`; the refresh-candidates CSV writes `not read` in `activeCoverage`, where no coverage data leaves it
-  empty and a read device says `True` or `False`). A later PR (the collector and the Reports screen, after
-  PR #29 merges) aligns both with #29's `DeviceRead`/`ListRead`, which treat a missing entry as not read; this PR imports
-  none of it.
+- **Read as the fleet reports do** (follow-up to the reviews of #29 and #31). Both reports take the device list's
+  `ListRead` (default `.whole`) and the coverage sweep's reads as a map by device id (`DeviceRead<[Resource]>`: the device's
+  own records, or `.notRead(why)`); a device with no entry is not read ("the sweep didn't reach this device"), the rule
+  `WarrantyReport` uses. A device not read is in `CoverageReport.notRead`, and has `covered` nil in `FleetAgeReport`
+  (counted in `notReadCandidates`, never in `uncoveredCandidates`); it is never covered and never uncovered. `words` says the list's
+  read state first, and a list that wasn't read says only that (no zero counts). Both CSVs lead with a `listRead` column
+  ("read in full", "read in part: how"), written over any record attribute of that name. Records are a device's by the key
+  they sit under; keys that match no listed device still count toward `expiring`, and equal `days_left` keep the device
+  list's order, then the other keys by bytes. With every device read and the list whole both reports equal the goldens
+  (32 coverage and 35 fleet-age cases, the same two fleet-age deviations). **Recorded deviations from abapit**: the tie order above, and a leading `listRead` column on both history CSVs (abapit's two CSVs had none). Ids are matched by bytes: an NFC id with coverage under the NFD spelling is not that device's read. `FleetAgeReport`'s map is optional: nil is no
+  coverage data; an empty map is data in which nobody was read. A list that wasn't read, or was read in part, and left no rows exports one row, `listRead` saying why and every other cell empty (every fleet CSV and both history CSVs; never a bare header).
 - **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
   allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
 - **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
@@ -411,6 +415,11 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   tokens, inputs and CSV columns (`quiet-services` isn't one: `service-health`'s `quiet` group answers it). `resolve` takes
   only known values: case and spaces around a value or its colon normalize to the canonical token (`lock:user` and
   `status: SUCCESS` work), anything else (`lock:bogus`) is a problem, so a token never silently matches nothing.
+- **A quoted cell** means Apple sent a value in a shape this app didn't expect; it is shown as sent (its JSON text, with any value under a secret-looking key, at any depth, replaced by the audit payloads' withheld marker, never shown: a
+  string keeps its quotes). This holds on every row kind: an `orderDateTime` that isn't a date is quoted on active,
+  status-unknown, not-read, no-record and no-active-coverage rows alike, and an ACTIVE record whose `endDateTime` isn't a
+  date is never exported blank: `activeCoverageEnds` reads `end date not readable: "<as sent>"`, after the latest readable
+  end if there is one. A missing or null value is blank.
 - **CSV**: `ExportPolicy.{activationLockReport,migrationReport,serviceHealth,warrantyReport}`. Every export leads with a
   `listRead` column ("read in full", "read in part: how", "not read: why"); a list that wasn't read exports no judgment cells
   (they say "not read"). Every value Apple sent is written as sent (a string as it is where text is expected; any other value

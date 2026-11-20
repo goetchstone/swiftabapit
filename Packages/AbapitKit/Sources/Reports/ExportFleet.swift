@@ -31,6 +31,14 @@ private func finish(_ list: ListRead, identity: JSONObject, full: JSONObject, ju
     return attributes
 }
 
+/// A list that wasn't read, or was read in part, and left no rows still says so (invariant 8): one row whose `listRead` cell says why and whose
+/// other cells are empty, so the file is never a bare header that reads as "nothing to report".
+func withSentinel(_ list: ListRead, rows: [CSV.Item]) -> [CSV.Item] {
+    if case .whole = list { return rows }
+    guard rows.isEmpty else { return rows }
+    return [CSV.Item(id: "", attributes: ["listRead": .string(list.csvWords)])]
+}
+
 private func text(_ value: String?) -> JSONValue { value.map(JSONValue.string) ?? .null }
 
 private func identity(_ device: OrgDevice) -> JSONObject {
@@ -39,7 +47,9 @@ private func identity(_ device: OrgDevice) -> JSONObject {
 }
 
 extension ActivationLockReport {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             var attributes = identity(row.device).merging(["state": .string(Self.title(row.group)), "blocksRelease": .string(row.blocksReleaseWords),
                                                            "isLocked": text(row.isLockedSent), "lockType": text(row.lockTypeSent)])
@@ -54,7 +64,9 @@ extension ActivationLockReport {
 }
 
 extension MigrationReport {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             var attributes = identity(row.device).merging([
                 "state": .string(Self.title(row.group)), "mdmMigrationStatus": text(row.status?.rawValue),
@@ -79,13 +91,15 @@ extension MigrationReport {
         switch device.attributes["isMdmMigrationCapable"] {
         case nil, .null?: nil
         case .bool(let flag)?: flag ? "yes" : "no"
-        case let value?: value.jsonText
+        case let value?: shownJSON(value)
         }
     }
 }
 
 extension ServiceHealth {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             let name: JSONObject = ["serverName": .string(row.service.name)]
             var attributes: JSONObject = name.merging(["serverType": text(sent(row.service.attributes, "serverType")),
@@ -111,12 +125,28 @@ extension ServiceHealth {
 }
 
 extension WarrantyReport {
-    public var csvItems: [CSV.Item] {
+    /// The order date as the CSV shows it on every row kind: a date as sent, anything `ISODate` can't read as its JSON text
+    /// (a string keeps its quotes), nothing when not sent. A quoted cell means Apple sent a value in a shape this app
+    /// didn't expect; it is shown as sent.
+    static func orderDateCell(_ device: OrgDevice) -> String? {
+        switch device.attributes["orderDateTime"] {
+        case nil, .null?: nil
+        case let value?: ISODate.parse(value.string) == nil ? unreadableDate(value) : sent(device.attributes, "orderDateTime")
+        }
+    }
+
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         let formatter = Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!)
         return rows.map { row in
-            var attributes = identity(row.device).merging(["orderDateTime": text(sent(row.device.attributes, "orderDateTime"))])
+            var attributes = identity(row.device).merging(["orderDateTime": text(Self.orderDateCell(row.device))])
             switch row.kind {
-            case .active(let ends): attributes = attributes.merging(["coverage": .string("active AppleCare coverage"), "activeCoverageEnds": text(ends?.isoformat)])
+            case .active(let ends):
+                // An end Apple sent that isn't a date is never left blank (invariant 10): its JSON text, after any readable one.
+                let cells = [ends?.isoformat].compactMap { $0 } + row.unreadableEnds.map { "end date not readable: \($0)" }
+                attributes = attributes.merging(["coverage": .string("active AppleCare coverage"),
+                                                 "activeCoverageEnds": cells.isEmpty ? .null : .string(cells.joined(separator: "; "))])
             case .noActiveCoverage(let statuses):
                 attributes = attributes.merging(["coverage": .string("coverage records read, none ACTIVE"), "recordStatuses": .string(statuses.joined(separator: "; "))])
             case .statusUnknown(let statuses):
@@ -128,8 +158,8 @@ extension WarrantyReport {
             switch row.estimate {
             case .notMade: break
             case .noOrderDate: attributes = attributes.merging(["estimate": .string("estimate not possible: no order date"), "assumption": .string(Self.assumption)])
-            case .unreadableOrderDate(let raw):
-                attributes = attributes.merging(["orderDateTime": .string(raw), "estimate": .string("estimate not possible: order date not readable"),
+            case .unreadableOrderDate:
+                attributes = attributes.merging(["estimate": .string("estimate not possible: order date not readable"),
                                                  "assumption": .string(Self.assumption)])
             case .pastAssumedLimit(let end):
                 attributes = attributes.merging(["estimate": .string("estimate: past the assumed one year"), "estimatedEnd": .string(end.formatted(formatter)),
