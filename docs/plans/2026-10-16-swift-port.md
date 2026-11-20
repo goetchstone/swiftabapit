@@ -1291,7 +1291,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** split into PRs (2026-11-20); the store is built on branch `phase-3-snapshot-store`.
+**Status:** in progress, split into PRs (2026-11-20). Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), and the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29). The store is built on branch `phase-3-snapshot-store` (PR #30). Not started or not merged: collectors, the diff in Swift, the Changes screen, abapit's history import and scheduled snapshots.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.
