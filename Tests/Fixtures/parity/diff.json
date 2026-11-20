@@ -10581,6 +10581,68 @@
     "old": {
      "devices": {
       "id-1": {
+       "n": 9007199254740993
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "n": 9007199254740992
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "n": 9007199254740992
+        },
+        "fields": [
+         {
+          "field": "n",
+          "old": 9007199254740993,
+          "new": 9007199254740992
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "n": 10000000000000000
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "n": 1e+16
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
        "o": {
         "a": 1,
         "b": [
@@ -10993,6 +11055,9 @@
     }
    },
    "expected": {
+    "ok": {}
+   },
+   "abapit": {
     "ok": {
      "devices": {
       "added": [],
@@ -11024,6 +11089,9 @@
     }
    },
    "expected": {
+    "ok": {}
+   },
+   "abapit": {
     "ok": {
      "devices": {
       "added": [],

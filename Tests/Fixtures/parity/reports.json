@@ -24270,15 +24270,6 @@
       "attributes": {
        "serialNumber": "DEMO0001"
       }
-     },
-     {
-      "type": "orgDevices",
-      "id": null,
-      "attributes": {}
-     },
-     {
-      "type": "orgDevices",
-      "attributes": {}
      }
     ],
     "days": 30
@@ -24302,7 +24293,7 @@
        }
       }
      ],
-     "covered_count": 1,
+     "covered_count": 0,
      "days": 30
     }
    }

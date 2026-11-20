@@ -22,9 +22,12 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
     mixed offsets and fractional seconds); equal instants keep their input order, and an event with no date it
     can read goes last, in input order; an event whose attributes aren't an object, or whose type isn't a
     string, is no row (abapit raised on both and lost the list);
-  - diff_snapshots: a boolean is not a number (Python's `True == 1` hid a flag that became a count); 1 and 1.0
-    stay one JSON number;
-  - fleet_age_report: a device ordered a year or more ahead is "< 1 yr" (abapit's `bucket_labels[-1]` put it in
+  - diff_snapshots, two decisions of the operator's (2026-11-20; asked whether swiftabapit should report
+    true <-> 1 as a change: "Report it (Recommended)"; asked what counts as a changed item: "Only real changes
+    (Recommended)"): a boolean is not a number (Python's `True == 1` hid a flag that became a count; 1 and 1.0
+    stay one JSON number), and an item is changed only when at least one field really changed (abapit listed
+    an item with an empty `fields` for None against a missing field);
+  - fleet_age_report: a device ordered more than 365 days ahead is "< 1 yr" (abapit's `bucket_labels[-1]` put it in
     "4+ yrs"); it is never a refresh candidate;
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
   - mosyle adapt_device: an allowlist (defect 1, invariant 11): what abapit makes of the raw cut to the columns
@@ -594,11 +597,15 @@ def mosyle_edges() -> dict:
     return {"reconcile": reconcile, "posture": posture, "stale": stale, "timeline": timeline}
 
 
+FLEET_AGE_DEVIATIONS = 2   # the hand-written fleets with a device ordered more than 365 days ahead
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
     rng = random.Random(1004)
     cases = []
+    fleet_labels: list = []
 
     def add(function, args, call):
         cases.append({"function": function, "input": args, "expected": outcome(call)})
@@ -654,23 +661,31 @@ def gen_reports(m: dict) -> None:
         years = rng.choice([1, 3, 4, 5])
         add("fleet_age_report", {"devices": devices, "applecare_items": care, "years": years},
             lambda: reports.fleet_age_report(devices, care, years, now=FIXED_NOW))
+        fleet_labels.append(None)
     for label, devices, care, years in fleet_age_edges():
         add("fleet_age_report", {"devices": devices, "applecare_items": care, "years": years},
             lambda: reports.fleet_age_report(devices, care, years, now=FIXED_NOW))
-        corrected = outcome(lambda: corrected_fleet_age(reports, devices, care, years))
-        if "ok" not in cases[-1]["expected"] or "ok" not in corrected:
-            raise SystemExit(f"fleet_age_report refused a hand-written case ({label}): {cases[-1]['expected']}")
-        # Only a fleet with a device ordered a year or more ahead deviates; the others keep abapit's bytes.
-        if cases[-1]["expected"] != corrected:
-            cases[-1]["abapit"], cases[-1]["expected"] = cases[-1]["expected"], corrected
-        if ("future" in label) != ("abapit" in cases[-1]):
+        fleet_labels.append(label)
+    # Every fleet-age case, drawn or hand-written, is held to the corrected output: only a case labelled "future"
+    # (a device ordered more than 365 days ahead) deviates, and then abapit's output is kept beside it.
+    fleet_cases = [c for c in cases if c["function"] == "fleet_age_report"]
+    for case, label in zip(fleet_cases, fleet_labels, strict=True):
+        i = case["input"]
+        corrected = outcome(lambda: corrected_fleet_age(reports, i["devices"], i["applecare_items"], i["years"]))
+        if "ok" not in case["expected"] or "ok" not in corrected:
+            raise SystemExit(f"fleet_age_report refused a case ({label}): {case['expected']}")
+        if case["expected"] != corrected:
+            case["abapit"], case["expected"] = case["expected"], corrected
+        if (label is not None and "future" in label) != ("abapit" in case):
             raise SystemExit(f"fleet_age_report {label!r}: the future-order correction no longer holds "
-                             f"(abapit's output {'differs' if 'abapit' in cases[-1] else 'matches'} the corrected one)")
-        if "abapit" in cases[-1]:
-            buckets = dict(cases[-1]["expected"]["ok"]["buckets"])
-            wrong = dict(cases[-1]["abapit"]["ok"]["buckets"])
+                             f"(abapit's output {'differs' if 'abapit' in case else 'matches'} the corrected one)")
+        if "abapit" in case:
+            buckets = dict(case["expected"]["ok"]["buckets"])
+            wrong = dict(case["abapit"]["ok"]["buckets"])
             if buckets["4+ yrs"] >= wrong["4+ yrs"] or buckets["< 1 yr"] <= wrong["< 1 yr"]:
                 raise SystemExit(f"fleet_age_report {label!r}: a future order must move from '4+ yrs' to '< 1 yr'")
+    if sum(1 for c in fleet_cases if "abapit" in c) != FLEET_AGE_DEVIATIONS:
+        raise SystemExit("fleet_age_report: the number of deviating cases changed")
     def audit_case(events: list[dict], which: str) -> None:
         types = getattr(reports, which)
         add("audit_digest", {"events": events, "types": which}, lambda: reports.audit_digest(events, types))
@@ -792,9 +807,9 @@ def coverage_edges() -> list[tuple[list[dict], list[dict], int]]:
           demo_care("DEMO0002", end=ago(days=-10, hours=-5), description="AppleCare+"),
           demo_care("DEMO0002", status="INACTIVE", end=ago(days=-3), description="Old"),
           demo_care("DEMO0003", end=ago(days=-10), description="AppleCare for Enterprise")], d[:3], 30),
-        # a null serialNumber is covered_serials' None, which a device with a null or no id then matches
+        # a null or missing serialNumber is covered_serials' None; no device (every device has an id) matches it
         ([demo_care(None, end=ago(days=-4)), {"type": "applecare", "id": "X:0", "attributes": {"status": "ACTIVE"}}],
-         [d[0], {"type": "orgDevices", "id": None, "attributes": {}}, {"type": "orgDevices", "attributes": {}}], 30),
+         [d[0]], 30),
         ([], d[:2], 30),
         ([demo_care("DEMO0001", end=ago(days=-1))], [], 30),
     ]
@@ -814,10 +829,10 @@ def fleet_age_edges() -> list[tuple[str, list[dict], list[dict] | None, int]]:
     return [
         # abapit's bucket_labels[min(int(age), 4)] reads int(-1.2) = -1 as the last bucket: "4+ yrs".
         # The port answers "< 1 yr" (never a candidate); the case keeps abapit's output beside it.
-        ("future: ordered more than a year ahead", [dev("DEMO0001", order=ago(days=-500)), dev("DEMO0002", order=ago(days=-400)),
+        ("future: ordered more than 365 days ahead", [dev("DEMO0001", order=ago(days=-500)), dev("DEMO0002", order=ago(days=-400)),
                                           dev("DEMO0003", order=ago(days=-30)), dev("DEMO0004", order=ago(days=100))], care, 1),
         ("future: ordered exactly 366 days ahead", [dev("DEMO0001", order=ago(days=-366))], None, 1),
-        ("a year ahead less a day (365 days)", [dev("DEMO0001", order=ago(days=-365))], None, 1),
+        ("365 days ahead, not more", [dev("DEMO0001", order=ago(days=-365))], None, 1),
         ("a month ahead and a few hours ahead", [dev("DEMO0001", order=ago(days=-30)), dev("DEMO0002", order=ago(hours=-3))], None, 1),
         # a future added date as the fallback, with years=0 (a candidate at any age)
         ("added date, ahead", [dev("DEMO0001", added=ago(days=-10))], [], 0),
@@ -845,7 +860,7 @@ def fleet_age_edges() -> list[tuple[str, list[dict], list[dict] | None, int]]:
 
 
 def corrected_fleet_age(reports, devices: list[dict], care, years: int) -> dict:
-    """abapit's report with a device ordered a year or more ahead counted "< 1 yr", not "4+ yrs".
+    """abapit's report with a device ordered more than 365 days ahead counted "< 1 yr", not "4+ yrs".
 
     abapit's `bucket_labels[min(int(age), 4)]` reads int(-1.2) = -1 as the last label. A device ahead by
     less than a year already lands in "< 1 yr" (int(-0.5) = 0), and never is a candidate (age < years)."""
@@ -1068,7 +1083,8 @@ def csv_case(m: dict, items: list[dict]) -> dict:
 
 # -- snapshot diffs --------------------------------------------------------------------------------
 
-DIFF_DEVIATIONS = 4   # the hand-written pairs where a boolean meets a number (see diff_edges)
+DIFF_DRAWN = 40
+DIFF_DEVIATIONS = 6   # hand-written pairs: a boolean against a number (4), None against a missing field (2)
 
 
 def strict_equal(a, b) -> bool:
@@ -1100,7 +1116,8 @@ def corrected_diff(history, old: dict, new: dict) -> dict:
             fields = [{"field": field, "old": o[key].get(field), "new": n[key].get(field)}
                       for field in sorted(set(o[key]) | set(n[key]))
                       if not strict_equal(o[key].get(field), n[key].get(field))]
-            changed.append({"id": key, "attributes": n[key], "fields": fields})
+            if fields:   # the operator's decision: an item is changed only when a field really changed
+                changed.append({"id": key, "attributes": n[key], "fields": fields})
         if added or removed or changed:
             result[resource] = {"added": added, "removed": removed, "changed": changed}
     return result
@@ -1121,6 +1138,10 @@ def diff_edges() -> list[tuple[dict, dict]]:
         one({"n": 1}, {"n": 1.0}),
         one({"n": 1.0}, {"n": 1}),
         one({"n": 2}, {"n": 2.0, "m": 1}),
+        # numbers abapit pins: Python ints are exact (2**53 + 1 differs from 2**53), and 10**16 == 1e16 although
+        # the JSON texts differ ("10000000000000000" against "1e+16"): a port comparing by Double gets both wrong
+        one({"n": 9007199254740993}, {"n": 9007199254740992}),
+        one({"n": 10**16}, {"n": 1e16}),
         # nested equality: objects ignore key order, lists don't; a flag inside a list counts the same way
         one({"o": {"a": 1, "b": [1, 2, {"c": None}]}}, {"o": {"b": [1, 2, {"c": None}], "a": 1}}),
         one({"o": {"a": 1, "b": [1, 2]}}, {"o": {"a": 1, "b": [2, 1]}}),
@@ -1199,19 +1220,24 @@ def gen_diff(m: dict) -> None:
                 for resource, items in data.items():
                     conn.executemany("INSERT INTO items VALUES (?, ?, ?, ?)",
                                      [(cur.lastrowid, resource, key, json.dumps(attrs, sort_keys=True)) for key, attrs in items.items()])
-        case = {"input": {"old": old, "new": new}, "expected": outcome(lambda: history.diff_snapshots(ids[0], ids[1]))}
-        corrected = outcome(lambda: corrected_diff(history, old, new))
+        cases.append({"input": {"old": old, "new": new}, "expected": outcome(lambda: history.diff_snapshots(ids[0], ids[1]))})
+    # Every case, drawn or hand-written, is held to the corrected diff. A drawn case must equal abapit's output;
+    # a hand-written one may deviate (abapit's output is kept beside the corrected one), and only the counted ones.
+    deviating = 0
+    for index, case in enumerate(cases):
+        corrected = outcome(lambda: corrected_diff(history, case["input"]["old"], case["input"]["new"]))
         if "ok" not in case["expected"] or "ok" not in corrected:
-            raise SystemExit(f"diff_snapshots refused a hand-written case: {case['expected']}")
-        # Only a pair that differs by a boolean against a number deviates; the others keep abapit's output.
+            raise SystemExit(f"diff_snapshots refused case {index}: {case['expected']}")
         if case["expected"] != corrected:
+            if index < DIFF_DRAWN:
+                raise SystemExit(f"diff_snapshots: drawn case {index} differs from the corrected diff; "
+                                 "a seed change would record an uncorrected output")
             case["abapit"], case["expected"] = case["expected"], corrected
-        cases.append(case)
+            deviating += 1
     # A corrected expectation that abapit now agrees with, or that never fires, is stale: say so loudly.
-    deviating = sum(1 for case in cases if "abapit" in case)
     if deviating != DIFF_DEVIATIONS:
         raise SystemExit(f"diff_snapshots: {deviating} cases deviate from abapit, expected {DIFF_DEVIATIONS}: "
-                         "the corrected boolean-is-not-a-number expectation no longer holds")
+                         "the corrected expectation (a boolean is not a number; only real changes) no longer holds")
     conn.close()
     write("diff", {**header(1006), "cases": cases})
 
@@ -1285,6 +1311,13 @@ def gen_history(m: dict) -> None:
         a, b = "DEMO-ORG-A", "DEMO-ORG-B"
         reads = []
 
+        def seeded(snapshot_id: int) -> dict:
+            data: dict = {}
+            for i in seed["items"]:
+                if i["snapshot_id"] == snapshot_id:
+                    data.setdefault(i["resource"], {})[i["item_id"]] = i["attributes"]
+            return data
+
         def read(call: str, args: dict, fn) -> None:
             reads.append({"call": call, "args": args, "expected": outcome(fn)})
 
@@ -1302,6 +1335,9 @@ def gen_history(m: dict) -> None:
         for old_id, new_id in ((1, 3), (3, 5), (5, 9), (1, 9), (9, 1), (2, 6), (1, 2)):
             args = {"old_id": old_id, "new_id": new_id}
             read("diff_snapshots", args, lambda: history.diff_snapshots(**args))
+            # held to the corrected diff over the seed too: a seed change can't record an uncorrected output
+            if reads[-1]["expected"] != outcome(lambda: corrected_diff(history, seeded(old_id), seeded(new_id))):
+                raise SystemExit(f"history.json: diff_snapshots {old_id}->{new_id} differs from the corrected diff")
         for org in (a, b):
             args = {"org_client_id": org}
             read("latest_applecare", args, lambda: history.latest_applecare(**args))
