@@ -147,6 +147,12 @@ are below.
   generator reads every expected CSV back with Python's
   `csv.reader` and fails if a cell splits, joins or starts (after blanks) with a trigger.
 - Mutants for the Phase 1b fixes and verifier rounds 1 and 2 are listed in the branch's commit messages.
+- Phase 3 goldens (generated, nothing reads them in Swift yet): `diff.json` (40 drawn + 30 hand-written
+  `diff_edges`; 4 deviations: a boolean against a number), `reports.json`'s `coverage_report` (20 + 12 hand-written)
+  and `fleet_age_report` (20 + 15; 2 deviations: an order a year or more ahead is "< 1 yr", abapit's "4+ yrs" is in
+  `abapit`), and `history.json`: abapit's `SCHEMA`, a fake database's seed rows and abapit's own `list_snapshots`,
+  `latest_resource`, `snapshot_resource`, `diff_snapshots`, `latest_applecare` and, in order, `prune`. The generator
+  stops if a corrected expectation stops holding.
 - Find has no parity golden (abapit's `/find` is in `web/app.py`, not a pure module): `FindTests` holds it,
   with Python 3.12's own outputs written in for the final-sigma cases.
 

@@ -10358,6 +10358,1312 @@
    "expected": {
     "ok": {}
    }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "flag": true
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "flag": 1
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "flag": 1
+        },
+        "fields": [
+         {
+          "field": "flag",
+          "old": true,
+          "new": 1
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "abapit": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "flag": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "flag": true
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "flag": true
+        },
+        "fields": [
+         {
+          "field": "flag",
+          "old": 1,
+          "new": true
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "abapit": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "flag": false
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "flag": 0
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "flag": 0
+        },
+        "fields": [
+         {
+          "field": "flag",
+          "old": false,
+          "new": 0
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "abapit": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "n": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "n": 1.0
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "n": 1.0
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "n": 1
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "n": 2
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "n": 2.0,
+       "m": 1
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "m": 1,
+         "n": 2.0
+        },
+        "fields": [
+         {
+          "field": "m",
+          "old": null,
+          "new": 1
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": 1,
+        "b": [
+         1,
+         2,
+         {
+          "c": null
+         }
+        ]
+       }
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "b": [
+         1,
+         2,
+         {
+          "c": null
+         }
+        ],
+        "a": 1
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": 1,
+        "b": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": 1,
+        "b": [
+         2,
+         1
+        ]
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "o": {
+          "a": 1,
+          "b": [
+           2,
+           1
+          ]
+         }
+        },
+        "fields": [
+         {
+          "field": "o",
+          "old": {
+           "a": 1,
+           "b": [
+            1,
+            2
+           ]
+          },
+          "new": {
+           "a": 1,
+           "b": [
+            2,
+            1
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": [
+         1,
+         {
+          "b": true
+         }
+        ]
+       }
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": [
+         1,
+         {
+          "b": 1
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "o": {
+          "a": [
+           1,
+           {
+            "b": 1
+           }
+          ]
+         }
+        },
+        "fields": [
+         {
+          "field": "o",
+          "old": {
+           "a": [
+            1,
+            {
+             "b": true
+            }
+           ]
+          },
+          "new": {
+           "a": [
+            1,
+            {
+             "b": 1
+            }
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "abapit": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": [
+         1,
+         {
+          "b": 2
+         }
+        ]
+       }
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": [
+         1,
+         {
+          "b": 3
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "o": {
+          "a": [
+           1,
+           {
+            "b": 3
+           }
+          ]
+         }
+        },
+        "fields": [
+         {
+          "field": "o",
+          "old": {
+           "a": [
+            1,
+            {
+             "b": 2
+            }
+           ]
+          },
+          "new": {
+           "a": [
+            1,
+            {
+             "b": 3
+            }
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": 1
+       }
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "o": {
+        "a": 1,
+        "z": {}
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "o": {
+          "a": 1,
+          "z": {}
+         }
+        },
+        "fields": [
+         {
+          "field": "o",
+          "old": {
+           "a": 1
+          },
+          "new": {
+           "a": 1,
+           "z": {}
+          }
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "t": []
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "t": {}
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "t": {}
+        },
+        "fields": [
+         {
+          "field": "t",
+          "old": [],
+          "new": {}
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "t": ""
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "t": null
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "t": null
+        },
+        "fields": [
+         {
+          "field": "t",
+          "old": "",
+          "new": null
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "x": null
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {}
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {},
+        "fields": []
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {}
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "x": null
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "x": null
+        },
+        "fields": []
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "x": null,
+       "y": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "y": 2
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "y": 2
+        },
+        "fields": [
+         {
+          "field": "y",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "x": null
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "x": null
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "\u00c9": {
+       "k": 1
+      },
+      "E\u0301": {
+       "k": 2
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "\u00c9": {
+       "k": 1
+      },
+      "E\u0301": {
+       "k": 3
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "E\u0301",
+        "attributes": {
+         "k": 3
+        },
+        "fields": [
+         {
+          "field": "k",
+          "old": 2,
+          "new": 3
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "\u00c9": {
+       "k": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "E\u0301": {
+       "k": 1
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [
+       {
+        "id": "E\u0301",
+        "attributes": {
+         "k": 1
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "\u00c9",
+        "attributes": {
+         "k": 1
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "\u00c9": 1,
+       "E\u0301": 2
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "\u00c9": 1,
+       "E\u0301": 3
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "E\u0301": 3,
+         "\u00c9": 1
+        },
+        "fields": [
+         {
+          "field": "E\u0301",
+          "old": 2,
+          "new": 3
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "name": "\u00c9"
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "name": "E\u0301"
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "name": "E\u0301"
+        },
+        "fields": [
+         {
+          "field": "name",
+          "old": "\u00c9",
+          "new": "E\u0301"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {}
+    },
+    "new": {
+     "devices": {
+      "z": {},
+      "\ud83d\ude00": {},
+      "\uff21": {},
+      "\u00e9": {},
+      "A": {},
+      "a": {},
+      "": {}
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [
+       {
+        "id": "",
+        "attributes": {}
+       },
+       {
+        "id": "A",
+        "attributes": {}
+       },
+       {
+        "id": "a",
+        "attributes": {}
+       },
+       {
+        "id": "z",
+        "attributes": {}
+       },
+       {
+        "id": "\u00e9",
+        "attributes": {}
+       },
+       {
+        "id": "\uff21",
+        "attributes": {}
+       },
+       {
+        "id": "\ud83d\ude00",
+        "attributes": {}
+       }
+      ],
+      "removed": [],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "\ud83d\ude00": {
+       "k": 1
+      },
+      "\uff21": {
+       "k": 1
+      },
+      "\ue000": {
+       "k": 1
+      },
+      "b": {
+       "k": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "\ud83d\ude00": {
+       "k": 2
+      },
+      "\uff21": {
+       "k": 2
+      },
+      "\ue000": {
+       "k": 2
+      },
+      "b": {
+       "k": 2
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "b",
+        "attributes": {
+         "k": 2
+        },
+        "fields": [
+         {
+          "field": "k",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       },
+       {
+        "id": "\ue000",
+        "attributes": {
+         "k": 2
+        },
+        "fields": [
+         {
+          "field": "k",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       },
+       {
+        "id": "\uff21",
+        "attributes": {
+         "k": 2
+        },
+        "fields": [
+         {
+          "field": "k",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       },
+       {
+        "id": "\ud83d\ude00",
+        "attributes": {
+         "k": 2
+        },
+        "fields": [
+         {
+          "field": "k",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "\ud83d\ude00": 1,
+       "\uff21": 1,
+       "\ue000": 1,
+       "b": 1
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "id-1": {
+       "\ud83d\ude00": 2,
+       "\uff21": 2,
+       "\ue000": 2,
+       "b": 2
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "b": 2,
+         "\ue000": 2,
+         "\uff21": 2,
+         "\ud83d\ude00": 2
+        },
+        "fields": [
+         {
+          "field": "b",
+          "old": 1,
+          "new": 2
+         },
+         {
+          "field": "\ue000",
+          "old": 1,
+          "new": 2
+         },
+         {
+          "field": "\uff21",
+          "old": 1,
+          "new": 2
+         },
+         {
+          "field": "\ud83d\ude00",
+          "old": 1,
+          "new": 2
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {}
+    },
+    "new": {
+     "devices": {
+      "": {
+       "name": "Empty id"
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "Empty id"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "": {
+       "name": "Empty id"
+      }
+     }
+    },
+    "new": {
+     "devices": {}
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "Empty id"
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "": {
+       "name": "A"
+      }
+     }
+    },
+    "new": {
+     "devices": {
+      "": {
+       "name": "B"
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "B"
+        },
+        "fields": [
+         {
+          "field": "name",
+          "old": "A",
+          "new": "B"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "old": {},
+    "new": {}
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {}
+    },
+    "new": {
+     "devices": {}
+    }
+   },
+   "expected": {
+    "ok": {}
+   }
+  },
+  {
+   "input": {
+    "old": {
+     "devices": {
+      "id-1": {
+       "a": 1
+      }
+     }
+    },
+    "new": {
+     "users": {
+      "id-1": {
+       "a": 1
+      }
+     }
+    }
+   },
+   "expected": {
+    "ok": {
+     "devices": {
+      "added": [],
+      "removed": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "a": 1
+        }
+       }
+      ],
+      "changed": []
+     },
+     "users": {
+      "added": [
+       {
+        "id": "id-1",
+        "attributes": {
+         "a": 1
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     }
+    }
+   }
   }
  ]
 }
