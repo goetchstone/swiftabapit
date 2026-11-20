@@ -23549,6 +23549,835 @@
    }
   },
   {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:01Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0004:0",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T11:59:59Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z",
+       "days_left": 0
+      },
+      {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:00Z",
+       "days_left": 30
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 4,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z",
+       "days_left": 0
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 1,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:00Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:00Z",
+       "days_left": 30
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 1,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "endDateTime": "2026-11-15T12:00:01Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [],
+     "uncovered": [],
+     "covered_count": 1,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0004:0",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T11:59:59Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [],
+     "uncovered": [],
+     "covered_count": 1,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:01Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T11:59:59Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     }
+    ],
+    "days": 0
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T12:00:00Z",
+       "days_left": 0
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 3,
+     "days": 0
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20T12:00:00"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T14:00:00+02:00"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0004:0",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T14:00:00-02:00"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T14:00:00+02:00",
+       "days_left": 0
+      },
+      {
+       "serialNumber": "DEMO0004",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-16T14:00:00-02:00",
+       "days_left": 0
+      },
+      {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20",
+       "days_left": 3
+      },
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20T12:00:00",
+       "days_left": 4
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 4,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "INACTIVE",
+       "endDateTime": "2026-10-21T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "active",
+       "endDateTime": "2026-10-21T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": null,
+       "endDateTime": "2026-10-21T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0004:0",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "status": "ACTIVE",
+       "endDateTime": null
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0005:0",
+      "attributes": {
+       "serialNumber": "DEMO0005",
+       "status": "ACTIVE"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0006:0",
+      "attributes": {
+       "serialNumber": "DEMO0006",
+       "status": "ACTIVE",
+       "endDateTime": "not a date"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0007:0",
+      "attributes": {
+       "serialNumber": "DEMO0007",
+       "status": "ACTIVE",
+       "endDateTime": ""
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0005",
+      "attributes": {
+       "serialNumber": "DEMO0005"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0006",
+      "attributes": {
+       "serialNumber": "DEMO0006"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0007",
+      "attributes": {
+       "serialNumber": "DEMO0007"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [],
+     "uncovered": [
+      {
+       "type": "orgDevices",
+       "id": "DEMO0001",
+       "attributes": {
+        "serialNumber": "DEMO0001"
+       }
+      },
+      {
+       "type": "orgDevices",
+       "id": "DEMO0002",
+       "attributes": {
+        "serialNumber": "DEMO0002"
+       }
+      },
+      {
+       "type": "orgDevices",
+       "id": "DEMO0003",
+       "attributes": {
+        "serialNumber": "DEMO0003"
+       }
+      }
+     ],
+     "covered_count": 4,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "description": "AppleCare+",
+       "endDateTime": "2026-11-05T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "description": "Limited Warranty",
+       "endDateTime": "2026-10-26T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "description": "AppleCare+",
+       "endDateTime": "2026-10-26T17:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "INACTIVE",
+       "description": "Old",
+       "endDateTime": "2026-10-19T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "description": "AppleCare for Enterprise",
+       "endDateTime": "2026-10-26T12:00:00Z"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "description": "Limited Warranty",
+       "endDateTime": "2026-10-26T12:00:00Z",
+       "days_left": 10
+      },
+      {
+       "serialNumber": "DEMO0002",
+       "status": "ACTIVE",
+       "description": "AppleCare+",
+       "endDateTime": "2026-10-26T17:00:00Z",
+       "days_left": 10
+      },
+      {
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE",
+       "description": "AppleCare for Enterprise",
+       "endDateTime": "2026-10-26T12:00:00Z",
+       "days_left": 10
+      },
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "description": "AppleCare+",
+       "endDateTime": "2026-11-05T12:00:00Z",
+       "days_left": 20
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 3,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "None:0",
+      "attributes": {
+       "serialNumber": null,
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20T12:00:00Z"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "X:0",
+      "attributes": {
+       "status": "ACTIVE"
+      }
+     }
+    ],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": null,
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-20T12:00:00Z",
+       "days_left": 4
+      }
+     ],
+     "uncovered": [
+      {
+       "type": "orgDevices",
+       "id": "DEMO0001",
+       "attributes": {
+        "serialNumber": "DEMO0001"
+       }
+      }
+     ],
+     "covered_count": 0,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [],
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002"
+      }
+     }
+    ],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [],
+     "uncovered": [
+      {
+       "type": "orgDevices",
+       "id": "DEMO0001",
+       "attributes": {
+        "serialNumber": "DEMO0001"
+       }
+      },
+      {
+       "type": "orgDevices",
+       "id": "DEMO0002",
+       "attributes": {
+        "serialNumber": "DEMO0002"
+       }
+      }
+     ],
+     "covered_count": 0,
+     "days": 30
+    }
+   }
+  },
+  {
+   "function": "coverage_report",
+   "input": {
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-17T12:00:00Z"
+      }
+     }
+    ],
+    "devices": [],
+    "days": 30
+   },
+   "expected": {
+    "ok": {
+     "expiring": [
+      {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE",
+       "endDateTime": "2026-10-17T12:00:00Z",
+       "days_left": 1
+      }
+     ],
+     "uncovered": [],
+     "covered_count": 0,
+     "days": 30
+    }
+   }
+  },
+  {
    "function": "fleet_age_report",
    "input": {
     "devices": [
@@ -31836,6 +32665,1272 @@
      "undated": 0,
      "years": 5,
      "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2028-02-28T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2027-11-20T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2026-11-15T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2026-07-08T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "status": "INACTIVE"
+      }
+     }
+    ],
+    "years": 1
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       4
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 4,
+     "candidates": [],
+     "uncovered_candidates": 0,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": true
+    }
+   },
+   "abapit": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       2
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       2
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [],
+     "uncovered_candidates": 0,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": true
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2027-10-17T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 1
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": false
+    }
+   },
+   "abapit": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       1
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2027-10-16T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 1
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2026-11-15T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2026-10-16T15:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 1
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       2
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "addedToOrgDateTime": "2026-10-26T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": [],
+    "years": 0
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [],
+     "uncovered_candidates": 0,
+     "undated": 0,
+     "years": 0,
+     "has_coverage_data": true
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2025-10-16T06:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2024-10-16T00:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2023-10-16T18:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-10-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0005",
+      "attributes": {
+       "serialNumber": "DEMO0005",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2021-10-16T06:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 4
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       1
+      ],
+      [
+       "2\u20133 yrs",
+       1
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       2
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [
+      {
+       "serial": "DEMO0005",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2021-10-16T06:00:00Z",
+       "age_years": 5.0,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0004",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-10-16T12:00:00Z",
+       "age_years": 4.0,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 4,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-10-16T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": [],
+    "years": 4
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       1
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [
+      {
+       "serial": "DEMO0004",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-10-16T12:00:00Z",
+       "age_years": 4.0,
+       "covered": false
+      }
+     ],
+     "uncovered_candidates": 1,
+     "undated": 0,
+     "years": 4,
+     "has_coverage_data": true
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2025-10-16T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2025-10-15T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 1
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       1
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [
+      {
+       "serial": "DEMO0002",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2025-10-15T12:00:00Z",
+       "age_years": 1.0,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 1,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2025-11-03T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2023-12-10T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2023-09-28T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2021-11-03T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0005",
+      "attributes": {
+       "serialNumber": "DEMO0005",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2021-08-22T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 3
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       1
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       1
+      ],
+      [
+       "3\u20134 yrs",
+       1
+      ],
+      [
+       "4+ yrs",
+       2
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [
+      {
+       "serial": "DEMO0005",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2021-08-22T12:00:00Z",
+       "age_years": 5.1,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0004",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2021-11-03T12:00:00Z",
+       "age_years": 5.0,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0003",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2023-09-28T12:00:00Z",
+       "age_years": 3.0,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 3,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "addedToOrgDateTime": "2024-08-07T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "not a date",
+       "addedToOrgDateTime": "2024-04-29T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "",
+       "addedToOrgDateTime": "2024-01-20T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": null,
+       "addedToOrgDateTime": "2023-10-12T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0005",
+      "attributes": {
+       "serialNumber": "DEMO0005",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-09-07T12:00:00Z",
+       "addedToOrgDateTime": "2026-07-08T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 2
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       3
+      ],
+      [
+       "3\u20134 yrs",
+       1
+      ],
+      [
+       "4+ yrs",
+       1
+      ]
+     ],
+     "bucket_max": 3,
+     "candidates": [
+      {
+       "serial": "DEMO0005",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-09-07T12:00:00Z",
+       "age_years": 4.1,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0004",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2023-10-12T12:00:00Z",
+       "age_years": 3.0,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0003",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2024-01-20T12:00:00Z",
+       "age_years": 2.7,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0002",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "not a date",
+       "age_years": 2.5,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0001",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2024-08-07T12:00:00Z",
+       "age_years": 2.2,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 2,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": null,
+       "addedToOrgDateTime": null
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "",
+       "addedToOrgDateTime": "x"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0004",
+      "attributes": {
+       "serialNumber": "DEMO0004",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2023-07-04T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 3
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       1
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 1,
+     "candidates": [
+      {
+       "serial": "DEMO0004",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2023-07-04T12:00:00Z",
+       "age_years": 3.3,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 3,
+     "years": 3,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-05-30T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-02-19T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": null,
+    "years": 4
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       2
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [
+      {
+       "serial": "DEMO0002",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-02-19T12:00:00Z",
+       "age_years": 4.7,
+       "covered": null
+      },
+      {
+       "serial": "DEMO0001",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-05-30T12:00:00Z",
+       "age_years": 4.4,
+       "covered": null
+      }
+     ],
+     "uncovered_candidates": null,
+     "undated": 0,
+     "years": 4,
+     "has_coverage_data": false
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-05-30T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-02-19T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": [],
+    "years": 4
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       2
+      ]
+     ],
+     "bucket_max": 2,
+     "candidates": [
+      {
+       "serial": "DEMO0002",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-02-19T12:00:00Z",
+       "age_years": 4.7,
+       "covered": false
+      },
+      {
+       "serial": "DEMO0001",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-05-30T12:00:00Z",
+       "age_years": 4.4,
+       "covered": false
+      }
+     ],
+     "uncovered_candidates": 2,
+     "undated": 0,
+     "years": 4,
+     "has_coverage_data": true
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [
+     {
+      "type": "orgDevices",
+      "id": "DEMO0001",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-05-30T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0002",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2022-02-19T12:00:00Z"
+      }
+     },
+     {
+      "type": "orgDevices",
+      "id": "DEMO0003",
+      "attributes": {
+       "serialNumber": "DEMO0003",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "orderDateTime": "2021-11-11T12:00:00Z"
+      }
+     }
+    ],
+    "applecare_items": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "serialNumber": "DEMO0001",
+       "status": "ACTIVE"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0002:0",
+      "attributes": {
+       "serialNumber": "DEMO0002",
+       "status": "INACTIVE"
+      }
+     }
+    ],
+    "years": 4
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       3
+      ]
+     ],
+     "bucket_max": 3,
+     "candidates": [
+      {
+       "serial": "DEMO0003",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2021-11-11T12:00:00Z",
+       "age_years": 4.9,
+       "covered": false
+      },
+      {
+       "serial": "DEMO0002",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-02-19T12:00:00Z",
+       "age_years": 4.7,
+       "covered": false
+      },
+      {
+       "serial": "DEMO0001",
+       "model": "MacBook Air 13-inch (M3)",
+       "family": "Mac",
+       "ordered": "2022-05-30T12:00:00Z",
+       "age_years": 4.4,
+       "covered": true
+      }
+     ],
+     "uncovered_candidates": 2,
+     "undated": 0,
+     "years": 4,
+     "has_coverage_data": true
+    }
+   }
+  },
+  {
+   "function": "fleet_age_report",
+   "input": {
+    "devices": [],
+    "applecare_items": [],
+    "years": 3
+   },
+   "expected": {
+    "ok": {
+     "buckets": [
+      [
+       "< 1 yr",
+       0
+      ],
+      [
+       "1\u20132 yrs",
+       0
+      ],
+      [
+       "2\u20133 yrs",
+       0
+      ],
+      [
+       "3\u20134 yrs",
+       0
+      ],
+      [
+       "4+ yrs",
+       0
+      ]
+     ],
+     "bucket_max": 0,
+     "candidates": [],
+     "uncovered_candidates": 0,
+     "undated": 0,
+     "years": 3,
+     "has_coverage_data": true
     }
    }
   },
