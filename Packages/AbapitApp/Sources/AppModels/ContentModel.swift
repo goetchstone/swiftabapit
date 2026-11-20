@@ -24,6 +24,9 @@ public protocol ContentRow: Identifiable, Sendable where ID == String {
     static var columns: ExportPolicy.Columns { get }
     var item: Item { get }
     var name: String { get }
+    /// The row's name when it has one, as a blueprint's member shows it: nil when Apple sent none (`name` is then the id).
+    /// A package's is masked as its `name` is.
+    var memberName: String? { get }
     /// What the search matches.
     var searched: [String] { get }
     /// The row as its CSV holds it: the item's attributes, a package's with its addresses masked.
@@ -47,6 +50,7 @@ public struct AppRow: ContentRow {
     /// "Custom" (the organization's own) or "App Store".
     public let source: String
     public var searched: [String] { [name, bundleID, item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ app: ContentApp) {
         item = app
@@ -68,6 +72,7 @@ public struct PackageRow: ContentRow {
     /// Sorts undated packages first, as a missing date reads oldest.
     public let updated: Date
     public var searched: [String] { [name, bundleIDs, item.id] }
+    public var memberName: String? { ContentWords.named(ContentWords.shown(item.name)) }
     public var exported: CSV.Item { ContentWords.exported(item) }
 
     /// Each text with its addresses masked (`ContentWords.shown`), as the detail's attributes are.
@@ -90,6 +95,7 @@ public struct BlueprintRow: ContentRow {
     public let licences: String
     public let updated: Date
     public var searched: [String] { [name, item.summary ?? "", item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ blueprint: Blueprint) {
         item = blueprint
@@ -110,6 +116,7 @@ public struct ConfigurationRow: ContentRow {
     public let platforms: String
     public let updated: Date
     public var searched: [String] { [name, type, item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ configuration: Configuration) {
         item = configuration
@@ -153,8 +160,11 @@ public final class ContentList<Row: ContentRow> {
     /// This list as the names of a blueprint's members: each row's own text, so a package's is masked as its row masks it
     /// (invariant 11; `PackageRow.init`).
     package var memberNames: MemberNames.Source {
-        MemberNames.source(state, truncated: truncated) { MemberNames.byID(rows.map { ($0.id, $0.name) }) }
+        MemberNames.source(state, truncated: truncated) { MemberNames.byID(rows.map { ($0.id, $0.memberName) }) }
     }
+
+    /// Only where this list stands (not read, read, unreadable), which is cheap: what an open blueprint detail watches.
+    package var memberPhase: MemberNames.Phase { MemberNames.phase(state, truncated: truncated) }
 
     /// The rows a walk read before it failed or was refused: shown, and said to be partial.
     public var partialCount: Int? {
@@ -261,25 +271,33 @@ public final class ContentModel {
     @ObservationIgnored private var loadedGeneration = -1
 
     public convenience init(orgs: OrgsModel) {
-        self.init(orgs: orgs, otherNames: { [:] })
+        self.init(orgs: orgs, otherNames: { [:] }, otherPhases: { [:] })
     }
 
     /// `otherNames` is what the other screens have read, for the relationships Content has no list of: devices, users and
-    /// user groups (`ScreenModels` wires them). Asked when a blueprint's detail lands, never before: no read is made for it.
-    package init(orgs: OrgsModel, otherNames: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Source]) {
+    /// user groups (`ScreenModels` wires them), and `otherPhases` where each stands (what the open detail watches). Asked
+    /// when a blueprint's detail lands and when a list moves between not read, read and unreadable; no read is made for it.
+    package init(orgs: OrgsModel, otherNames: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Source],
+                 otherPhases: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Phase] = { [:] }) {
         self.orgs = orgs
         let apps = ContentList<AppRow>(), packages = ContentList<PackageRow>(), configurations = ContentList<ConfigurationRow>()
         self.apps = apps
         self.packages = packages
         blueprints = ContentList()
         self.configurations = configurations
-        detail = ContentDetailModel(orgs: orgs) {
+        detail = ContentDetailModel(orgs: orgs, names: {
             var sources = otherNames()
             sources[.apps] = apps.memberNames
             sources[.packages] = packages.memberNames
             sources[.configurations] = configurations.memberNames
             return MemberNames(sources)
-        }
+        }, phases: {
+            var phases = otherPhases()
+            phases[.apps] = apps.memberPhase
+            phases[.packages] = packages.memberPhase
+            phases[.configurations] = configurations.memberPhase
+            return phases
+        })
         orgs.onSwitch { [weak self] in self?.orgChanged() }
     }
 
@@ -370,22 +388,34 @@ public final class ContentDetailModel {
     @ObservationIgnored package private(set) var readsFinished = 0
 
     /// What the app has read to name a blueprint's members (the active org's lists as they are now). Asked when the
-    /// blueprint's read lands and again whenever a list it reads changes (`track`): the open blueprint's members are named,
+    /// blueprint's read lands and again whenever a list it reads moves between not read, read and unreadable (`track`): the open blueprint's members are named,
     /// and its words kept true, as lists arrive, from the held read and no new Apple read.
     private let names: @MainActor () -> MemberNames
+    /// Where each list stands, cheap to ask: the open detail watches this alone, and builds the names (`names`) only when a
+    /// list moves between not read, read and unreadable, not on each page it reads.
+    private let phases: @MainActor () -> [Blueprint.Relationship: MemberNames.Phase]
+    @ObservationIgnored private var heldPhases: [Blueprint.Relationship: MemberNames.Phase] = [:]
+    @ObservationIgnored private var tracked = false
     /// The open blueprint's read, with the token of the `show` that made it: a rebuild uses it only while that is still the
     /// current one, so a switch or another choice retires it (a list finishing in the old org rebuilds nothing).
     @ObservationIgnored private var held: (read: BlueprintRead, token: Int)?
 
-    init(orgs: OrgsModel, names: @escaping @MainActor () -> MemberNames = { MemberNames() }) {
+    init(orgs: OrgsModel, names: @escaping @MainActor () -> MemberNames = { MemberNames() },
+         phases: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Phase] = { [:] }) {
         self.orgs = orgs
         self.names = names
+        self.phases = phases
     }
 
     func show(_ selection: ContentSelection?) {
         task?.cancel()
         task = nil
         token += 1
+        // Nothing of the last row's read stays in memory past its show: a switch (which clears the selection), another choice
+        // or a close drops it (the clients rule).
+        held = nil
+        heldPhases = [:]
+        tracked = false
         shown = selection
         item = .loading
         guard let selection else { return }
@@ -428,9 +458,14 @@ public final class ContentDetailModel {
     /// one changes, once more. Only while `token` is the current show's.
     private func track(_ token: Int) {
         guard let held, held.token == token, self.token == token else { return }
-        let names = withObservationTracking { self.names() } onChange: { [weak self] in
+        let now = withObservationTracking { self.phases() } onChange: { [weak self] in
             Task { @MainActor in self?.track(token) }
         }
+        // A page of a list changes its state without changing where it stands: nothing to rebuild.
+        guard now != heldPhases || !tracked else { return }
+        heldPhases = now
+        tracked = true
+        let names = self.names()
         let rebuilt = ContentDetail(blueprint: held.read, names: names)
         if case .loaded(let now) = item, now.members == rebuilt.members, now.membersListNote == rebuilt.membersListNote { return }
         item = .loaded(rebuilt)
@@ -569,9 +604,9 @@ public struct ContentDetail: Sendable {
                     let source = names[relationship]
                     var named = 0, nameless = 0
                     let members = listed.linkages.map { linkage -> ContentMember in
-                        guard case .read(let list, _) = source, let name = list[linkage.id] else { return ContentMember(id: linkage.id, name: nil) }
-                        // A row with no name shows its id (`AppRow.name`): that names nothing, so it stays an ID, and is said.
-                        if name == linkage.id {
+                        guard case .read(let list, _) = source, let entry = list[linkage.id] else { return ContentMember(id: linkage.id, name: nil) }
+                        // One rule for every kind: a row with no name leaves its member an ID, counted and said.
+                        guard let name = entry else {
                             nameless += 1
                             return ContentMember(id: linkage.id, name: nil)
                         }
@@ -765,6 +800,9 @@ package enum ContentWords {
     /// verifier round 2: the detail masked an address in the description attribute, then showed the same address raw in the
     /// Name, Version, Bundle IDs and Hash fields and the title, and the CSV wrote all five raw: a file that leaves the app was
     /// less careful than the screen, invariant 11; round 3: so did the member list). Nil when Apple sent none.
+    /// `text` as a name: nil when there is none (Apple sent none, or an empty string).
+    static func named(_ text: String?) -> String? { text.flatMap { $0.isEmpty ? nil : $0 } }
+
     static func shown(_ text: String?) -> String? { text.map(addresses(in:)) }
 
     /// A package as its CSV holds it: every string of every attribute through `addresses(in:)`, at any depth. The `url`

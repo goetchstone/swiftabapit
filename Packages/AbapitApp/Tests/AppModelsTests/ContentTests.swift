@@ -3,7 +3,9 @@ import AppleModels
 import AppModels
 import Foundation
 import JSONAPI
+import Observation
 import Reports
+import Synchronization
 import Testing
 import TestSupport
 
@@ -1071,8 +1073,8 @@ struct ContentTests {
     // MARK: naming a blueprint's members
 
     /// Org a with one member of each of a blueprint's six relationships, each in the list that names it.
-    static func membersWorld(pageCap: Int = AppleClient.defaultPageCap) async throws -> World {
-        let world = try await World.make(devices: ["a": 1, "b": 2], pageCap: pageCap)
+    static func membersWorld(pageCap: Int = AppleClient.defaultPageCap, mosyle: Bool = false) async throws -> World {
+        let world = try await World.make(devices: ["a": 1, "b": 2], pageCap: pageCap, mosyle: mosyle)
         world.stubs["a"]!.add([
             Self.app(1),
             Resource(type: "packages", id: "P1", attributes: ["name": .string("Agent from https://deploy:TOPSECRET1@pkgs.example.com/agent.pkg")]),
@@ -1260,9 +1262,12 @@ struct ContentTests {
         let opened = try await Self.blueprintDetail(world, "B1")
         #expect(opened.title == "Office")
         world.orgs.select("b")
-        await Self.settled(world, 8)
-        await eventually("org b's people") { Self.isLoaded(world.people.groups.state) }
-        try await Task.sleep(for: .milliseconds(150))
+        let fired = Self.probe(world.content.detail)
+        await Self.drain()
+        #expect(fired.count == 0, "a rebuild scheduled by the switch's resets touched the detail")
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        #expect(fired.count == 0, "a rebuild after the new org's lists loaded touched the detail")
         #expect(world.content.detail.shown == nil)
         if case .loaded(let detail) = world.content.detail.item { Issue.record("a detail for no chosen row: \(detail.title)") }
         // Org b's own blueprint, opened afterwards, is org b's, whatever the old lists did.
@@ -1300,6 +1305,175 @@ struct ContentTests {
         #expect(detail.members.first?.members == [ContentMember(id: "N1", name: nil)])
         #expect(detail.membersListNote == "Packages, configurations, devices, users and user groups are named; 1 of 1 apps has no name in the apps "
                 + "list, so is listed by ID.")
+    }
+
+    // MARK: the open detail's rebuilds, held to their show
+
+    /// Counts what a probe saw, from any thread.
+    final class Flag: Sendable {
+        private let value = Mutex(0)
+        func withLock(_ body: (inout Int) -> Void) { value.withLock { body(&$0) } }
+        var count: Int { value.withLock { $0 } }
+    }
+
+    /// A one-shot probe on the detail's `item` and `shown`: counts once either is set.
+    static func probe(_ detail: ContentDetailModel) -> Flag {
+        let fired = Flag()
+        withObservationTracking { _ = detail.item; _ = detail.shown } onChange: { fired.withLock { $0 = 1 } }
+        return fired
+    }
+
+    /// Runs every main-actor job queued before this call (the main queue is first in, first out), so a rebuild a willSet
+    /// scheduled has run: no clock, so "nothing happened" is a fact, not a wait that ran out.
+    static func drain(_ times: Int = 3) async { for _ in 0..<times { await Task.yield() } }
+
+    static func everythingSettled(_ world: World, content: Int, people: Int) async {
+        await settled(world, content)
+        await eventually("people") { world.people.readsFinished >= people }
+        await eventually("devices") { world.devices.devicesReadWhole && isLoaded(world.devices.servicesState) }
+    }
+
+    /// A client move that keeps the active org (the Mosyle org leaves its client) clears every screen; the old show's tracking
+    /// must not bring the detail back when the same org's lists reload.
+    @Test func aClientMoveKeepingTheOrgRebuildsNothing() async throws {
+        let world = try await Self.membersWorld(mosyle: true)
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        let b = try #require(world.orgs.store.client(of: "b")).id
+        let generation = world.orgs.generation
+        try world.orgs.move("m", toClient: b)
+        #expect(world.orgs.generation == generation + 1 && world.orgs.store.active?.id == "a")
+        #expect(world.content.detail.shown == nil)
+        let fired = Self.probe(world.content.detail)
+        await Self.drain()
+        #expect(fired.count == 0, "the switch's resets rebuilt the cleared detail")
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        #expect(fired.count == 0, "the same org's lists reloading rebuilt the cleared detail")
+        #expect(world.content.detail.shown == nil && !Self.isLoadedItem(world.content.detail))
+    }
+
+    static func isLoadedItem(_ detail: ContentDetailModel) -> Bool { if case .loaded = detail.item { true } else { false } }
+
+    /// The detail closed in the same org, then a list changes: nothing comes back.
+    @Test func aClosedDetailStaysClosedWhenAListChanges() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        world.content.selection = nil
+        let fired = Self.probe(world.content.detail)
+        world.people.load(force: true)
+        await eventually("people again") { world.people.readsFinished >= 6 }
+        await Self.drain()
+        #expect(fired.count == 0 && world.content.detail.shown == nil && !Self.isLoadedItem(world.content.detail))
+    }
+
+    /// A blueprint, then an app chosen, then a list changes: the detail stays the app's.
+    @Test func anAppChosenAfterABlueprintIsNotReplacedWhenAListChanges() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        world.content.kind = .apps
+        let before = world.content.detail.readsFinished
+        world.content.selection = "2000000001"
+        await Self.detailSettled(world, before + 1)
+        world.people.load(force: true)
+        await eventually("people again") { world.people.readsFinished >= 6 }
+        await Self.drain()
+        let detail = try Self.detail(world)
+        #expect(detail.title == "App 00001" && world.content.detail.shown?.kind == .apps, "\(detail.title)")
+    }
+
+    /// Tracking stops with the detail: once it closes, the lookup is never asked again however lists change.
+    @Test func trackingStopsWhenTheDetailCloses() async throws {
+        let world = try await Self.membersWorld()
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.sources(devices: devices, people: people)
+        }, otherPhases: { MemberNames.phases(devices: devices, people: people) })
+        model.load()
+        await eventually("own lists") { model.readsFinished >= 4 }
+        model.kind = .blueprints
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await Self.drain()
+        guard case .loaded(let named) = model.detail.item else { Issue.record("\(model.detail.item)"); return }
+        #expect(named.members.first { $0.relationship == .users }?.members.first?.name == "Ada Lovelace", "tracking works while open")
+        model.selection = nil
+        let afterClose = asked.count
+        for round in 0..<3 {
+            people.load(force: true)
+            await eventually("people \(round)") { people.readsFinished >= 6 + 3 * round }
+            await Self.drain()
+        }
+        #expect(asked.count == afterClose, "the lookup was asked \(asked.count - afterClose) times after the detail closed")
+    }
+
+    /// The clients rule: after a switch nothing of the old client's blueprint stays in the detail model's memory.
+    @Test func aSwitchDropsTheHeldBlueprintRead() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add([Resource(type: "blueprints", id: "B9", attributes: ["name": .string("CANARY-ORG-A-BLUEPRINT"), "description": .string("CANARY-DESC")])])
+        world.stubs["a"]!.relate("blueprints", "B9", "users", to: ["U1"])
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B9")
+        world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        world.content.kind = .apps
+        let dumped = Self.printed(world.content.detail) + Self.printed(world.content)
+        #expect(!dumped.contains("CANARY-ORG-A-BLUEPRINT") && !dumped.contains("CANARY-DESC"), "the old client's blueprint is still held")
+    }
+
+    /// One rule for every kind: a member whose row has no name is shown as its ID, counted as unnamed and said. A device is
+    /// named by its serial, with its model when it has one; a serial alone is a name.
+    @Test func aMemberWithNoNameIsAnIDAndSaidForEveryKind() async throws {
+        let world = try await Self.membersWorld()
+        let stub = world.stubs["a"]!
+        stub.add([Resource(type: "users", id: "U2", attributes: ["email": .string("x@example.com")]),
+                  Resource(type: "userGroups", id: "G2", attributes: ["status": .string("ACTIVE")])])
+        stub.add(devices: [Resource(type: "orgDevices", id: "ADEVNOMODEL", attributes: ["serialNumber": .string("ADEVNOMODEL"), "status": .string("ASSIGNED")])])
+        stub.relate("blueprints", "B1", "users", to: ["U2"])
+        stub.relate("blueprints", "B1", "userGroups", to: ["G2"])
+        stub.relate("blueprints", "B1", "orgDevices", to: ["ADEVNOMODEL"])
+        await Self.readEverything(world)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let names = Dictionary(uniqueKeysWithValues: detail.members.map { ($0.relationship, $0.members.first?.name) })
+        #expect(names[.users] == .some(nil) && names[.userGroups] == .some(nil))
+        #expect(names[.orgDevices] == "ADEVNOMODEL", "a serial alone is a name")
+        #expect(detail.membersListNote == "Apps, packages, configurations and devices are named; 1 of 1 users has no name in the users list, so is "
+                + "listed by ID; 1 of 1 user groups has no name in the user groups list, so is listed by ID.", "\(detail.membersListNote ?? "")")
+    }
+
+    /// A 10-page list loading under an open detail rebuilds a constant number of times, not once a page: the detail watches
+    /// where the list stands, and builds the names when that changes.
+    @Test func aTenPageListLoadRebuildsTheDetailAConstantNumberOfTimes() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add((0..<9500).map { Resource(type: "users", id: "F\($0)", attributes: ["firstName": .string("Filler")]) })
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.sources(devices: devices, people: people)
+        }, otherPhases: { MemberNames.phases(devices: devices, people: people) })
+        model.load()
+        devices.load()
+        await eventually("own lists") { model.readsFinished >= 4 && devices.devicesReadWhole }
+        model.kind = .blueprints
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        await Self.drain()
+        let start = asked.count
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await Self.drain(10)
+        #expect(people.users.rows.count >= 9500, "\(people.users.rows.count) users: ten pages")
+        #expect(asked.count - start <= 2, "the lookup was asked \(asked.count - start) times for one list load")
+        guard case .loaded(let detail) = model.detail.item else { Issue.record("\(model.detail.item)"); return }
+        #expect(detail.members.first { $0.relationship == .users }?.members.first?.name == "Ada Lovelace")
     }
 
     /// The words alone: nothing to say when every member shown is named or there is none; an empty relationship is left out.

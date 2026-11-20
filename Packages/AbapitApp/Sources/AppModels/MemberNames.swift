@@ -13,10 +13,18 @@ package struct MemberNames: Sendable, Equatable {
     /// One relationship's list as far as the app has read it.
     package enum Source: Sendable, Equatable {
         /// Read to its end or cut at the page cap (`whole` is false then): a member missing from a cut list may be past the cut.
-        case read([String: String], whole: Bool)
+        /// Each member of the list by id, with its name, nil when its row has none.
+        case read([String: String?], whole: Bool)
         /// Idle or still loading: nothing to name from yet.
         case notRead
         /// Refused, failed, not in this org's scope or the org unusable: the screen shows why.
+        case unreadable
+    }
+
+    /// Where a list stands, not what it holds: what an open detail watches, so a page read isn't a change.
+    package enum Phase: Sendable, Equatable {
+        case notRead
+        case read(whole: Bool)
         case unreadable
     }
 
@@ -29,16 +37,24 @@ package struct MemberNames: Sendable, Equatable {
 
     /// A list's names as a source, by its load state: only a list that ended is named from, and a failed or refused walk's
     /// partial rows aren't (the screen shows them as partial; a name from them could be taken for a whole list's).
-    package static func source(_ state: LoadState, truncated: Bool, names: () -> [String: String]) -> Source {
+    package static func source(_ state: LoadState, truncated: Bool, names: () -> [String: String?]) -> Source {
+        switch phase(state, truncated: truncated) {
+        case .notRead: .notRead
+        case .read(let whole): .read(names(), whole: whole)
+        case .unreadable: .unreadable
+        }
+    }
+
+    package static func phase(_ state: LoadState, truncated: Bool) -> Phase {
         switch state {
         case .idle, .loading: .notRead
-        case .loaded: .read(names(), whole: !truncated)
+        case .loaded: .read(whole: !truncated)
         case .forbidden, .failed, .unusable, .notInScope: .unreadable
         }
     }
 
     /// `pairs` by id, the first of a repeated id kept.
-    package static func byID(_ pairs: [(id: String, name: String)]) -> [String: String] {
+    package static func byID(_ pairs: [(id: String, name: String?)]) -> [String: String?] {
         Dictionary(pairs.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 }
@@ -53,11 +69,23 @@ extension MemberNames {
                 byID(devices.rows.map { ($0.id, $0.model.isEmpty ? $0.serial : "\($0.serial) · \($0.model)") })
             },
             .users: source(people.users.state, truncated: people.users.truncated) {
-                byID(people.users.rows.map { ($0.id, $0.name) })
+                byID(people.users.rows.map { ($0.id, $0.user.fullName.flatMap { $0.isEmpty ? nil : $0 }) })
             },
             .userGroups: source(people.groups.state, truncated: people.groups.truncated) {
-                byID(people.groups.rows.map { ($0.id, PeopleModel.text($0.name)) })
+                byID(people.groups.rows.map { ($0.id, $0.name.flatMap { $0.isEmpty ? nil : $0 }) })
             },
+        ]
+    }
+}
+
+extension MemberNames {
+    /// Where the Devices and People lists stand: the cheap half of `sources(devices:people:)`.
+    @MainActor
+    package static func phases(devices: DevicesModel, people: PeopleModel) -> [Blueprint.Relationship: Phase] {
+        [
+            .orgDevices: phase(devices.state, truncated: devices.truncated),
+            .users: phase(people.users.state, truncated: people.users.truncated),
+            .userGroups: phase(people.groups.state, truncated: people.groups.truncated),
         ]
     }
 }

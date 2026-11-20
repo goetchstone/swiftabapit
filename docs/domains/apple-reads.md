@@ -581,18 +581,24 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   `ContentWords.naming`, shown as `membersListNote`): nothing is said when every member shown is named; otherwise the note says which
   relationships are named, which are listed by ID "until the Devices list is read" (a list not read yet) or "because the Users
   list couldn't be read", and, for a list read to its end, "1 of 2 apps isn't in the apps list read" (for one the page cap cut,
-  "in the part of the apps list read (it stopped at its page cap)"). A row with no name shows its id and names nothing: that member stays an ID and
-  the words say "1 of 3 apps has no name in the apps list". The open detail updates as lists arrive (`ContentDetailModel.track`): it
-  keeps the blueprint's read and, whenever a list it names from changes state (Content's lists, People's, Devices), rebuilds
-  its names and words from it, with no new Apple read, so the words never say "until the Users list is read" after it was. A
-  rebuild is dropped unless it belongs to the row still shown (the show's token), so an org switch, another choice, or a list
-  finishing in the old org rebuilds nothing (`aListReadAfterTheDetailOpensNamesItAndTheWordsFollow`,
-  `aRefreshWhoseAppsListIsSlowNamesTheOpenDetailWhenItLoads`, `aListChangingInTheOldOrgAfterASwitchRebuildsNothing`). Who decided: the operator said "Yes, do it here"
-  to naming members from the lists already loaded (2026-11-20); the design (a lookup the screen models inject, the words, no
-  new read) was the coordinating session's proposal; the executor's refinements were to name only from lists that ended (no partial rows),
-  to word "couldn't be read" apart from "not read yet", to show a user or group with no name as the row does (a dash, its ID
-  beneath), and to keep a row with no name an ID; the coordinator decided, after review, that the open detail rebuilds as lists
-  arrive (the first build was made once and its "until read" words went stale).
+  "in the part of the apps list read (it stopped at its page cap)"). One rule for "no name", for all six kinds (the coordinator's decision, 2026-11-20, superseding the
+  executor's earlier dash for a user or group): a member whose row has no name (Apple sent none) is shown as its ID, counted
+  as unnamed and said, "1 of 3 users has no name in the users list, so is listed by ID". A device is named by its serial,
+  with its model when it has one, so a serial alone is a name. The open detail updates as lists arrive
+  (`ContentDetailModel.track`): it keeps the blueprint's read and watches only where each list stands (not read, read to its end or
+  cut, unreadable); when one moves between those, it rebuilds its names and words from the held read, with no new Apple read, so the
+  words never say "until the Users list is read" after it was; a page read changes nothing (a 10-page load asks the lookup a
+  constant number of times, `aTenPageListLoadRebuildsTheDetailAConstantNumberOfTimes`). The held read is dropped by every `show`
+  (a switch clears the selection, so it goes with the org or client: `aSwitchDropsTheHeldBlueprintRead`), and a rebuild is dropped
+  unless it belongs to the row still shown (the show's token), so a switch, a client move that keeps the org, another choice or a
+  close rebuilds nothing, and a closed detail stops watching (`aListChangingInTheOldOrgAfterASwitchRebuildsNothing`,
+  `aClientMoveKeepingTheOrgRebuildsNothing`, `aClosedDetailStaysClosedWhenAListChanges`, `trackingStopsWhenTheDetailCloses`,
+  `aListReadAfterTheDetailOpensNamesItAndTheWordsFollow`, `aRefreshWhoseAppsListIsSlowNamesTheOpenDetailWhenItLoads`).
+  Who decided: the operator said "Yes, do it here" to naming members from the lists already loaded (2026-11-20); the design (a lookup
+  the screen models inject, the words, no new read) was the coordinating session's proposal; the executor's refinements that stand
+  were to name only from lists that ended (no partial rows) and to word "couldn't be read" apart from "not read yet"; the coordinator
+  decided, after review, that the open detail rebuilds as lists arrive (the first build was made once and its "until read" words
+  went stale), that it watches list states only, and the one no-name rule above.
   A configuration's profile is only `profileText`, and one that can't be
   shown says why. A package's location is shown with its user, password, query values, path parameters' values and
   fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.

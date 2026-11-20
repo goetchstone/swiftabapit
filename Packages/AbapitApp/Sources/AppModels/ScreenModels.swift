@@ -26,7 +26,8 @@ public final class ScreenModels {
         detail = DeviceDetailModel(orgs: orgs, mosyle: mosyle)
         self.people = people
         // A blueprint's members are named from the lists these two have read, never from a read made for it.
-        content = ContentModel(orgs: orgs) { MemberNames.sources(devices: devices, people: people) }
+        content = ContentModel(orgs: orgs, otherNames: { MemberNames.sources(devices: devices, people: people) },
+                               otherPhases: { MemberNames.phases(devices: devices, people: people) })
         appleMDM = AppleMDMModel(orgs: orgs)
         activity = ActivityModel(orgs: orgs)
         dashboard = DashboardModel(orgs: orgs, devices: devices)
