@@ -27,8 +27,9 @@ struct CollectorTests {
                            "canary.mail@example.com", "CANARYPHONE", "CANARYJOB", "CANARYDEPT", "CANARYDEVICENAME", "CANARYGROUP"]
                            + identifierCanaries + memberCanaries
 
-    /// The device list's identifiers the operator left out (2026-11-20): IMEI, MEID and every MAC address.
-    static let identifierCanaries = ["CANARYIMEI", "CANARYMEID", "CA:NA:RY:WI:FI:00", "CA:NA:RY:BT:00:00", "CA:NA:RY:ET:00:00"]
+    /// The device list's hardware identifiers left out: IMEI, MEID and every MAC address (the operator, 2026-11-20), and the
+    /// eSIM's EID (the coordinating session's reading of that answer).
+    static let identifierCanaries = ["CANARYIMEI", "CANARYMEID", "CA:NA:RY:WI:FI:00", "CA:NA:RY:BT:00:00", "CA:NA:RY:ET:00:00", "CANARYEID"]
 
     /// A blueprint's members, by ids no list holds: only a members read could find them.
     static let memberCanaries = ["CANARYMEMBERAPP", "CANARYMEMBERDEVICE", "CANARYMEMBERUSER", "CANARYMEMBERGROUP"]
@@ -37,7 +38,7 @@ struct CollectorTests {
     static func identified(_ serial: String) -> Resource {
         Resource(type: "orgDevices", id: serial, attributes: [
             "serialNumber": .string(serial), "deviceModel": .string("iPhone 17"), "productFamily": .string("iPhone"), "status": .string("ASSIGNED"),
-            "eid": .string("89049032000001000000000000000001"),
+            "eid": .string("CANARYEID"),
             "imei": .array([.string("CANARYIMEI")]), "meid": .array([.string("CANARYMEID")]), "wifiMacAddress": .string("CA:NA:RY:WI:FI:00"),
             "bluetoothMacAddress": .string("CA:NA:RY:BT:00:00"), "ethernetMacAddress": .array([.string("CA:NA:RY:ET:00:00")]),
         ])
@@ -122,7 +123,7 @@ struct CollectorTests {
         #expect(summary.orgID == "a" && summary.deviceCount == 3)
         #expect(Self.attributes(snapshot, "devices", "ADEV0000000") == ["addedToOrgDateTime", "deviceModel", "productFamily", "serialNumber", "status"])
         // The operator's 2026-11-20 answer: no IMEI, MEID or MAC address, without a note (they are known, and left out).
-        #expect(Self.attributes(snapshot, "devices", "IDEV0000001") == ["deviceModel", "eid", "productFamily", "serialNumber", "status"])
+        #expect(Self.attributes(snapshot, "devices", "IDEV0000001") == ["deviceModel", "productFamily", "serialNumber", "status"])
         #expect(summary.notes["devices"] == nil)
         // A blueprint as the list sent it: its attributes, never its members.
         #expect(Self.attributes(snapshot, "blueprints", "B1") == ["appLicenseDeficient", "createdDateTime", "description", "name", "status"])
@@ -435,7 +436,7 @@ struct CollectorTests {
     @Test func theAllowlistIsTheOperatorsMinimal() {
         let expected: [String: [String]] = [
             "devices": ["serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
-                        "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "eid", "purchaseSourceId",
+                        "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "purchaseSourceId",
                         "purchaseSourceType", "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime"],
             "mdm_servers": ["createdDateTime", "defaultProductFamilies", "deviceCount", "enableMdmDisownFlag", "lastConnectedDateTime", "serverName",
                             "serverType", "status", "updatedDateTime"],
@@ -466,10 +467,10 @@ struct CollectorTests {
         let kept = Dictionary(uniqueKeysWithValues: SnapshotPolicy.all.map { ($0.name, Set($0.kept)) })
         #expect(!kept["packages"]!.contains("url") && !kept["mdm_servers"]!.contains("lastConnectedIp"))
         #expect(kept["mdm_details"]!.isDisjoint(with: ["deviceName"]))
-        // No IMEI, MEID or MAC address in any resource (the operator, 2026-11-20): held by name, so one Apple adds
-        // (`thunderboltMacAddress`) can't be added to a list unseen.
+        // No IMEI, MEID or MAC address in any resource (the operator, 2026-11-20), nor an EID (the coordinating session's
+        // reading of that answer): held by name, so one Apple adds (`thunderboltMacAddress`) can't be added to a list unseen.
         for rule in SnapshotPolicy.all {
-            #expect(!rule.kept.contains { ["imei", "meid"].contains($0.lowercased()) || $0.lowercased().hasSuffix("macaddress") }, "\(rule.name)")
+            #expect(!rule.kept.contains { ["imei", "meid", "eid"].contains($0.lowercased()) || $0.lowercased().hasSuffix("macaddress") }, "\(rule.name)")
         }
         #expect(kept["users"]!.isDisjoint(with: ["firstName", "middleName", "lastName", "email", "phoneNumbers", "jobTitle", "department", "employeeNumber",
                                                  "costCenter", "division", "roleOuList"]))

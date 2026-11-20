@@ -45,11 +45,12 @@ public enum SnapshotPolicy {
     // MARK: the lists the collector reads
 
     /// `orgDevices`, keyed by serial number: every attribute Apple documents (the operator: devices as abapit kept them) but
-    /// the IMEI, the MEID and every MAC address (the operator, 2026-11-20: "Leave them out (Recommended)"). `eid`, the eSIM's
-    /// identifier, wasn't asked about and is kept.
+    /// the IMEI, the MEID and every MAC address (the operator, 2026-11-20: "Leave them out (Recommended)"), and `eid`, the
+    /// eSIM's identifier: a hardware identifier of the same kind (the coordinating session's reading of that answer, the side
+    /// that stores less; the operator can overrule it).
     public static let devices = Rule("devices", kept: [
         "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily",
-        "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "eid",
+        "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime",
         "purchaseSourceId", "purchaseSourceType", "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime",
     ], known: OrgDevice.fields)
 
