@@ -1,6 +1,7 @@
 import Foundation
 import JSONAPI
 import Orgs
+import Reports
 
 /// What "Needs attention" keeps (plan §8.0: "Stored: only what can't be read again, which is when a finding first appeared
 /// and whether it was dismissed or snoozed"). Methods on `SnapshotStore`, not a second store, because the table lives in
@@ -52,7 +53,7 @@ extension SnapshotStore {
     public func seen(org: OrgProfile, rule: String, subjects: some Collection<String>, at: Date) throws(Failure) {
         try writable()
         let orgID = try Self.id(of: org)
-        guard Self.isIdentifier(rule, limit: 64), subjects.allSatisfy({ Self.isIdentifier($0, limit: 128) }) else { throw .notAnIdentifier }
+        guard Self.isIdentifier(rule, limit: NeedsAttention.ruleLimit), subjects.allSatisfy({ Self.isIdentifier($0, limit: NeedsAttention.subjectLimit) }) else { throw .notAnIdentifier }
         let now = Schema.takenAt(at), cutoff = Schema.takenAt(at.addingTimeInterval(-Self.forgetAfter))
         try Self.guarded {
             try database.transaction {
@@ -72,17 +73,9 @@ extension SnapshotStore {
         }
     }
 
-    /// Whether `text` can be a rule or a subject: 1 to `limit` characters, none whitespace, a control, a quote, a slash or
-    /// a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
-    /// doesn't. A one-word name would pass: callers pass identifiers, and this is the backstop. (No id helper exists
-    /// elsewhere in the app to reuse: `OrgStore.slug` makes slugs of names.)
-    static func isIdentifier(_ text: String, limit: Int) -> Bool {
-        guard !text.isEmpty, text.count <= limit else { return false }
-        return text.unicodeScalars.allSatisfy { scalar in
-            !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format
-              || "\"'`/\\".unicodeScalars.contains(scalar))
-        }
-    }
+    /// Whether `text` can be a rule or a subject: `NeedsAttention.isIdentifier`, the one rule the findings are checked by
+    /// too, so a finding the rules call trackable is one this store keeps.
+    static func isIdentifier(_ text: String, limit: Int) -> Bool { NeedsAttention.isIdentifier(text, limit: limit) }
 
     /// The operator dismissed the finding. It must have been recorded by `seen`.
     public func dismiss(org: OrgProfile, rule: String, subject: String, at: Date) throws(Failure) {

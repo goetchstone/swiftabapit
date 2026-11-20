@@ -45,6 +45,9 @@ public struct CoverageReport: Sendable {
         /// The record's attributes with `days_left` set over them, abapit's `{**attrs, "days_left": n}`.
         public let attributes: JSONObject
         public let daysLeft: Int
+        /// The device id the record sat under in `coverage` (a record is its device's by that key, whatever its own
+        /// `serialNumber` says): what "Needs attention" names the finding by.
+        public let device: String
     }
 
     /// How much of the device list this was given. A list that wasn't read judges nothing.
@@ -89,7 +92,8 @@ public struct CoverageReport: Sendable {
                 }
                 guard start <= end, end <= cutoff else { continue }
                 let left = Instant.days(end - start)
-                rows.append((rows.count, Expiring(attributes: item.attributes.merging(["days_left": .number(String(left))]), daysLeft: left)))
+                rows.append((rows.count, Expiring(attributes: item.attributes.merging(["days_left": .number(String(left))]), daysLeft: left,
+                                                  device: String(decoding: key, as: UTF8.self))))
             }
         }
         // Python's sort is stable: equal days_left keep the input order.
