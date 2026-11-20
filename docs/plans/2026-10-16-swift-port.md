@@ -757,7 +757,11 @@ Apple publishes no OpenAPI spec, but its DocC pages are machine-readable JSON
       device-management schema (Phase 5's profile validation) and against the **operator's own rules**, held in local
       settings (examples of the kind: WPA3 only, no hidden networks, a naming pattern). No rule is written into the repo.
     - The password is typed into a secure field in the app. It is never spoken to Siri, never shown to the model, and
-      never stored outside the Keychain flow the write uses (invariants 3, 11).
+      never logged, snapshotted, audited or stored anywhere, the Keychain included: it is held in memory only until the
+      one write is sent, and cleared when the preview is confirmed, discarded or expires. The configuration it goes into
+      is Apple's to keep (invariants 3, 11; Phase 3: a snapshot keeps no custom setting's profile).
+    - The preview masks the password on screen while the held bytes carry it, and its memory lifetime is bounded by the
+      held preview's (invariant 7: 15 minutes).
     - The preview shows the blueprint, the configuration and their link exactly as they will be sent. Only the
       operator's click (and Touch ID) confirms.
     - Apple's API (Business 2.8): `POST /v1/configurations` (custom, `customSettingsValues`), `POST /v1/blueprints` and
@@ -1011,9 +1015,10 @@ reads, and what they reveal, come before writes.
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
 4. **Phase 3, plus Needs attention** (below).
 5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering, and the report intents: "which devices are
-   out of warranty?" maps onto Phase 3's reports; operator, 2026-11-20). D10 stands: Foundation Models only.
+   out of warranty?" maps onto Phase 3's reports; placement: the coordinating session's proposal, from the operator's 2026-11-20
+   request). D10 stands: Foundation Models only.
 6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9 (including the Wi-Fi blueprint draft, after Phases 4 and 5;
-   operator, 2026-11-20), and the webhook writes. Phase 4 still stops for the operator's
+   placement: the coordinating session's proposal, from the operator's 2026-11-20 request), and the webhook writes. Phase 4 still stops for the operator's
    answers in the write-path design.
 7. **Phase 10.**
 
@@ -1312,8 +1317,9 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
     and with the audit log refused, but with `[.auditEvents]` alone a School org keeps the section hidden
     (`SidebarItem.shown(for:)`) and a role refused the audit log has it locked (`isLocked(for:)`, Phase 2b review M1).
 - **Reports**:
-  - coverage (with the new AppleCare fields). **Caution for "out of warranty"**: on the first live check a sampled
-    device had no AppleCare coverage records, so "no record" may mean "no AppleCare" rather than "expired". Whether
+  - coverage (with the new AppleCare fields). **Caution for "out of warranty"**: on the operator's acceptance passes of
+    2026-11-19 and 2026-11-20 the one device whose coverage the pass reads had no AppleCare coverage records
+    (`orgDevices/{id}/appleCareCoverage: ok, 0 items`; apple-reads runbook, "Answered live"), so "no record" may mean "no AppleCare" rather than "expired". Whether
     Apple lists the standard one-year limited warranty as a coverage is a live check; until it is made, the report says
     so and may estimate from the order date, labelled as an estimate;
   - fleet age;
