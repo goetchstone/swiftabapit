@@ -22,6 +22,13 @@ Corrections recorded here (the others in §2.3 are client behaviour, covered by 
     mixed offsets and fractional seconds); equal instants keep their input order, and an event with no date it
     can read goes last, in input order; an event whose attributes aren't an object, or whose type isn't a
     string, is no row (abapit raised on both and lost the list);
+  - diff_snapshots, two decisions of the operator's (2026-11-20; asked whether swiftabapit should report
+    true <-> 1 as a change: "Report it (Recommended)"; asked what counts as a changed item: "Only real changes
+    (Recommended)"): a boolean is not a number (Python's `True == 1` hid a flag that became a count; 1 and 1.0
+    stay one JSON number), and an item is changed only when at least one field really changed (abapit listed
+    an item with an empty `fields` for None against a missing field);
+  - fleet_age_report: a device ordered more than 365 days ahead is "< 1 yr" (abapit's `bucket_labels[-1]` put it in
+    "4+ yrs"); it is never a refresh candidate;
   - private keys: only P-256 is accepted (abapit accepts any key cryptography loads, then fails to sign);
   - mosyle adapt_device: an allowlist (defect 1, invariant 11): what abapit makes of the raw cut to the columns
     the list asks for, so no raw key is passed through (`activation_bypass*`, or a raw `serialNumber`); a serial
@@ -590,11 +597,15 @@ def mosyle_edges() -> dict:
     return {"reconcile": reconcile, "posture": posture, "stale": stale, "timeline": timeline}
 
 
+FLEET_AGE_DEVIATIONS = 2   # the hand-written fleets with a device ordered more than 365 days ahead
+
+
 def gen_reports(m: dict) -> None:
     reports = m["reports"]
     reports.datetime = FrozenDatetime  # device_stats reads datetime.now() itself
     rng = random.Random(1004)
     cases = []
+    fleet_labels: list = []
 
     def add(function, args, call):
         cases.append({"function": function, "input": args, "expected": outcome(call)})
@@ -641,12 +652,40 @@ def gen_reports(m: dict) -> None:
         days = rng.choice([0, 30, 90, 365])
         add("coverage_report", {"applecare_items": care, "devices": devices, "days": days},
             lambda: reports.coverage_report(care, devices, days, now=FIXED_NOW))
+    for care, devices, days in coverage_edges():
+        add("coverage_report", {"applecare_items": care, "devices": devices, "days": days},
+            lambda: reports.coverage_report(care, devices, days, now=FIXED_NOW))
     for _ in range(20):
         devices = fleet(rng, 0, 25)
         care = applecare(rng, devices) if rng.random() < 0.7 else None
         years = rng.choice([1, 3, 4, 5])
         add("fleet_age_report", {"devices": devices, "applecare_items": care, "years": years},
             lambda: reports.fleet_age_report(devices, care, years, now=FIXED_NOW))
+        fleet_labels.append(None)
+    for label, devices, care, years in fleet_age_edges():
+        add("fleet_age_report", {"devices": devices, "applecare_items": care, "years": years},
+            lambda: reports.fleet_age_report(devices, care, years, now=FIXED_NOW))
+        fleet_labels.append(label)
+    # Every fleet-age case, drawn or hand-written, is held to the corrected output: only a case labelled "future"
+    # (a device ordered more than 365 days ahead) deviates, and then abapit's output is kept beside it.
+    fleet_cases = [c for c in cases if c["function"] == "fleet_age_report"]
+    for case, label in zip(fleet_cases, fleet_labels, strict=True):
+        i = case["input"]
+        corrected = outcome(lambda: corrected_fleet_age(reports, i["devices"], i["applecare_items"], i["years"]))
+        if "ok" not in case["expected"] or "ok" not in corrected:
+            raise SystemExit(f"fleet_age_report refused a case ({label}): {case['expected']}")
+        if case["expected"] != corrected:
+            case["abapit"], case["expected"] = case["expected"], corrected
+        if (label is not None and "future" in label) != ("abapit" in case):
+            raise SystemExit(f"fleet_age_report {label!r}: the future-order correction no longer holds "
+                             f"(abapit's output {'differs' if 'abapit' in case else 'matches'} the corrected one)")
+        if "abapit" in case:
+            buckets = dict(case["expected"]["ok"]["buckets"])
+            wrong = dict(case["abapit"]["ok"]["buckets"])
+            if buckets["4+ yrs"] >= wrong["4+ yrs"] or buckets["< 1 yr"] <= wrong["< 1 yr"]:
+                raise SystemExit(f"fleet_age_report {label!r}: a future order must move from '4+ yrs' to '< 1 yr'")
+    if sum(1 for c in fleet_cases if "abapit" in c) != FLEET_AGE_DEVIATIONS:
+        raise SystemExit("fleet_age_report: the number of deviating cases changed")
     def audit_case(events: list[dict], which: str) -> None:
         types = getattr(reports, which)
         add("audit_digest", {"events": events, "types": which}, lambda: reports.audit_digest(events, types))
@@ -721,6 +760,129 @@ def gen_reports(m: dict) -> None:
     # abapit's two audit type sets, in its order: the Swift views' sets are held to them.
     audit_types = {name: list(getattr(reports, name)) for name in ("SUBSCRIPTION_EVENTS", "DEVICE_LIFECYCLE_EVENTS")}
     write("reports", {**header(1004), "audit_types": audit_types, "cases": cases})
+
+
+def ago(days: float = 0, hours: float = 0, seconds: float = 0) -> str:
+    """FIXED_NOW minus an offset, as Apple writes it (negative: in the future)."""
+    return (FIXED_NOW - timedelta(days=days, hours=hours, seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def demo_device(serial, **attrs) -> dict:
+    return {"type": "orgDevices", "id": serial, "attributes": {"serialNumber": serial, **attrs}}
+
+
+def demo_care(serial, status="ACTIVE", end=..., **attrs) -> dict:
+    body = {"serialNumber": serial, "status": status, **attrs}
+    if end is not ...:
+        body["endDateTime"] = end
+    return {"type": "applecare", "id": f"{serial}:0", "attributes": body}
+
+
+def coverage_edges() -> list[tuple[list[dict], list[dict], int]]:
+    """Hand-written coverage cases, drawing nothing. now is 2026-10-16T12:00:00Z."""
+    d = [demo_device(f"DEMO{i:04d}") for i in range(1, 9)]
+    cutoff30 = ago(days=-30)
+    return [
+        # the window is closed at both ends: end == now and end == cutoff count, a second either side doesn't
+        ([demo_care("DEMO0001", end=ago()), demo_care("DEMO0002", end=cutoff30),
+          demo_care("DEMO0003", end=ago(days=-30, seconds=-1)), demo_care("DEMO0004", end=ago(seconds=1))], d[:4], 30),
+        ([demo_care("DEMO0001", end=ago())], d[:1], 30),
+        ([demo_care("DEMO0002", end=cutoff30)], d[1:2], 30),
+        ([demo_care("DEMO0003", end=ago(days=-30, seconds=-1))], d[2:3], 30),
+        ([demo_care("DEMO0004", end=ago(seconds=1))], d[3:4], 30),
+        # days=0: only an end of exactly now is in the window
+        ([demo_care("DEMO0001", end=ago()), demo_care("DEMO0002", end=ago(seconds=-1)),
+          demo_care("DEMO0003", end=ago(seconds=1))], d[:3], 0),
+        # an end with no zone reads as UTC (a date alone is midnight UTC); an offset is honoured
+        ([demo_care("DEMO0001", end="2026-10-20T12:00:00"), demo_care("DEMO0002", end="2026-10-20"),
+          demo_care("DEMO0003", end="2026-10-16T14:00:00+02:00"), demo_care("DEMO0004", end="2026-10-16T14:00:00-02:00")],
+         d[:4], 30),
+        # INACTIVE and a missing or odd status are never active; a missing or unreadable end is covered, never expiring
+        ([demo_care("DEMO0001", status="INACTIVE", end=ago(days=-5)), demo_care("DEMO0002", status="active", end=ago(days=-5)),
+          demo_care("DEMO0003", status=None, end=ago(days=-5)), demo_care("DEMO0004", end=None),
+          demo_care("DEMO0005"), demo_care("DEMO0006", end="not a date"), demo_care("DEMO0007", end="")], d[:7], 30),
+        # two coverages for one serial: both list, soonest first, equal days_left keep input order; covered counts it once
+        ([demo_care("DEMO0001", end=ago(days=-20), description="AppleCare+"),
+          demo_care("DEMO0001", end=ago(days=-10), description="Limited Warranty"),
+          demo_care("DEMO0002", end=ago(days=-10, hours=-5), description="AppleCare+"),
+          demo_care("DEMO0002", status="INACTIVE", end=ago(days=-3), description="Old"),
+          demo_care("DEMO0003", end=ago(days=-10), description="AppleCare for Enterprise")], d[:3], 30),
+        # a null or missing serialNumber is covered_serials' None; no device (every device has an id) matches it
+        ([demo_care(None, end=ago(days=-4)), {"type": "applecare", "id": "X:0", "attributes": {"status": "ACTIVE"}}],
+         [d[0]], 30),
+        ([], d[:2], 30),
+        ([demo_care("DEMO0001", end=ago(days=-1))], [], 30),
+    ]
+
+
+def fleet_age_edges() -> list[tuple[str, list[dict], list[dict] | None, int]]:
+    """Hand-written fleet-age cases, drawing nothing. A label holding 'future' marks a case that deviates."""
+    def dev(serial, order=..., added=...):
+        attrs = {"deviceModel": "MacBook Air 13-inch (M3)", "productFamily": "Mac"}
+        if order is not ...:
+            attrs["orderDateTime"] = order
+        if added is not ...:
+            attrs["addedToOrgDateTime"] = added
+        return demo_device(serial, **attrs)
+
+    care = [demo_care("DEMO0001"), demo_care("DEMO0003", status="INACTIVE")]
+    return [
+        # abapit's bucket_labels[min(int(age), 4)] reads int(-1.2) = -1 as the last bucket: "4+ yrs".
+        # The port answers "< 1 yr" (never a candidate); the case keeps abapit's output beside it.
+        ("future: ordered more than 365 days ahead", [dev("DEMO0001", order=ago(days=-500)), dev("DEMO0002", order=ago(days=-400)),
+                                          dev("DEMO0003", order=ago(days=-30)), dev("DEMO0004", order=ago(days=100))], care, 1),
+        ("future: ordered exactly 366 days ahead", [dev("DEMO0001", order=ago(days=-366))], None, 1),
+        ("365 days ahead, not more", [dev("DEMO0001", order=ago(days=-365))], None, 1),
+        ("a month ahead and a few hours ahead", [dev("DEMO0001", order=ago(days=-30)), dev("DEMO0002", order=ago(hours=-3))], None, 1),
+        # a future added date as the fallback, with years=0 (a candidate at any age)
+        ("added date, ahead", [dev("DEMO0001", added=ago(days=-10))], [], 0),
+        # exactly 365.25 x n days: timedelta.days drops the six hours, so n = 1 is 365 days, still "< 1 yr"
+        ("365.25 x n days", [dev(f"DEMO000{n}", order=ago(days=365.25 * n)) for n in (1, 2, 3, 4, 5)], None, 4),
+        ("365.25 x 4 days, years 4", [dev("DEMO0004", order=ago(days=365.25 * 4))], [], 4),
+        ("365 and 366 days", [dev("DEMO0001", order=ago(days=365)), dev("DEMO0002", order=ago(days=366))], None, 1),
+        # ages the rounding to a tenth leaves close to a tie (d / 365.25 near x.x5); none is exact with whole days
+        ("rounding near a tie", [dev(f"DEMO{i:04d}", order=ago(days=days)) for i, days in
+                                 enumerate((347, 1041, 1114, 1808, 1881), 1)], None, 3),
+        # the fallback to the added date: no order, an unreadable or empty order, a null order
+        ("added date fallback", [dev("DEMO0001", added=ago(days=800)), dev("DEMO0002", order="not a date", added=ago(days=900)),
+                                 dev("DEMO0003", order="", added=ago(days=1000)), dev("DEMO0004", order=None, added=ago(days=1100)),
+                                 dev("DEMO0005", order=ago(days=1500), added=ago(days=100))], None, 2),
+        ("no dates", [dev("DEMO0001"), dev("DEMO0002", order=None, added=None), dev("DEMO0003", order="", added="x"),
+                      dev("DEMO0004", order=ago(days=1200))], None, 3),
+        # no AppleCare data (None) and an empty list (data, none active) differ: covered is null against false
+        ("coverage None", [dev("DEMO0001", order=ago(days=1600)), dev("DEMO0002", order=ago(days=1700))], None, 4),
+        ("coverage empty", [dev("DEMO0001", order=ago(days=1600)), dev("DEMO0002", order=ago(days=1700))], [], 4),
+        ("coverage active and not", [dev("DEMO0001", order=ago(days=1600)), dev("DEMO0002", order=ago(days=1700)),
+                                     dev("DEMO0003", order=ago(days=1800))],
+         [demo_care("DEMO0001"), demo_care("DEMO0002", status="INACTIVE")], 4),
+        ("no devices", [], [], 3),
+    ]
+
+
+def corrected_fleet_age(reports, devices: list[dict], care, years: int) -> dict:
+    """abapit's report with a device ordered more than 365 days ahead counted "< 1 yr", not "4+ yrs".
+
+    abapit's `bucket_labels[min(int(age), 4)]` reads int(-1.2) = -1 as the last label. A device ahead by
+    less than a year already lands in "< 1 yr" (int(-0.5) = 0), and never is a candidate (age < years)."""
+    out = reports.fleet_age_report(devices, care, years, now=FIXED_NOW)
+    future = 0
+    for item in devices:
+        attrs = item.get("attributes", {})
+        basis = reports.parse_iso(attrs.get("orderDateTime")) or reports.parse_iso(attrs.get("addedToOrgDateTime"))
+        if basis is not None and int((FIXED_NOW - basis).days / 365.25) < 0:
+            future += 1
+    if not future:
+        return out
+    buckets = dict(out["buckets"])
+    if buckets["4+ yrs"] < future:
+        raise SystemExit("abapit no longer puts a future order in '4+ yrs': the corrected expectation is stale")
+    buckets["4+ yrs"] -= future
+    buckets["< 1 yr"] += future
+    if any(c["age_years"] < 0 for c in out["candidates"]):
+        raise SystemExit("abapit made a future order a refresh candidate")
+    out["buckets"] = [(label, buckets[label]) for label, _ in out["buckets"]]
+    out["bucket_max"] = max(buckets.values(), default=0)
+    return out
 
 
 # -- CSV -------------------------------------------------------------------------------------------
@@ -921,6 +1083,99 @@ def csv_case(m: dict, items: list[dict]) -> dict:
 
 # -- snapshot diffs --------------------------------------------------------------------------------
 
+DIFF_DRAWN = 40
+DIFF_DEVIATIONS = 6   # hand-written pairs: a boolean against a number (4), None against a missing field (2)
+
+
+def strict_equal(a, b) -> bool:
+    """JSON equality that tells a boolean from a number, as the port does. Python's `True == 1` is why abapit
+    reports no change for a flag that became a count. 1 and 1.0 stay equal (one JSON number)."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return isinstance(a, bool) and isinstance(b, bool) and a == b
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(strict_equal(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(strict_equal(x, y) for x, y in zip(a, b))
+    if isinstance(a, dict) or isinstance(b, dict) or isinstance(a, list) or isinstance(b, list):
+        return False
+    return a == b
+
+
+def corrected_diff(history, old: dict, new: dict) -> dict:
+    """abapit's `diff_snapshots` over two in-memory snapshots, equality by `strict_equal`. It reuses the shape
+    of abapit's code (sorted by code point; a field that reads None on both sides is no field change)."""
+    result: dict = {}
+    for resource in sorted(set(old) | set(new)):
+        o, n = old.get(resource, {}), new.get(resource, {})
+        added = [{"id": key, "attributes": n[key]} for key in sorted(n.keys() - o.keys())]
+        removed = [{"id": key, "attributes": o[key]} for key in sorted(o.keys() - n.keys())]
+        changed = []
+        for key in sorted(o.keys() & n.keys()):
+            if strict_equal(o[key], n[key]):
+                continue
+            fields = [{"field": field, "old": o[key].get(field), "new": n[key].get(field)}
+                      for field in sorted(set(o[key]) | set(n[key]))
+                      if not strict_equal(o[key].get(field), n[key].get(field))]
+            if fields:   # the operator's decision: an item is changed only when a field really changed
+                changed.append({"id": key, "attributes": n[key], "fields": fields})
+        if added or removed or changed:
+            result[resource] = {"added": added, "removed": removed, "changed": changed}
+    return result
+
+
+def diff_edges() -> list[tuple[dict, dict]]:
+    """Hand-written snapshot pairs, drawing nothing. Each is {resource: {id: attributes}}."""
+    def one(old_attrs: dict, new_attrs: dict, key: str = "id-1"):
+        return {"devices": {key: old_attrs}}, {"devices": {key: new_attrs}}
+
+    nfc, nfd = "\u00c9", "E\u0301"
+    return [
+        # Python's True == 1 == 1.0: abapit sees no change. A boolean against a number is a change (4 cases
+        # deviate: the three below and the nested one); 1 against 1.0 is the same JSON number (no change).
+        one({"flag": True}, {"flag": 1}),
+        one({"flag": 1}, {"flag": True}),
+        one({"flag": False}, {"flag": 0}),
+        one({"n": 1}, {"n": 1.0}),
+        one({"n": 1.0}, {"n": 1}),
+        one({"n": 2}, {"n": 2.0, "m": 1}),
+        # numbers abapit pins: Python ints are exact (2**53 + 1 differs from 2**53), and 10**16 == 1e16 although
+        # the JSON texts differ ("10000000000000000" against "1e+16"): a port comparing by Double gets both wrong
+        one({"n": 9007199254740993}, {"n": 9007199254740992}),
+        one({"n": 10**16}, {"n": 1e16}),
+        # nested equality: objects ignore key order, lists don't; a flag inside a list counts the same way
+        one({"o": {"a": 1, "b": [1, 2, {"c": None}]}}, {"o": {"b": [1, 2, {"c": None}], "a": 1}}),
+        one({"o": {"a": 1, "b": [1, 2]}}, {"o": {"a": 1, "b": [2, 1]}}),
+        one({"o": {"a": [1, {"b": True}]}}, {"o": {"a": [1, {"b": 1}]}}),
+        one({"o": {"a": [1, {"b": 2}]}}, {"o": {"a": [1, {"b": 3}]}}),
+        one({"o": {"a": 1}}, {"o": {"a": 1, "z": {}}}),
+        one({"t": []}, {"t": {}}),
+        one({"t": ""}, {"t": None}),
+        # None against a missing field: abapit's .get() reads both as None, so the item is "changed" with no fields
+        one({"x": None}, {}),
+        one({}, {"x": None}),
+        one({"x": None, "y": 1}, {"y": 2}),
+        one({"x": None}, {"x": None}),
+        # NFC and NFD are two ids, two field names and two values; none merges
+        ({"devices": {nfc: {"k": 1}, nfd: {"k": 2}}}, {"devices": {nfc: {"k": 1}, nfd: {"k": 3}}}),
+        ({"devices": {nfc: {"k": 1}}}, {"devices": {nfd: {"k": 1}}}),
+        one({nfc: 1, nfd: 2}, {nfc: 1, nfd: 3}),
+        one({"name": nfc}, {"name": nfd}),
+        # order by code point: ASCII, U+00E9, U+FF21 (UTF-16 would put U+1F600 before it), U+1F600
+        ({"devices": {}}, {"devices": {"z": {}, "\U0001f600": {}, "\uff21": {}, "\u00e9": {}, "A": {}, "a": {}, "": {}}}),
+        ({"devices": {"\U0001f600": {"k": 1}, "\uff21": {"k": 1}, "\ue000": {"k": 1}, "b": {"k": 1}}},
+         {"devices": {"\U0001f600": {"k": 2}, "\uff21": {"k": 2}, "\ue000": {"k": 2}, "b": {"k": 2}}}),
+        one({"\U0001f600": 1, "\uff21": 1, "\ue000": 1, "b": 1}, {"\U0001f600": 2, "\uff21": 2, "\ue000": 2, "b": 2}),
+        # an empty id, added, removed and changed
+        ({"devices": {}}, {"devices": {"": {"name": "Empty id"}}}),
+        ({"devices": {"": {"name": "Empty id"}}}, {"devices": {}}),
+        one({"name": "A"}, {"name": "B"}, key=""),
+        # resources and shapes
+        ({}, {}),
+        ({"devices": {}}, {"devices": {}}),
+        ({"devices": {"id-1": {"a": 1}}}, {"users": {"id-1": {"a": 1}}}),
+    ]
+
+
 def gen_diff(m: dict) -> None:
     history = m["history"]
     rng = random.Random(1006)
@@ -955,8 +1210,165 @@ def gen_diff(m: dict) -> None:
                     conn.executemany("INSERT INTO items VALUES (?, ?, ?, ?)",
                                      [(cur.lastrowid, resource, key, json.dumps(attrs, sort_keys=True)) for key, attrs in items.items()])
         cases.append({"input": {"old": old, "new": new}, "expected": outcome(lambda: history.diff_snapshots(ids[0], ids[1]))})
+    for old, new in diff_edges():
+        ids = []
+        with conn:
+            for data in (old, new):
+                cur = conn.execute("INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors) "
+                                   "VALUES ('2026-10-16T12:00:00Z', 'gen', 'Gen', 'business', '0.2.0', '{}')")
+                ids.append(cur.lastrowid)
+                for resource, items in data.items():
+                    conn.executemany("INSERT INTO items VALUES (?, ?, ?, ?)",
+                                     [(cur.lastrowid, resource, key, json.dumps(attrs, sort_keys=True)) for key, attrs in items.items()])
+        cases.append({"input": {"old": old, "new": new}, "expected": outcome(lambda: history.diff_snapshots(ids[0], ids[1]))})
+    # Every case, drawn or hand-written, is held to the corrected diff. A drawn case must equal abapit's output;
+    # a hand-written one may deviate (abapit's output is kept beside the corrected one), and only the counted ones.
+    deviating = 0
+    for index, case in enumerate(cases):
+        corrected = outcome(lambda: corrected_diff(history, case["input"]["old"], case["input"]["new"]))
+        if "ok" not in case["expected"] or "ok" not in corrected:
+            raise SystemExit(f"diff_snapshots refused case {index}: {case['expected']}")
+        if case["expected"] != corrected:
+            if index < DIFF_DRAWN:
+                raise SystemExit(f"diff_snapshots: drawn case {index} differs from the corrected diff; "
+                                 "a seed change would record an uncorrected output")
+            case["abapit"], case["expected"] = case["expected"], corrected
+            deviating += 1
+    # A corrected expectation that abapit now agrees with, or that never fires, is stale: say so loudly.
+    if deviating != DIFF_DEVIATIONS:
+        raise SystemExit(f"diff_snapshots: {deviating} cases deviate from abapit, expected {DIFF_DEVIATIONS}: "
+                         "the corrected expectation (a boolean is not a number; only real changes) no longer holds")
     conn.close()
     write("diff", {**header(1006), "cases": cases})
+
+
+# -- abapit's history store ------------------------------------------------------------------------
+
+def history_seed() -> dict:
+    """Synthetic snapshot rows for a FAKE history database: two orgs, interleaved ids, all invented."""
+    def snap(id_, taken, org, name, **errors):
+        return {"id": id_, "taken_at": taken, "org_client_id": org, "org_name": name, "org_scope": "business",
+                "abapit_version": "0.2.0", "errors": json.dumps(errors)}
+
+    def item(snapshot, resource, item_id, attrs):
+        return {"snapshot_id": snapshot, "resource": resource, "item_id": item_id, "attributes": attrs}
+
+    def dev(serial, **attrs):
+        return {"serialNumber": serial, "deviceModel": "MacBook Air 13-inch (M3)", "productFamily": "Mac",
+                "status": "ASSIGNED", "addedToOrgDateTime": "2026-01-05T09:00:00Z", **attrs}
+
+    def care(serial, end, status="ACTIVE"):
+        return {"serialNumber": serial, "description": "AppleCare+", "status": status, "endDateTime": end}
+
+    a, b = "DEMO-ORG-A", "DEMO-ORG-B"
+    snapshots = [snap(1, "2026-09-01T08:00:00Z", a, "Demo Org A"),
+                 snap(2, "2026-09-08T08:00:00Z", b, "Demo Org B"),
+                 snap(3, "2026-09-15T08:00:00Z", a, "Demo Org A", applecare="HTTP 403 (demo)"),
+                 snap(5, "2026-10-01T08:00:00Z", a, "Demo Org A (renamed)"),
+                 snap(6, "2026-10-02T08:00:00Z", b, "Demo Org B"),
+                 snap(9, "2026-10-15T08:00:00Z", a, "Demo Org A (renamed)")]
+    items = [
+        item(1, "devices", "DEMO0001", dev("DEMO0001")), item(1, "devices", "DEMO0002", dev("DEMO0002", status="UNASSIGNED")),
+        item(1, "applecare", "DEMO0001:0", care("DEMO0001", "2026-12-01T00:00:00Z")),
+        item(1, "mdm_servers", "AB01", {"serverName": "Demo MDM", "serverType": "MDM"}),
+        item(2, "devices", "DEMO0100", dev("DEMO0100")), item(2, "applecare", "DEMO0100:0", care("DEMO0100", "2027-01-01T00:00:00Z")),
+        item(3, "devices", "DEMO0001", dev("DEMO0001")), item(3, "devices", "DEMO0003", dev("DEMO0003")),
+        item(3, "mdm_servers", "AB01", {"serverName": "Demo MDM", "serverType": "MDM"}),
+        item(5, "devices", "DEMO0001", dev("DEMO0001", status="UNASSIGNED")), item(5, "devices", "DEMO0003", dev("DEMO0003")),
+        item(5, "applecare", "DEMO0003:0", care("DEMO0003", "2026-11-30T12:00:00Z")),
+        item(5, "applecare", "DEMO0001:0", care("DEMO0001", "2026-12-01T00:00:00Z", status="INACTIVE")),
+        item(5, "users", "demo.user@example.com", {"managedAppleAccount": "demo.user@example.com", "name": "Demo User"}),
+        item(6, "devices", "DEMO0100", dev("DEMO0100")),
+        item(9, "devices", "DEMO0001", dev("DEMO0001")), item(9, "devices", "DEMO0003", dev("DEMO0003")),
+        item(9, "devices", "DEMO0004", dev("DEMO0004", flag=True, tags=["x", "y"], note=None)),
+        # ids that sort differently by code point, UTF-16 and canonical equivalence; an empty id; an unusual name
+        item(9, "users", "\u00c9", {"name": "NFC"}), item(9, "users", "E\u0301", {"name": "NFD"}),
+        item(9, "users", "\uff21", {"name": "Fullwidth"}), item(9, "users", "\U0001f600", {"name": "Astral"}),
+        item(9, "users", "", {"name": "Empty id"}), item(9, "users", "demo.user@example.com", {"name": "Demo User"}),
+    ]
+    return {"snapshots": snapshots, "items": items}
+
+
+def gen_history(m: dict) -> None:
+    """abapit's own history store over a fake database in a temp directory, never the operator's."""
+    history = m["history"]
+    seed = history_seed()
+    saved = os.environ.get("ABAPIT_DATA_DIR")
+    directory = Path(tempfile.mkdtemp(prefix="abapit-fake-history-"))
+    os.environ["ABAPIT_DATA_DIR"] = str(directory)
+    try:
+        if Path(history.data_dir()).resolve() != directory.resolve():
+            raise SystemExit("abapit's history database is not the fake one: refusing to go on")
+        conn = history.connect()
+        with conn:
+            conn.executemany("INSERT INTO snapshots (id, taken_at, org_client_id, org_name, org_scope, abapit_version, errors) "
+                             "VALUES (:id, :taken_at, :org_client_id, :org_name, :org_scope, :abapit_version, :errors)",
+                             seed["snapshots"])
+            conn.executemany("INSERT INTO items VALUES (?, ?, ?, ?)",
+                             [(i["snapshot_id"], i["resource"], i["item_id"], json.dumps(i["attributes"], sort_keys=True))
+                              for i in seed["items"]])
+        conn.close()
+        a, b = "DEMO-ORG-A", "DEMO-ORG-B"
+        reads = []
+
+        def seeded(snapshot_id: int) -> dict:
+            data: dict = {}
+            for i in seed["items"]:
+                if i["snapshot_id"] == snapshot_id:
+                    data.setdefault(i["resource"], {})[i["item_id"]] = i["attributes"]
+            return data
+
+        def read(call: str, args: dict, fn) -> None:
+            reads.append({"call": call, "args": args, "expected": outcome(fn)})
+
+        for org, limit in ((a, None), (a, 1), (a, 2), (a, 0), (a, -1), (b, None), ("DEMO-ORG-NONE", None), ("", None)):
+            args = {"org_client_id": org} | ({} if limit is None else {"limit": limit})
+            read("list_snapshots", args, lambda: history.list_snapshots(**args))
+        for org, resource in ((a, "applecare"), (a, "devices"), (a, "users"), (a, "mdm_servers"), (a, "blueprints"),
+                              (b, "applecare"), (b, "devices"), (b, "users"), ("DEMO-ORG-NONE", "devices"), (a, "")):
+            args = {"org_client_id": org, "resource": resource}
+            read("latest_resource", args, lambda: history.latest_resource(**args))
+        for snapshot_id, resource in ((9, "users"), (9, "devices"), (5, "applecare"), (3, "applecare"), (1, "mdm_servers"),
+                                      (4, "devices"), (9, "nothing"), (7, "devices"), (2, "devices"), (2, "users")):
+            args = {"snapshot_id": snapshot_id, "resource": resource}
+            read("snapshot_resource", args, lambda: history.snapshot_resource(**args))
+        for old_id, new_id in ((1, 3), (3, 5), (5, 9), (1, 9), (9, 1), (2, 6), (1, 2)):
+            args = {"old_id": old_id, "new_id": new_id}
+            read("diff_snapshots", args, lambda: history.diff_snapshots(**args))
+            # held to the corrected diff over the seed too: a seed change can't record an uncorrected output
+            if reads[-1]["expected"] != outcome(lambda: corrected_diff(history, seeded(old_id), seeded(new_id))):
+                raise SystemExit(f"history.json: diff_snapshots {old_id}->{new_id} differs from the corrected diff")
+        for org in (a, b):
+            args = {"org_client_id": org}
+            read("latest_applecare", args, lambda: history.latest_applecare(**args))
+
+        # prune runs in order against one database; each step records what is left (snapshot ids and the item
+        # count behind each, since a removed snapshot takes its items with it through the foreign key).
+        def left() -> dict:
+            conn = history.connect()
+            try:
+                return {"snapshots": [r["id"] for r in conn.execute("SELECT id FROM snapshots ORDER BY id")],
+                        "items": {str(r["snapshot_id"]): r["n"] for r in conn.execute(
+                            "SELECT snapshot_id, COUNT(*) AS n FROM items GROUP BY snapshot_id ORDER BY snapshot_id")}}
+            finally:
+                conn.close()
+
+        prunes = []
+        for org, keep in (("DEMO-ORG-NONE", 3), (a, 10), (a, -1), (a, 4), (a, 2), (a, 2), (b, 0), (a, 0)):
+            step = {"org_client_id": org, "keep": keep}
+            step["expected"] = outcome(lambda: history.prune(org, keep))
+            step["after"] = left()
+            prunes.append(step)
+        removed = sum(step["expected"].get("ok", 0) for step in prunes)
+        if removed != 6 or prunes[-1]["after"] != {"snapshots": [], "items": {}}:
+            raise SystemExit(f"abapit's prune no longer behaves as the history golden assumes: {prunes}")
+    finally:
+        if saved is None:
+            os.environ.pop("ABAPIT_DATA_DIR", None)
+        else:
+            os.environ["ABAPIT_DATA_DIR"] = saved
+        shutil.rmtree(directory, ignore_errors=True)
+    write("history", {**header(None), "schema": history.SCHEMA, "seed": seed, "cases": reads, "prunes": prunes})
 
 
 # -- private keys and the client assertion ---------------------------------------------------------
@@ -1522,6 +1934,7 @@ def main() -> int:
     gen_reports(modules)
     gen_csv(modules)
     gen_diff(modules)
+    gen_history(modules)
     gen_keys_and_claims(modules)
     gen_mosyle(modules)
     gen_unicode_case(modules)

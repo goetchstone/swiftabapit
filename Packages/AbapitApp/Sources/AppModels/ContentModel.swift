@@ -24,6 +24,9 @@ public protocol ContentRow: Identifiable, Sendable where ID == String {
     static var columns: ExportPolicy.Columns { get }
     var item: Item { get }
     var name: String { get }
+    /// The row's name when it has one, as a blueprint's member shows it: nil when Apple sent none (`name` is then the id).
+    /// A package's is masked as its `name` is.
+    var memberName: String? { get }
     /// What the search matches.
     var searched: [String] { get }
     /// The row as its CSV holds it: the item's attributes, a package's with its addresses masked.
@@ -47,6 +50,7 @@ public struct AppRow: ContentRow {
     /// "Custom" (the organization's own) or "App Store".
     public let source: String
     public var searched: [String] { [name, bundleID, item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ app: ContentApp) {
         item = app
@@ -68,6 +72,7 @@ public struct PackageRow: ContentRow {
     /// Sorts undated packages first, as a missing date reads oldest.
     public let updated: Date
     public var searched: [String] { [name, bundleIDs, item.id] }
+    public var memberName: String? { ContentWords.named(ContentWords.shown(item.name)) }
     public var exported: CSV.Item { ContentWords.exported(item) }
 
     /// Each text with its addresses masked (`ContentWords.shown`), as the detail's attributes are.
@@ -90,6 +95,7 @@ public struct BlueprintRow: ContentRow {
     public let licences: String
     public let updated: Date
     public var searched: [String] { [name, item.summary ?? "", item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ blueprint: Blueprint) {
         item = blueprint
@@ -110,6 +116,7 @@ public struct ConfigurationRow: ContentRow {
     public let platforms: String
     public let updated: Date
     public var searched: [String] { [name, type, item.id] }
+    public var memberName: String? { ContentWords.named(item.name) }
 
     public init(_ configuration: Configuration) {
         item = configuration
@@ -149,6 +156,15 @@ public final class ContentList<Row: ContentRow> {
         let found = query.isEmpty ? rows : rows.filter { row in row.searched.contains { $0.localizedStandardContains(query) } }
         return found.sorted(using: sortOrder)
     }
+
+    /// This list as the names of a blueprint's members: each row's own text, so a package's is masked as its row masks it
+    /// (invariant 11; `PackageRow.init`).
+    package var memberNames: MemberNames.Source {
+        MemberNames.source(state, truncated: truncated) { MemberNames.byID(rows.map { ($0.id, $0.memberName) }) }
+    }
+
+    /// Only where this list stands (not read, read, unreadable), which is cheap: what an open blueprint detail watches.
+    package var memberPhase: MemberNames.Phase { MemberNames.phase(state, truncated: truncated) }
 
     /// The rows a walk read before it failed or was refused: shown, and said to be partial.
     public var partialCount: Int? {
@@ -254,13 +270,34 @@ public final class ContentModel {
     private let orgs: OrgsModel
     @ObservationIgnored private var loadedGeneration = -1
 
-    public init(orgs: OrgsModel) {
+    public convenience init(orgs: OrgsModel) {
+        self.init(orgs: orgs, otherNames: { [:] }, otherPhases: { [:] })
+    }
+
+    /// `otherNames` is what the other screens have read, for the relationships Content has no list of: devices, users and
+    /// user groups (`ScreenModels` wires them), and `otherPhases` where each stands (what the open detail watches). Asked
+    /// when a blueprint's detail lands and when a list moves between not read, read and unreadable; no read is made for it.
+    package init(orgs: OrgsModel, otherNames: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Source],
+                 otherPhases: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Phase] = { [:] }) {
         self.orgs = orgs
-        apps = ContentList()
-        packages = ContentList()
+        let apps = ContentList<AppRow>(), packages = ContentList<PackageRow>(), configurations = ContentList<ConfigurationRow>()
+        self.apps = apps
+        self.packages = packages
         blueprints = ContentList()
-        configurations = ContentList()
-        detail = ContentDetailModel(orgs: orgs)
+        self.configurations = configurations
+        detail = ContentDetailModel(orgs: orgs, names: {
+            var sources = otherNames()
+            sources[.apps] = apps.memberNames
+            sources[.packages] = packages.memberNames
+            sources[.configurations] = configurations.memberNames
+            return MemberNames(sources)
+        }, phases: {
+            var phases = otherPhases()
+            phases[.apps] = apps.memberPhase
+            phases[.packages] = packages.memberPhase
+            phases[.configurations] = configurations.memberPhase
+            return phases
+        })
         orgs.onSwitch { [weak self] in self?.orgChanged() }
     }
 
@@ -350,14 +387,35 @@ public final class ContentDetailModel {
     /// Detail reads that have returned, superseded ones included: what tests wait on.
     @ObservationIgnored package private(set) var readsFinished = 0
 
-    init(orgs: OrgsModel) {
+    /// What the app has read to name a blueprint's members (the active org's lists as they are now). Asked when the
+    /// blueprint's read lands and again whenever a list it reads moves between not read, read and unreadable (`track`): the open blueprint's members are named,
+    /// and its words kept true, as lists arrive, from the held read and no new Apple read.
+    private let names: @MainActor () -> MemberNames
+    /// Where each list stands, cheap to ask: the open detail watches this alone, and builds the names (`names`) only when a
+    /// list moves between not read, read and unreadable, not on each page it reads.
+    private let phases: @MainActor () -> [Blueprint.Relationship: MemberNames.Phase]
+    @ObservationIgnored private var heldPhases: [Blueprint.Relationship: MemberNames.Phase] = [:]
+    @ObservationIgnored private var tracked = false
+    /// The open blueprint's read, with the token of the `show` that made it: a rebuild uses it only while that is still the
+    /// current one, so a switch or another choice retires it (a list finishing in the old org rebuilds nothing).
+    @ObservationIgnored private var held: (read: BlueprintRead, token: Int)?
+
+    init(orgs: OrgsModel, names: @escaping @MainActor () -> MemberNames = { MemberNames() },
+         phases: @escaping @MainActor () -> [Blueprint.Relationship: MemberNames.Phase] = { [:] }) {
         self.orgs = orgs
+        self.names = names
+        self.phases = phases
     }
 
     func show(_ selection: ContentSelection?) {
         task?.cancel()
         task = nil
         token += 1
+        // Nothing of the last row's read stays in memory past its show: a switch (which clears the selection), another choice
+        // or a close drops it (the clients rule).
+        held = nil
+        heldPhases = [:]
+        tracked = false
         shown = selection
         item = .loading
         guard let selection else { return }
@@ -372,12 +430,15 @@ public final class ContentDetailModel {
             item = .failed(ScreenWords.unsendableID)
             return
         }
-        let token = token
+        let token = token, names = names
         task = Task { [weak self] in
             defer { self?.readsFinished += 1 }
             let result: Panel<ContentDetail>
+            var blueprint: BlueprintRead?
             do {
-                result = .loaded(try await Self.read(selection, from: client))
+                let read = try await Self.read(selection, from: client, names: names)
+                result = .loaded(read.detail)
+                blueprint = read.blueprint
             } catch is CancellationError {
                 return
             } catch {
@@ -386,15 +447,38 @@ public final class ContentDetailModel {
             }
             guard let self, self.token == token, !Task.isCancelled else { return }
             self.item = result
+            if let blueprint {
+                held = (blueprint, token)
+                track(token)
+            }
         }
     }
 
-    private static func read(_ selection: ContentSelection, from client: AppleClient) async throws -> ContentDetail {
+    /// Rebuilds the open blueprint's detail from its held read and the lists as they are now, and watches those lists: when
+    /// one changes, once more. Only while `token` is the current show's.
+    private func track(_ token: Int) {
+        guard let held, held.token == token, self.token == token else { return }
+        let now = withObservationTracking { self.phases() } onChange: { [weak self] in
+            Task { @MainActor in self?.track(token) }
+        }
+        // A page of a list changes its state without changing where it stands: nothing to rebuild.
+        guard now != heldPhases || !tracked else { return }
+        heldPhases = now
+        tracked = true
+        let names = self.names()
+        let rebuilt = ContentDetail(blueprint: held.read, names: names)
+        if case .loaded(let now) = item, now.members == rebuilt.members, now.membersListNote == rebuilt.membersListNote { return }
+        item = .loaded(rebuilt)
+    }
+
+    private static func read(_ selection: ContentSelection, from client: AppleClient, names: @MainActor () -> MemberNames) async throws -> (detail: ContentDetail, blueprint: BlueprintRead?) {
         switch selection.kind {
-        case .apps: ContentDetail(app: try await client.app(selection.id))
-        case .packages: ContentDetail(package: try await client.package(selection.id))
-        case .blueprints: ContentDetail(blueprint: try await client.blueprintWithMembers(selection.id))
-        case .configurations: ContentDetail(configuration: try await client.configuration(selection.id))
+        case .apps: return (ContentDetail(app: try await client.app(selection.id)), nil)
+        case .packages: return (ContentDetail(package: try await client.package(selection.id)), nil)
+        case .blueprints:
+            let read = try await client.blueprintWithMembers(selection.id)
+            return (ContentDetail(blueprint: read, names: names()), read)
+        case .configurations: return (ContentDetail(configuration: try await client.configuration(selection.id)), nil)
         }
     }
 }
@@ -412,7 +496,8 @@ public struct ContentField: Sendable, Equatable, CustomStringConvertible {
     public var description: String { "\(label): \(value)" }
 }
 
-/// One member of a blueprint relationship: its id, and a name when one is given (none is: blueprint reads give ids only).
+/// One member of a blueprint relationship: its id, and its name when a list the app already read has it (`MemberNames`);
+/// a package's is masked as its row masks it.
 public struct ContentMember: Sendable, Equatable {
     public let id: String
     public let name: String?
@@ -450,8 +535,8 @@ public struct ContentDetail: Sendable {
     public let members: [ContentMemberGroup]
     /// Why a blueprint's members aren't shown: Apple refused a relationship's list (Phase 2a review L5: never "no members").
     public let membersNote: String?
-    /// Said where a blueprint's members are shown: they are ids, as nothing in Apple's blueprint reads names them (nil when
-    /// no members are shown).
+    /// Said where a blueprint's members are shown: which are named, from which lists, and which are listed by ID and why
+    /// (`ContentWords.naming`); nil when every member shown is named, or none is shown.
     public let membersListNote: String?
     /// A custom setting's profile, pretty-printed with every secret masked.
     public let profile: String?
@@ -503,19 +588,32 @@ public struct ContentDetail: Sendable {
         ], notes: notes, attributes: ContentWords.packageAttributes(package))
     }
 
-    init(blueprint read: BlueprintRead) {
+    init(blueprint read: BlueprintRead, names: MemberNames = MemberNames()) {
         let blueprint = read.blueprint
         var groups: [ContentMemberGroup] = [], refusal: String?
+        var coverage: [ContentWords.Coverage] = []
         switch read.members {
         case .refused(let error):
             refusal = ContentWords.refusal(error)
         case .read(let related):
-            // Every relationship was read on its own, so each has a list (possibly empty: "None"). A member is its id: nothing
-            // is included, so none is named. Naming one later, from a list the app already loads, must mask a package's
-            // address as the package's own row does (invariant 11; docs/domains/apple-reads.md).
+            // Every relationship was read on its own, so each has a list (possibly empty: "None"). Apple gives a member as its
+            // id; its name is the text its own list's row shows, from a list the app already read (`MemberNames`). A package's
+            // is `PackageRow.name`, masked, so an address in it never reaches here raw (invariant 11).
             groups = Blueprint.Relationship.allCases.compactMap { relationship in
                 related[relationship].map { listed in
-                    let members = listed.linkages.map { ContentMember(id: $0.id, name: nil) }
+                    let source = names[relationship]
+                    var named = 0, nameless = 0
+                    let members = listed.linkages.map { linkage -> ContentMember in
+                        guard case .read(let list, _) = source, let entry = list[linkage.id] else { return ContentMember(id: linkage.id, name: nil) }
+                        // One rule for every kind: a row with no name leaves its member an ID, counted and said.
+                        guard let name = entry else {
+                            nameless += 1
+                            return ContentMember(id: linkage.id, name: nil)
+                        }
+                        named += 1
+                        return ContentMember(id: linkage.id, name: name)
+                    }
+                    coverage.append(ContentWords.Coverage(relationship, total: members.count, named: named, nameless: nameless, source: source))
                     return ContentMemberGroup(relationship: relationship, title: relationship.title, members: members, count: members.count,
                                               isTruncated: listed.isTruncated, summary: ContentWords.members(members.count, relationship, truncated: listed.isTruncated))
                 }
@@ -526,7 +624,7 @@ public struct ContentDetail: Sendable {
             ContentField("Status", BlueprintRow(blueprint).status),
             ContentField("Licences", blueprint.appLicenseDeficient.map { $0 ? "Too few for its apps" : "Enough for its apps" } ?? "—"),
             ContentField("Created", ScreenWords.day(blueprint.created?.date)), ContentField("Updated", ScreenWords.day(blueprint.updated?.date)),
-        ], members: groups, membersNote: refusal, membersListNote: groups.isEmpty ? nil : ContentWords.membersByID, attributes: ContentWords.attributes(of: blueprint))
+        ], members: groups, membersNote: refusal, membersListNote: ContentWords.naming(coverage), attributes: ContentWords.attributes(of: blueprint))
     }
 
     init(configuration: Configuration) {
@@ -554,8 +652,84 @@ package enum ContentWords {
     /// What stands where a value is masked: `ProfileText`'s mask, so the screen masks one way.
     static let mask = ProfileText.mask
 
-    /// Said under a blueprint's members: they are ids, because Apple's blueprint reads give nothing to name them by.
-    static let membersByID = "Listed by ID: Apple's blueprint reads give IDs only."
+    /// How well one of a blueprint's relationships was named from the lists the app has read.
+    package struct Coverage: Equatable {
+        package enum How: Equatable {
+            /// Every member has a name.
+            case named
+            /// The list wasn't read (idle or loading).
+            case notRead
+            /// The list couldn't be read: refused, failed, or not in this org's scope.
+            case unreadable
+            /// The list was read but `missing` of the members aren't in it; `whole` is false when the page cap cut it.
+            case missing(Int, whole: Bool)
+            /// Every member is in the list, but some rows have no name (they show their id).
+            case nameless
+        }
+
+        package let relationship: Blueprint.Relationship
+        package let total: Int
+        package let how: How
+        /// How many members are in the list but have no name there.
+        package let nameless: Int
+
+        package init(_ relationship: Blueprint.Relationship, total: Int, named: Int, nameless: Int = 0, source: MemberNames.Source) {
+            self.relationship = relationship
+            self.total = total
+            self.nameless = nameless
+            switch source {
+            case .notRead: how = total == 0 ? .named : .notRead
+            case .unreadable: how = total == 0 ? .named : .unreadable
+            case .read(_, let whole):
+                let missing = total - named - nameless
+                how = missing > 0 ? .missing(missing, whole: whole) : nameless > 0 ? .nameless : .named
+            }
+        }
+    }
+
+    /// Said under a blueprint's members (invariant 8: never silent): which relationships are named and which are listed by
+    /// ID, and why. Apple's blueprint reads give members as IDs only, so a name comes from a list the app has already read.
+    /// Nil when every member shown is named (a member whose row has no name is not); none shown is nil too; a relationship with no members is left out.
+    package static func naming(_ coverage: [Coverage]) -> String? {
+        let relevant = coverage.filter { $0.total > 0 }
+        func titles(_ how: (Coverage.How) -> Bool) -> [Coverage] { relevant.filter { how($0.how) } }
+        let named = titles { $0 == .named }, notRead = titles { $0 == .notRead }, unreadable = titles { $0 == .unreadable }
+        let missing = relevant.filter { if case .missing = $0.how { true } else { false } }
+        let nameless = relevant.filter { $0.nameless > 0 }
+        guard missing.count + notRead.count + unreadable.count + nameless.count > 0 else { return nil }
+        var parts: [String] = []
+        if !named.isEmpty { parts.append("\(joined(named.map { $0.relationship.noun(2) })) are named") }
+        if !notRead.isEmpty {
+            let lists = joined(notRead.map { $0.relationship.title })
+            parts.append("\(joined(notRead.map { $0.relationship.noun(2) })) are listed by ID until the \(lists) "
+                         + (notRead.count == 1 ? "list is read" : "lists are read"))
+        }
+        if !unreadable.isEmpty {
+            let lists = joined(unreadable.map { $0.relationship.title })
+            parts.append("\(joined(unreadable.map { $0.relationship.noun(2) })) are listed by ID because the \(lists) "
+                         + (unreadable.count == 1 ? "list couldn't be read" : "lists couldn't be read"))
+        }
+        for group in missing {
+            guard case .missing(let count, let whole) = group.how else { continue }
+            let noun = group.relationship.noun(2)
+            let list = whole ? "the \(noun) list read" : "the part of the \(noun) list read (it stopped at its page cap)"
+            parts.append("\(count.formatted()) of \(group.total.formatted()) \(noun) \(count == 1 ? "isn't" : "aren't") in \(list), so \(count == 1 ? "is" : "are") listed by ID")
+        }
+        for group in nameless {
+            let noun = group.relationship.noun(2), count = group.nameless
+            parts.append("\(count.formatted()) of \(group.total.formatted()) \(noun) \(count == 1 ? "has" : "have") no name in the \(noun) list, so \(count == 1 ? "is" : "are") listed by ID")
+        }
+        let sentence = parts.joined(separator: "; ")
+        return sentence.prefix(1).uppercased() + sentence.dropFirst() + "."
+    }
+
+    /// "a", "a and b", "a, b and c".
+    private static func joined(_ items: [String]) -> String {
+        switch items.count {
+        case 0, 1: items.first ?? ""
+        default: items.dropLast().joined(separator: ", ") + " and " + items.last!
+        }
+    }
 
     static let maskedLocation = "The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
         + "It is shown here, never opened."
@@ -626,6 +800,9 @@ package enum ContentWords {
     /// verifier round 2: the detail masked an address in the description attribute, then showed the same address raw in the
     /// Name, Version, Bundle IDs and Hash fields and the title, and the CSV wrote all five raw: a file that leaves the app was
     /// less careful than the screen, invariant 11; round 3: so did the member list). Nil when Apple sent none.
+    /// `text` as a name: nil when there is none (Apple sent none, or an empty string).
+    static func named(_ text: String?) -> String? { text.flatMap { $0.isEmpty ? nil : $0 } }
+
     static func shown(_ text: String?) -> String? { text.map(addresses(in:)) }
 
     /// A package as its CSV holds it: every string of every attribute through `addresses(in:)`, at any depth. The `url`
