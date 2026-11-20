@@ -590,7 +590,7 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   words never say "until the Users list is read" after it was; a page read changes nothing (a 10-page load asks the lookup a
   constant number of times, `aTenPageListLoadRebuildsTheDetailAConstantNumberOfTimes`). The held read is dropped by every `show`
   (a switch clears the selection, so it goes with the org or client: `aSwitchDropsTheHeldBlueprintRead`), and a rebuild is dropped
-  unless it belongs to the row still shown (the show's token), so a switch, a client move that keeps the org, another choice or a
+  unless it belongs to the row still shown (the show's token; the same guard ends each earlier show's observation chain, so a detail opened and closed seven times asks the lookup no more often than one opened once, `openingAndClosingTheDetailLeavesNoObservationBehind`, invariant 7), so a switch, a client move that keeps the org, another choice or a
   close rebuilds nothing, and a closed detail stops watching (`aListChangingInTheOldOrgAfterASwitchRebuildsNothing`,
   `aClientMoveKeepingTheOrgRebuildsNothing`, `aClosedDetailStaysClosedWhenAListChanges`, `trackingStopsWhenTheDetailCloses`,
   `aListReadAfterTheDetailOpensNamesItAndTheWordsFollow`, `aRefreshWhoseAppsListIsSlowNamesTheOpenDetailWhenItLoads`).

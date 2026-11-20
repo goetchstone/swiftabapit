@@ -1413,6 +1413,46 @@ struct ContentTests {
         #expect(asked.count == afterClose, "the lookup was asked \(asked.count - afterClose) times after the detail closed")
     }
 
+    /// How many times the open detail asks where the lists stand while People reloads, after the detail was opened and closed
+    /// `shows` times and opened once more.
+    static func phaseLookups(afterShows shows: Int) async throws -> Int {
+        let world = try await membersWorld()
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: { MemberNames.sources(devices: devices, people: people) },
+                                 otherPhases: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.phases(devices: devices, people: people)
+        })
+        model.load()
+        await eventually("own lists") { model.readsFinished >= 4 }
+        model.kind = .blueprints
+        for _ in 0..<shows {
+            let before = model.detail.readsFinished
+            model.selection = "B1"
+            await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+            model.selection = nil
+        }
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        await drain()
+        let start = asked.count
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await drain(10)
+        return asked.count - start
+    }
+
+    /// Each show registers one observation chain and the guard in `track` ends the chain of any show that is no longer the
+    /// current one (invariant 7: bounded). Without it every earlier show leaves a permanent chain, and the lookups per list
+    /// change grow with the number of rows ever opened.
+    @Test func openingAndClosingTheDetailLeavesNoObservationBehind() async throws {
+        let once = try await Self.phaseLookups(afterShows: 0)
+        let many = try await Self.phaseLookups(afterShows: 6)
+        // Counts shift a little with when each page's state change is seen; they don't grow with the shows.
+        #expect(once > 0 && many <= 8, "lookups per list change: \(once) after one show, \(many) after seven")
+    }
+
     /// The clients rule: after a switch nothing of the old client's blueprint stays in the detail model's memory.
     @Test func aSwitchDropsTheHeldBlueprintRead() async throws {
         let world = try await Self.membersWorld()

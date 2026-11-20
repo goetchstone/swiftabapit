@@ -35,6 +35,9 @@ package struct MemberNames: Sendable, Equatable {
     /// A list that nothing has been read for.
     package subscript(relationship: Blueprint.Relationship) -> Source { sources[relationship] ?? .notRead }
 
+    /// Caution for whoever changes what feeds the names: the open detail rebuilds only when a list's `Phase` changes, and
+    /// the Devices rows are rewritten while the state stays `.loaded` (assignment only: a serial and a model don't change).
+    /// A change that lets a name move without the phase moving must also be watched (`ContentDetailModel.track`).
     /// A list's names as a source, by its load state: only a list that ended is named from, and a failed or refused walk's
     /// partial rows aren't (the screen shows them as partial; a name from them could be taken for a whole list's).
     package static func source(_ state: LoadState, truncated: Bool, names: () -> [String: String?]) -> Source {
