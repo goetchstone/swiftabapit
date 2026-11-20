@@ -5,7 +5,8 @@
 **Owns invariant(s):** #6, #8, and #11 for CSV export
 
 **Status:** Phase 3 in progress (split into PRs, 2026-11-20): the snapshot store is built (`SnapshotStore`, below; PR #30,
-branch `phase-3-snapshot-store`); the fleet reports (Activation Lock, migration, service health, out of warranty, the
+branch `phase-3-snapshot-store`); the Needs-attention store and `settings.json` are built (PR #33, branch
+`phase-3-attention-store`; below); the fleet reports (Activation Lock, migration, service health, out of warranty, the
 catalog) are built (PR #29); the parity goldens for the store, diff and coverage are merged (PR #28). The collectors, the
 abapit import, the diff in Swift and scheduled snapshots are still to do. The Reports module (CSV, the export policy,
 Find, the dashboard's stats) shipped in phase 1b, and the audit digests and the dashboard's quiet services and recent
@@ -15,8 +16,9 @@ events in phase 2a; their notes are below.
 
 - `Packages/AbapitKit/Sources/History/`: `SQLite.swift` (a thin wrapper over the system `SQLite3`: values bound and
   read by their bytes, a transaction that rolls back on any error), `Schema.swift` (abapit's `SCHEMA` word for word, this
-  app's additions, `StoredJSON`, `taken_at`'s text) and `SnapshotStore.swift` (the actor).
-- `Packages/AbapitKit/Tests/HistoryTests/`: `SnapshotStoreTests`, `SchemaTests`, and `Scratch` (a temporary folder by
+  app's additions, `StoredJSON`, `taken_at`'s text) `SnapshotStore.swift` (the actor) and `AttentionStore.swift` (the Needs-attention methods on it).
+- `Packages/AbapitKit/Sources/Orgs/LocalSettings.swift` (`settings.json`) and its `OrgsTests/LocalSettingsTests`.
+- `Packages/AbapitKit/Tests/HistoryTests/`: `SnapshotStoreTests`, `SchemaTests`, `AttentionStoreTests`, and `Scratch` (a temporary folder by
   its real path, synthetic orgs and devices, a second connection that looks at the file from outside the store).
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
@@ -128,13 +130,14 @@ events in phase 2a; their notes are below.
   `1.50`, `1e2`, `3.0e-5` and `1e400`. So a diff must compare numbers by value (1 is 1.0, as the operator reads them),
   never by `JSONValue.==`, which compares their text. Apple's and Mosyle's numbers are integers.
 
-### Needs attention: the store and the local settings (PR S4.11)
+### Needs attention: the store and the local settings (PR #33)
 
 - **What is stored** (plan §8.0, "Stored: only what can't be read again"): `AttentionStore.swift` adds methods to
   `SnapshotStore`, not a second store, because the table is in the same file (`attention`, `PRAGMA user_version` 2) and so
   has the same walk from `/`, modes, refusals and read-only access for a newer file. A row is
   `(org_id, rule, subject, first_seen, last_seen, dismissed_at, snoozed_until)`, primary key `(org_id, rule, subject)`.
-  `last_seen` is the one column beyond the plan's list: without it a finding that is gone can't be forgotten after 30 days.
+  `last_seen` is the one column beyond the plan's list (**a proposal, for the operator to confirm**): without it a finding
+  that is gone can't be forgotten after 30 days.
   `subject` is an identifier (a serial number, a service or activity id), never a name. **It never holds** a name, a
   message, a secret or any attribute of the device; what a finding says is computed from the latest snapshot every time.
   The sensitive-key leave-out (`withoutSecrets`) has nothing to act on here, because no attribute is stored.
@@ -142,7 +145,9 @@ events in phase 2a; their notes are below.
   transaction, the version read again under the lock. It never names `snapshots`, `items` or a view;
   `aVersionOneFileMigratesAndKeepsEverySnapshotByteIdentical` compares every row before and after. The file safety is
   the snapshot store's, unchanged (`theMigrationKeepsTheFileSafety`: a wider mode is narrowed, a link refused, the file
-  left at version 1). A new file is made version 2 in one script. `removeAll(org:)` also deletes the org's findings.
+  left at version 1). A version-1 file must have this app's `snapshots` shape (`org_id` and `counts` columns), else `.notThisAppsFile`, the file
+  untouched (a foreign file can carry `user_version` 1). The version is read again under the lock (hook steps
+  `foundVersion1`, `migrating`; `twoStoresOpeningAVersionOneFileMigrateItOnce`). A new file is made version 2 in one script. `removeAll(org:)` also deletes the org's findings.
 - **Semantics** (the coordinating session's proposals, for the operator to confirm):
   - `seen(org:rule:subjects:at:)` takes every subject one run of a rule found (none is valid). A new subject gets
     `first_seen`; `first_seen` is never written for a row that exists (the conflict clause names only `last_seen`, which
@@ -150,19 +155,31 @@ events in phase 2a; their notes are below.
   - `dismiss` and `snooze` need a row `seen` made (`.noFinding` otherwise, so no row is invented); the latest choice wins
     (a dismissal clears a snooze and the reverse). A dismissal holds while the finding is there. A snooze hides it until its
     date (`Finding.isHidden(at:)`), then it shows again with its original `first_seen`.
-  - **Forgetting**: each `seen` deletes the org's rows not seen for more than 30 days (`SnapshotStore.forgetAfter`;
-    exactly 30 days is kept), a dismissal included. This reads "a dismissal holds until the finding clears" as "clears for
-    30 days", so one failed or partial read doesn't un-dismiss everything; a finding that returns after that is new, with
-    a new `first_seen`. A snooze on a finding gone 30 days goes with it.
+  - **Forgetting** (the 30 days is a **proposal, for the operator to confirm**): each `seen` deletes **that rule's** rows
+    of the org not seen for more than 30 days (exactly 30 is kept), a dismissal included. Another rule's rows are never
+    aged by the call, so a rule that isn't run keeps its findings and dismissals. This reads "a dismissal holds until the
+    finding clears" as "cleared for 30 days", so one failed read doesn't un-dismiss; a finding that returns after that is new,
+    with a new `first_seen`. A snooze on a finding gone 30 days goes with it.
+  - **The caller's contract**: call `seen` only for a run that judged the rule over a complete read, `[]` included. For a
+    rule skipped as not read, or a partial read (cut at a page cap, a resource that failed), don't call it at all, not even
+    with `[]`, which would age every finding of the rule. `at` is the current time.
+  - **Identifiers only**: `rule` (up to 64 characters) and `subject` (up to 128) can't be empty or hold whitespace, a control
+    or format character, a quote, a slash or a backslash (`.notAnIdentifier`), so a name with a space ("Jane Example's
+    MacBook Pro") can't be stored. A one-word name would pass: the collectors pass serials and ids, and this is the backstop.
+    Subjects are compared by bytes: precomposed and decomposed "e with acute" are two rows.
+  - `orgIDs()` lists orgs with snapshots or findings, so an org that has only findings is still a name in use.
   - There is no undo for a dismissal yet; a later screen PR adds it if the operator wants it.
   - Org isolation is the snapshots': every query filters on `org_id`; another org's finding is `.noFinding`.
 - **`settings.json`** (`Orgs/LocalSettings.swift`; the file beside `orgs.json`, in the app's container; never
   `UserDefaults` or `@AppStorage`, which `scripts/check_app.sh` fails). It holds the Needs-attention thresholds, in days:
   check-in 30, AppleCare expiring 90, migration deadline 14, quiet service 30 (**proposals, for the operator to confirm**).
-  A value outside 1...3650, or not a whole number, reads as its default. Written atomically (a `0600` temporary file made
+  `load` reads a value outside 1...3650, or not a whole number, as its default; `save` throws for one (`thresholdOutOfRange`),
+  writing nothing. Written atomically (a `0600` temporary file made
   `O_EXCL | O_NOFOLLOW`, synced, renamed), read with `O_NOFOLLOW`; unknown keys, at the top and among the thresholds, are
   kept. **A file it could not read is never written over**: `load` doesn't throw, it returns the defaults with `blocked` set
-  (not JSON, not a file, a link, unreadable, or a newer version, whose values are read), and `save` throws that. A missing
+  (not JSON, an `attention` value that isn't an object, not a file, a link, unreadable, or a newer version, whose values
+  are read), and `save` throws that. `save` also reads the file again first and refuses on the same grounds, whatever the
+  in-memory value says (a reset to defaults, or a value loaded before the file changed). A missing
   file isn't blocked. A crash between the write and the rename leaves the old file whole and a stale `.settings.json.<uuid>`
   beside it. No slots for the schedule, retention or login item yet: they come with those features.
 

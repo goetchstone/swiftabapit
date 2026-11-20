@@ -88,6 +88,59 @@ struct AttentionStoreTests {
         #expect(try Scratch.open(target).userVersion() == 1)
     }
 
+    /// A foreign file can carry `user_version` 1: refused before any write, bytes and mode unchanged.
+    @Test func aForeignFileAtVersionOneIsRefusedAndLeftAsItIs() throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o644]))
+        do {
+            let file = try Scratch.open(path)
+            try file.execute("CREATE TABLE snapshots (id INTEGER PRIMARY KEY, note TEXT); INSERT INTO snapshots VALUES (1, 'x'); PRAGMA user_version = 1;")
+        }
+        let before = try Data(contentsOf: URL(filePath: path))
+        #expect(throws: SnapshotStore.Failure.notThisAppsFile(path: path)) { _ = try SnapshotStore(storage: .folder(folder), appVersion: "1") }
+        #expect(try Data(contentsOf: URL(filePath: path)) == before)
+        #expect(Scratch.mode(path) == 0o644)
+        let file = try Scratch.open(path)
+        #expect(try file.userVersion() == 1)
+        #expect(try Scratch.count(file, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'attention'") == 0)
+    }
+
+    /// Two stores open one version-1 file: the second gets in between the first's reading the version and taking the write
+    /// lock (the hook). The first reads the version again under the lock, finds 2, and doesn't migrate twice (which would
+    /// fail: the table exists).
+    @Test func twoStoresOpeningAVersionOneFileMigrateItOnce() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]))
+        try Scratch.open(path).execute(Schema.toVersion1)
+        let steps = Shared<[String]>([]), second = Unchecked<SnapshotStore?>(nil)
+        let first = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(SnapshotStore.Failure) in
+            switch step {
+            case .foundVersion1:
+                steps.set(steps.value + ["found"])
+                second.value = try SnapshotStore(storage: .folder(folder), appVersion: "1") { inner throws(SnapshotStore.Failure) in
+                    if case .migrating = inner { steps.set(steps.value + ["second migrates"]) }
+                }
+            case .migrating:
+                steps.set(steps.value + ["first migrates"])
+            default:
+                break
+            }
+        }
+        #expect(steps.value == ["found", "second migrates"])
+        #expect(first.access == .readWrite)
+        try await second.value?.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon)
+        #expect(try await first.state(org: Self.acme).map(\.subject) == ["A"])
+        #expect(try Scratch.open(path).userVersion() == 2)
+    }
+
     // MARK: first seen
 
     @Test func firstSeenIsRecordedOnceAndNeverOverwritten() async throws {
@@ -106,9 +159,29 @@ struct AttentionStoreTests {
 
     @Test func aRuleAndASubjectAreNeverEmpty() async throws {
         let store = try Self.store()
-        await #expect(throws: SnapshotStore.Failure.emptyKey) { try await store.seen(org: Self.acme, rule: "", subjects: ["A"], at: Scratch.noon) }
-        await #expect(throws: SnapshotStore.Failure.emptyKey) { try await store.seen(org: Self.acme, rule: "r", subjects: [""], at: Scratch.noon) }
-        #expect(try await store.state(org: Self.acme).isEmpty)
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "", subjects: ["A"], at: Scratch.noon) }
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [""], at: Scratch.noon) }
+        for name in ["Jane Example's MacBook Pro", "a b", "a/b", "a\"b", "a\u{0}b", String(repeating: "x", count: 129)] {
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier, "\(name)") {
+                try await store.seen(org: Self.acme, rule: "r", subjects: [name], at: Scratch.noon)
+            }
+        }
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "a rule", subjects: [], at: Scratch.noon) }
+        // One bad subject stores none of the run's.
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: ["OK1", "bad name"], at: Scratch.noon) }
+        try await store.seen(org: Self.acme, rule: "check_in", subjects: ["C02XX0000001", "0b3a1c52-0000-4000-8000-000000000001", "12345"], at: Scratch.noon)
+        #expect(try await store.state(org: Self.acme).count == 3)
+    }
+
+    /// Canonically equivalent strings are two rows: the table keys by bytes, and a `Set<String>` would have merged them.
+    @Test func unicodeEquivalentSubjectsStayTwoRows() async throws {
+        let store = try Self.store()
+        let precomposed = "caf\u{E9}", decomposed = "cafe\u{301}"
+        #expect(precomposed == decomposed && Array(precomposed.utf8) != Array(decomposed.utf8))
+        try await store.seen(org: Self.acme, rule: "r", subjects: [precomposed, decomposed, precomposed], at: Scratch.noon)
+        let state = try await store.state(org: Self.acme)
+        #expect(state.count == 2)
+        #expect(Set(state.map { Array($0.subject.utf8) }) == [Array(precomposed.utf8), Array(decomposed.utf8)])
     }
 
     // MARK: dismiss and snooze
@@ -202,6 +275,44 @@ struct AttentionStoreTests {
         #expect(try await store.state(org: Self.acme).count == 1)
         try await store.seen(org: Self.acme, rule: "r", subjects: [], at: t.addingTimeInterval(30 * Self.day + 1))
         #expect(try await store.state(org: Self.acme).isEmpty)
+    }
+
+    /// Each rule ages only its own rows: a rule that wasn't run (skipped as not read, or the app idle) keeps its findings and
+    /// dismissals while another rule runs.
+    @Test func aRuleAgesOnlyItsOwnFindings() async throws {
+        let store = try Self.store()
+        let t = Scratch.noon
+        for rule in ["check_in", "quiet_service"] {
+            try await store.seen(org: Self.acme, rule: rule, subjects: ["A"], at: t)
+            try await store.dismiss(org: Self.acme, rule: rule, subject: "A", at: t)
+        }
+        // The app was idle 31 days; one rule runs first.
+        try await store.seen(org: Self.acme, rule: "check_in", subjects: [], at: t.addingTimeInterval(31 * Self.day))
+        var state = try await store.state(org: Self.acme)
+        #expect(state.map(\.rule) == ["quiet_service"])
+        #expect(state[0].dismissedAt == t && state[0].firstSeen == t)
+        // A rule skipped as not read for 31 days, while another runs daily, keeps its rows.
+        let skipped = t.addingTimeInterval(100 * Self.day)
+        try await store.seen(org: Self.acme, rule: "migration_deadline", subjects: ["M1"], at: skipped)
+        try await store.dismiss(org: Self.acme, rule: "migration_deadline", subject: "M1", at: skipped)
+        for day in 1...31 { try await store.seen(org: Self.acme, rule: "check_in", subjects: ["Z"], at: skipped.addingTimeInterval(Double(day) * Self.day)) }
+        state = try await store.state(org: Self.acme)
+        // `quiet_service` too, idle 130 days, keeps its row: nothing ages a rule that doesn't run.
+        #expect(state.map(\.rule) == ["check_in", "migration_deadline", "quiet_service"])
+        #expect(state[1].dismissedAt == skipped && state[1].firstSeen == skipped)
+        #expect(state[2].dismissedAt == t)
+    }
+
+    /// An org with findings and no snapshots is still taken: a new org must not inherit its dismissals.
+    @Test func anOrgWithOnlyFindingsIsStillANameInUse() async throws {
+        let store = try Self.store()
+        try await store.record(org: Self.other, takenAt: Scratch.noon, resources: [:])
+        try await store.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon)
+        #expect(try await store.orgIDs() == ["acme", "other-org"])
+        try await store.seen(org: Self.acme, rule: "r", subjects: ["A", "B"], at: Scratch.noon)
+        #expect(try await store.orgIDs() == ["acme", "other-org"])
+        try await store.removeAll(org: Self.acme)
+        #expect(try await store.orgIDs() == ["other-org"])
     }
 
     // MARK: orgs

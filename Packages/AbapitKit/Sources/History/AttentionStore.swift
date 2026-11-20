@@ -40,11 +40,19 @@ extension SnapshotStore {
     }
 
     /// Records the findings a run of `rule` found for `org` at `at`: `subjects` is all of them, none included. New ones
-    /// get `first_seen`; ones already there keep it. Then every finding of the org not seen for `forgetAfter` is deleted.
+    /// get `first_seen`; ones already there keep it. Then every finding of **this rule** of the org not seen for
+    /// `forgetAfter` is deleted; another rule's rows are never aged by this call.
+    ///
+    /// **The caller's contract:** call `seen` only for a run that judged the rule over a complete read, `[]` included
+    /// (the read was complete and found nothing). For a rule skipped as not read, or a read that was partial (cut at a
+    /// page cap, a resource that failed), don't call `seen` at all, not even with `[]`: an empty list would age every
+    /// finding of the rule. `at` is the current time; a clock far ahead would age the rule's rows early.
+    ///
+    /// `rule` and `subject` must be identifiers (`isIdentifier`), so a name can't be stored; else `.notAnIdentifier`.
     public func seen(org: OrgProfile, rule: String, subjects: some Collection<String>, at: Date) throws(Failure) {
         try writable()
         let orgID = try Self.id(of: org)
-        guard !rule.isEmpty, !subjects.contains("") else { throw .emptyKey }
+        guard Self.isIdentifier(rule, limit: 64), subjects.allSatisfy({ Self.isIdentifier($0, limit: 128) }) else { throw .notAnIdentifier }
         let now = Schema.takenAt(at), cutoff = Schema.takenAt(at.addingTimeInterval(-Self.forgetAfter))
         try Self.guarded {
             try database.transaction {
@@ -53,11 +61,26 @@ extension SnapshotStore {
                     INSERT INTO attention (org_id, rule, subject, first_seen, last_seen) VALUES (?, ?, ?, ?, ?) \
                     ON CONFLICT (org_id, rule, subject) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)
                     """)
-                for subject in Set(subjects) {
+                // Not a `Set`: Swift treats canonically equivalent strings (precomposed and decomposed "é") as one, and the
+                // table keys by bytes. A duplicate is the upsert's no-op.
+                for subject in subjects {
                     try upsert.run([.text(orgID), .text(rule), .text(subject), .text(now), .text(now)])
                 }
-                try database.run("DELETE FROM attention WHERE org_id = ? AND last_seen < ?", [.text(orgID), .text(cutoff)])
+                try database.run("DELETE FROM attention WHERE org_id = ? AND rule = ? AND last_seen < ?",
+                                 [.text(orgID), .text(rule), .text(cutoff)])
             }
+        }
+    }
+
+    /// Whether `text` can be a rule or a subject: 1 to `limit` characters, none whitespace, a control, a quote, a slash or
+    /// a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
+    /// doesn't. A one-word name would pass: callers pass identifiers, and this is the backstop. (No id helper exists
+    /// elsewhere in the app to reuse: `OrgStore.slug` makes slugs of names.)
+    static func isIdentifier(_ text: String, limit: Int) -> Bool {
+        guard !text.isEmpty, text.count <= limit else { return false }
+        return text.unicodeScalars.allSatisfy { scalar in
+            !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format
+              || "\"'`/\\".unicodeScalars.contains(scalar))
         }
     }
 

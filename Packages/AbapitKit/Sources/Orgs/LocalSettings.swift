@@ -52,6 +52,8 @@ public struct LocalSettings: Sendable, Equatable {
         case notASettingsFile
         case newerVersion(Int)
         case unwritable(errno: Int32)
+        /// A threshold outside `Thresholds.range`: nothing is written.
+        case thresholdOutOfRange(String)
 
         public var message: String {
             switch self {
@@ -60,6 +62,7 @@ public struct LocalSettings: Sendable, Equatable {
             case .notASettingsFile: "The settings file isn't one this app wrote. It was left as it is."
             case .newerVersion(let version): "The settings file was written by a newer abapit (version \(version)); this one won't change it."
             case .unwritable(let code): "The settings file couldn't be saved (\(String(cString: strerror(code))))."
+            case .thresholdOutOfRange(let key): "The setting \(key) must be between 1 and 3650 days; nothing was saved."
             }
         }
     }
@@ -104,6 +107,11 @@ public struct LocalSettings: Sendable, Equatable {
         }
         settings.fileVersion = version
         if version > Self.version { settings.blocked = .newerVersion(version) }
+        // Present but not an object: the file isn't one this version can keep whole, so it is never replaced.
+        if let value = root["attention"], value.object == nil {
+            settings.blocked = .notASettingsFile
+            return settings
+        }
         let attention = root["attention"]?.object ?? JSONObject()
         for (key, path) in thresholdKeys {
             if let days = attention[key]?.int, Thresholds.range.contains(days) { settings.thresholds[keyPath: path] = days }
@@ -113,8 +121,10 @@ public struct LocalSettings: Sendable, Equatable {
         return settings
     }
 
-    /// Writes the settings to `folder` atomically. Refuses when `blocked` (the file on disk is left as it was), when the
-    /// file is a link now, or when a threshold is outside `Thresholds.range`.
+    /// Writes the settings to `folder` atomically. Refuses, writing nothing, when `blocked`; when the file on disk is
+    /// unreadable, not JSON, not a regular file, a link or from a newer version *now* (it is read again here, so a "reset
+    /// to defaults" or a stale value can't overwrite one that changed since `load`); or when a threshold is outside
+    /// `Thresholds.range` (`load` reads such a stored value as its default; `save` never writes one).
     public func save(to folder: URL) throws(Failure) {
         try save(to: folder, beforeRename: nil)
     }
@@ -123,6 +133,12 @@ public struct LocalSettings: Sendable, Equatable {
     /// crash would. Never set outside the tests.
     func save(to folder: URL, beforeRename: (() throws(Failure) -> Void)?) throws(Failure) {
         if let blocked { throw blocked }
+        for (key, path) in Self.thresholdKeys where !Thresholds.range.contains(thresholds[keyPath: path]) {
+            throw .thresholdOutOfRange(key)
+        }
+        // The file as it is now (a missing one is fine). Not atomic with the rename below: another program writing in
+        // that window is out of scope, as for `orgs.json`.
+        if let onDisk = Self.load(from: folder).blocked { throw onDisk }
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         } catch {
@@ -135,7 +151,7 @@ public struct LocalSettings: Sendable, Equatable {
         var attention = thresholdExtras
         for (key, path) in Self.thresholdKeys {
             let days = thresholds[keyPath: path]
-            attention[key] = .number(String(Self.Thresholds.range.contains(days) ? days : Thresholds()[keyPath: path]))
+            attention[key] = .number(String(days))
         }
         var root = extras
         root["version"] = .number(String(Self.version))

@@ -138,4 +138,60 @@ struct LocalSettingsTests {
         #expect(try Self.read(dir) == Data(text.utf8))
         #expect(LocalSettings.Failure.newerVersion(2).message.contains("newer"))
     }
+
+    /// `load` reads a bad stored value as its default; `save` never writes one.
+    @Test(arguments: [0, -1, 3651, Int.max])
+    func saveRefusesAThresholdOutOfRange(days: Int) throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try LocalSettings().save(to: dir)
+        let before = try Self.read(dir)
+        var settings = LocalSettings()
+        settings.thresholds.quietServiceDays = days
+        #expect(throws: LocalSettings.Failure.thresholdOutOfRange("quiet_service_days")) { try settings.save(to: dir) }
+        #expect(try Self.read(dir) == before)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == [LocalSettings.fileName])
+        settings.thresholds.quietServiceDays = days == 0 ? 1 : 3650
+        try settings.save(to: dir)
+    }
+
+    /// `save` reads the file again: a "reset to defaults", or a value loaded before the file changed, can't overwrite one
+    /// that isn't this version's to change.
+    @Test func saveRefusesAFileThatIsUnreadableOrNewerNow() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fresh = LocalSettings.load(from: dir)  // no file: not blocked
+        #expect(fresh.blocked == nil)
+        for (text, failure) in [("not json", LocalSettings.Failure.notASettingsFile),
+                                (#"{"version": 9, "attention": {"check_in_days": 3}}"#, .newerVersion(9))] {
+            try Self.write(text, in: dir)
+            #expect(throws: failure) { try fresh.save(to: dir) }
+            #expect(try Self.read(dir) == Data(text.utf8))
+        }
+        // A file written after load by a newer version.
+        try FileManager.default.removeItem(at: dir.appending(path: LocalSettings.fileName))
+        let loaded = LocalSettings.load(from: dir)
+        try loaded.save(to: dir)
+        let newer = #"{"version": 2, "attention": {}}"#
+        try Self.write(newer, in: dir)
+        #expect(throws: LocalSettings.Failure.newerVersion(2)) { try loaded.save(to: dir) }
+        #expect(try Self.read(dir) == Data(newer.utf8))
+        // A directory where the file should be.
+        try FileManager.default.removeItem(at: dir.appending(path: LocalSettings.fileName))
+        try FileManager.default.createDirectory(at: dir.appending(path: LocalSettings.fileName), withIntermediateDirectories: false)
+        #expect(throws: LocalSettings.Failure.notASettingsFile) { try fresh.save(to: dir) }
+    }
+
+    @Test(arguments: ["1", "null", "[1]", "\"x\""])
+    func anAttentionValueThatIsNotAnObjectBlocksTheFile(value: String) throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let text = #"{"version": 1, "attention": \#(value)}"#
+        try Self.write(text, in: dir)
+        var settings = LocalSettings.load(from: dir)
+        #expect(settings.blocked == .notASettingsFile)
+        settings.thresholds.checkInDays = 7
+        #expect(throws: LocalSettings.Failure.notASettingsFile) { try settings.save(to: dir) }
+        #expect(try Self.read(dir) == Data(text.utf8))
+    }
 }

@@ -60,8 +60,8 @@ public actor SnapshotStore {
         case noSnapshot(Int64)
         /// The finding isn't in the store: it is recorded by `seen` before it can be dismissed or snoozed.
         case noFinding(rule: String, subject: String)
-        /// A rule or subject that is empty.
-        case emptyKey
+        /// A rule or subject that isn't an identifier (`isIdentifier`): empty, too long, or holding a space or a quote.
+        case notAnIdentifier
         /// A row that doesn't read (JSON that isn't, text that isn't UTF-8, an escape of half a character): the file was
         /// changed outside this app.
         case corrupt(String)
@@ -81,7 +81,7 @@ public actor SnapshotStore {
             case .noOrg: "The organization has no id, so its snapshots can't be kept apart from another's."
             case .noSnapshot(let id): "There's no snapshot \(id) for this organization."
             case .noFinding: "That finding isn't in the list any more, so it can't be changed."
-            case .emptyKey: "A finding needs a rule and a subject."
+            case .notAnIdentifier: "A finding's rule and subject must be identifiers, not names."
             case .corrupt(let what): "The snapshot history holds a row this app can't read (\(what)); it was changed outside abapit."
             }
         }
@@ -160,6 +160,10 @@ public actor SnapshotStore {
         case foundEmpty(path: String)
         /// Inside `record`'s transaction: the snapshot row and `items` items are written.
         case recording(items: Int)
+        /// A file at version 1 was found and checked as this app's; the write lock is taken next and the version read again.
+        case foundVersion1(path: String)
+        /// Inside the migration's transaction, the version confirmed as still 1: the attention table is made next.
+        case migrating(path: String)
     }
 
     typealias Hook = @Sendable (Step) throws(Failure) -> Void
@@ -273,11 +277,12 @@ public actor SnapshotStore {
 
     // MARK: reading
 
-    /// Every org id with at least one snapshot, by bytes. Org ids are slugs of names and can come round again: a new org
+    /// Every org id with at least one snapshot or one finding, by bytes. Org ids are slugs of names and can come round again: a new org
     /// must not be given one of these, or it would inherit a removed org's history (`OrgStore.uniqueID(avoiding:)`).
     public func orgIDs() throws(Failure) -> [String] {
         try Self.guarded {
-            try database.rows("SELECT DISTINCT org_id FROM snapshots ORDER BY org_id") { try $0.text(0) ?? "" }
+            // Findings count too: an org with dismissals and no snapshots must not be reused either.
+            try database.rows("SELECT org_id FROM snapshots UNION SELECT org_id FROM attention ORDER BY 1") { try $0.text(0) ?? "" }
         }
     }
 
@@ -473,10 +478,19 @@ public actor SnapshotStore {
             }
             guard found < Schema.version else { return .readWrite }
             if found == 1 {
-                // This app's own version-1 file: the attention table is added, the snapshots are not touched. Read again
-                // under the write lock, so two stores opening at once migrate it once.
+                // This app's own version-1 file (a foreign file can carry `user_version` 1 too: its `snapshots` must have
+                // the columns this app added), then the attention table is added; the snapshots are not touched. Read
+                // again under the write lock, so two stores opening at once migrate it once.
+                func isThisApps() throws -> Bool {
+                    let columns = try database.rows("PRAGMA table_info(snapshots)") { try $0.text(1) ?? "" }
+                    return columns.contains("org_id") && columns.contains("counts")
+                }
+                guard try isThisApps() else { throw Failure.notThisAppsFile(path: path) }
+                try hook?(.foundVersion1(path: path))
                 try database.transaction {
                     guard try database.userVersion() == 1 else { return }
+                    guard try isThisApps() else { throw Failure.notThisAppsFile(path: path) }
+                    try hook?(.migrating(path: path))
                     try database.execute(Schema.toVersion2)
                 }
                 return .readWrite
