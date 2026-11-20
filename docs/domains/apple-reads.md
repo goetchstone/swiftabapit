@@ -565,10 +565,29 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   L6, mutant P4).
 - **Content** (`ContentModel`, `ContentDetailModel`): apps, packages, blueprints and configurations side by side
   (`ContentList` each); the chosen row is read alone. A blueprint is read with no `include` and each of its six relationships on its own
-  (`AppleClient.blueprintWithMembers`, every page, ids only: a member is not named), counted only through
+  (`AppleClient.blueprintWithMembers`, every page, ids only), counted only through
   `BlueprintRead.members`: "N apps", "Showing N of more than N" when the page cap cut a list, and a refused relationship one
-  note and no counts. ("Apple didn't list …" and the names of included members stay in `ContentDetail.init(blueprint:)`,
-  which nothing in the app reaches now.) A configuration's profile is only `profileText`, and one that can't be
+  note and no counts.
+  **Naming a blueprint's members** (2026-11-20): Apple gives a member as an ID and nothing else, so a name comes only from a
+  list the app already read for its own screen, never from a read made to name it (no other screen is loaded for it). Apps,
+  packages and configurations are named from Content's own lists; users and user groups from People's; devices from the
+  Devices screen's (`MemberNames`, wired in `ScreenModels`, asked when the blueprint's detail lands). A member's name is the
+  text its list's row shows: an app's, a configuration's, a user's and a group's name, a device as "serial · model". A
+  package's is `PackageRow.name`, the row's own text through `ContentWords.addresses(in:)`, so an address with a user and
+  password in a package's name is masked in the member list as in the row, the detail and the CSV (invariant 11;
+  `aBlueprintsPackageNamesAreMaskedAsThePackagesOwn`). Only a list that ended names members: one still loading, idle,
+  refused or failed names none (its partial rows aren't used), and every model empties its lists on an org switch, so a
+  lookup after a switch sees only the new org's (`noMemberIsNamedFromAPreviousOrg`). Never silent (invariant 8,
+  `ContentWords.naming`, shown as `membersListNote`): nothing is said when every member shown is named; otherwise the note says which
+  relationships are named, which are listed by ID "until the Devices list is read" (a list not read yet) or "because the Users
+  list couldn't be read", and, for a list read to its end, "1 of 2 apps isn't in the apps list read" (for one the page cap cut,
+  "in the part of the apps list read (it stopped at its page cap)"). The detail is made once, when the blueprint's read lands:
+  a list read after it is open doesn't rename it; choosing the row again or Refresh reads it again and names from what is
+  read by then (`aListReadAfterTheDetailOpensNamesItOnlyWhenItIsOpenedAgain`). Who decided: the operator said "Yes, do it here"
+  to naming members from the lists already loaded (2026-11-20); the design (a lookup the screen models inject, the words, no
+  new read) was the coordinating session's proposal, and the executor's refinements were to name only from lists that ended
+  (no partial rows) and to leave the open detail as it was rather than rebuild it when a list arrives.
+  A configuration's profile is only `profileText`, and one that can't be
   shown says why. A package's location is shown with its user, password, query values, path parameters' values and
   fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
   A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
