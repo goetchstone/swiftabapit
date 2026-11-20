@@ -48,7 +48,7 @@ EDGES = {
     "HTTPCore": {"Wire"},
     "AppleBusiness": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"},
     "Mosyle": {"HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels", "JSONAPI"},
-    "History": {"Orgs", "AppleModels", "MosyleModels", "Reports"},
+    "History": {"Orgs", "AppleModels", "MosyleModels", "Reports", "JSONAPI"},
     "ChangeCore": {"HTTPCore", "Wire", "Planners", "Vault", "Orgs"},
     "Assist": {"Planners", "Reports"},
     "TestSupport": {"HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"},

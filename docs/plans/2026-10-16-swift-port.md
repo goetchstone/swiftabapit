@@ -364,7 +364,7 @@ AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
 MosyleModels → {JSONAPI}
 HTTPCore → {Wire}
-History → {AppleModels, MosyleModels, Reports}
+History → {Orgs, AppleModels, MosyleModels, Reports, JSONAPI}   stores and reads JSON:API resources
 Planners → {AppleModels, MosyleModels, JSONAPI, Wire}  (builds WireOperation via package init)
 Reports → {AppleModels, MosyleModels, JSONAPI}
 Assist → {Planners, Reports}                            never a client, HTTPCore or ChangeCore
@@ -1291,7 +1291,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** in progress. Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), and the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29). On branch `phase-3-diff-coverage-age` (PR #31): the ports of abapit's snapshot diff, `item_label`, coverage report and fleet-age report (`Reports/{SnapshotDiff,Coverage,FleetAge}.swift`) and the two history CSVs (`Reports/ExportHistory.swift`), each held to its golden, with the operator's two diff decisions of 2026-11-20 and the generator's fleet-age correction. Not started or not merged: the snapshot store, collectors, the Changes screen, abapit's history import and scheduled snapshots.
+**Status:** in progress, split into PRs (2026-11-20). Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29), and the snapshot store (`History/`, PR #30). On branch `phase-3-diff-coverage-age` (PR #31): the ports of abapit's snapshot diff, `item_label`, coverage report and fleet-age report (`Reports/{SnapshotDiff,Coverage,FleetAge}.swift`) and the two history CSVs (`Reports/ExportHistory.swift`), each held to its golden, with the operator's two diff decisions of 2026-11-20 and the generator's fleet-age correction. Not started or not merged: collectors, the Changes screen, abapit's history import and scheduled snapshots.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.
@@ -1300,9 +1300,15 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 - **SnapshotStore** (SQLite3): abapit's schema + `schema_version` + `org_id`; foreign keys on; dir
   `0700`, file `0600`.
+  - **An org's history is never inherited** (coordinating session's proposal, 2026-11-20, for the operator): org ids are
+    slugs of names and can come round again, so `OrgStore.uniqueID(for:avoiding:)` also avoids `SnapshotStore.orgIDs()`,
+    and removing an org offers to delete its history (`removeAll(org:)`). Both are wired in the collector PR, which adds
+    the `AppModels → History` edge.
 - **Import abapit history**: the operator picks `~/.local/share/abapit/history.sqlite` (the open
   panel shows hidden files). Open it read-only, copy rows, map client IDs to org IDs. **Export a
   copy** for sqlite3/Datasette.
+  - Imported rows fill `counts` (abapit's have none; `latest` answers from it, docs/domains/history.md), and the store
+    refuses abapit's file if it meets one in its own folder: it is imported, never changed in place.
 - **Collectors per provider** (Apple now; Mosyle in Phase 7):
   - devices, mdm_servers, assignments, people, content, mdm_enrolled (+ details);
   - **AppleCare sweep** and **Activation Lock sweep** (§3.6);

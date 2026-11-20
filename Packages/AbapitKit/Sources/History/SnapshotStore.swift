@@ -1,0 +1,626 @@
+import Darwin
+import Foundation
+import JSONAPI
+import Orgs
+import Reports
+import SQLite3
+
+/// Snapshot history: point-in-time copies of what an org's reads returned, in one SQLite file on abapit's schema (plan
+/// L7, §3.7, Phase 3). A `snapshots` row per run and an `items` row per resource item, its attributes as JSON; every row
+/// carries the org's id, and every query asks for one org's rows only.
+///
+/// The file is an inventory of the org (serials, people, services), so it is the owner's alone: the folder `0700`, the
+/// database `0600` from the moment it exists (never made and then narrowed), and its journal takes the database's mode
+/// (SQLite gives a journal the mode of its database). The folder and the database are reached from `/` one name at a
+/// time, each opened without following a link relative to the folder above, and made there, so a link swapped in
+/// anywhere on the way can't receive them. SQLite then opens the database by its path with `SQLITE_OPEN_NOFOLLOW`, which
+/// refuses a link anywhere in that path.
+///
+/// Only a file this app made is opened: an existing file with a second name on disk (a hard link), or a database at
+/// version 0 that already holds tables (abapit's history, say), is refused and left as it is. abapit's history is
+/// imported, never changed in place.
+///
+/// What it never holds: a secret, and a custom setting's profile (operator, 2026-10-31: what can be read again from Apple
+/// isn't kept; a collector stores `Configuration.resource`, the profile withheld). As a backstop to the collectors, an
+/// attribute whose name looks like a secret's (`ExportPolicy.isSensitive`), at any depth, is left out of what is stored,
+/// and the snapshot's `notes` say how many were left out of each resource (never their names).
+public actor SnapshotStore {
+    public enum Storage: Sendable {
+        /// `history.sqlite` in this folder (the app's: `Application Support/abapit`, inside the sandbox container).
+        case folder(URL)
+        /// A database in memory, gone with the store: the demo and the tests.
+        case memory
+    }
+
+    public enum Access: Sendable, Equatable {
+        case readWrite
+        /// The file was written by a newer version of the app (its schema `version`): read, never written.
+        case readOnly(version: Int32)
+    }
+
+    public enum Failure: Error, Equatable, Sendable {
+        /// A symbolic link where the store's folder or file, or a folder above them, should be.
+        case link(path: String)
+        /// The database file has a second name on disk (a hard link): refused, left as it is.
+        case hardLinked(path: String)
+        case notAFolder(path: String)
+        case notAFile(path: String)
+        /// A database at version 0 that already holds tables: abapit's history, or another program's. Left as it is.
+        case notThisAppsFile(path: String)
+        case unopenable(path: String, errno: Int32)
+        /// SQLite's extended result code and message.
+        case database(code: Int32, message: String)
+        /// Written by a newer version: this one doesn't change it.
+        case readOnly(version: Int32)
+        /// The org has no id, so its rows couldn't be told from another's.
+        case noOrg
+        /// No snapshot with that id for that org (there may be one for another org: it isn't said).
+        case noSnapshot(Int64)
+        /// A row that doesn't read (JSON that isn't, text that isn't UTF-8, an escape of half a character): the file was
+        /// changed outside this app.
+        case corrupt(String)
+
+        public var message: String {
+            switch self {
+            case .link(let path): "The snapshot history wasn't opened: \(path) is or passes through a symbolic link."
+            case .hardLinked(let path): "The snapshot history wasn't opened: \(path) has a second name on disk (a hard link). It was left as it is."
+            case .notAFolder(let path): "The snapshot history wasn't opened: \(path) isn't a folder."
+            case .notAFile(let path): "The snapshot history wasn't opened: \(path) isn't a file."
+            case .notThisAppsFile(let path):
+                "\(path) is abapit's history or another program's database, not this app's. It was left as it is: import abapit's history instead."
+            case .unopenable(let path, let code): "The snapshot history at \(path) couldn't be opened (\(String(cString: strerror(code))))."
+            case .database(_, let message): "The snapshot history couldn't be read or written (\(message))."
+            case .readOnly(let version):
+                "The snapshot history was written by a newer abapit (schema version \(version)); this one reads it and won't change it."
+            case .noOrg: "The organization has no id, so its snapshots can't be kept apart from another's."
+            case .noSnapshot(let id): "There's no snapshot \(id) for this organization."
+            case .corrupt(let what): "The snapshot history holds a row this app can't read (\(what)); it was changed outside abapit."
+            }
+        }
+    }
+
+    /// One snapshot's row.
+    public struct Summary: Sendable, Equatable, Identifiable {
+        public let id: Int64
+        /// As abapit writes it: UTC, to the second (`2026-11-20T08:00:00Z`).
+        public let takenAt: String
+        public let orgID: String
+        public let orgName: String
+        /// `business` or `school` for an Apple org; the provider's name (`mosyle`) for another.
+        public let orgScope: String
+        /// The Apple API account's client ID; empty for a Mosyle org.
+        public let clientID: String
+        /// What wrote the row: `swiftabapit <version>`, or abapit's version for a row abapit wrote.
+        public let writtenBy: String
+        /// Per resource, why it wasn't read (abapit's `errors`).
+        public let errors: [String: String]
+        /// Per resource, what was read only in part (`Schema.additions`).
+        public let notes: [String: String]
+        /// Per resource read, the items recorded, zero included; a resource not read is absent (`Schema.additions`).
+        public let counts: [String: Int]
+        /// Items recorded as `devices`, as abapit's list counts them.
+        public let deviceCount: Int
+
+        public var date: Date? { ISODate.parse(takenAt)?.date }
+    }
+
+    public struct Snapshot: Sendable, Equatable {
+        public let summary: Summary
+        /// Each resource's items, ordered by id (by bytes, as SQLite and Python compare them); an item's attributes in
+        /// abapit's stored order (keys sorted). A resource recorded with no items isn't here: `summary.counts` says it was
+        /// read and found none.
+        public let resources: [String: [Resource]]
+    }
+
+    /// One snapshot's copy of one resource.
+    public struct Copy: Sendable, Equatable {
+        public let summary: Summary
+        /// The items, ordered by id. None is an answer: the org had none when the snapshot was taken.
+        public let items: [Resource]
+    }
+
+    /// What the history knows of a resource now (invariant 8: its age always shows, through the snapshot's `takenAt`).
+    public enum Latest: Sendable, Equatable {
+        /// The newest snapshot that tried to read the resource read it: what it found, possibly nothing.
+        case read(Copy)
+        /// The newest snapshot that tried failed, with this error; `newest` is the last good copy: the newest snapshot that
+        /// read the resource without an error, what it found possibly nothing (plan §2.3 defect 13). A snapshot that read
+        /// part of it and then failed is never a good copy.
+        case failed(Summary, error: String, newest: Copy?)
+    }
+
+    public static let fileName = "history.sqlite"
+    /// The resource name `activation_lock_view` reads: one item per device, keyed by serial number, attributes as Apple's
+    /// `ActivationLockStatus` has them.
+    public static let activationLockResource = "activation_lock"
+
+    public nonisolated let access: Access
+    private let database: SQLiteDatabase
+    private let writer: String
+    private let hook: Hook?
+
+    /// Where a test can stop the store, as a crash or a failing disk would, or change the disk under it, as another
+    /// program could (`hook`). Never set outside the tests.
+    enum Step: Sendable, Equatable {
+        /// A folder on the way to the store's has been opened (or made and opened); the next name is opened from it.
+        case walked(path: String)
+        /// The database file has just been made: nothing written to it yet.
+        case created(path: String)
+        /// The folder and file are open and checked; SQLite opens the path next.
+        case opening(path: String)
+        /// A file at version 0 was found empty; the write lock is taken next, and the file looked at again under it.
+        case foundEmpty(path: String)
+        /// Inside `record`'s transaction: the snapshot row and `items` items are written.
+        case recording(items: Int)
+    }
+
+    typealias Hook = @Sendable (Step) throws(Failure) -> Void
+
+    /// Opens (and makes, the first time) the store. `appVersion` is this app's version, written on each snapshot as
+    /// `swiftabapit <appVersion>` where abapit wrote its own.
+    public init(storage: Storage, appVersion: String) throws(Failure) {
+        try self.init(storage: storage, appVersion: appVersion, hook: nil)
+    }
+
+    init(storage: Storage, appVersion: String, hook: Hook?) throws(Failure) {
+        let opened: (database: SQLiteDatabase, access: Access)
+        switch storage {
+        case .memory:
+            let database = try Self.guarded { try SQLiteDatabase(path: ":memory:", flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) }
+            opened = (database, try Self.prepare(database, path: ":memory:", hook: hook))
+        case .folder(let folder):
+            opened = try Self.openFile(in: folder, hook: hook)
+        }
+        database = opened.database
+        access = opened.access
+        writer = "swiftabapit \(appVersion)"
+        self.hook = hook
+    }
+
+    // MARK: writing
+
+    /// Records one snapshot of `org`: a row taken at `takenAt` (an import passes the original time), and an item per
+    /// resource item, its attributes as abapit stores them (`StoredJSON`; its relationships aren't kept, as abapit kept
+    /// none). Every resource in `resources` is counted as read (`counts`), an empty list included; one that failed goes in
+    /// `errors`. Whole or not at all: a failure part way leaves no row. Two items of a resource with one id keep the last
+    /// (abapit's `INSERT OR REPLACE`). An attribute whose name looks like a secret's, at any depth, is left out, and the
+    /// resource's note says how many were (`Self.leftOut`). Returns the snapshot's id.
+    @discardableResult
+    public func record(org: OrgProfile, takenAt: Date, resources: [String: [Resource]], errors: [String: String] = [:],
+                       notes: [String: String] = [:]) throws(Failure) -> Int64 {
+        try writable()
+        let orgID = try Self.id(of: org)
+        let names = resources.keys.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+        var counts = JSONObject(), kept: [String: [(id: String, attributes: JSONObject)]] = [:], notes = notes
+        for name in names {
+            let items = resources[name] ?? []
+            var dropped = 0
+            kept[name] = items.map { item in
+                let (attributes, count) = Self.withoutSecrets(item.attributes)
+                dropped += count
+                return (item.id, attributes)
+            }
+            if dropped > 0 { notes[name] = [notes[name], Self.leftOut(dropped)].compactMap { $0 }.joined(separator: "; ") }
+            // Distinct ids by bytes: what the primary key keeps after `INSERT OR REPLACE`.
+            counts[name] = .number(String(Set(items.map { Array($0.id.utf8) }).count))
+        }
+        let scope = org.provider == .known(.apple) ? org.scope.rawValue : org.provider.rawValue
+        return try Self.guarded {
+            try database.transaction {
+                try database.run("""
+                    INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors, org_id, notes, counts) \
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, [.text(Schema.takenAt(takenAt)), .text(org.clientID), .text(org.name), .text(scope), .text(writer),
+                          .text(Self.words(errors)), .text(orgID), .text(Self.words(notes)), .text(StoredJSON.text(.object(counts)))])
+                let snapshot = database.lastInsertRowID
+                var written = 0
+                try hook?(.recording(items: written))
+                let insert = try database.prepare("INSERT OR REPLACE INTO items VALUES (?, ?, ?, ?)")
+                for name in names {
+                    for item in kept[name] ?? [] {
+                        try insert.run([.integer(snapshot), .text(name), .text(item.id), .text(StoredJSON.text(.object(item.attributes)))])
+                        written += 1
+                        try hook?(.recording(items: written))
+                    }
+                }
+                return snapshot
+            }
+        }
+    }
+
+    /// Keeps the newest `keep` snapshots of `org`, by id (the order they were recorded, whatever their `takenAt`), and
+    /// removes the rest with their items. A negative `keep` removes nothing. Returns the snapshots removed.
+    @discardableResult
+    public func prune(org: OrgProfile, keep: Int) throws(Failure) -> Int {
+        try writable()
+        let orgID = try Self.id(of: org)
+        guard keep >= 0 else { return 0 }
+        return try Self.guarded {
+            try database.transaction {
+                try database.run("""
+                    DELETE FROM snapshots WHERE org_id = ? AND id NOT IN (\
+                    SELECT id FROM snapshots WHERE org_id = ? ORDER BY id DESC LIMIT ?)
+                    """, [.text(orgID), .text(orgID), .integer(Int64(keep))])
+                return database.changes
+            }
+        }
+    }
+
+    /// Removes every snapshot of `org` and their items (the org was removed and the operator chose to delete its
+    /// history). Returns the snapshots removed.
+    @discardableResult
+    public func removeAll(org: OrgProfile) throws(Failure) -> Int {
+        try writable()
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.transaction {
+                try database.run("DELETE FROM snapshots WHERE org_id = ?", [.text(orgID)])
+                return database.changes
+            }
+        }
+    }
+
+    // MARK: reading
+
+    /// Every org id with at least one snapshot, by bytes. Org ids are slugs of names and can come round again: a new org
+    /// must not be given one of these, or it would inherit a removed org's history (`OrgStore.uniqueID(avoiding:)`).
+    public func orgIDs() throws(Failure) -> [String] {
+        try Self.guarded {
+            try database.rows("SELECT DISTINCT org_id FROM snapshots ORDER BY org_id") { try $0.text(0) ?? "" }
+        }
+    }
+
+    /// `org`'s snapshots, newest first (by id), at most `limit` (abapit's list).
+    public func snapshots(org: OrgProfile, limit: Int = 100) throws(Failure) -> [Summary] {
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.rows(Self.summarySQL + "WHERE s.org_id = ? ORDER BY s.id DESC LIMIT ?",
+                              [.text(orgID), .integer(Int64(max(limit, 0)))], Self.summary)
+        }
+    }
+
+    /// One of `org`'s snapshots with every item. Another org's snapshot is refused as one that isn't there.
+    public func load(_ id: Int64, org: OrgProfile) throws(Failure) -> Snapshot {
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.reading {
+                guard let summary = try database.rows(Self.summarySQL + "WHERE s.id = ? AND s.org_id = ?", [.integer(id), .text(orgID)],
+                                                      Self.summary).first else { throw Failure.noSnapshot(id) }
+                var resources: [String: [Resource]] = [:]
+                let rows = try database.rows("SELECT resource, item_id, attributes FROM items WHERE snapshot_id = ? ORDER BY resource, item_id",
+                                             [.integer(id)]) { row in try Self.item(row, resource: row.text(0) ?? "", from: 1) }
+                for item in rows { resources[item.type, default: []].append(item) }
+                return Snapshot(summary: summary, resources: resources)
+            }
+        }
+    }
+
+    /// What the newest of `org`'s snapshots that tried to read `resource` found: its items (possibly none), or its error
+    /// with the last good copy, the newest snapshot that read it without an error (possibly empty). A snapshot that didn't
+    /// try is passed over. Nil when none tried.
+    public func latest(_ resource: String, org: OrgProfile) throws(Failure) -> Latest? {
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.reading {
+                guard let attempt = try database.rows(Self.summarySQL + """
+                    WHERE s.org_id = ? AND (EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
+                    OR EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?)) ORDER BY s.id DESC LIMIT 1
+                    """, [.text(orgID), .text(resource), .text(resource)], Self.summary).first else { return nil }
+                // The error by the key's bytes, as SQLite compares them, not by a Swift dictionary's equivalence.
+                let error = try database.rows("SELECT e.value AS errors FROM snapshots s, json_each(s.errors) e WHERE s.id = ? AND e.key = ?",
+                                              [.integer(attempt.id), .text(resource)]) { try $0.text(0) ?? "" }.first
+                guard let error else { return .read(Copy(summary: attempt, items: try items(resource, in: attempt.id))) }
+                guard let id = try database.rows("""
+                    SELECT s.id FROM snapshots s WHERE s.org_id = ? \
+                    AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
+                    AND NOT EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?) ORDER BY s.id DESC LIMIT 1
+                    """, [.text(orgID), .text(resource), .text(resource)], { $0.integer(0) }).first,
+                      let summary = try database.rows(Self.summarySQL + "WHERE s.id = ?", [.integer(id)], Self.summary).first
+                else { return .failed(attempt, error: error, newest: nil) }
+                return .failed(attempt, error: error, newest: Copy(summary: summary, items: try items(resource, in: id)))
+            }
+        }
+    }
+
+    private func items(_ resource: String, in snapshot: Int64) throws -> [Resource] {
+        try database.rows("SELECT item_id, attributes FROM items WHERE snapshot_id = ? AND resource = ? ORDER BY item_id",
+                          [.integer(snapshot), .text(resource)]) { row in try Self.item(row, resource: resource, from: 0) }
+    }
+
+    // MARK: opening
+
+    /// Opens the folder and the file, made where missing, then the file with SQLite, then accepts it or refuses it. A
+    /// refused file is left as it was: its mode is narrowed only once it is accepted.
+    private static func openFile(in folder: URL, hook: Hook?) throws(Failure) -> (database: SQLiteDatabase, access: Access) {
+        // The path as given, never `standardizedFileURL`: Foundation drops `/private` from `/private/var/…` there, which
+        // puts a link (`/var`) back into the path. A `.` or `..` is refused rather than resolved.
+        let given = folder.path(percentEncoded: false)
+        let components = given.split(separator: "/").map(String.init)
+        guard folder.isFileURL, given.hasPrefix("/"), !components.contains(where: { $0 == "." || $0 == ".." }) else {
+            throw .notAFolder(path: given)
+        }
+        let path = "/" + components.joined(separator: "/")
+        let file = (path == "/" ? "" : path) + "/" + fileName
+        let folderFD = try openFolder(components, hook: hook)
+        defer { close(folderFD) }
+        let (fileFD, made) = try openDatabaseFile(in: folderFD, path: file, hook: hook)
+        defer { close(fileFD) }
+        try hook?(.opening(path: file))
+        let database: SQLiteDatabase
+        do throws(SQLiteDatabase.Failure) {
+            // No SQLITE_OPEN_CREATE: the file exists, made above with its mode.
+            database = try SQLiteDatabase(path: file, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOFOLLOW)
+        } catch {
+            if error.code == SQLiteDatabase.cantOpenSymlink { throw .link(path: file) }
+            throw .database(code: error.code, message: error.message)
+        }
+        let access = try prepare(database, path: file, hook: hook)
+        if !made {
+            var info = stat()
+            guard fstat(fileFD, &info) == 0 else { throw .unopenable(path: file, errno: errno) }
+            if info.st_mode & 0o077 != 0, fchmod(fileFD, 0o600) != 0 { throw .unopenable(path: file, errno: errno) }
+        }
+        return (database, access)
+    }
+
+    /// The store's folder as a descriptor, reached from `/` one name at a time: each opened `O_DIRECTORY | O_NOFOLLOW`
+    /// relative to the folder above's descriptor, and made `0700` there (`mkdirat`) where missing, so a link put in place
+    /// of a folder already passed leads nowhere. A link or a file on the way is refused. The store's own folder is
+    /// narrowed to `0700` if it was wider.
+    private static func openFolder(_ components: [String], hook: Hook?) throws(Failure) -> Int32 {
+        var fd = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        guard fd >= 0 else { throw .unopenable(path: "/", errno: errno) }
+        var path = ""
+        for name in components {
+            path += "/" + name
+            var next = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            if next < 0, errno == ENOENT {
+                if mkdirat(fd, name, 0o700) != 0, errno != EEXIST {
+                    let code = errno
+                    close(fd)
+                    throw .unopenable(path: path, errno: code)
+                }
+                next = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            }
+            if next < 0 {
+                let failure = refusal(of: name, in: fd, path: path, errno: errno)
+                close(fd)
+                throw failure
+            }
+            close(fd)
+            fd = next
+            do throws(Failure) {
+                try hook?(.walked(path: path))
+            } catch {
+                close(fd)
+                throw error
+            }
+        }
+        var info = stat()
+        if fstat(fd, &info) != 0 || (info.st_mode & 0o077 != 0 && fchmod(fd, 0o700) != 0) {
+            let code = errno
+            close(fd)
+            throw .unopenable(path: path.isEmpty ? "/" : path, errno: code)
+        }
+        return fd
+    }
+
+    /// Why `name` in the folder `fd` didn't open as a folder: a link, not a folder, or the system's error.
+    private static func refusal(of name: String, in fd: Int32, path: String, errno code: Int32) -> Failure {
+        var info = stat()
+        guard fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return .unopenable(path: path, errno: code) }
+        if info.st_mode & S_IFMT == S_IFLNK { return .link(path: path) }
+        if info.st_mode & S_IFMT != S_IFDIR { return .notAFolder(path: path) }
+        return .unopenable(path: path, errno: code)
+    }
+
+    /// The database file in the folder `fd`: made `0600` by `openat` itself when it isn't there (`O_EXCL`, so never
+    /// through a link), else opened without following a link and held to a regular file with one name. Returns it open,
+    /// and whether it was made.
+    private static func openDatabaseFile(in folder: Int32, path: String, hook: Hook?) throws(Failure) -> (fd: Int32, made: Bool) {
+        let made = openat(folder, fileName, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        if made >= 0 {
+            do throws(Failure) {
+                try hook?(.created(path: path))
+            } catch {
+                close(made)
+                throw error
+            }
+            return (made, true)
+        }
+        guard errno == EEXIST else { throw .unopenable(path: path, errno: errno) }
+        // Read-only, so a folder opens too and is refused below as not a file; `fchmod` needs no write access.
+        let fd = openat(folder, fileName, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard fd >= 0 else { throw errno == ELOOP ? .link(path: path) : .unopenable(path: path, errno: errno) }
+        var info = stat()
+        let failure: Failure? = if fstat(fd, &info) != 0 {
+            .unopenable(path: path, errno: errno)
+        } else if info.st_mode & S_IFMT != S_IFREG {
+            .notAFile(path: path)
+        } else if info.st_nlink != 1 {
+            .hardLinked(path: path)
+        } else {
+            nil
+        }
+        if let failure {
+            close(fd)
+            throw failure
+        }
+        return (fd, false)
+    }
+
+    /// Foreign keys on (abapit's `PRAGMA foreign_keys = ON`: a snapshot's items go with it), then the schema. A file at
+    /// this version opens; a newer one is queried only; one at version 0 is made version 1 only when it holds nothing:
+    /// one that holds tables (abapit's history, another program's database) is refused and left as it is.
+    private static func prepare(_ database: SQLiteDatabase, path: String, hook: Hook?) throws(Failure) -> Access {
+        try guarded {
+            try database.execute("PRAGMA foreign_keys = ON")
+            let found = try database.userVersion()
+            guard found <= Schema.version else {
+                try database.execute("PRAGMA query_only = ON")
+                return .readOnly(version: found)
+            }
+            guard found < Schema.version else { return .readWrite }
+            func isEmpty() throws -> Bool { try database.rows("SELECT COUNT(*) FROM sqlite_master") { $0.integer(0) }.first == 0 }
+            // Looked at before any write lock is taken on a file that may not be this app's.
+            guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
+            try hook?(.foundEmpty(path: path))
+            try database.transaction {
+                // Read again under the write lock: another store may have made it meanwhile.
+                guard try database.userVersion() == 0 else { return }
+                guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
+                try database.execute(Schema.toVersion1)
+            }
+            return .readWrite
+        }
+    }
+
+    // MARK: rows
+
+    /// A snapshot's row and abapit's `device_count`; a `WHERE` follows.
+    private static let summarySQL = "SELECT s.id, s.taken_at, s.org_id, s.org_name, s.org_scope, s.org_client_id, s.abapit_version, "
+        + "s.errors, s.notes, s.counts, "
+        + "(SELECT COUNT(*) FROM items i WHERE i.snapshot_id = s.id AND i.resource = 'devices') AS device_count "
+        + "FROM snapshots s "
+
+    private static func summary(_ row: SQLiteDatabase.Row) throws -> Summary {
+        Summary(id: row.integer(0), takenAt: try row.text(1) ?? "", orgID: try row.text(2) ?? "", orgName: try row.text(3) ?? "",
+                orgScope: try row.text(4) ?? "", clientID: try row.text(5) ?? "", writtenBy: try row.text(6) ?? "",
+                errors: try words(row.text(7), "a snapshot's errors", column: "errors"),
+                notes: try words(row.text(8), "a snapshot's notes", column: "notes"),
+                counts: try counts(row.text(9)), deviceCount: Int(row.integer(10)))
+    }
+
+    /// An item from `item_id` and `attributes` at `column` and the next.
+    private static func item(_ row: SQLiteDatabase.Row, resource: String, from column: Int32) throws -> Resource {
+        let id = try row.text(column) ?? ""
+        guard let attributes = try json(row.text(column + 1), column: "attributes")?.object else {
+            throw Failure.corrupt("the attributes of \(resource) \(id)")
+        }
+        return Resource(type: resource, id: id, attributes: attributes)
+    }
+
+    /// A JSON column's text parsed, or nil when it isn't JSON. An escape of half a character (a lone surrogate, `\uD800`
+    /// to `\uDFFF` without its other half) throws, naming the column: `JSONValue.parse` reads one as U+FFFD (a Swift
+    /// string can't hold it), which would change an id or merge two keys silently. This app never writes one
+    /// (`StoredJSON` writes a pair). `JSONValue.parse` itself is left as it is for its other callers.
+    private static func json(_ text: String?, column: String) throws -> JSONValue? {
+        let text = text ?? ""
+        if hasLoneSurrogate(text) { throw Failure.corrupt("the column \(column) holds an escape of half a character") }
+        return JSONValue.parse(text)
+    }
+
+    /// Whether JSON text holds a `\u` escape of a surrogate that isn't half of a pair.
+    static func hasLoneSurrogate(_ text: String) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        var index = 0, high = false
+        func unit(at start: Int) -> UInt32? {
+            guard start + 6 <= scalars.count, scalars[start] == "\\", scalars[start + 1] == "u" else { return nil }
+            return UInt32(String(String.UnicodeScalarView(scalars[(start + 2)..<(start + 6)])), radix: 16)
+        }
+        while index < scalars.count {
+            if let value = unit(at: index) {
+                switch value {
+                case 0xD800...0xDBFF:
+                    if high { return true }
+                    high = true
+                case 0xDC00...0xDFFF:
+                    if !high { return true }
+                    high = false
+                default:
+                    if high { return true }
+                }
+                index += 6
+                continue
+            }
+            if high { return true }
+            // Any other escape is two scalars (`\\` included, so a backslash it escapes never starts one).
+            index += scalars[index] == "\\" ? 2 : 1
+        }
+        return high
+    }
+
+    /// `errors` and `notes` as stored: a JSON object of strings.
+    private static func words(_ words: [String: String]) -> String {
+        var object = JSONObject()
+        for (key, value) in words { object[key] = .string(value) }
+        return StoredJSON.text(.object(object))
+    }
+
+    /// `errors` or `notes` read back. A value that isn't a string (abapit wrote strings) shows as its JSON.
+    private static func words(_ text: String?, _ what: String, column: String) throws -> [String: String] {
+        guard let object = try json(text, column: column)?.object else { throw Failure.corrupt(what) }
+        var found: [String: String] = [:]
+        for (key, value) in object { found[key] = value.string ?? value.jsonText }
+        return found
+    }
+
+    /// `counts` read back: a JSON object of whole numbers, none negative.
+    private static func counts(_ text: String?) throws -> [String: Int] {
+        guard let object = try json(text, column: "counts")?.object else { throw Failure.corrupt("a snapshot's counts") }
+        var found: [String: Int] = [:]
+        for (key, value) in object {
+            guard let count = value.int, count >= 0 else { throw Failure.corrupt("a snapshot's counts") }
+            found[key] = count
+        }
+        return found
+    }
+
+    /// `attributes` without every member, at any depth, whose name looks like a secret's (`ExportPolicy.isSensitive`), and
+    /// how many were left out (a member left out isn't looked into).
+    static func withoutSecrets(_ attributes: JSONObject) -> (JSONObject, Int) {
+        var dropped = 0
+        func clean(_ value: JSONValue) -> JSONValue {
+            switch value {
+            case .object(let object):
+                var kept = JSONObject()
+                for (key, member) in object {
+                    if ExportPolicy.isSensitive(key) {
+                        dropped += 1
+                    } else {
+                        kept[key] = clean(member)
+                    }
+                }
+                return .object(kept)
+            case .array(let items):
+                return .array(items.map(clean))
+            case .null, .bool, .number, .string:
+                return value
+            }
+        }
+        guard case .object(let kept) = clean(.object(attributes)) else { return (attributes, 0) }
+        return (kept, dropped)
+    }
+
+    /// The note for a resource that had `count` attributes left out: the count only, never the names (a key can be data,
+    /// such as a device's name in an object keyed by device).
+    static func leftOut(_ count: Int) -> String {
+        count == 1 ? "1 attribute left out: its name looks like a secret's" : "\(count) attributes left out: their names look like a secret's"
+    }
+
+    // MARK: helpers
+
+    private func writable() throws(Failure) {
+        if case .readOnly(let version) = access { throw .readOnly(version: version) }
+    }
+
+    private static func id(of org: OrgProfile) throws(Failure) -> String {
+        guard !org.id.isEmpty else { throw .noOrg }
+        return org.id
+    }
+
+    /// `body`'s errors as `Failure`s: SQLite's as `.database`, text that isn't UTF-8 as `.corrupt`, a hook's as thrown.
+    private static func guarded<T>(_ body: () throws -> T) throws(Failure) -> T {
+        do {
+            return try body()
+        } catch let failure as Failure {
+            throw failure
+        } catch let failure as SQLiteDatabase.Failure {
+            throw .database(code: failure.code, message: failure.message)
+        } catch let invalid as SQLiteDatabase.InvalidText {
+            throw .corrupt("the column \(invalid.column) isn't UTF-8")
+        } catch {
+            throw .database(code: SQLITE_ERROR, message: "\(error)")
+        }
+    }
+}
