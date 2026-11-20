@@ -32,14 +32,14 @@ struct SchemaTests {
 
         #expect(try file.userVersion() == Schema.version)
         #expect(Schema.version == 1)
-        let columns = { (table: String) in try file.rows("PRAGMA table_info(\(table))") { $0.text(1) ?? "" } }
+        let columns = { (table: String) in try file.rows("PRAGMA table_info(\(table))") { try $0.text(1) ?? "" } }
         #expect(try columns("snapshots") == ["id", "taken_at", "org_client_id", "org_name", "org_scope", "abapit_version", "errors",
-                                             "org_id", "notes"])
+                                             "org_id", "notes", "counts"])
         #expect(try columns("items") == ["snapshot_id", "resource", "item_id", "attributes"])
         // items → snapshots, deleted with it.
-        let keys = try file.rows("PRAGMA foreign_key_list(items)") { [$0.text(2) ?? "", $0.text(3) ?? "", $0.text(4) ?? "", $0.text(6) ?? ""] }
+        let keys = try file.rows("PRAGMA foreign_key_list(items)") { try [$0.text(2) ?? "", $0.text(3) ?? "", $0.text(4) ?? "", $0.text(6) ?? ""] }
         #expect(keys == [["snapshots", "snapshot_id", "id", "CASCADE"]])
-        let named = { (type: String) in try file.rows("SELECT name FROM sqlite_master WHERE type = '\(type)' AND name NOT LIKE 'sqlite_%' ORDER BY name") { $0.text(0) ?? "" } }
+        let named = { (type: String) in try file.rows("SELECT name FROM sqlite_master WHERE type = '\(type)' AND name NOT LIKE 'sqlite_%' ORDER BY name") { try $0.text(0) ?? "" } }
         #expect(try named("table") == ["items", "snapshots"])
         #expect(try named("view") == ["activation_lock_view", "applecare_view", "devices_view"])
         #expect(try named("index") == ["snapshots_by_org"])
@@ -50,7 +50,7 @@ struct SchemaTests {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " IF NOT EXISTS", with: "")
         }
         for name in ["items", "devices_view", "applecare_view"] {
-            let stored = try file.rows("SELECT sql FROM sqlite_master WHERE name = '\(name)'") { $0.text(0) ?? "" }
+            let stored = try file.rows("SELECT sql FROM sqlite_master WHERE name = '\(name)'") { try $0.text(0) ?? "" }
             #expect(stored.count == 1 && abapit.contains { Array($0.utf8) == Array(stored[0].utf8) }, "\(name): \(stored)")
         }
     }
@@ -67,26 +67,50 @@ struct SchemaTests {
         #expect(try await store.snapshots(org: org).map(\.id) == [id])
     }
 
-    /// abapit's own file (version 0, its tables, its rows) is brought to version 1 in place; its rows belong to no org
-    /// until an import names one (an import reads abapit's file read-only and copies; this is what the store does if it
-    /// meets one).
-    @Test func abapitsFileIsBroughtUpAndItsRowsAreNoOrgs() async throws {
+    /// abapit's own file is never changed in place: one copied in, or one with a second name (a hard link) there, is
+    /// refused, and its bytes and its mode stay as they were. The import (a later PR) reads abapit's file and copies rows.
+    @Test(arguments: [false, true])
+    func abapitsFileIsRefusedAndLeftAsItIs(hardLinked: Bool) async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        // abapit's file, as abapit leaves it, but wider (a copy keeps the copier's mode).
+        let original = hardLinked ? Scratch.path(root.appending(path: "abapit-history.sqlite")) : path
+        #expect(FileManager.default.createFile(atPath: original, contents: nil, attributes: [.posixPermissions: 0o644]))
+        do {
+            let file = try Scratch.open(original)
+            try file.execute(Schema.abapit)
+            try file.execute("""
+                INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors) \
+                VALUES ('2026-01-01T00:00:00Z', 'BUSINESSAPI.x', 'Example', 'business', '0.9.0', '{}')
+                """)
+        }
+        if hardLinked { #expect(link(original, path) == 0) }
+        let before = try Data(contentsOf: URL(filePath: path))
+
+        #expect(throws: hardLinked ? SnapshotStore.Failure.hardLinked(path: path) : .notThisAppsFile(path: path)) {
+            _ = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        }
+        #expect(try Data(contentsOf: URL(filePath: path)) == before)
+        #expect(Scratch.mode(path) == 0o644)
+        #expect(!Scratch.exists(path + "-journal"))
+        #expect(try Scratch.open(path).userVersion() == 0)
+        #expect(SnapshotStore.Failure.notThisAppsFile(path: path).message.contains("import abapit's history instead"))
+    }
+
+    /// An empty file this app didn't make is made this app's (a file left empty by a crash before its schema).
+    @Test func anEmptyFileWithOneNameIsMadeThisAppsOwn() async throws {
         let root = try Scratch.folder()
         defer { Scratch.remove(root) }
         let folder = root.appending(path: "store")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         let path = Scratch.path(folder.appending(path: "history.sqlite"))
         #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]))
-        let file = try Scratch.open(path)
-        try file.execute(Schema.abapit)
-        try file.execute("""
-            INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors) \
-            VALUES ('2026-01-01T00:00:00Z', 'BUSINESSAPI.x', 'Example', 'business', '0.9.0', '{}')
-            """)
         let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-        #expect(try file.userVersion() == 1)
-        #expect(try file.rows("SELECT org_id, notes FROM snapshots") { [$0.text(0) ?? "-", $0.text(1) ?? "-"] } == [["", "{}"]])
-        #expect(try await store.snapshots(org: Scratch.apple("acme")).isEmpty)
+        #expect(store.access == .readWrite)
+        #expect(try Scratch.open(path).userVersion() == 1)
     }
 
     /// abapit's two views and the new one read what a snapshot records.
@@ -107,7 +131,7 @@ struct SchemaTests {
         ])
         let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
         let row = { (sql: String, count: Int32) in
-            try file.rows(sql) { row in (0..<count).map { row.text($0) ?? "NULL" } }
+            try file.rows(sql) { row in try (0..<count).map { try row.text($0) ?? "NULL" } }
         }
         #expect(try row("SELECT * FROM devices_view", 8)
                 == [["\(id)", "2026-11-18T11:06:40Z", "Example acme", "SERIAL0001", "MacBook Air", "Mac", "ASSIGNED", "2025-01-02T03:04:05Z"]])
@@ -135,8 +159,10 @@ struct SchemaTests {
         // abapit's `json.dumps(errors)` kept the collectors' order; a Swift dictionary has none, so keys are sorted.
         #expect(StoredJSON.text(.object(["devices": .string("boom"), "applecare_partial": .string("2 device(s) failed")]))
                 == #"{"applecare_partial": "2 device(s) failed", "devices": "boom"}"#)
-        // The one deviation: a number keeps its text (Python writes 1.5).
-        #expect(StoredJSON.text(.number("1.50")) == "1.50")
+        // The one deviation: a number keeps its text, where Python writes what it read again (in brackets).
+        for (text, python) in [("-0", "0"), ("1.50", "1.5"), ("1e2", "100.0"), ("3.0e-5", "3e-05"), ("1e400", "Infinity")] {
+            #expect(StoredJSON.text(.number(text)) == text, "Python writes \(python)")
+        }
 
         // And that text is what a record writes.
         let root = try Scratch.folder()
@@ -147,8 +173,8 @@ struct SchemaTests {
                                resources: ["devices": [Resource(type: "orgDevices", id: "SERIAL0001", attributes: escaped.object ?? [:])]],
                                errors: ["devices": "caf\u{E9}"])
         let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
-        #expect(try file.rows("SELECT attributes FROM items") { $0.text(0) ?? "" } == [StoredJSON.text(escaped)])
-        #expect(try file.rows("SELECT errors, notes FROM snapshots") { [$0.text(0) ?? "", $0.text(1) ?? ""] }
+        #expect(try file.rows("SELECT attributes FROM items") { try $0.text(0) ?? "" } == [StoredJSON.text(escaped)])
+        #expect(try file.rows("SELECT errors, notes FROM snapshots") { try [$0.text(0) ?? "", $0.text(1) ?? ""] }
                 == [[#"{"devices": "caf\u00e9"}"#, "{}"]])
     }
 

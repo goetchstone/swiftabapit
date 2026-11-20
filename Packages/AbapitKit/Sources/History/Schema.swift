@@ -57,11 +57,15 @@ enum Schema {
     ///   kept and filled, but a Mosyle org has no client ID, and an id never changes after the org is added.
     /// - `notes`: per resource, what the operator must hear about it besides an error (a list cut short at the page cap,
     ///   a resource read in part, fields Apple left out), as a JSON object of words, like abapit's `errors`.
+    /// - `counts`: per resource the snapshot read, the items it recorded, zero included, as a JSON object of numbers. A
+    ///   resource it didn't try is absent, so "read and found none" and "didn't read" are told apart, which abapit's
+    ///   items alone couldn't (`SnapshotStore.latest`).
     /// - An index for the per-org listing, and `activation_lock_view` beside abapit's two views, over the Activation Lock
     ///   statuses a collector records as `SnapshotStore.activationLockResource`, keyed by serial number.
     static let additions = """
     ALTER TABLE snapshots ADD COLUMN org_id TEXT NOT NULL DEFAULT '';
     ALTER TABLE snapshots ADD COLUMN notes TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE snapshots ADD COLUMN counts TEXT NOT NULL DEFAULT '{}';
     CREATE INDEX IF NOT EXISTS snapshots_by_org ON snapshots (org_id, id);
 
     CREATE VIEW IF NOT EXISTS activation_lock_view AS
@@ -74,7 +78,8 @@ enum Schema {
 
     """
 
-    /// The script that takes a database from version 0 (new, or abapit's) to version 1, run in one transaction.
+    /// The script that makes a new, empty database version 1, run in one transaction. Never run on a file that holds
+    /// anything (abapit's history is imported, never changed in place: `SnapshotStore.Failure.notThisAppsFile`).
     static var toVersion1: String { abapit + additions + "PRAGMA user_version = 1;\n" }
 
     /// `taken_at` as abapit writes it: UTC, to the second, `Z` (`strftime("%Y-%m-%dT%H:%M:%SZ")`).
@@ -88,8 +93,10 @@ enum Schema {
 /// surrogate pair above U+FFFF), as Python's default `ensure_ascii` writes it. So a row this app writes reads, in
 /// `sqlite3`, as the row abapit would have written, and its attributes load in abapit's order (sorted).
 ///
-/// One deviation: a number keeps the text it was read with (`JSONValue` keeps it), where Python writes a float again
-/// (`1.50` stays `1.50`; Python writes `1.5`). Apple's and Mosyle's numbers are integers.
+/// One deviation: a number keeps the text it was read with (`JSONValue` keeps it), where Python reads it as an int or a
+/// float and writes that again: `-0` (Python `0`), `1.50` (`1.5`), `1e2` (`100.0`), `3.0e-5` (`3e-05`), `1e400`
+/// (`Infinity`). So a diff compares numbers by value (1 is 1.0, as the operator reads them), never by `JSONValue.==`,
+/// which compares their text. Apple's and Mosyle's numbers are integers.
 enum StoredJSON {
     static func text(_ value: JSONValue) -> String {
         var out = ""

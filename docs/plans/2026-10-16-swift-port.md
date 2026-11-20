@@ -1300,6 +1300,10 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 - **SnapshotStore** (SQLite3): abapit's schema + `schema_version` + `org_id`; foreign keys on; dir
   `0700`, file `0600`.
+  - **An org's history is never inherited** (coordinating session's proposal, 2026-11-20, for the operator): org ids are
+    slugs of names and can come round again, so `OrgStore.uniqueID(for:avoiding:)` also avoids `SnapshotStore.orgIDs()`,
+    and removing an org offers to delete its history (`removeAll(org:)`). Both are wired in the collector PR, which adds
+    the `AppModels → History` edge.
 - **Import abapit history**: the operator picks `~/.local/share/abapit/history.sqlite` (the open
   panel shows hidden files). Open it read-only, copy rows, map client IDs to org IDs. **Export a
   copy** for sqlite3/Datasette.

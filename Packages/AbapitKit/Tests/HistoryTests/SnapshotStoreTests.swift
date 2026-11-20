@@ -29,7 +29,8 @@ struct SnapshotStoreTests {
         #expect(snapshot.summary == SnapshotStore.Summary(
             id: id, takenAt: "2026-11-18T11:06:40Z", orgID: "acme", orgName: "Example acme", orgScope: "business",
             clientID: "BUSINESSAPI.00000000-0000-0000-0000-000000000000", writtenBy: "swiftabapit 1.0 (7)",
-            errors: ["applecare": "HTTP 429"], notes: ["devices": "showing 2 of at least 3: cut at the page cap"], deviceCount: 2))
+            errors: ["applecare": "HTTP 429"], notes: ["devices": "showing 2 of at least 3: cut at the page cap"],
+            counts: ["devices": 2, "mdm_servers": 1], deviceCount: 2))
         #expect(snapshot.summary.date == Scratch.noon)
         // Each resource's items by id, typed by the resource's name (abapit's `snapshot_resource`), attributes kept.
         #expect(snapshot.resources.keys.sorted() == ["devices", "mdm_servers"])
@@ -61,23 +62,50 @@ struct SnapshotStoreTests {
         #expect(devices.map(\.id) == ["SERIAL0001", "SERIAL0002"])
         #expect(devices.first?.attributes["deviceModel"] == .string("last"))
         #expect(try await store.snapshots(org: org).first?.deviceCount == 2)
+        #expect(try await store.snapshots(org: org).first?.counts == ["devices": 2])
     }
 
-    /// abapit's `latest_resource`: the newest snapshot that holds the resource, its items by id.
-    @Test func theLatestCopyOfAResourceSkipsSnapshotsWithoutIt() async throws {
+    /// What the newest attempt found is the answer, even none: recorded `[X]` at T1 and `[]` at T2, the latest is "none at
+    /// T2" (abapit's `latest_resource` showed T1's as current). A snapshot that didn't try is passed over.
+    @Test func theLatestIsWhatTheNewestAttemptFoundEvenNone() async throws {
         let store = try SnapshotStore(storage: .memory, appVersion: "1")
         let org = Scratch.apple("acme")
         let coverage = [Resource(type: "appleCareCoverage", id: "C2", attributes: ["serialNumber": .string("SERIAL0001")]),
                         Resource(type: "appleCareCoverage", id: "C1", attributes: ["serialNumber": .string("SERIAL0001")])]
-        let first = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")], "applecare": coverage])
-        let second = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")], "applecare": []],
-                                            errors: ["applecare": "HTTP 500"])
-        let applecare = try #require(try await store.latest("applecare", org: org))
-        #expect(applecare.summary.id == first)
-        #expect(applecare.items.map(\.id) == ["C1", "C2"])
-        #expect(applecare.items.allSatisfy { $0.type == "applecare" })
-        #expect(try await store.latest("devices", org: org)?.summary.id == second)
+        #expect(try await store.latest("applecare", org: org) == nil)
+        let t1 = try await store.record(org: org, takenAt: Scratch.noon, resources: ["applecare": coverage])
+        let first = try #require(try await store.latest("applecare", org: org))
+        let summary1 = try await store.load(t1, org: org).summary
+        #expect(first == .read(SnapshotStore.Copy(summary: summary1, items: [
+            Resource(type: "applecare", id: "C1", attributes: coverage[1].attributes),
+            Resource(type: "applecare", id: "C2", attributes: coverage[0].attributes),
+        ])))
+
+        let t2 = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(60), resources: ["applecare": []])
+        // T3 didn't try: passed over.
+        try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(120), resources: ["devices": [Scratch.device("SERIAL0001")]])
+        let summary2 = try await store.load(t2, org: org).summary
+        #expect(summary2.counts == ["applecare": 0])
+        #expect(try await store.latest("applecare", org: org) == .read(SnapshotStore.Copy(summary: summary2, items: [])))
         #expect(try await store.latest("people", org: org) == nil)
+    }
+
+    /// The newest attempt failed: the latest says so, when, and why, and shows the newest copy that holds items, with its
+    /// own age (invariant 8). Recorded `[X]` at T1, an error at T2: "failed at T2; showing T1".
+    @Test func aFailedAttemptSaysSoAndShowsTheNewestCopy() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        let t1 = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")]])
+        let t2 = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(60), resources: [:], errors: ["devices": "HTTP 500"])
+        let (summary1, summary2) = (try await store.load(t1, org: org).summary, try await store.load(t2, org: org).summary)
+        #expect(summary2.counts.isEmpty)
+        let copy = SnapshotStore.Copy(summary: summary1, items: [Resource(type: "devices", id: "SERIAL0001", attributes: Scratch.device("SERIAL0001").attributes)])
+        #expect(try await store.latest("devices", org: org) == .failed(summary2, error: "HTTP 500", newest: copy))
+
+        // Failed with nothing before it: no copy to show.
+        let other = Scratch.apple("other")
+        let only = try await store.record(org: other, takenAt: Scratch.noon, resources: [:], errors: ["devices": "HTTP 403"])
+        #expect(try await store.latest("devices", org: other) == .failed(try await store.load(only, org: other).summary, error: "HTTP 403", newest: nil))
     }
 
     @Test func theListIsNewestFirstAndBounded() async throws {
@@ -107,7 +135,12 @@ struct SnapshotStoreTests {
         await #expect(throws: Failure.noSnapshot(b1)) { try await store.load(b1, org: a) }
         await #expect(throws: Failure.noSnapshot(a1)) { try await store.load(a1, org: b) }
         #expect(try await store.load(b1, org: b).resources["devices"]?.map(\.id) == ["SERIAL000B"])
-        #expect(try await store.latest("devices", org: a)?.items.map(\.id) == ["SERIAL000A"])
+        guard case .read(let copy)? = try await store.latest("devices", org: a) else {
+            Issue.record("a's latest devices weren't read")
+            return
+        }
+        #expect(copy.summary.id == a1)
+        #expect(copy.items.map(\.id) == ["SERIAL000A"])
         #expect(try await store.latest("devices", org: Scratch.apple("c")) == nil)
 
         // Pruning or clearing one org leaves the other's.
@@ -168,6 +201,76 @@ struct SnapshotStoreTests {
         #expect(try Scratch.count(file, "SELECT COUNT(*) FROM items") == 1)
     }
 
+    /// The newest N are the org's own newest: another org's newer snapshots don't count towards them.
+    @Test func pruneCountsOnlyTheOrgsOwnSnapshots() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let (a, b) = (Scratch.apple("a"), Scratch.apple("b"))
+        let a1 = try await store.record(org: a, takenAt: Scratch.noon, resources: [:])
+        let a2 = try await store.record(org: a, takenAt: Scratch.noon, resources: [:])
+        let b1 = try await store.record(org: b, takenAt: Scratch.noon, resources: [:])
+        let b2 = try await store.record(org: b, takenAt: Scratch.noon, resources: [:])
+        #expect(try await store.prune(org: a, keep: 1) == 1)
+        #expect(try await store.snapshots(org: a).map(\.id) == [a2])
+        #expect(try await store.snapshots(org: b).map(\.id) == [b2, b1])
+        #expect(a1 < a2)
+    }
+
+    /// Org ids are slugs of names and come round again: every id with history, so a new org is never given one and never
+    /// inherits a removed org's snapshots.
+    @Test func everyOrgIDWithHistoryIsListed() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        #expect(try await store.orgIDs().isEmpty)
+        for id in ["b", "a", "c"] { try await store.record(org: Scratch.apple(id), takenAt: Scratch.noon, resources: [:]) }
+        try await store.record(org: Scratch.apple("a"), takenAt: Scratch.noon, resources: [:])
+        #expect(try await store.orgIDs() == ["a", "b", "c"])
+        try await store.removeAll(org: Scratch.apple("c"))
+        #expect(try await store.orgIDs() == ["a", "b"])
+    }
+
+    // MARK: what is kept
+
+    /// Text is stored by its bytes: a NUL inside an id or a name comes back whole, not cut at it.
+    @Test func aNULInsideAnIDOrANameRoundTrips() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        var org = Scratch.apple("acme")
+        org.name = "Example\u{0}Org"
+        let id = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL\u{0}0001")]])
+        let snapshot = try await store.load(id, org: org)
+        #expect(Array(snapshot.summary.orgName.utf8) == Array("Example\u{0}Org".utf8))
+        #expect(snapshot.resources["devices"]?.map { Array($0.id.utf8) } == [Array("SERIAL\u{0}0001".utf8)])
+    }
+
+    /// History never keeps a secret: an attribute named for one, at any depth, refuses the whole record, and nothing of it
+    /// reaches the file, the canary least of all. A backstop: the collectors never hand one over.
+    @Test func anAttributeNamedForASecretRefusesTheRecord() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        let org = Scratch.apple("acme")
+        let canary = "canary-7f3a91c2"
+        let nested = Resource(type: "configurations", id: "CFG-0001", attributes: [
+            "name": .string("Wi-Fi"),
+            "payloads": .array([.object(["kind": .string("wifi"), "settings": .object(["ssid": .string("Example"), "Password": .string(canary)])])]),
+        ])
+        let failure = Failure.sensitive(resource: "configurations", key: "Password")
+        await #expect(throws: failure) {
+            try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")], "configurations": [nested]])
+        }
+        #expect(!failure.message.contains(canary))
+        #expect(try await store.snapshots(org: org).isEmpty)
+        for name in ["history.sqlite", "history.sqlite-journal"] {
+            let bytes = (try? Data(contentsOf: folder.appending(path: name))) ?? Data()
+            #expect(bytes.firstRange(of: Data(canary.utf8)) == nil, "\(name) holds the canary")
+        }
+        // A top-level key too.
+        await #expect(throws: Failure.sensitive(resource: "devices", key: "activation_bypass")) {
+            try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [
+                Resource(type: "devices", id: "SERIAL0001", attributes: ["activation_bypass": .string(canary)]),
+            ]])
+        }
+    }
+
     // MARK: whole or not at all
 
     /// A failure part way through (a disk error, here injected after two items) leaves no snapshot row and no item, and
@@ -222,11 +325,16 @@ struct SnapshotStoreTests {
         defer { Scratch.remove(root) }
         let folder = root.appending(path: "store")
         let file = Scratch.path(folder.appending(path: "history.sqlite"))
+        // Read the moment the file exists, before anything the store does on the way out (a `defer` included) can run.
+        let born = Shared<mode_t?>(nil)
         #expect(throws: Self.injected) {
             _ = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(Failure) in
-                if step == .created(path: file) { throw Self.injected }
+                guard step == .created(path: file) else { return }
+                born.set(Scratch.mode(file))
+                throw Self.injected
             }
         }
+        #expect(born.value == 0o600)
         #expect(Scratch.mode(file) == 0o600)
     }
 
@@ -310,6 +418,32 @@ struct SnapshotStoreTests {
         }
     }
 
+    /// A link put in place of a folder the walk has already opened, an ancestor or the store's own, leads nowhere: the next
+    /// folder and the database are made from the descriptor the walk holds, so the link's target receives nothing (an
+    /// attacker's folder, `evil/store`, made ready for it), and SQLite then refuses the path.
+    @Test(arguments: ["a", "a/store"])
+    func aLinkSwappedInDuringTheWalkReceivesNothing(swapped: String) throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let base = Scratch.path(root)
+        try FileManager.default.createDirectory(atPath: base + "a", withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(atPath: base + "evil/store", withIntermediateDirectories: true)
+        let target = base + (swapped == "a" ? "evil" : "evil/store")
+        let file = base + "a/store/history.sqlite"
+        #expect(throws: Failure.link(path: file)) {
+            _ = try SnapshotStore(storage: .folder(URL(filePath: base + "a/store")), appVersion: "1") { step throws(Failure) in
+                guard step == .walked(path: base + swapped) else { return }
+                guard rename(base + swapped, base + "moved") == 0, symlink(target, base + swapped) == 0 else {
+                    throw .unopenable(path: base + swapped, errno: errno)
+                }
+            }
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: base + "evil/store").isEmpty)
+        // What was made went where the walk was: the folder it held, now called `moved`.
+        let made = base + (swapped == "a" ? "moved/store/history.sqlite" : "moved/history.sqlite")
+        #expect(Scratch.mode(made) == 0o600)
+    }
+
     /// A link where the journal goes is never written through: the record fails and the link's target isn't made.
     @Test func aLinkedJournalIsNeverWrittenThrough() async throws {
         let root = try Scratch.folder()
@@ -389,5 +523,26 @@ struct SnapshotStoreTests {
         // A value abapit didn't write as a string shows as its JSON.
         try file.execute("UPDATE snapshots SET notes = '{}'")
         #expect(try await store.snapshots(org: org).first?.errors == ["devices": "1"])
+        try file.execute("UPDATE snapshots SET counts = '{\"devices\": -1}'")
+        await #expect(throws: Failure.corrupt("a snapshot's counts")) { try await store.snapshots(org: org) }
+    }
+
+    /// Bytes that aren't UTF-8 in a text column say which column, never read as U+FFFD (a changed id or name would pass for
+    /// another).
+    @Test func textThatIsntUTF8SaysWhichColumn() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        let org = Scratch.apple("acme")
+        let id = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")]])
+        let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
+        try file.execute("UPDATE items SET item_id = CAST(X'5345524941C3' AS TEXT)")
+        await #expect(throws: Failure.corrupt("the column item_id isn't UTF-8")) { try await store.load(id, org: org) }
+        try file.execute("UPDATE items SET item_id = 'SERIAL0001'")
+        try file.execute("UPDATE snapshots SET org_name = CAST(X'4578FF' AS TEXT)")
+        await #expect(throws: Failure.corrupt("the column org_name isn't UTF-8")) { try await store.snapshots(org: org) }
+        try file.execute("UPDATE snapshots SET org_name = 'Example', org_id = CAST(X'61C0' AS TEXT)")
+        await #expect(throws: Failure.corrupt("the column org_id isn't UTF-8")) { try await store.orgIDs() }
     }
 }

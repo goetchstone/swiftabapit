@@ -167,17 +167,26 @@ final class SQLiteDatabase {
         }
     }
 
+    /// A text column whose bytes aren't UTF-8: the file was written outside this app.
+    struct InvalidText: Error, Equatable, Sendable {
+        let column: String
+    }
+
     /// The current row of a statement, read by column.
     struct Row {
         fileprivate let handle: OpaquePointer
 
         func integer(_ column: Int32) -> Int64 { sqlite3_column_int64(handle, column) }
 
-        /// The column's text by its bytes (a NUL inside is kept); nil for SQL NULL. Bytes that aren't UTF-8 read as U+FFFD.
-        func text(_ column: Int32) -> String? {
+        /// The column's text by its bytes (a NUL inside is kept); nil for SQL NULL. Bytes that aren't UTF-8 throw, never
+        /// read as U+FFFD: a changed id or name must not pass for another.
+        func text(_ column: Int32) throws(InvalidText) -> String? {
             guard sqlite3_column_type(handle, column) != SQLITE_NULL, let bytes = sqlite3_column_text(handle, column) else { return nil }
             let count = Int(sqlite3_column_bytes(handle, column))
-            return String(decoding: UnsafeBufferPointer(start: bytes, count: count), as: UTF8.self)
+            guard let text = String(validating: UnsafeBufferPointer(start: bytes, count: count), as: UTF8.self) else {
+                throw InvalidText(column: sqlite3_column_name(handle, column).map { String(cString: $0) } ?? "\(column)")
+            }
+            return text
         }
     }
 }
