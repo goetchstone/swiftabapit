@@ -11,7 +11,8 @@ struct PackageGraphTests {
     /// manifest SwiftPM evaluates (`swift package dump-package`): this regex can be fooled by a variable or a
     /// later `.append` (Phase 0's review), and `scripts/test.sh` and CI run both.
     /// Every allowed edge. Wire is the pure home of `WireOperation`, shared by Planners, HTTPCore and
-    /// ChangeCore (RULE-FEEDBACK 2026-10-16); Orgs holds the non-secret org profiles (`orgs.json`, Phase 1).
+    /// ChangeCore (RULE-FEEDBACK 2026-10-16); Orgs holds the non-secret org profiles (`orgs.json`, Phase 1); History
+    /// stores JSON:API `Resource`s and reads them back as `JSONValue` (Phase 3's snapshot store).
     /// A new edge is a reviewed change to this list and the plan.
     static let allowed: [String: Set<String>] = [
         "JSONAPI": [],
@@ -26,7 +27,7 @@ struct PackageGraphTests {
         "HTTPCore": ["Wire"],
         "AppleBusiness": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "JSONAPI"],
         "Mosyle": ["HTTPCore", "Wire", "Vault", "Orgs", "MosyleModels", "JSONAPI"],
-        "History": ["Orgs", "AppleModels", "MosyleModels", "Reports"],
+        "History": ["Orgs", "AppleModels", "MosyleModels", "Reports", "JSONAPI"],
         "ChangeCore": ["HTTPCore", "Wire", "Planners", "Vault", "Orgs"],
         "Assist": ["Planners", "Reports"],
         "TestSupport": ["HTTPCore", "Wire", "Vault", "Orgs", "AppleModels", "MosyleModels", "JSONAPI"],
