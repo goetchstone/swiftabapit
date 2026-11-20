@@ -8,7 +8,7 @@
 SwiftGamGui runbook. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in
 phase 1b, and the audit digests and the dashboard's quiet services and recent events in phase 2a; their notes
 are below. The Phase 3 fleet reports (Activation Lock, migration, service health, out of warranty, the catalog) are on branch
-`phase-3-new-reports`, not yet merged; the snapshot store, collectors and diff are still to do.
+`phase-3-new-reports`, not yet merged; the parity goldens for the store, diff and coverage are merged (PR #28), and the Swift snapshot store, collectors and diff are still to do.
 
 ## Files
 
