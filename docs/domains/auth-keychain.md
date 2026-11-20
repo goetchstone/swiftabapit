@@ -102,7 +102,8 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 - `Sources/Vault/KeyImport.swift` — read the picked file once by descriptor (regular, `O_NOFOLLOW`, ≤ 16 KiB);
   abapit's normalization, P-256 only (golden-held); `ImportedKey` shows a public-key fingerprint, never the
   key; `Base64URL`.
-- `Sources/Orgs/` — `orgs.json`: profiles without secrets, tolerant of fields a newer version wrote.
+- `Sources/Orgs/` — `orgs.json`: profiles without secrets, tolerant of fields a newer version wrote. `LocalSettings.swift`: `settings.json` beside it (the Needs-attention
+  thresholds; written the same way, never over a file it couldn't read; docs/domains/history.md).
 - `Sources/AppleBusiness/ClientAssertion.swift`, `TokenBroker.swift` — the ES256 assertion (`exp` an hour,
   not abapit's 179 days: a listed deviation) and the single-flight, memory-only token.
 

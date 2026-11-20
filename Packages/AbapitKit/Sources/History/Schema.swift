@@ -7,7 +7,7 @@ import JSONAPI
 enum Schema {
     /// The version this app writes. A database with a higher one was written by a newer version and opens read-only
     /// (`SnapshotStore.Access.readOnly`); abapit's own file says 0.
-    static let version: Int32 = 1
+    static let version: Int32 = 2
 
     /// abapit's `SCHEMA` (`abapit/history.py` at the commit `scripts/gen_fixtures.py` pins, `ABAPIT_PIN`), byte for byte.
     /// `SchemaTests` holds it to that text's SHA-256.
@@ -81,6 +81,34 @@ enum Schema {
     /// The script that makes a new, empty database version 1, run in one transaction. Never run on a file that holds
     /// anything (abapit's history is imported, never changed in place: `SnapshotStore.Failure.notThisAppsFile`).
     static var toVersion1: String { abapit + additions + "PRAGMA user_version = 1;\n" }
+
+    /// Version 2 (Phase 3, "Needs attention"): the `attention` table, and nothing else. It never touches `snapshots`,
+    /// `items` or a view: a version-1 file migrates by this script alone, in one transaction.
+    ///
+    /// Only what can't be read again from Apple or Mosyle (plan §8.0): `first_seen` (when the finding first appeared),
+    /// `dismissed_at` and `snoozed_until` (the operator's choices), and `last_seen` (what lets a finding that is gone be
+    /// forgotten after 30 days). `subject` is an identifier (a serial number, a service or an activity id), never a name,
+    /// and no value that could be a secret is ever stored here.
+    static let attention = """
+    CREATE TABLE attention (
+        org_id TEXT NOT NULL,
+        rule TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        dismissed_at TEXT,
+        snoozed_until TEXT,
+        PRIMARY KEY (org_id, rule, subject)
+    ) WITHOUT ROWID;
+    PRAGMA user_version = 2;
+
+    """
+
+    /// The script that takes a version-1 file to version 2.
+    static var toVersion2: String { attention }
+
+    /// The script that makes a new, empty database current: version 1's, then version 2's.
+    static var newDatabase: String { toVersion1 + toVersion2 }
 
     /// `taken_at` as abapit writes it: UTC, to the second, `Z` (`strftime("%Y-%m-%dT%H:%M:%SZ")`).
     static func takenAt(_ date: Date) -> String {
