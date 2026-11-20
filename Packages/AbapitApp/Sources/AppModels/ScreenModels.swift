@@ -20,11 +20,14 @@ public final class ScreenModels {
     public let reconciliation: ReconciliationModel
 
     public init(orgs: OrgsModel) {
-        devices = DevicesModel(orgs: orgs)
+        let devices = DevicesModel(orgs: orgs), people = PeopleModel(orgs: orgs)
+        self.devices = devices
         mosyle = MosyleModel(orgs: orgs)
         detail = DeviceDetailModel(orgs: orgs, mosyle: mosyle)
-        people = PeopleModel(orgs: orgs)
-        content = ContentModel(orgs: orgs)
+        self.people = people
+        // A blueprint's members are named from the lists these two have read, never from a read made for it.
+        content = ContentModel(orgs: orgs, otherNames: { MemberNames.sources(devices: devices, people: people) },
+                               otherPhases: { MemberNames.phases(devices: devices, people: people) })
         appleMDM = AppleMDMModel(orgs: orgs)
         activity = ActivityModel(orgs: orgs)
         dashboard = DashboardModel(orgs: orgs, devices: devices)
