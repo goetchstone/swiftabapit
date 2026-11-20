@@ -126,6 +126,59 @@ struct WarrantyReportTests {
         #expect(table["B"]?["orderDateTime"] == "")
     }
 
+    /// An order date that isn't a date is written the same quoted way on every kind of row, not only where an estimate is made.
+    @Test func anUnreadableOrderDateIsQuotedOnEveryKindOfRow() {
+        let odd = "last spring"
+        let report = Self.make([
+            ("ACTIVE", .read([Fleet.coverage("ACTIVE", end: "2027-06-01T00:00:00Z")]), odd),
+            ("UNKNOWN", .read([Fleet.coverage("NEW_STATE")]), odd),
+            ("UNREAD", .notRead("failed"), odd),
+            ("NORECORD", .read([]), odd),
+            ("NONE", .read([Fleet.coverage("INACTIVE")]), odd),
+            ("MISSING", nil, odd),
+        ])
+        #expect(Set(report.rows.map(\.group)) == ["active", "status-unknown", "not-read", "no-record", "no-active-coverage"])
+        let table = Fleet.table(CSV.text(report.csvItems, columns: ExportPolicy.warrantyReport))
+        #expect(table.count == 6)
+        for (serial, row) in table { #expect(row["orderDateTime"] == "\"last spring\"", "\(serial)") }
+        // A readable one is as sent, and a number Apple sent is its JSON text, on a row that makes no estimate too.
+        let readable = Self.make([("R", .notRead("failed"), "2020-01-01T00:00:00Z")])
+        #expect(Fleet.table(CSV.text(readable.csvItems, columns: ExportPolicy.warrantyReport))["R"]?["orderDateTime"] == "2020-01-01T00:00:00Z")
+        let number = WarrantyReport([Fleet.device("N", ["orderDateTime": .number("5")])], coverage: ["N": .read([Fleet.coverage("ACTIVE")])], now: Fleet.now)
+        #expect(Fleet.table(CSV.text(number.csvItems, columns: ExportPolicy.warrantyReport))["N"]?["orderDateTime"] == "5")
+        // Even a list that wasn't read keeps the value as sent.
+        let unread = Self.make([("U", .read([]), odd)], list: .notRead("no role"))
+        #expect(Fleet.table(CSV.text(unread.csvItems, columns: ExportPolicy.warrantyReport))["U"]?["orderDateTime"] == "\"last spring\"")
+    }
+
+    /// An ACTIVE record whose end isn't a date is covered, but the CSV never leaves the end blank: Apple's value, as sent.
+    @Test func anActiveRecordWithAnUnreadableEndIsNeverExportedBlank() throws {
+        func end(_ value: JSONValue?, others: [AppleCareCoverage] = []) throws -> String? {
+            var attributes: JSONObject = ["status": .string("ACTIVE")]
+            if let value { attributes = attributes.merging(["endDateTime": value]) }
+            let record = AppleCareCoverage(resource: Resource(type: "appleCareCoverage", id: "c", attributes: attributes))
+            let report = WarrantyReport([Fleet.device("E")], coverage: ["E": .read([record] + others)], now: Fleet.now)
+            #expect(report.rows[0].group == "active")
+            return Fleet.table(CSV.text(report.csvItems, columns: ExportPolicy.warrantyReport))["E"]?["activeCoverageEnds"]
+        }
+        #expect(try end(.string("someday")) == "end date not readable: \"someday\"")
+        #expect(try end(.string("")) == "end date not readable: \"\"")
+        #expect(try end(.number("5")) == "end date not readable: 5")
+        #expect(try end(.bool(true)) == "end date not readable: true")
+        // A missing or null end is open-ended: blank, as before. A readable one is as before.
+        #expect(try end(nil) == "")
+        #expect(try end(.null) == "")
+        let readable = try #require(ISODate.parse("2027-06-01T00:00:00Z")).isoformat
+        #expect(try end(.string("2027-06-01T00:00:00Z")) == readable)
+        // A readable end beside an unreadable one keeps both: the latest known end, then what couldn't be read.
+        let both = try end(.string("someday"), others: [Fleet.coverage("ACTIVE", end: "2027-06-01T00:00:00Z")])
+        #expect(both == "\(readable); end date not readable: \"someday\"")
+        // An unreadable end on a record that isn't ACTIVE says nothing.
+        let inactive = AppleCareCoverage(resource: Resource(type: "appleCareCoverage", id: "c", attributes: ["status": .string("INACTIVE"), "endDateTime": .string("junk")]))
+        let report = WarrantyReport([Fleet.device("E")], coverage: ["E": .read([inactive, Fleet.coverage("ACTIVE", end: "2027-06-01T00:00:00Z")])], now: Fleet.now)
+        #expect(report.rows[0].unreadableEnds.isEmpty)
+    }
+
     /// A list that wasn't read exports no judgment cells and says so; a partly read one says that.
     @Test func theCSVCarriesTheListsReadState() throws {
         let unread = Self.make([("A", .read([]), "2020-01-01T00:00:00Z")], list: .notRead("your role can't read this"))
