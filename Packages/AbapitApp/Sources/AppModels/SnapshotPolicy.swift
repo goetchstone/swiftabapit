@@ -10,8 +10,9 @@ import JSONAPI
 /// IPs, MDM-detail IMEI/MEID/MAC addresses and error text (codes only); people only the Managed Apple Account, status,
 /// external flag and dates, no names, emails, phones, job titles or departments; and (2026-10-31) no custom setting's
 /// profile, so a configuration is kept as `Configuration.resource`, its profile withheld. Later the same day the operator
-/// answered "Leave them out (Recommended)" for the device list's IMEI, MEID and MAC addresses too, and "Keep them
-/// (Recommended)" for blueprints (not their members).
+/// answered "Leave them out (Recommended)" for the device list's IMEI, MEID and MAC addresses too, "Keep them
+/// (Recommended)" for blueprints (not their members), and "All three" for user groups' names and org-unit ids and the
+/// device name Apple's MDM reports.
 ///
 /// Each resource's attributes are an **allowlist**, written out here and compared by bytes: an attribute Apple adds later is
 /// left out until a review adds it, and the snapshot's note counts what was left out that this version doesn't know (never
@@ -70,9 +71,9 @@ public enum SnapshotPolicy {
         "status", "managedAppleAccount", "isExternalUser", "startDateTime", "createdDateTime", "updatedDateTime",
     ], known: User.fields, businessOnly: true)
 
-    /// `userGroups`: the executor's minimal reading of the operator's People line (2026-11-20, for review): a group's status,
-    /// type, member count and dates, and not its name, which can name people, or its org unit, which a snapshot doesn't keep.
-    public static let userGroups = Rule("user_groups", kept: ["status", "type", "totalMemberCount", "createdDateTime", "updatedDateTime"],
+    /// `userGroups`: every attribute Apple documents, the name and the org unit's id included (the operator, 2026-11-20,
+    /// asked about user groups' names and org-unit ids and the MDM device name: "All three").
+    public static let userGroups = Rule("user_groups", kept: ["ouId", "name", "type", "totalMemberCount", "status", "createdDateTime", "updatedDateTime"],
                                         known: UserGroup.fields, businessOnly: true)
 
     public static let apps = Rule("apps", kept: ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
@@ -96,9 +97,9 @@ public enum SnapshotPolicy {
         "type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime",
     ], known: Configuration.fields, businessOnly: true)
 
-    /// `mdmDevices`, as abapit kept the list (`mdm_enrolled`): the serial, family and enrolled user's id. Not `deviceName`,
-    /// which commonly holds its user's name (the executor's reading of the operator's People line, for review).
-    public static let mdmEnrolled = Rule("mdm_enrolled", kept: ["serialNumber", "productFamily", "enrolledUserId"],
+    /// `mdmDevices`, as abapit kept the list (`mdm_enrolled`): every attribute, `deviceName` included (the operator,
+    /// 2026-11-20: "All three").
+    public static let mdmEnrolled = Rule("mdm_enrolled", kept: ["serialNumber", "deviceName", "productFamily", "enrolledUserId"],
                                          known: MDMDevice.fields, businessOnly: true)
 
     /// The lists, in the order a snapshot reads them (abapit's `_collect`). Not kept: org units, blueprints' members, audit
@@ -117,10 +118,10 @@ public enum SnapshotPolicy {
     /// `orgDevices/{serial}/activationLockStatus`, keyed by serial (`activation_lock_view`).
     public static let activationLock = Rule(SnapshotStore.activationLockResource, kept: ["isLocked", "lockType"], known: ActivationLockStatus.fields)
 
-    /// `mdmDevices/{id}/details`: the posture only (the operator's minus list: no IMEI, MEID or MAC address; and no
-    /// `deviceName`, as for `mdm_enrolled`).
+    /// `mdmDevices/{id}/details`: the posture and the device's name (the operator's minus list: no IMEI, MEID or MAC
+    /// address; `deviceName` kept, 2026-11-20: "All three").
     public static let mdmDetails = Rule("mdm_details", kept: [
-        "serialNumber", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
+        "serialNumber", "deviceName", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
         "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus",
     ], known: MDMDeviceDetail.fields, businessOnly: true)
 

@@ -21,11 +21,14 @@ struct CollectorTests {
 
     /// Every canary a snapshot must never hold: a custom setting's Wi-Fi password, a package's download location (its
     /// `url`, whose host masking would keep) and a password written into its description, a service's IP, a user's names,
-    /// email, phone, job title and department, a device's and a group's names, a device's IMEI, MEID and MAC addresses,
-    /// and a blueprint's members.
+    /// email, phone, job title and department, a device's IMEI, MEID, EID and MAC addresses, and a blueprint's members.
     static let canaries = ["CANARYWIFIPW", "canaryhost", "CANARYURLPW", "CANARYQUERY", "CANARYDESCPW", "198.51.100.234", "CANARYFIRST", "CANARYLAST",
-                           "canary.mail@example.com", "CANARYPHONE", "CANARYJOB", "CANARYDEPT", "CANARYDEVICENAME", "CANARYGROUP"]
+                           "canary.mail@example.com", "CANARYPHONE", "CANARYJOB", "CANARYDEPT"]
                            + identifierCanaries + memberCanaries
+
+    /// What the operator chose to keep that a person might read as personal (2026-11-20, "All three"): a user group's name
+    /// and org unit's id, and the device name Apple's MDM reports. In the store by design.
+    static let keptByAnswer = ["KEPTGROUPNAME", "KEPTOUID", "KEPTDEVICENAME"]
 
     /// The device list's hardware identifiers left out: IMEI, MEID and every MAC address (the operator, 2026-11-20), and the
     /// eSIM's EID (the coordinating session's reading of that answer).
@@ -57,7 +60,7 @@ struct CollectorTests {
     ])
 
     static let group = Resource(type: "userGroups", id: "G1", attributes: [
-        "name": .string("CANARYGROUP"), "type": .string("STANDARD"), "status": .string("ACTIVE"), "totalMemberCount": .number("1"), "ouId": .string("OU1"),
+        "name": .string("KEPTGROUPNAME"), "type": .string("STANDARD"), "status": .string("ACTIVE"), "totalMemberCount": .number("1"), "ouId": .string("KEPTOUID"),
     ])
 
     static let package = Resource(type: "packages", id: "P1", attributes: [
@@ -74,7 +77,7 @@ struct CollectorTests {
     ])
 
     static let mdmDevice = Resource(type: "mdmDevices", id: "ADEV0000000", attributes: [
-        "serialNumber": .string("ADEV0000000"), "deviceName": .string("CANARYDEVICENAME"), "productFamily": .string("Mac"), "enrolledUserId": .string("U1"),
+        "serialNumber": .string("ADEV0000000"), "deviceName": .string("KEPTDEVICENAME"), "productFamily": .string("Mac"), "enrolledUserId": .string("U1"),
     ])
 
     /// Org `a` with two devices in two services (one service's IP a canary), a user, a group, an app, a package, a custom
@@ -131,9 +134,9 @@ struct CollectorTests {
         #expect(Self.attributes(snapshot, "blueprints", "B1") == ["appLicenseDeficient", "createdDateTime", "description", "name", "status"])
         #expect(Self.attributes(snapshot, "mdm_servers", "S1") == ["lastConnectedDateTime", "serverName", "serverType", "status"])
         #expect(Self.attributes(snapshot, "users", "U1") == ["createdDateTime", "isExternalUser", "managedAppleAccount", "status"])
-        #expect(Self.attributes(snapshot, "user_groups", "G1") == ["status", "totalMemberCount", "type"])
+        #expect(Self.attributes(snapshot, "user_groups", "G1") == ["name", "ouId", "status", "totalMemberCount", "type"])
         #expect(Self.attributes(snapshot, "packages", "P1") == ["description", "name", "version"])
-        #expect(Self.attributes(snapshot, "mdm_enrolled", "ADEV0000000") == ["enrolledUserId", "productFamily", "serialNumber"])
+        #expect(Self.attributes(snapshot, "mdm_enrolled", "ADEV0000000") == ["deviceName", "enrolledUserId", "productFamily", "serialNumber"])
         // abapit's assignments: one item per serial, the service's id and name.
         #expect(snapshot.resources["assignments"]?.map { [$0.id, $0.attributes["serverId"]?.string ?? "", $0.attributes["serverName"]?.string ?? ""] }
                 == [["ADEV0000000", "S1", "Main MDM"], ["ADEV0000001", "S2", "Lab"]])
@@ -197,6 +200,8 @@ struct CollectorTests {
         // The scan reads what was stored.
         for kept in ["ADEV0000000", "u1@appleid.example.com", "Office Wi-Fi", "Main MDM"] { #expect(bytes.range(of: Data(kept.utf8)) != nil, "\(kept)") }
         for canary in Self.canaries { #expect(bytes.range(of: Data(canary.utf8)) == nil, "\(canary) reached \(folder.path)") }
+        // The operator's "All three" (2026-11-20): these are kept, by design.
+        for kept in Self.keptByAnswer { #expect(bytes.range(of: Data(kept.utf8)) != nil, "\(kept) wasn't kept") }
     }
 
     /// The policy is an allowlist: an attribute Apple adds is left out until a review adds it, and the note counts it,
@@ -611,16 +616,16 @@ struct CollectorTests {
                             "serverType", "status", "updatedDateTime"],
             "assignments": ["serverId", "serverName"],
             "users": ["status", "managedAppleAccount", "isExternalUser", "startDateTime", "createdDateTime", "updatedDateTime"],
-            "user_groups": ["status", "type", "totalMemberCount", "createdDateTime", "updatedDateTime"],
+            "user_groups": ["ouId", "name", "type", "totalMemberCount", "status", "createdDateTime", "updatedDateTime"],
             "apps": ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
             "packages": ["name", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
             "blueprints": ["name", "description", "status", "appLicenseDeficient", "createdDateTime", "updatedDateTime"],
             "configurations": ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"],
-            "mdm_enrolled": ["serialNumber", "productFamily", "enrolledUserId"],
+            "mdm_enrolled": ["serialNumber", "deviceName", "productFamily", "enrolledUserId"],
             "applecare": ["agreementNumber", "contractCancelDateTime", "description", "endDateTime", "isCanceled", "isRenewable", "paymentType",
                           "startDateTime", "status", "serialNumber"],
             "activation_lock": ["isLocked", "lockType"],
-            "mdm_details": ["serialNumber", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
+            "mdm_details": ["serialNumber", "deviceName", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
                             "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus"],
         ]
         #expect(SnapshotPolicy.all.map(\.name) == ["devices", "mdm_servers", "assignments", "users", "user_groups", "apps", "packages", "blueprints",
@@ -635,7 +640,9 @@ struct CollectorTests {
         // The operator's minus list, and the People line.
         let kept = Dictionary(uniqueKeysWithValues: SnapshotPolicy.all.map { ($0.name, Set($0.kept)) })
         #expect(!kept["packages"]!.contains("url") && !kept["mdm_servers"]!.contains("lastConnectedIp"))
-        #expect(kept["mdm_details"]!.isDisjoint(with: ["deviceName"]))
+        // The operator's "All three" (2026-11-20): a group's name and org unit's id, and the MDM device name.
+        #expect(kept["user_groups"]!.isSuperset(of: ["name", "ouId"]) && kept["mdm_enrolled"]!.contains("deviceName")
+                && kept["mdm_details"]!.contains("deviceName"))
         // No IMEI, MEID or MAC address in any resource (the operator, 2026-11-20), nor an EID (the coordinating session's
         // reading of that answer): held by name, so one Apple adds (`thunderboltMacAddress`) can't be added to a list unseen.
         for rule in SnapshotPolicy.all {
@@ -643,7 +650,6 @@ struct CollectorTests {
         }
         #expect(kept["users"]!.isDisjoint(with: ["firstName", "middleName", "lastName", "email", "phoneNumbers", "jobTitle", "department", "employeeNumber",
                                                  "costCenter", "division", "roleOuList"]))
-        #expect(!kept["user_groups"]!.contains("name") && !kept["mdm_enrolled"]!.contains("deviceName"))
         // The Business-only reads are exactly School's gaps; the sweeps aren't in the lists a run reads.
         #expect(SnapshotPolicy.all.filter(\.businessOnly).map(\.name) == ["users", "user_groups", "apps", "packages", "blueprints", "configurations",
                                                                           "mdm_enrolled", "mdm_details"])

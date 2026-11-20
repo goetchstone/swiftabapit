@@ -161,6 +161,10 @@ events in phase 2a; their notes are below.
     answered "Keep them (Recommended)": `blueprints` is the list as abapit read it (no `include`), with
     `appLicenseDeficient`, which Apple's blueprint resource carries and abapit stored; never a member, a single blueprint
     or a relationship's list (`aBlueprintIsKeptWithoutItsMembers`).
+  - Asked "Snapshots: three fields your 'Minimal' answer didn't name. User groups' names and org-unit ids, and the device
+    name Apple's MDM reports (often like 'Jane's MacBook Pro'). Which should snapshots keep?", the operator answered "All
+    three": `user_groups` keeps `name` and `ouId`, and `mdm_enrolled` and `mdm_details` keep `deviceName`. The canary test
+    holds them in the file by design (`keptByAnswer`).
 - **An allowlist per resource** (`SnapshotPolicy`), written out and compared by bytes, never a denylist: abapit stored
   every attribute Apple sent, so an attribute Apple adds later is left out here until a review adds it to the list, and
   the snapshot's note counts how many such attributes were left out ("left out 2 attributes Apple sent that this version
@@ -175,21 +179,21 @@ events in phase 2a; their notes are below.
   | `mdm_servers` | `mdmServers` | all but `lastConnectedIp` |
   | `assignments` | each service's device list | abapit's shape: one item per serial, `serverId`, `serverName` |
   | `users` | `users` | `status`, `managedAppleAccount`, `isExternalUser`, `startDateTime`, `createdDateTime`, `updatedDateTime` |
-  | `user_groups` | `userGroups` | `status`, `type`, `totalMemberCount`, the two dates: not `name`, which can name people, nor `ouId` |
+  | `user_groups` | `userGroups` | all 7, `name` and `ouId` included (the operator's "All three") |
   | `apps` | `apps` | all 7 |
   | `packages` | `packages` | all but `url`; every string with any address masked (`ContentWords.addresses`), noted |
   | `blueprints` | the list | all 6 (`name`, `description`, `status`, `appLicenseDeficient`, the two dates); never members |
   | `configurations` | the list | all 6 of `Configuration.resource`: the list sends a profile as null, and the single read is never made |
-  | `mdm_enrolled` | `mdmDevices` | `serialNumber`, `productFamily`, `enrolledUserId`: not `deviceName`, which commonly holds its user's name |
+  | `mdm_enrolled` | `mdmDevices` | all 4, `deviceName` included (the operator's "All three") |
   | `applecare` (sweep) | per device | all 9, and the serial it was read for (abapit's shape) |
   | `activation_lock` (sweep) | per device | `isLocked`, `lockType` |
-  | `mdm_details` (sweep) | per Apple-managed device | the posture: no IMEI, MEID, MAC address or `deviceName` |
+  | `mdm_details` (sweep) | per Apple-managed device | the posture and `deviceName` (the operator's "All three"): no IMEI, MEID or MAC address |
 
   Not kept: org units, blueprints' members, audit events and webhooks. Who decided: the operator decided what to keep (the
-  "Minimal" answer, the device list's identifiers, blueprints); the lists are the executor's translation of those words,
-  reviewed; the coordinating session, the scope (no org units, blueprint members, audit events or webhooks) and `eid` left
-  out with the other identifiers (the coordinator's reading of the operator's device-list answer); the executor, for
-  review, `user_groups`' and `mdm_enrolled`'s lists (no names) and masking a package's other strings.
+  "Minimal" answer, the device list's identifiers, blueprints, and "All three": user groups' names and org-unit ids and the
+  MDM device name); the lists are the executor's translation of those words, reviewed; the coordinating session, the scope
+  (no org units, blueprint members, audit events or webhooks) and `eid` left out with the other identifiers (the
+  coordinator's reading of the operator's device-list answer); the executor, for review, masking a package's other strings.
 - **Errors are codes** (`SnapshotPolicy.code`): the HTTP status and Apple's `code` when it is two or more words of capital
   ASCII letters joined by `_` or `.` ("HTTP 403 FORBIDDEN_ERROR", "HTTP 400 PARAMETER_ERROR.INVALID"), or this app's word
   ("transport", "keychain", "malformed"); never Apple's `detail`, a parameter, a URL or a `code` of another shape.
@@ -544,8 +548,9 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
 
 - The collector: `CollectorTests` (each resource as the policy keeps it; a configuration from the list, never the
   detail; a blueprint without its members; canaries for the profile's password, a package's url and description, a
-  service's IP, a user's names, email, phone, job title and department, a device's and a group's names, a device's IMEI,
-  MEID, EID and MAC addresses and a blueprint's members, in no byte of the folder's files; an attribute off the
+  service's IP, a user's names, email, phone, job title and department, a device's IMEI, MEID, EID and MAC addresses and
+  a blueprint's members, in no byte of the folder's files, and a group's name and org unit and the MDM device name in it, by
+  the operator's answer; an attribute off the
   allowlist left out and counted; a package's nested strings masked; a 403 leaving the rest; error codes, never Apple's
   text; the services' default fields; the page cap, a part read, `latest` included; a list failed part-way; assignments in
   part, when every list failed, with an unsendable service id, over a cut services list, and stopped by a sign-in failure;
