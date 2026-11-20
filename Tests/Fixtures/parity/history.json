@@ -1,0 +1,1873 @@
+{
+ "generator": "scripts/gen_fixtures.py",
+ "abapit": "3890091ddc4e57372f45eb6b479ebf5fbcbbfa2f",
+ "python": "3.12.13",
+ "unicode": "15.0.0",
+ "seed": {
+  "snapshots": [
+   {
+    "id": 1,
+    "taken_at": "2026-09-01T08:00:00Z",
+    "org_client_id": "DEMO-ORG-A",
+    "org_name": "Demo Org A",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{}"
+   },
+   {
+    "id": 2,
+    "taken_at": "2026-09-08T08:00:00Z",
+    "org_client_id": "DEMO-ORG-B",
+    "org_name": "Demo Org B",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{}"
+   },
+   {
+    "id": 3,
+    "taken_at": "2026-09-15T08:00:00Z",
+    "org_client_id": "DEMO-ORG-A",
+    "org_name": "Demo Org A",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{\"applecare\": \"HTTP 403 (demo)\"}"
+   },
+   {
+    "id": 5,
+    "taken_at": "2026-10-01T08:00:00Z",
+    "org_client_id": "DEMO-ORG-A",
+    "org_name": "Demo Org A (renamed)",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{}"
+   },
+   {
+    "id": 6,
+    "taken_at": "2026-10-02T08:00:00Z",
+    "org_client_id": "DEMO-ORG-B",
+    "org_name": "Demo Org B",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{}"
+   },
+   {
+    "id": 9,
+    "taken_at": "2026-10-15T08:00:00Z",
+    "org_client_id": "DEMO-ORG-A",
+    "org_name": "Demo Org A (renamed)",
+    "org_scope": "business",
+    "abapit_version": "0.2.0",
+    "errors": "{}"
+   }
+  ],
+  "items": [
+   {
+    "snapshot_id": 1,
+    "resource": "devices",
+    "item_id": "DEMO0001",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 1,
+    "resource": "devices",
+    "item_id": "DEMO0002",
+    "attributes": {
+     "serialNumber": "DEMO0002",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "UNASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 1,
+    "resource": "applecare",
+    "item_id": "DEMO0001:0",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "description": "AppleCare+",
+     "status": "ACTIVE",
+     "endDateTime": "2026-12-01T00:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 1,
+    "resource": "mdm_servers",
+    "item_id": "AB01",
+    "attributes": {
+     "serverName": "Demo MDM",
+     "serverType": "MDM"
+    }
+   },
+   {
+    "snapshot_id": 2,
+    "resource": "devices",
+    "item_id": "DEMO0100",
+    "attributes": {
+     "serialNumber": "DEMO0100",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 2,
+    "resource": "applecare",
+    "item_id": "DEMO0100:0",
+    "attributes": {
+     "serialNumber": "DEMO0100",
+     "description": "AppleCare+",
+     "status": "ACTIVE",
+     "endDateTime": "2027-01-01T00:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 3,
+    "resource": "devices",
+    "item_id": "DEMO0001",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 3,
+    "resource": "devices",
+    "item_id": "DEMO0003",
+    "attributes": {
+     "serialNumber": "DEMO0003",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 3,
+    "resource": "mdm_servers",
+    "item_id": "AB01",
+    "attributes": {
+     "serverName": "Demo MDM",
+     "serverType": "MDM"
+    }
+   },
+   {
+    "snapshot_id": 5,
+    "resource": "devices",
+    "item_id": "DEMO0001",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "UNASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 5,
+    "resource": "devices",
+    "item_id": "DEMO0003",
+    "attributes": {
+     "serialNumber": "DEMO0003",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 5,
+    "resource": "applecare",
+    "item_id": "DEMO0003:0",
+    "attributes": {
+     "serialNumber": "DEMO0003",
+     "description": "AppleCare+",
+     "status": "ACTIVE",
+     "endDateTime": "2026-11-30T12:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 5,
+    "resource": "applecare",
+    "item_id": "DEMO0001:0",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "description": "AppleCare+",
+     "status": "INACTIVE",
+     "endDateTime": "2026-12-01T00:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 5,
+    "resource": "users",
+    "item_id": "demo.user@example.com",
+    "attributes": {
+     "managedAppleAccount": "demo.user@example.com",
+     "name": "Demo User"
+    }
+   },
+   {
+    "snapshot_id": 6,
+    "resource": "devices",
+    "item_id": "DEMO0100",
+    "attributes": {
+     "serialNumber": "DEMO0100",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "devices",
+    "item_id": "DEMO0001",
+    "attributes": {
+     "serialNumber": "DEMO0001",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "devices",
+    "item_id": "DEMO0003",
+    "attributes": {
+     "serialNumber": "DEMO0003",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "devices",
+    "item_id": "DEMO0004",
+    "attributes": {
+     "serialNumber": "DEMO0004",
+     "deviceModel": "MacBook Air 13-inch (M3)",
+     "productFamily": "Mac",
+     "status": "ASSIGNED",
+     "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+     "flag": true,
+     "tags": [
+      "x",
+      "y"
+     ],
+     "note": null
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "\u00c9",
+    "attributes": {
+     "name": "NFC"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "E\u0301",
+    "attributes": {
+     "name": "NFD"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "\uff21",
+    "attributes": {
+     "name": "Fullwidth"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "\ud83d\ude00",
+    "attributes": {
+     "name": "Astral"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "",
+    "attributes": {
+     "name": "Empty id"
+    }
+   },
+   {
+    "snapshot_id": 9,
+    "resource": "users",
+    "item_id": "demo.user@example.com",
+    "attributes": {
+     "name": "Demo User"
+    }
+   }
+  ]
+ },
+ "now": "2026-10-16T12:00:00+00:00",
+ "schema": "\nCREATE TABLE IF NOT EXISTS snapshots (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    taken_at TEXT NOT NULL,\n    org_client_id TEXT NOT NULL,\n    org_name TEXT NOT NULL,\n    org_scope TEXT NOT NULL,\n    abapit_version TEXT NOT NULL,\n    errors TEXT NOT NULL DEFAULT '{}'\n);\n\nCREATE TABLE IF NOT EXISTS items (\n    snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,\n    resource TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    attributes TEXT NOT NULL,\n    PRIMARY KEY (snapshot_id, resource, item_id)\n);\n\nCREATE VIEW IF NOT EXISTS devices_view AS\nSELECT s.id AS snapshot_id, s.taken_at, s.org_name,\n       i.item_id AS serial,\n       json_extract(i.attributes, '$.deviceModel') AS model,\n       json_extract(i.attributes, '$.productFamily') AS family,\n       json_extract(i.attributes, '$.status') AS status,\n       json_extract(i.attributes, '$.addedToOrgDateTime') AS added_to_org\nFROM items i JOIN snapshots s ON s.id = i.snapshot_id\nWHERE i.resource = 'devices';\n\nCREATE VIEW IF NOT EXISTS applecare_view AS\nSELECT s.id AS snapshot_id, s.taken_at, s.org_name,\n       json_extract(i.attributes, '$.serialNumber') AS serial,\n       json_extract(i.attributes, '$.description') AS description,\n       json_extract(i.attributes, '$.status') AS status,\n       json_extract(i.attributes, '$.endDateTime') AS end_date\nFROM items i JOIN snapshots s ON s.id = i.snapshot_id\nWHERE i.resource = 'applecare';\n",
+ "cases": [
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-A"
+   },
+   "expected": {
+    "ok": [
+     {
+      "id": 9,
+      "taken_at": "2026-10-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 3
+     },
+     {
+      "id": 5,
+      "taken_at": "2026-10-01T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 2
+     },
+     {
+      "id": 3,
+      "taken_at": "2026-09-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{\"applecare\": \"HTTP 403 (demo)\"}",
+      "device_count": 2
+     },
+     {
+      "id": 1,
+      "taken_at": "2026-09-01T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 2
+     }
+    ]
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "limit": 1
+   },
+   "expected": {
+    "ok": [
+     {
+      "id": 9,
+      "taken_at": "2026-10-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 3
+     }
+    ]
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "limit": 2
+   },
+   "expected": {
+    "ok": [
+     {
+      "id": 9,
+      "taken_at": "2026-10-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 3
+     },
+     {
+      "id": 5,
+      "taken_at": "2026-10-01T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 2
+     }
+    ]
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "limit": 0
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "limit": -1
+   },
+   "expected": {
+    "ok": [
+     {
+      "id": 9,
+      "taken_at": "2026-10-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 3
+     },
+     {
+      "id": 5,
+      "taken_at": "2026-10-01T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A (renamed)",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 2
+     },
+     {
+      "id": 3,
+      "taken_at": "2026-09-15T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{\"applecare\": \"HTTP 403 (demo)\"}",
+      "device_count": 2
+     },
+     {
+      "id": 1,
+      "taken_at": "2026-09-01T08:00:00Z",
+      "org_client_id": "DEMO-ORG-A",
+      "org_name": "Demo Org A",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 2
+     }
+    ]
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-B"
+   },
+   "expected": {
+    "ok": [
+     {
+      "id": 6,
+      "taken_at": "2026-10-02T08:00:00Z",
+      "org_client_id": "DEMO-ORG-B",
+      "org_name": "Demo Org B",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 1
+     },
+     {
+      "id": 2,
+      "taken_at": "2026-09-08T08:00:00Z",
+      "org_client_id": "DEMO-ORG-B",
+      "org_name": "Demo Org B",
+      "org_scope": "business",
+      "abapit_version": "0.2.0",
+      "errors": "{}",
+      "device_count": 1
+     }
+    ]
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": "DEMO-ORG-NONE"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "list_snapshots",
+   "args": {
+    "org_client_id": ""
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": "applecare"
+   },
+   "expected": {
+    "ok": [
+     5,
+     "2026-10-01T08:00:00Z",
+     [
+      {
+       "type": "applecare",
+       "id": "DEMO0001:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2026-12-01T00:00:00Z",
+        "serialNumber": "DEMO0001",
+        "status": "INACTIVE"
+       }
+      },
+      {
+       "type": "applecare",
+       "id": "DEMO0003:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2026-11-30T12:00:00Z",
+        "serialNumber": "DEMO0003",
+        "status": "ACTIVE"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": [
+     9,
+     "2026-10-15T08:00:00Z",
+     [
+      {
+       "type": "devices",
+       "id": "DEMO0001",
+       "attributes": {
+        "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+        "deviceModel": "MacBook Air 13-inch (M3)",
+        "productFamily": "Mac",
+        "serialNumber": "DEMO0001",
+        "status": "ASSIGNED"
+       }
+      },
+      {
+       "type": "devices",
+       "id": "DEMO0003",
+       "attributes": {
+        "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+        "deviceModel": "MacBook Air 13-inch (M3)",
+        "productFamily": "Mac",
+        "serialNumber": "DEMO0003",
+        "status": "ASSIGNED"
+       }
+      },
+      {
+       "type": "devices",
+       "id": "DEMO0004",
+       "attributes": {
+        "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+        "deviceModel": "MacBook Air 13-inch (M3)",
+        "flag": true,
+        "note": null,
+        "productFamily": "Mac",
+        "serialNumber": "DEMO0004",
+        "status": "ASSIGNED",
+        "tags": [
+         "x",
+         "y"
+        ]
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": "users"
+   },
+   "expected": {
+    "ok": [
+     9,
+     "2026-10-15T08:00:00Z",
+     [
+      {
+       "type": "users",
+       "id": "",
+       "attributes": {
+        "name": "Empty id"
+       }
+      },
+      {
+       "type": "users",
+       "id": "E\u0301",
+       "attributes": {
+        "name": "NFD"
+       }
+      },
+      {
+       "type": "users",
+       "id": "demo.user@example.com",
+       "attributes": {
+        "name": "Demo User"
+       }
+      },
+      {
+       "type": "users",
+       "id": "\u00c9",
+       "attributes": {
+        "name": "NFC"
+       }
+      },
+      {
+       "type": "users",
+       "id": "\uff21",
+       "attributes": {
+        "name": "Fullwidth"
+       }
+      },
+      {
+       "type": "users",
+       "id": "\ud83d\ude00",
+       "attributes": {
+        "name": "Astral"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": "mdm_servers"
+   },
+   "expected": {
+    "ok": [
+     3,
+     "2026-09-15T08:00:00Z",
+     [
+      {
+       "type": "mdm_servers",
+       "id": "AB01",
+       "attributes": {
+        "serverName": "Demo MDM",
+        "serverType": "MDM"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": "blueprints"
+   },
+   "expected": {
+    "ok": null
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-B",
+    "resource": "applecare"
+   },
+   "expected": {
+    "ok": [
+     2,
+     "2026-09-08T08:00:00Z",
+     [
+      {
+       "type": "applecare",
+       "id": "DEMO0100:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2027-01-01T00:00:00Z",
+        "serialNumber": "DEMO0100",
+        "status": "ACTIVE"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-B",
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": [
+     6,
+     "2026-10-02T08:00:00Z",
+     [
+      {
+       "type": "devices",
+       "id": "DEMO0100",
+       "attributes": {
+        "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+        "deviceModel": "MacBook Air 13-inch (M3)",
+        "productFamily": "Mac",
+        "serialNumber": "DEMO0100",
+        "status": "ASSIGNED"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-B",
+    "resource": "users"
+   },
+   "expected": {
+    "ok": null
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-NONE",
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": null
+   }
+  },
+  {
+   "call": "latest_resource",
+   "args": {
+    "org_client_id": "DEMO-ORG-A",
+    "resource": ""
+   },
+   "expected": {
+    "ok": null
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 9,
+    "resource": "users"
+   },
+   "expected": {
+    "ok": [
+     {
+      "type": "users",
+      "id": "",
+      "attributes": {
+       "name": "Empty id"
+      }
+     },
+     {
+      "type": "users",
+      "id": "E\u0301",
+      "attributes": {
+       "name": "NFD"
+      }
+     },
+     {
+      "type": "users",
+      "id": "demo.user@example.com",
+      "attributes": {
+       "name": "Demo User"
+      }
+     },
+     {
+      "type": "users",
+      "id": "\u00c9",
+      "attributes": {
+       "name": "NFC"
+      }
+     },
+     {
+      "type": "users",
+      "id": "\uff21",
+      "attributes": {
+       "name": "Fullwidth"
+      }
+     },
+     {
+      "type": "users",
+      "id": "\ud83d\ude00",
+      "attributes": {
+       "name": "Astral"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 9,
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": [
+     {
+      "type": "devices",
+      "id": "DEMO0001",
+      "attributes": {
+       "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "serialNumber": "DEMO0001",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "devices",
+      "id": "DEMO0003",
+      "attributes": {
+       "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "serialNumber": "DEMO0003",
+       "status": "ASSIGNED"
+      }
+     },
+     {
+      "type": "devices",
+      "id": "DEMO0004",
+      "attributes": {
+       "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "flag": true,
+       "note": null,
+       "productFamily": "Mac",
+       "serialNumber": "DEMO0004",
+       "status": "ASSIGNED",
+       "tags": [
+        "x",
+        "y"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 5,
+    "resource": "applecare"
+   },
+   "expected": {
+    "ok": [
+     {
+      "type": "applecare",
+      "id": "DEMO0001:0",
+      "attributes": {
+       "description": "AppleCare+",
+       "endDateTime": "2026-12-01T00:00:00Z",
+       "serialNumber": "DEMO0001",
+       "status": "INACTIVE"
+      }
+     },
+     {
+      "type": "applecare",
+      "id": "DEMO0003:0",
+      "attributes": {
+       "description": "AppleCare+",
+       "endDateTime": "2026-11-30T12:00:00Z",
+       "serialNumber": "DEMO0003",
+       "status": "ACTIVE"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 3,
+    "resource": "applecare"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 1,
+    "resource": "mdm_servers"
+   },
+   "expected": {
+    "ok": [
+     {
+      "type": "mdm_servers",
+      "id": "AB01",
+      "attributes": {
+       "serverName": "Demo MDM",
+       "serverType": "MDM"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 4,
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 9,
+    "resource": "nothing"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 7,
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 2,
+    "resource": "devices"
+   },
+   "expected": {
+    "ok": [
+     {
+      "type": "devices",
+      "id": "DEMO0100",
+      "attributes": {
+       "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+       "deviceModel": "MacBook Air 13-inch (M3)",
+       "productFamily": "Mac",
+       "serialNumber": "DEMO0100",
+       "status": "ASSIGNED"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "call": "snapshot_resource",
+   "args": {
+    "snapshot_id": 2,
+    "resource": "users"
+   },
+   "expected": {
+    "ok": []
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 1,
+    "new_id": 3
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "removed": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "id": "DEMO0003",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0003",
+         "status": "ASSIGNED"
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "DEMO0002",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0002",
+         "status": "UNASSIGNED"
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 3,
+    "new_id": 5
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "INACTIVE"
+        }
+       },
+       {
+        "id": "DEMO0003:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-11-30T12:00:00Z",
+         "serialNumber": "DEMO0003",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     },
+     "devices": {
+      "added": [],
+      "removed": [],
+      "changed": [
+       {
+        "id": "DEMO0001",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0001",
+         "status": "UNASSIGNED"
+        },
+        "fields": [
+         {
+          "field": "status",
+          "old": "ASSIGNED",
+          "new": "UNASSIGNED"
+         }
+        ]
+       }
+      ]
+     },
+     "mdm_servers": {
+      "added": [],
+      "removed": [
+       {
+        "id": "AB01",
+        "attributes": {
+         "serverName": "Demo MDM",
+         "serverType": "MDM"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "users": {
+      "added": [
+       {
+        "id": "demo.user@example.com",
+        "attributes": {
+         "managedAppleAccount": "demo.user@example.com",
+         "name": "Demo User"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 5,
+    "new_id": 9
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "removed": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "INACTIVE"
+        }
+       },
+       {
+        "id": "DEMO0003:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-11-30T12:00:00Z",
+         "serialNumber": "DEMO0003",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "id": "DEMO0004",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "flag": true,
+         "note": null,
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0004",
+         "status": "ASSIGNED",
+         "tags": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ],
+      "removed": [],
+      "changed": [
+       {
+        "id": "DEMO0001",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0001",
+         "status": "ASSIGNED"
+        },
+        "fields": [
+         {
+          "field": "status",
+          "old": "UNASSIGNED",
+          "new": "ASSIGNED"
+         }
+        ]
+       }
+      ]
+     },
+     "users": {
+      "added": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "Empty id"
+        }
+       },
+       {
+        "id": "E\u0301",
+        "attributes": {
+         "name": "NFD"
+        }
+       },
+       {
+        "id": "\u00c9",
+        "attributes": {
+         "name": "NFC"
+        }
+       },
+       {
+        "id": "\uff21",
+        "attributes": {
+         "name": "Fullwidth"
+        }
+       },
+       {
+        "id": "\ud83d\ude00",
+        "attributes": {
+         "name": "Astral"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": [
+       {
+        "id": "demo.user@example.com",
+        "attributes": {
+         "name": "Demo User"
+        },
+        "fields": [
+         {
+          "field": "managedAppleAccount",
+          "old": "demo.user@example.com",
+          "new": null
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 1,
+    "new_id": 9
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "removed": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "id": "DEMO0003",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0003",
+         "status": "ASSIGNED"
+        }
+       },
+       {
+        "id": "DEMO0004",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "flag": true,
+         "note": null,
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0004",
+         "status": "ASSIGNED",
+         "tags": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "DEMO0002",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0002",
+         "status": "UNASSIGNED"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "mdm_servers": {
+      "added": [],
+      "removed": [
+       {
+        "id": "AB01",
+        "attributes": {
+         "serverName": "Demo MDM",
+         "serverType": "MDM"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "users": {
+      "added": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "Empty id"
+        }
+       },
+       {
+        "id": "E\u0301",
+        "attributes": {
+         "name": "NFD"
+        }
+       },
+       {
+        "id": "demo.user@example.com",
+        "attributes": {
+         "name": "Demo User"
+        }
+       },
+       {
+        "id": "\u00c9",
+        "attributes": {
+         "name": "NFC"
+        }
+       },
+       {
+        "id": "\uff21",
+        "attributes": {
+         "name": "Fullwidth"
+        }
+       },
+       {
+        "id": "\ud83d\ude00",
+        "attributes": {
+         "name": "Astral"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 9,
+    "new_id": 1
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "id": "DEMO0002",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0002",
+         "status": "UNASSIGNED"
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "DEMO0003",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0003",
+         "status": "ASSIGNED"
+        }
+       },
+       {
+        "id": "DEMO0004",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "flag": true,
+         "note": null,
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0004",
+         "status": "ASSIGNED",
+         "tags": [
+          "x",
+          "y"
+         ]
+        }
+       }
+      ],
+      "changed": []
+     },
+     "mdm_servers": {
+      "added": [
+       {
+        "id": "AB01",
+        "attributes": {
+         "serverName": "Demo MDM",
+         "serverType": "MDM"
+        }
+       }
+      ],
+      "removed": [],
+      "changed": []
+     },
+     "users": {
+      "added": [],
+      "removed": [
+       {
+        "id": "",
+        "attributes": {
+         "name": "Empty id"
+        }
+       },
+       {
+        "id": "E\u0301",
+        "attributes": {
+         "name": "NFD"
+        }
+       },
+       {
+        "id": "demo.user@example.com",
+        "attributes": {
+         "name": "Demo User"
+        }
+       },
+       {
+        "id": "\u00c9",
+        "attributes": {
+         "name": "NFC"
+        }
+       },
+       {
+        "id": "\uff21",
+        "attributes": {
+         "name": "Fullwidth"
+        }
+       },
+       {
+        "id": "\ud83d\ude00",
+        "attributes": {
+         "name": "Astral"
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 2,
+    "new_id": 6
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [],
+      "removed": [
+       {
+        "id": "DEMO0100:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2027-01-01T00:00:00Z",
+         "serialNumber": "DEMO0100",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "diff_snapshots",
+   "args": {
+    "old_id": 1,
+    "new_id": 2
+   },
+   "expected": {
+    "ok": {
+     "applecare": {
+      "added": [
+       {
+        "id": "DEMO0100:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2027-01-01T00:00:00Z",
+         "serialNumber": "DEMO0100",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "DEMO0001:0",
+        "attributes": {
+         "description": "AppleCare+",
+         "endDateTime": "2026-12-01T00:00:00Z",
+         "serialNumber": "DEMO0001",
+         "status": "ACTIVE"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "devices": {
+      "added": [
+       {
+        "id": "DEMO0100",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0100",
+         "status": "ASSIGNED"
+        }
+       }
+      ],
+      "removed": [
+       {
+        "id": "DEMO0001",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0001",
+         "status": "ASSIGNED"
+        }
+       },
+       {
+        "id": "DEMO0002",
+        "attributes": {
+         "addedToOrgDateTime": "2026-01-05T09:00:00Z",
+         "deviceModel": "MacBook Air 13-inch (M3)",
+         "productFamily": "Mac",
+         "serialNumber": "DEMO0002",
+         "status": "UNASSIGNED"
+        }
+       }
+      ],
+      "changed": []
+     },
+     "mdm_servers": {
+      "added": [],
+      "removed": [
+       {
+        "id": "AB01",
+        "attributes": {
+         "serverName": "Demo MDM",
+         "serverType": "MDM"
+        }
+       }
+      ],
+      "changed": []
+     }
+    }
+   }
+  },
+  {
+   "call": "latest_applecare",
+   "args": {
+    "org_client_id": "DEMO-ORG-A"
+   },
+   "expected": {
+    "ok": [
+     "2026-10-01T08:00:00Z",
+     [
+      {
+       "type": "applecare",
+       "id": "DEMO0001:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2026-12-01T00:00:00Z",
+        "serialNumber": "DEMO0001",
+        "status": "INACTIVE"
+       }
+      },
+      {
+       "type": "applecare",
+       "id": "DEMO0003:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2026-11-30T12:00:00Z",
+        "serialNumber": "DEMO0003",
+        "status": "ACTIVE"
+       }
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "call": "latest_applecare",
+   "args": {
+    "org_client_id": "DEMO-ORG-B"
+   },
+   "expected": {
+    "ok": [
+     "2026-09-08T08:00:00Z",
+     [
+      {
+       "type": "applecare",
+       "id": "DEMO0100:0",
+       "attributes": {
+        "description": "AppleCare+",
+        "endDateTime": "2027-01-01T00:00:00Z",
+        "serialNumber": "DEMO0100",
+        "status": "ACTIVE"
+       }
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "prunes": [
+  {
+   "org_client_id": "DEMO-ORG-NONE",
+   "keep": 3,
+   "expected": {
+    "ok": 0
+   },
+   "after": {
+    "snapshots": [
+     1,
+     2,
+     3,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "1": 4,
+     "2": 2,
+     "3": 3,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": 10,
+   "expected": {
+    "ok": 0
+   },
+   "after": {
+    "snapshots": [
+     1,
+     2,
+     3,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "1": 4,
+     "2": 2,
+     "3": 3,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": -1,
+   "expected": {
+    "ok": 0
+   },
+   "after": {
+    "snapshots": [
+     1,
+     2,
+     3,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "1": 4,
+     "2": 2,
+     "3": 3,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": 4,
+   "expected": {
+    "ok": 0
+   },
+   "after": {
+    "snapshots": [
+     1,
+     2,
+     3,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "1": 4,
+     "2": 2,
+     "3": 3,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": 2,
+   "expected": {
+    "ok": 2
+   },
+   "after": {
+    "snapshots": [
+     2,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "2": 2,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": 2,
+   "expected": {
+    "ok": 0
+   },
+   "after": {
+    "snapshots": [
+     2,
+     5,
+     6,
+     9
+    ],
+    "items": {
+     "2": 2,
+     "5": 5,
+     "6": 1,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-B",
+   "keep": 0,
+   "expected": {
+    "ok": 2
+   },
+   "after": {
+    "snapshots": [
+     5,
+     9
+    ],
+    "items": {
+     "5": 5,
+     "9": 9
+    }
+   }
+  },
+  {
+   "org_client_id": "DEMO-ORG-A",
+   "keep": 0,
+   "expected": {
+    "ok": 2
+   },
+   "after": {
+    "snapshots": [],
+    "items": {}
+   }
+  }
+ ]
+}

@@ -205,6 +205,17 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   generator reads every expected CSV back with Python's
   `csv.reader` and fails if a cell splits, joins or starts (after blanks) with a trigger.
 - Mutants for the Phase 1b fixes and verifier rounds 1 and 2 are listed in the branch's commit messages.
+- Phase 3 goldens (generated, nothing reads them in Swift yet): `diff.json` (40 drawn + 32 hand-written
+  `diff_edges`; 6 deviations, both the operator's decisions of 2026-11-20: a boolean is not a number, asked "should
+  swiftabapit report true <-> 1 as a change", answer "Report it (Recommended)" (4 cases); an item is changed only
+  when a field really changed, answer "Only real changes (Recommended)" (None against a missing field, 2 cases);
+  abapit's output sits in `abapit`; two number cases abapit pins, 2**53 + 1 against 2**53 (changed) and 10**16
+  against 1e16 (not), fail a port that compares by Double), `reports.json`'s `coverage_report` (20 + 12
+  hand-written, no deviation) and `fleet_age_report` (20 + 15; 2 deviations: an order more than 365 days ahead is
+  "< 1 yr", abapit's "4+ yrs" is in `abapit`), and `history.json`: abapit's `SCHEMA`, a fake database's seed rows and
+  abapit's own `list_snapshots`, `latest_resource`, `snapshot_resource`, `diff_snapshots`, `latest_applecare` (37
+  reads) and, in order, `prune` (8 steps). The generator holds every case of those functions, the drawn ones and
+  history.json's diff reads too, to the corrected function and stops on a difference it doesn't list.
 - Find has no parity golden (abapit's `/find` is in `web/app.py`, not a pure module): `FindTests` holds it,
   with Python 3.12's own outputs written in for the final-sigma cases.
 
