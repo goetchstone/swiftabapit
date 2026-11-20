@@ -25,16 +25,15 @@ import Wire
 ///   `links.next` URLs and cursors (a cursor it never gave is 400). An endpoint Apple doesn't document (abapit's
 ///   `mdmDevices/{id}`) and any School read of a Business-only collection are unhandled.
 /// - The Business-only reads serve what `add(_:)`, `relate(_:_:_:to:)` and `setDetails(_:_:)` hold: the configuration
-///   list sends a custom setting's profile as null, a blueprint lists the members it was asked to include up to
-///   `limit[<name>]` and includes their resources, the audit log requires its range and really filters by it, the
+///   list sends a custom setting's profile as null, a single blueprint refuses any `include` as Apple's live server did,
+///   the blueprints list can still include members up to `limit[<name>]`, the audit log requires its range and really filters by it, the
 ///   types, the actor and the subject, and a webhook's deliveries are the `webhookDeliveries` that `relate("webhooks",
 ///   id, "deliveries", to:)` names, filtered by creation and state, each page's `webhookEvents` included once.
 /// - The device list really filters by its fifteen filters (2.7), and refuses a value outside a filter's described list or
 ///   a date that isn't ISO 8601 (`described`, `dateFilters`, written out from the contract's text).
 /// - Failures can be queued: 401 once, 403 for a section, 429 with or without `Retry-After`, any status or body for a
-///   path (`queue`, which may go on into the query: `/v1/blueprints/B1?include=` fails only the read that includes);
-///   a blueprint read whose include names a forbidden collection is refused (`refuseIncludes(with:)`, 400 by default,
-///   as abapit saw); `repeatCursors(on:)` makes a list's cursor never move.
+///   path (`queue`, which may go on into the query: `/v1/orgDevices?cursor=` fails only a later page);
+///   `repeatCursors(on:)` makes a list's cursor never move.
 public final class AppleStub: Transport, Sendable {
     public struct Account: Sendable {
         public let clientID: String
@@ -73,7 +72,6 @@ public final class AppleStub: Transport, Sendable {
         var members: [String: [String]] = [:]
         /// `mdmDevices/{id}/details` by the device's id.
         var details: [String: Resource] = [:]
-        var includeRefusal = 400
         var refusesServiceFields = false
         var servesLiveDefaultFields = false
         var repeatingCursors: Set<String> = []
@@ -123,12 +121,10 @@ public final class AppleStub: Transport, Sendable {
     }
     /// An Apple-managed device's `mdmDevices/{id}/details`.
     public func setDetails(_ device: String, _ details: Resource) { state.withLock { $0.details[device] = details } }
-    /// The status a blueprint read answers when its `include` names a relationship `forbid` refused: 400 unless set (what
-    /// abapit saw), or 403.
-    public func refuseIncludes(with status: Int) { state.withLock { $0.includeRefusal = status } }
-    /// The services list refuses `fields[mdmServers]` with a 400 `PARAMETER_ERROR.INVALID`, as Apple's live server did on
-    /// 2026-11-19 although the contract allows every value sent; which value it refuses is unknown. Off by default: the
-    /// stub otherwise follows the contract. A list read without `fields[mdmServers]` is served as ever.
+    /// The services list refuses any `fields[mdmServers]` with a 400 `PARAMETER_ERROR.INVALID`, as Apple's live server did on
+    /// 2026-11-19 (the value it refused turned out to be `deviceCount`, 2026-11-20, which the stub refuses by default). For
+    /// the tests of the client's refusal fallback, which stays for any future refusal. Off by default. A list read without
+    /// `fields[mdmServers]` is served as ever.
     public func refuseServiceFields() { state.withLock { $0.refusesServiceFields = true } }
     /// A services list read without `fields[mdmServers]` answers every attribute the stub holds but `deviceCount`, as Apple's live
     /// server did on 2026-11-20 (its default fields carried the nine the client asks for), and not the four of Apple's docc
@@ -303,14 +299,15 @@ public final class AppleStub: Transport, Sendable {
             return (200, [:], Self.json(["data": .object(["type": .string("mdmServers"), "id": .string(service)])]))
         case "/v1/mdmServers":
             if query["fields[mdmServers]"] != nil, state.withLock({ $0.refusesServiceFields }) {
-                // Seen live 2026-11-19 although the contract allows every value sent; the refused value is unknown (the
-                // `detail` wasn't captured), so this one is written as the stub's other refused parameters are.
+                // Any list refused: the shape seen live 2026-11-19, for the fallback's tests (the refused value was
+                // `deviceCount`, below).
                 return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "A value isn't allowed in fields[mdmServers].",
                                   parameter: "fields[mdmServers]")
             }
             // Seen live 2026-11-20: Apple refuses a field list that names `deviceCount` (400 `PARAMETER_ERROR.INVALID`,
             // `source.parameter` `fields[mdmServers]`, the field's name in the reason), although the contract allows it. The
-            // code, the parameter and the field's name in the reason were seen; the `detail`'s wording is the stub's own.
+            // code, the parameter and the field's name in the reason were seen; the `detail`'s wording is the stub's own. Seen on
+            // a Business org; assumed for a School one (check live).
             if let asked = query["fields[mdmServers]"], asked.split(separator: ",").contains("deviceCount") {
                 return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "The field deviceCount isn't allowed in fields[mdmServers].",
                                   parameter: "fields[mdmServers]")
@@ -365,12 +362,14 @@ public final class AppleStub: Transport, Sendable {
             return page(blueprints, url: url, query: query, host: host, included: included)
         case "/v1/blueprints/{id}":
             guard let blueprint = collection("blueprints").first(where: { $0.id == id }) else { return Self.notFound(path) }
-            let include = query["include"].map { $0.split(separator: ",").map(String.init) } ?? []
-            if let refused = refusal(include) { return refused }
-            let (json, included) = blueprintJSON(blueprint, include: include, query: query, host: host)
-            var body: JSONObject = ["data": json, "links": .object(["self": .string(url.absoluteString)])]
-            if !include.isEmpty { body["included"] = .array(included.map(\.asJSON)) }
-            return (200, [:], Self.json(body))
+            // Apple's live server refused `include` on a single blueprint, whatever it named, from a role that could read
+            // every relationship: 400 `PARAMETER_ERROR.ILLEGAL`, `source.parameter` `include`, seen 2026-11-19 and 2026-11-20
+            // (the `title` and `detail` are the stub's words).
+            if query["include"] != nil {
+                return Self.error(400, "PARAMETER_ERROR.ILLEGAL", "A parameter has an illegal value", "The include isn't allowed on this read.", parameter: "include")
+            }
+            let (json, _) = blueprintJSON(blueprint, include: [], query: query, host: host)
+            return (200, [:], Self.json(["data": json, "links": .object(["self": .string(url.absoluteString)])]))
         case _ where segments.count == 5 && segments[3] == "relationships":
             // A group's or an org unit's users, a blueprint's members: linkages of the relationship's own type.
             guard collection(segments[1]).contains(where: { $0.id == id }) else { return Self.notFound(path) }
@@ -406,17 +405,6 @@ public final class AppleStub: Transport, Sendable {
     private func forbidden(_ path: String) -> Bool { state.withLock { $0.forbiddenPaths.contains { path.hasPrefix($0) } } }
 
     private func collection(_ name: String) -> [Resource] { state.withLock { $0.collections[name] ?? [] } }
-
-    /// Apple refuses a blueprint read whose `include` names a relationship the role can't read: abapit saw a role that
-    /// gets 403 on users and user groups get 400 for the blueprint with them included (client.py `blueprint`). The 400's
-    /// code is `PARAMETER_ERROR.ILLEGAL`, naming `include`: seen live 2026-11-19 (the `detail` and `title` are the stub's words).
-    private func refusal(_ include: [String]) -> (Int, [String: String], Data)? {
-        guard include.contains(where: { forbidden("/v1/\($0)") }) else { return nil }
-        let status = state.withLock { $0.includeRefusal }
-        return status == 403
-            ? Self.error(403, "FORBIDDEN_ERROR", "This request is forbidden for security reasons", "The API account's role can't read an included relationship.")
-            : Self.error(status, "PARAMETER_ERROR.ILLEGAL", "A parameter has an illegal value", "An included relationship can't be read.", parameter: "include")
-    }
 
     /// A blueprint as `Blueprint` documents it: its six relationships with Apple's links, and for each included one its
     /// linkages up to `limit[<name>]` with `meta.paging` (the next cursor when more remain, the total when asked), and

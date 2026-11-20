@@ -997,13 +997,16 @@ struct ContentTests {
             #expect(reads.contains { $0.contains("/relationships/\(relationship)?") && $0.contains("limit=1000") }, "\(reads)")
         }
         #expect(detail.title == "Example Office Macs" && detail.membersNote == nil)
+        // Said where the members are shown: they are ids, as no blueprint read names them.
+        #expect(detail.membersListNote == "Listed by ID: Apple's blueprint reads give IDs only.")
+        #expect(detail.members.allSatisfy { $0.members.allSatisfy { $0.name == nil } })
         #expect(detail.members.map(\.title) == ["Apps", "Packages", "Configurations", "Devices", "Users", "User groups"])
         #expect(detail.members.map(\.summary) == ["5 apps", "3 packages", "4 configurations", "3 devices", "None", "1 user group"])
         #expect(detail.members.map(\.count) == [5, 3, 4, 3, 0, 1])
         let apps = try #require(detail.members.first)
         #expect(apps.members.first == ContentMember(id: "1000000001", name: nil))
         #expect(detail.members[3].members.first == ContentMember(id: "ADEV0000000", name: nil))
-        // DemoPeople's group, by its id; named once DemoPeople is loaded too, as the demo org does (DemoTests).
+        // DemoPeople's group, by its id: no member is named.
         #expect(detail.members[5].members.map(\.id) == ["DEMOUG01"])
         #expect(detail.fields.contains(ContentField("Licences", "Enough for its apps")) && detail.fields.contains(ContentField("Status", "Active")))
     }
@@ -1032,6 +1035,7 @@ struct ContentTests {
             let detail = try await Self.blueprintDetail(world, "demo-blueprint-02")
             #expect(detail.title == "Example Field iPads" && detail.members.isEmpty, "\(status)")
             let note = try #require(detail.membersNote)
+            #expect(detail.membersListNote == nil, "no members are shown, so none are said to be listed by id")
             if status == 403 {
                 #expect(note == "Your role can't read this: Apple refused to list the blueprint's members, so none are shown or counted.")
             } else {
@@ -1044,9 +1048,9 @@ struct ContentTests {
     }
 
     /// Phase 2b verifier round 3: a blueprint's included packages were named raw in its member list, where the package's
-    /// own row, detail and CSV mask an address in its name; the list masks it the same way (`ContentWords.shown`). The blueprint
-    /// is read without `include` now, so a member is its id alone and no address of the package's reaches the detail; the
-    /// naming (and its masking) for an included member stays in `ContentDetail.init(blueprint:)`, which nothing in the app reaches.
+    /// own row, detail and CSV mask an address in its name. A blueprint's members are ids now (nothing is included to name
+    /// them), so no address of the package's reaches the detail. When members are named later, from a list the app loads, a
+    /// package's address must be masked as the row masks it (invariant 11), with a test beside this one.
     @Test func aBlueprintsPackageNamesAreMaskedAsThePackagesOwn() async throws {
         let world = try await World.make()
         let stub = world.stubs["a"]!

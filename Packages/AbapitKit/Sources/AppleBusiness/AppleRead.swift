@@ -114,15 +114,10 @@ public enum AppleRead {
     /// The blueprints, without their members (abapit's list asked for none either).
     public static func blueprints() -> ReadRequest { list("/v1/blueprints") }
 
-    /// One blueprint, with the members of `include` listed and their resources included, each relationship asked for
-    /// at the most Apple sends (`limit[<name>]`, maximum 1000): what that cuts, `Blueprint.Related.isTruncated` says. The
-    /// names come from `Blueprint.Relationship`, a closed enum of Apple's six, in its order.
-    public static func blueprint(id: String, include: Set<Blueprint.Relationship> = []) -> ReadRequest? {
-        let included = Blueprint.Relationship.allCases.filter(include.contains)
-        let query = included.isEmpty ? [] : [QueryItem("include", included.map(\.rawValue).joined(separator: ","))]
-            + included.map { QueryItem("limit[\($0.rawValue)]", String(pageLimit)) }
-        return single("/v1/blueprints/{id}", id, query: query)
-    }
+    /// One blueprint, with no query: Apple's live server refused `include` on it twice (2026-11-19 and 2026-11-20: 400
+    /// `PARAMETER_ERROR.ILLEGAL`, `source.parameter` `include`), so the members are read one relationship at a time
+    /// (`blueprintMembers`).
+    public static func blueprint(id: String) -> ReadRequest? { single("/v1/blueprints/{id}", id) }
 
     /// A blueprint's members of one relationship, as linkages of its type.
     public static func blueprintMembers(id: String, _ relationship: Blueprint.Relationship) -> ReadRequest? {

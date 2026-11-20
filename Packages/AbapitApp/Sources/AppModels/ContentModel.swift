@@ -335,7 +335,7 @@ public struct ContentSelection: Hashable, Sendable {
 }
 
 /// The detail of the row chosen (plan Phase 2: app, package, blueprint and configuration detail): the item read alone,
-/// for a blueprint with every relationship included, for a configuration the only read that carries a custom setting's
+/// for a blueprint with each relationship's members read on their own, for a configuration the only read that carries a custom setting's
 /// profile. A choice made after it, or an org switch, retires its read.
 @MainActor
 @Observable
@@ -412,7 +412,7 @@ public struct ContentField: Sendable, Equatable, CustomStringConvertible {
     public var description: String { "\(label): \(value)" }
 }
 
-/// One member of a blueprint relationship: its id, and its name when Apple included it.
+/// One member of a blueprint relationship: its id, and a name when one is given (none is: blueprint reads give ids only).
 public struct ContentMember: Sendable, Equatable {
     public let id: String
     public let name: String?
@@ -423,7 +423,7 @@ public struct ContentMember: Sendable, Equatable {
     }
 }
 
-/// One of a blueprint's relationships as the read with `include` said it: its members, how many, and that in words.
+/// One of a blueprint's relationships as its own list said it: its members, how many, and that in words.
 public struct ContentMemberGroup: Identifiable, Sendable, Equatable {
     public let relationship: Blueprint.Relationship
     public let title: String
@@ -446,10 +446,13 @@ public struct ContentDetail: Sendable {
     public let fields: [ContentField]
     /// Sentences under the fields: a masked location, a configuration's type.
     public let notes: [String]
-    /// A blueprint's relationships, in `Blueprint.Relationship` order; empty when the include was refused.
+    /// A blueprint's relationships, in `Blueprint.Relationship` order; empty when a relationship's list was refused.
     public let members: [ContentMemberGroup]
-    /// Why a blueprint's members aren't shown: Apple refused the include (Phase 2a review L5: never "no members").
+    /// Why a blueprint's members aren't shown: Apple refused a relationship's list (Phase 2a review L5: never "no members").
     public let membersNote: String?
+    /// Said where a blueprint's members are shown: they are ids, as nothing in Apple's blueprint reads names them (nil when
+    /// no members are shown).
+    public let membersListNote: String?
     /// A custom setting's profile, pretty-printed with every secret masked.
     public let profile: String?
     /// What was masked in it, or why it isn't shown.
@@ -458,12 +461,13 @@ public struct ContentDetail: Sendable {
     public let attributes: [ContentField]
 
     init(title: String, fields: [ContentField], notes: [String] = [], members: [ContentMemberGroup] = [],
-         membersNote: String? = nil, profile: String? = nil, profileNote: String? = nil, attributes: [ContentField]) {
+         membersNote: String? = nil, membersListNote: String? = nil, profile: String? = nil, profileNote: String? = nil, attributes: [ContentField]) {
         self.title = title
         self.fields = fields
         self.notes = notes
         self.members = members
         self.membersNote = membersNote
+        self.membersListNote = membersListNote
         self.profile = profile
         self.profileNote = profileNote
         self.attributes = attributes
@@ -505,31 +509,16 @@ public struct ContentDetail: Sendable {
         switch read.members {
         case .refused(let error):
             refusal = ContentWords.refusal(error)
-        case .read(let related, let included):
-            groups = Blueprint.Relationship.allCases.map { relationship in
-                guard let listed = related[relationship] else {
-                    return ContentMemberGroup(relationship: relationship, title: relationship.title, members: [], count: nil, isTruncated: false,
-                                              summary: "Apple didn't list the blueprint's \(relationship.noun(2)), so none are shown or counted.")
+        case .read(let related):
+            // Every relationship was read on its own, so each has a list (possibly empty: "None"). A member is its id: nothing
+            // is included, so none is named. Naming one later, from a list the app already loads, must mask a package's
+            // address as the package's own row does (invariant 11; docs/domains/apple-reads.md).
+            groups = Blueprint.Relationship.allCases.compactMap { relationship in
+                related[relationship].map { listed in
+                    let members = listed.linkages.map { ContentMember(id: $0.id, name: nil) }
+                    return ContentMemberGroup(relationship: relationship, title: relationship.title, members: members, count: members.count,
+                                              isTruncated: listed.isTruncated, summary: ContentWords.members(members.count, relationship, truncated: listed.isTruncated))
                 }
-                // Each member's name from what Apple included, matched by its id's bytes: a device's model, a person's name
-                // or Managed Apple Account, anything else's name; a package's with its addresses masked, as its own row,
-                // detail and CSV show it (Phase 2b verifier round 3: the member list showed it raw).
-                var names: [[UInt8]: String] = [:]
-                for resource in blueprint.included(relationship, from: included) {
-                    let key = Array(resource.id.utf8)
-                    let name: String? = switch relationship {
-                    case .apps: ContentApp(resource: resource).name
-                    case .packages: ContentWords.shown(ContentPackage(resource: resource).name)
-                    case .configurations: Configuration(resource: resource).name
-                    case .orgDevices: OrgDevice(resource: resource).deviceModel
-                    case .users: User(resource: resource).fullName ?? User(resource: resource).managedAppleAccount
-                    case .userGroups: UserGroup(resource: resource).name
-                    }
-                    if names[key] == nil, let name { names[key] = name }
-                }
-                let members = listed.linkages.map { ContentMember(id: $0.id, name: names[Array($0.id.utf8)]) }
-                return ContentMemberGroup(relationship: relationship, title: relationship.title, members: members, count: members.count,
-                                          isTruncated: listed.isTruncated, summary: ContentWords.members(members.count, relationship, truncated: listed.isTruncated))
             }
         }
         self.init(title: blueprint.name ?? blueprint.id, fields: [
@@ -537,7 +526,7 @@ public struct ContentDetail: Sendable {
             ContentField("Status", BlueprintRow(blueprint).status),
             ContentField("Licences", blueprint.appLicenseDeficient.map { $0 ? "Too few for its apps" : "Enough for its apps" } ?? "—"),
             ContentField("Created", ScreenWords.day(blueprint.created?.date)), ContentField("Updated", ScreenWords.day(blueprint.updated?.date)),
-        ], members: groups, membersNote: refusal, attributes: ContentWords.attributes(of: blueprint))
+        ], members: groups, membersNote: refusal, membersListNote: groups.isEmpty ? nil : ContentWords.membersByID, attributes: ContentWords.attributes(of: blueprint))
     }
 
     init(configuration: Configuration) {
@@ -564,6 +553,9 @@ public struct ContentDetail: Sendable {
 package enum ContentWords {
     /// What stands where a value is masked: `ProfileText`'s mask, so the screen masks one way.
     static let mask = ProfileText.mask
+
+    /// Said under a blueprint's members: they are ids, because Apple's blueprint reads give nothing to name them by.
+    static let membersByID = "Listed by ID: Apple's blueprint reads give IDs only."
 
     static let maskedLocation = "The location's user, password, query, path parameters and fragment are masked: they can carry credentials. "
         + "It is shown here, never opened."

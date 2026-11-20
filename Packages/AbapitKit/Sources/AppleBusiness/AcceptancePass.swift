@@ -225,8 +225,8 @@ extension AppleClient {
     }
 
     /// Each Business-only list, whole, with what this version doesn't know of its items; then the first item of each read
-    /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint with every
-    /// relationship included, and each relationship's own list; a configuration, a custom setting when there is one; an
+    /// alone (a user; a group and its members; an org unit and its members; an app; a package; a blueprint and each of its
+    /// relationships' own list (the blueprint read with no `include`); a configuration, a custom setting when there is one; an
     /// Apple-managed device's details), the last day's audit events, cursor by cursor, and the webhooks, the first read
     /// alone with its last day's deliveries and their events. A School org has none of these: each line says so, and
     /// nothing is sent.
@@ -436,7 +436,7 @@ extension AppleClient {
                 let failed = Self.acceptanceFailure(refused)
                 found.status = failed.status
                 found.note = ["a members read was refused, so the blueprint's members weren't read", failed.note].compactMap { $0 }.joined(separator: " · ")
-            case .read(let related, _):
+            case .read(let related):
                 let all = Blueprint.Relationship.allCases
                 let cut = all.filter { related[$0]?.isTruncated == true }.map(\.rawValue)
                 found.truncation = cut.isEmpty ? nil : "\(cut.joined(separator: ", ")) cut at the page cap"
@@ -451,7 +451,7 @@ extension AppleClient {
         var count = 0
         var keys: Set<String> = []
         var payloadKeys: Set<String> = []
-        /// The status a read that returned says, when not `ok` or `truncated`: a blueprint read again without its include.
+        /// The status a read that returned says, when not `ok` or `truncated`: a blueprint whose members read was refused.
         var status: AcceptanceReport.Status?
         /// `field=value`s as the text shows them; only `unknown(_:_:)` adds one.
         private(set) var values: Set<String> = []

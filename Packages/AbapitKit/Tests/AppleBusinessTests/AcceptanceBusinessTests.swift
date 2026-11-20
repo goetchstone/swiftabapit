@@ -23,10 +23,9 @@ struct AcceptanceBusinessTests {
     }
 
     /// The blueprint line is the app's own read: the blueprint with no `include` (Apple refused it live on 2026-11-19 and
-    /// 2026-11-20) and each relationship's list, so against the stub, which still refuses an include, the line is `ok` with no
-    /// refused request sent.
+    /// 2026-11-20; the stub refuses it by default) and each relationship's list, so the line is `ok` with no refused request sent.
     @Test func theBlueprintLineIsOkWithoutARefusedRequest() async throws {
-        let (harness, report) = try await Self.pass { $0.stub.refuseIncludes(with: 400) }
+        let (harness, report) = try await Self.pass()
         let line = try Self.line(report, "blueprints/{id}")
         #expect(line.ok && line.count == 1, "\(report.text)")
         #expect(report.text.contains("\nblueprints/{id}: ok, 1 item · unknown values status=PAUSED · apps 1, packages 1, configurations 1, orgDevices 2, users 1, userGroups 1\n"), "\(report.text)")
