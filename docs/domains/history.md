@@ -144,6 +144,15 @@ events in phase 2a; their notes are below.
   Account, status, external flag and dates; no names, emails, phones, job titles or departments. Profiles' Wi-Fi/VPN
   passwords are never kept (already decided)." And (2026-10-31) a configuration is `Configuration.resource`, its profile
   withheld, not even hashed.
+- **Two more answers of the operator's** (2026-11-20, asked once the collector was built):
+  - Asked "Apple's main device list carries the same identifiers (IMEI, MEID, Wi-Fi/Bluetooth/Ethernet MAC). Leave them out
+    of snapshots there too?", the operator answered "Leave them out (Recommended)": `devices` keeps no IMEI, MEID or MAC
+    address, and `theAllowlistIsTheOperatorsMinimal` holds every list to no `imei`, `meid` or `…MacAddress` by name, so
+    one Apple adds can't join a list unseen. `eid` (the eSIM's identifier) wasn't asked about and is kept.
+  - Asked whether to keep blueprints (abapit kept them: name, description, status, dates; not their members), the operator
+    answered "Keep them (Recommended)": `blueprints` is the list as abapit read it (no `include`), with
+    `appLicenseDeficient`, which Apple's blueprint resource carries and abapit stored; never a member, a single blueprint
+    or a relationship's list (`aBlueprintIsKeptWithoutItsMembers`).
 - **An allowlist per resource** (`SnapshotPolicy`), written out and compared by bytes, never a denylist: abapit stored
   every attribute Apple sent, so an attribute Apple adds later is left out here until a review adds it to the list, and
   the snapshot's note counts how many such attributes were left out ("left out 2 attributes Apple sent that this version
@@ -154,23 +163,24 @@ events in phase 2a; their notes are below.
 
   | Resource (the store's name) | Read | Kept |
   |---|---|---|
-  | `devices` | `orgDevices` | all 24 documented attributes; the minus list names the MDM details' IMEI, MEID and MACs, not the device record's |
+  | `devices` | `orgDevices` | all 24 documented attributes but `imei`, `meid`, `wifiMacAddress`, `bluetoothMacAddress` and `ethernetMacAddress` (19) |
   | `mdm_servers` | `mdmServers` | all but `lastConnectedIp` |
   | `assignments` | each service's device list | abapit's shape: one item per serial, `serverId`, `serverName` |
   | `users` | `users` | `status`, `managedAppleAccount`, `isExternalUser`, `startDateTime`, `createdDateTime`, `updatedDateTime` |
   | `user_groups` | `userGroups` | `status`, `type`, `totalMemberCount`, the two dates: not `name`, which can name people, nor `ouId` |
   | `apps` | `apps` | all 7 |
   | `packages` | `packages` | all but `url`; every string with any address masked (`ContentWords.addresses`), noted |
+  | `blueprints` | the list | all 6 (`name`, `description`, `status`, `appLicenseDeficient`, the two dates); never members |
   | `configurations` | the list | all 6 of `Configuration.resource`: the list sends a profile as null, and the single read is never made |
   | `mdm_enrolled` | `mdmDevices` | `serialNumber`, `productFamily`, `enrolledUserId`: not `deviceName`, which commonly holds its user's name |
   | `applecare` (sweep) | per device | all 9, and the serial it was read for (abapit's shape) |
   | `activation_lock` (sweep) | per device | `isLocked`, `lockType` |
   | `mdm_details` (sweep) | per Apple-managed device | the posture: no IMEI, MEID, MAC address or `deviceName` |
 
-  Not kept: org units, blueprints and their members, audit events and webhooks. abapit kept blueprints; the operator's
-  list doesn't name them, so they wait for the operator. Who decided: the operator, the lists and the minus list; the
-  coordinating session, the scope (no org units, blueprint members, audit events or webhooks); the executor, for review,
-  `user_groups`' and `mdm_enrolled`'s lists (no names), masking a package's other strings, and leaving blueprints out.
+  Not kept: org units, blueprints' members, audit events and webhooks. Who decided: the operator, the lists, the minus
+  list, the device list's identifiers and blueprints; the coordinating session, the scope (no org units, blueprint members,
+  audit events or webhooks); the executor, for review, `user_groups`' and `mdm_enrolled`'s lists (no names) and masking a
+  package's other strings.
 - **Errors are codes** (`SnapshotPolicy.code`): the HTTP status and Apple's `code` when it is two or more words of capital
   ASCII letters joined by `_` or `.` ("HTTP 403 FORBIDDEN_ERROR", "HTTP 400 PARAMETER_ERROR.INVALID"), or this app's word
   ("transport", "keychain", "malformed"); never Apple's `detail`, a parameter, a URL or a `code` of another shape.
@@ -450,8 +460,9 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
 ## Testing / live-verification status
 
 - The collector: `CollectorTests` (each resource as the policy keeps it; a configuration from the list, never the
-  detail; canaries for the profile's password, a package's url and description, a service's IP, a user's names, email,
-  phone, job title and department, a device's and a group's names, in no byte of the folder's files; an attribute off the
+  detail; a blueprint without its members; canaries for the profile's password, a package's url and description, a
+  service's IP, a user's names, email, phone, job title and department, a device's and a group's names, a device's IMEI,
+  MEID and MAC addresses and a blueprint's members, in no byte of the folder's files; an attribute off the
   allowlist left out and counted; a 403 leaving the rest; error codes, never Apple's text; the services' default fields;
   the page cap; assignments in part; a credential failure stopping the asking; an org switch, a client switch, a cancel and
   a rename mid-run; School; no org or no history; a new org's id avoiding the history's; the allowlist written out).

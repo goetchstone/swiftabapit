@@ -9,7 +9,9 @@ import JSONAPI
 /// configurations, AppleCare and Activation Lock as abapit kept them, minus package download URLs, services' last-connected
 /// IPs, MDM-detail IMEI/MEID/MAC addresses and error text (codes only); people only the Managed Apple Account, status,
 /// external flag and dates, no names, emails, phones, job titles or departments; and (2026-10-31) no custom setting's
-/// profile, so a configuration is kept as `Configuration.resource`, its profile withheld.
+/// profile, so a configuration is kept as `Configuration.resource`, its profile withheld. Later the same day the operator
+/// answered "Leave them out (Recommended)" for the device list's IMEI, MEID and MAC addresses too, and "Keep them
+/// (Recommended)" for blueprints (not their members).
 ///
 /// Each resource's attributes are an **allowlist**, written out here and compared by bytes: an attribute Apple adds later is
 /// left out until a review adds it, and the snapshot's note counts what was left out that this version doesn't know (never
@@ -42,13 +44,13 @@ public enum SnapshotPolicy {
 
     // MARK: the lists the collector reads
 
-    /// `orgDevices`, keyed by serial number: every attribute Apple documents (the operator: devices as abapit kept them).
-    /// The minus list names the MDM details' IMEI, MEID and MAC addresses, not the device record's, which are kept.
+    /// `orgDevices`, keyed by serial number: every attribute Apple documents (the operator: devices as abapit kept them) but
+    /// the IMEI, the MEID and every MAC address (the operator, 2026-11-20: "Leave them out (Recommended)"). `eid`, the eSIM's
+    /// identifier, wasn't asked about and is kept.
     public static let devices = Rule("devices", kept: [
         "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily",
-        "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid",
-        "purchaseSourceId", "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress",
-        "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime",
+        "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "eid",
+        "purchaseSourceId", "purchaseSourceType", "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime",
     ], known: OrgDevice.fields)
 
     /// `mdmServers`: everything but `lastConnectedIp` (the operator's minus list).
@@ -80,6 +82,13 @@ public enum SnapshotPolicy {
     public static let packages = Rule("packages", kept: ["name", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
                                       known: ContentPackage.fields, businessOnly: true, masksAddresses: true)
 
+    /// `blueprints`, the list as abapit kept it (the operator, 2026-11-20: "Keep them (Recommended)"): every attribute Apple
+    /// documents, `appLicenseDeficient` included (Apple's blueprint resource carries it, and abapit stored what the list
+    /// sent). Never its members: the list read sends none (no `include`), the store keeps no relationships, and the six
+    /// relationship reads are never made for a snapshot.
+    public static let blueprints = Rule("blueprints", kept: ["name", "description", "status", "appLicenseDeficient", "createdDateTime", "updatedDateTime"],
+                                        known: Blueprint.fields, businessOnly: true)
+
     /// `configurations`, from `Configuration.resource`: a custom setting's profile withheld (operator, 2026-10-31), and read
     /// from the list, which sends it as null; the single read that carries it is never made for a snapshot.
     public static let configurations = Rule("configurations", kept: [
@@ -91,9 +100,9 @@ public enum SnapshotPolicy {
     public static let mdmEnrolled = Rule("mdm_enrolled", kept: ["serialNumber", "productFamily", "enrolledUserId"],
                                          known: MDMDevice.fields, businessOnly: true)
 
-    /// The lists, in the order a snapshot reads them (abapit's `_collect`). Not kept: org units, blueprints and their
-    /// members, audit events and webhooks.
-    public static let lists: [Rule] = [devices, services, assignments, users, userGroups, apps, packages, configurations, mdmEnrolled]
+    /// The lists, in the order a snapshot reads them (abapit's `_collect`). Not kept: org units, blueprints' members, audit
+    /// events and webhooks.
+    public static let lists: [Rule] = [devices, services, assignments, users, userGroups, apps, packages, blueprints, configurations, mdmEnrolled]
 
     // MARK: the sweeps (one read per device; the next PR runs them)
 

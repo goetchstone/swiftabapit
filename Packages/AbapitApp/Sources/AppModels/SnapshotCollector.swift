@@ -138,6 +138,9 @@ public final class SnapshotCollector {
         guard current(run) else { return .cancelled }
         _ = await read(SnapshotPolicy.packages, run, &collected) { client.packages() }
         guard current(run) else { return .cancelled }
+        // The list only: never a blueprint's members (`blueprintWithMembers`, `blueprintMemberIDs`).
+        _ = await read(SnapshotPolicy.blueprints, run, &collected) { client.blueprints() }
+        guard current(run) else { return .cancelled }
         // The list, never `configuration(_:)`: the list sends a custom setting's profile as null, and what is kept is
         // `Configuration.resource`, the profile withheld (operator, 2026-10-31).
         _ = await read(SnapshotPolicy.configurations, run, &collected) { client.configurations() }

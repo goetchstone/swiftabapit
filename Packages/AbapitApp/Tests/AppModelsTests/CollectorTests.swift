@@ -21,9 +21,32 @@ struct CollectorTests {
 
     /// Every canary a snapshot must never hold: a custom setting's Wi-Fi password, a package's download location (its
     /// `url`, whose host masking would keep) and a password written into its description, a service's IP, a user's names,
-    /// email, phone, job title and department, a device's and a group's names.
+    /// email, phone, job title and department, a device's and a group's names, a device's IMEI, MEID and MAC addresses,
+    /// and a blueprint's members.
     static let canaries = ["CANARYWIFIPW", "canaryhost", "CANARYURLPW", "CANARYQUERY", "CANARYDESCPW", "198.51.100.234", "CANARYFIRST", "CANARYLAST",
                            "canary.mail@example.com", "CANARYPHONE", "CANARYJOB", "CANARYDEPT", "CANARYDEVICENAME", "CANARYGROUP"]
+                           + identifierCanaries + memberCanaries
+
+    /// The device list's identifiers the operator left out (2026-11-20): IMEI, MEID and every MAC address.
+    static let identifierCanaries = ["CANARYIMEI", "CANARYMEID", "CA:NA:RY:WI:FI:00", "CA:NA:RY:BT:00:00", "CA:NA:RY:ET:00:00"]
+
+    /// A blueprint's members, by ids no list holds: only a members read could find them.
+    static let memberCanaries = ["CANARYMEMBERAPP", "CANARYMEMBERDEVICE", "CANARYMEMBERUSER", "CANARYMEMBERGROUP"]
+
+    /// A device with every identifier the operator left out, beside what is kept.
+    static func identified(_ serial: String) -> Resource {
+        Resource(type: "orgDevices", id: serial, attributes: [
+            "serialNumber": .string(serial), "deviceModel": .string("iPhone 17"), "productFamily": .string("iPhone"), "status": .string("ASSIGNED"),
+            "eid": .string("89049032000001000000000000000001"),
+            "imei": .array([.string("CANARYIMEI")]), "meid": .array([.string("CANARYMEID")]), "wifiMacAddress": .string("CA:NA:RY:WI:FI:00"),
+            "bluetoothMacAddress": .string("CA:NA:RY:BT:00:00"), "ethernetMacAddress": .array([.string("CA:NA:RY:ET:00:00")]),
+        ])
+    }
+
+    static let blueprint = Resource(type: "blueprints", id: "B1", attributes: [
+        "name": .string("Field kit"), "description": .string("Phones for the field"), "status": .string("ACTIVE"),
+        "appLicenseDeficient": .bool(false), "createdDateTime": .string("2025-01-02T03:04:05Z"),
+    ])
 
     static let user = Resource(type: "users", id: "U1", attributes: [
         "firstName": .string("CANARYFIRST"), "lastName": .string("CANARYLAST"), "email": .string("canary.mail@example.com"),
@@ -64,9 +87,11 @@ struct CollectorTests {
         a.add(services: [Resource(type: "mdmServers", id: "S1", attributes: main), World.service("S2", name: "Lab")])
         a.assign("ADEV0000000", to: "S1")
         a.assign("ADEV0000001", to: "S2")
+        a.add(devices: [identified("IDEV0000001")])
         if profiles?.first?.scope != .known(.school) {
             a.add([user, group, Resource(type: "apps", id: "A1", attributes: ["name": .string("Pages"), "bundleId": .string("com.apple.Pages")]),
-                   package, configuration, mdmDevice])
+                   package, blueprint, configuration, mdmDevice])
+            for (relationship, id) in zip(["apps", "orgDevices", "users", "userGroups"], memberCanaries) { a.relate("blueprints", "B1", relationship, to: [id]) }
         }
         return world
     }
@@ -91,11 +116,16 @@ struct CollectorTests {
         let world = try await Self.world()
         let snapshot = try await Self.recorded(world)
         let summary = snapshot.summary
-        #expect(summary.counts == ["devices": 2, "mdm_servers": 2, "assignments": 2, "users": 1, "user_groups": 1, "apps": 1, "packages": 1,
-                                   "configurations": 1, "mdm_enrolled": 1])
+        #expect(summary.counts == ["devices": 3, "mdm_servers": 2, "assignments": 2, "users": 1, "user_groups": 1, "apps": 1, "packages": 1,
+                                   "blueprints": 1, "configurations": 1, "mdm_enrolled": 1])
         #expect(summary.errors.isEmpty)
-        #expect(summary.orgID == "a" && summary.deviceCount == 2)
+        #expect(summary.orgID == "a" && summary.deviceCount == 3)
         #expect(Self.attributes(snapshot, "devices", "ADEV0000000") == ["addedToOrgDateTime", "deviceModel", "productFamily", "serialNumber", "status"])
+        // The operator's 2026-11-20 answer: no IMEI, MEID or MAC address, without a note (they are known, and left out).
+        #expect(Self.attributes(snapshot, "devices", "IDEV0000001") == ["deviceModel", "eid", "productFamily", "serialNumber", "status"])
+        #expect(summary.notes["devices"] == nil)
+        // A blueprint as the list sent it: its attributes, never its members.
+        #expect(Self.attributes(snapshot, "blueprints", "B1") == ["appLicenseDeficient", "createdDateTime", "description", "name", "status"])
         #expect(Self.attributes(snapshot, "mdm_servers", "S1") == ["lastConnectedDateTime", "serverName", "serverType", "status"])
         #expect(Self.attributes(snapshot, "users", "U1") == ["createdDateTime", "isExternalUser", "managedAppleAccount", "status"])
         #expect(Self.attributes(snapshot, "user_groups", "G1") == ["status", "totalMemberCount", "type"])
@@ -121,6 +151,20 @@ struct CollectorTests {
         #expect(stored.attributes["customSettingsValues"] == .null)
         #expect(stored.attributes["name"]?.string == "Office Wi-Fi")
         #expect(!world.stubs["a"]!.requests.contains { $0.contains("/v1/configurations/") }, "no single configuration read")
+    }
+
+    /// The operator's 2026-11-20 answer: blueprints are kept, their members aren't. The list is read without `include`, and
+    /// neither a single blueprint nor a relationship's list is asked for.
+    @Test func aBlueprintIsKeptWithoutItsMembers() async throws {
+        let world = try await Self.world()
+        let snapshot = try await Self.recorded(world)
+        let stored = try #require(snapshot.resources["blueprints"]?.first)
+        #expect(stored.relationships.isEmpty)
+        #expect(!stored.attributes.members.contains { member in
+            Self.memberCanaries.contains { member.value.jsonText.contains($0) }
+        })
+        let asked = world.stubs["a"]!.requests.filter { $0.contains("/v1/blueprints") }
+        #expect(asked.count == 1 && !asked[0].contains("include") && !asked.contains { $0.contains("/v1/blueprints/") }, "\(asked)")
     }
 
     /// Canaries for everything the operator's "Minimal" leaves out, and the profile's password, looked for in every file the
@@ -164,7 +208,8 @@ struct CollectorTests {
         let snapshot = try await Self.recorded(world)
         #expect(snapshot.summary.errors == ["users": "HTTP 403 FORBIDDEN_ERROR"])
         #expect(snapshot.summary.counts["users"] == nil)
-        #expect(snapshot.summary.counts.keys.sorted() == ["apps", "assignments", "configurations", "devices", "mdm_enrolled", "mdm_servers", "packages", "user_groups"])
+        #expect(snapshot.summary.counts.keys.sorted() == ["apps", "assignments", "blueprints", "configurations", "devices", "mdm_enrolled", "mdm_servers",
+                                                          "packages", "user_groups"])
         guard case .failed(_, let error, nil)? = try await world.history!.latest("users", org: world.orgs.active!) else {
             Issue.record("the history doesn't say the users failed")
             return
@@ -213,7 +258,7 @@ struct CollectorTests {
         #expect(snapshot.summary.errors["devices"] == nil)
         world.stubs["a"]!.reportTotals()
         let again = try await Self.recorded(world)
-        #expect(again.summary.notes["devices"] == "stopped at the page limit: 1000 of 1001 read")
+        #expect(again.summary.notes["devices"] == "stopped at the page limit: 1000 of 1002 read")
     }
 
     /// One service's device list refused leaves the other's assignments, recorded with the error so the history never takes
@@ -268,7 +313,7 @@ struct CollectorTests {
         #expect(!world.snapshots.isRunning && world.snapshots.lastOutcome == .cancelled)
         // The next run reads the org now active, and records under it.
         let next = try await Self.recorded(world)
-        #expect(next.summary.orgID == "b" && next.summary.counts["devices"] == 1)
+        #expect(next.summary.orgID == "b" && next.summary.counts["devices"] == 1 && next.summary.counts["blueprints"] == 0)
         #expect(try await world.history!.orgIDs() == ["b"])
     }
 
@@ -330,7 +375,7 @@ struct CollectorTests {
         let world = try await Self.world(profiles: [World.profile("a", scope: .school), World.profile("b")])
         let snapshot = try await Self.recorded(world)
         #expect(snapshot.summary.orgScope == "school")
-        #expect(snapshot.summary.counts == ["devices": 2, "mdm_servers": 2, "assignments": 2])
+        #expect(snapshot.summary.counts == ["devices": 3, "mdm_servers": 2, "assignments": 2])
         #expect(snapshot.summary.errors.isEmpty)
         let asked = world.stubs["a"]!.requests.filter { !$0.contains("/auth/") }
         #expect(!asked.isEmpty && asked.allSatisfy { $0.contains("/v1/orgDevices") || $0.contains("/v1/mdmServers") }, "\(asked)")
@@ -390,9 +435,8 @@ struct CollectorTests {
     @Test func theAllowlistIsTheOperatorsMinimal() {
         let expected: [String: [String]] = [
             "devices": ["serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily", "productType",
-                        "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid", "purchaseSourceId",
-                        "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "isMdmMigrationCapable", "mdmMigrationStatus",
-                        "mdmMigrationDeadlineDateTime"],
+                        "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "eid", "purchaseSourceId",
+                        "purchaseSourceType", "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime"],
             "mdm_servers": ["createdDateTime", "defaultProductFamilies", "deviceCount", "enableMdmDisownFlag", "lastConnectedDateTime", "serverName",
                             "serverType", "status", "updatedDateTime"],
             "assignments": ["serverId", "serverName"],
@@ -400,6 +444,7 @@ struct CollectorTests {
             "user_groups": ["status", "type", "totalMemberCount", "createdDateTime", "updatedDateTime"],
             "apps": ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
             "packages": ["name", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
+            "blueprints": ["name", "description", "status", "appLicenseDeficient", "createdDateTime", "updatedDateTime"],
             "configurations": ["type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime"],
             "mdm_enrolled": ["serialNumber", "productFamily", "enrolledUserId"],
             "applecare": ["agreementNumber", "contractCancelDateTime", "description", "endDateTime", "isCanceled", "isRenewable", "paymentType",
@@ -408,8 +453,8 @@ struct CollectorTests {
             "mdm_details": ["serialNumber", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
                             "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus"],
         ]
-        #expect(SnapshotPolicy.all.map(\.name) == ["devices", "mdm_servers", "assignments", "users", "user_groups", "apps", "packages", "configurations",
-                                                   "mdm_enrolled", "applecare", "activation_lock", "mdm_details"])
+        #expect(SnapshotPolicy.all.map(\.name) == ["devices", "mdm_servers", "assignments", "users", "user_groups", "apps", "packages", "blueprints",
+                                                   "configurations", "mdm_enrolled", "applecare", "activation_lock", "mdm_details"])
         for rule in SnapshotPolicy.all {
             #expect(rule.kept.map { Array($0.utf8) } == expected[rule.name]?.map { Array($0.utf8) }, "\(rule.name)")
             // Every kept attribute is one Apple documents (a typo would keep nothing), once, and none looks like a secret's
@@ -420,12 +465,18 @@ struct CollectorTests {
         // The operator's minus list, and the People line.
         let kept = Dictionary(uniqueKeysWithValues: SnapshotPolicy.all.map { ($0.name, Set($0.kept)) })
         #expect(!kept["packages"]!.contains("url") && !kept["mdm_servers"]!.contains("lastConnectedIp"))
-        #expect(kept["mdm_details"]!.isDisjoint(with: ["imei", "meid", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress", "deviceName"]))
+        #expect(kept["mdm_details"]!.isDisjoint(with: ["deviceName"]))
+        // No IMEI, MEID or MAC address in any resource (the operator, 2026-11-20): held by name, so one Apple adds
+        // (`thunderboltMacAddress`) can't be added to a list unseen.
+        for rule in SnapshotPolicy.all {
+            #expect(!rule.kept.contains { ["imei", "meid"].contains($0.lowercased()) || $0.lowercased().hasSuffix("macaddress") }, "\(rule.name)")
+        }
         #expect(kept["users"]!.isDisjoint(with: ["firstName", "middleName", "lastName", "email", "phoneNumbers", "jobTitle", "department", "employeeNumber",
                                                  "costCenter", "division", "roleOuList"]))
         #expect(!kept["user_groups"]!.contains("name") && !kept["mdm_enrolled"]!.contains("deviceName"))
         // The Business-only reads are exactly School's gaps; the sweeps aren't in the lists a run reads.
-        #expect(SnapshotPolicy.all.filter(\.businessOnly).map(\.name) == ["users", "user_groups", "apps", "packages", "configurations", "mdm_enrolled", "mdm_details"])
+        #expect(SnapshotPolicy.all.filter(\.businessOnly).map(\.name) == ["users", "user_groups", "apps", "packages", "blueprints", "configurations",
+                                                                          "mdm_enrolled", "mdm_details"])
         #expect(SnapshotPolicy.lists.count + SnapshotPolicy.sweeps.count == SnapshotPolicy.all.count)
         #expect(SnapshotPolicy.all.filter(\.masksAddresses).map(\.name) == ["packages"])
     }
