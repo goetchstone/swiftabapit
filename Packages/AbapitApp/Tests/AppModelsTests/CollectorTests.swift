@@ -291,8 +291,12 @@ struct CollectorTests {
         gate.hold("packages") { $0.path() == "/v1/packages" }
         let running = Task { await world.snapshots.run() }
         await eventually("the run at the packages") { gate.held == 1 }
-        // One run at a time.
-        #expect(await world.snapshots.run() == .notRun("A snapshot is already being taken."))
+        // One run at a time: a second is answered at once and never waits behind the first. It is watched, not awaited: a
+        // second run would wait at the gate.
+        let second = Answer()
+        Task { second.outcome = await world.snapshots.run() }
+        await eventually("the second run answered") { second.outcome != nil }
+        #expect(second.outcome == .notRun("A snapshot is already being taken."))
         world.snapshots.cancel()
         gate.release("packages")
         #expect(await running.value == .cancelled)
@@ -427,6 +431,11 @@ struct CollectorTests {
     }
 
     // MARK: helpers
+
+    /// A run's outcome, once it has one.
+    final class Answer {
+        var outcome: SnapshotCollector.Outcome?
+    }
 
     /// A new folder under the temporary folder, by its real path (`SQLITE_OPEN_NOFOLLOW` refuses the `/var` link).
     static func folder() throws -> URL {
