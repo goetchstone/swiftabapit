@@ -37,7 +37,7 @@ public struct MigrationReport: Sendable {
             switch device.attributes["mdmMigrationStatus"] {
             case nil, .null?: nil
             case .string(let raw)?: OpenEnum(raw)
-            case let value?: .unknown(value.jsonText)
+            case let value?: .unknown(shownJSON(value))
             }
         }
 
