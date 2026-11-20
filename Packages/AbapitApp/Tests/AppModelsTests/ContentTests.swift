@@ -3,7 +3,9 @@ import AppleModels
 import AppModels
 import Foundation
 import JSONAPI
+import Observation
 import Reports
+import Synchronization
 import Testing
 import TestSupport
 
@@ -986,7 +988,7 @@ struct ContentTests {
     }
 
     /// A blueprint is read without `include` (Apple's live server refused it on 2026-11-19 and 2026-11-20) and each of its six
-    /// relationships on its own: each member is its id (nothing is included, so none is named), each count from `members`.
+    /// relationships on its own: each member is its id (nothing is included, and no list was read to name it from), each count from `members`.
     @Test func aBlueprintsMembersAreReadWithIt() async throws {
         let world = try await World.make()
         Self.stocked(world)
@@ -997,8 +999,9 @@ struct ContentTests {
             #expect(reads.contains { $0.contains("/relationships/\(relationship)?") && $0.contains("limit=1000") }, "\(reads)")
         }
         #expect(detail.title == "Example Office Macs" && detail.membersNote == nil)
-        // Said where the members are shown: they are ids, as no blueprint read names them.
-        #expect(detail.membersListNote == "Listed by ID: Apple's blueprint reads give IDs only.")
+        // No list was read here, so no member is named, and that is said, with the lists that would name them.
+        #expect(detail.membersListNote == "Apps, packages, configurations, devices and user groups are listed by ID until the Apps, Packages, "
+                + "Configurations, Devices and User groups lists are read.")
         #expect(detail.members.allSatisfy { $0.members.allSatisfy { $0.name == nil } })
         #expect(detail.members.map(\.title) == ["Apps", "Packages", "Configurations", "Devices", "Users", "User groups"])
         #expect(detail.members.map(\.summary) == ["5 apps", "3 packages", "4 configurations", "3 devices", "None", "1 user group"])
@@ -1048,9 +1051,9 @@ struct ContentTests {
     }
 
     /// Phase 2b verifier round 3: a blueprint's included packages were named raw in its member list, where the package's
-    /// own row, detail and CSV mask an address in its name. A blueprint's members are ids now (nothing is included to name
-    /// them), so no address of the package's reaches the detail. When members are named later, from a list the app loads, a
-    /// package's address must be masked as the row masks it (invariant 11), with a test beside this one.
+    /// own row, detail and CSV mask an address in its name. A member is named from the Packages list the app already read, by
+    /// the row's own `name`, so the address is masked exactly as the row masks it (invariant 11), and no secret reaches the
+    /// detail.
     @Test func aBlueprintsPackageNamesAreMaskedAsThePackagesOwn() async throws {
         let world = try await World.make()
         let stub = world.stubs["a"]!
@@ -1062,8 +1065,471 @@ struct ContentTests {
         let row = try #require(world.content.packages.rows.first)
         let detail = try await Self.blueprintDetail(world, "B1")
         let packages = try #require(detail.members.first { $0.relationship == .packages })
-        #expect(packages.members == [ContentMember(id: "P1", name: nil)], "\(packages.members)")
+        #expect(packages.members == [ContentMember(id: "P1", name: row.name)], "\(packages.members)")
         #expect(row.name.contains("https://********@pkgs.example.com") && !Self.printed(detail).contains("TOPSECRET1"), "\(row.name)")
+        #expect(detail.membersListNote == nil, "the only member is named")
+    }
+
+    // MARK: naming a blueprint's members
+
+    /// Org a with one member of each of a blueprint's six relationships, each in the list that names it.
+    static func membersWorld(pageCap: Int = AppleClient.defaultPageCap, mosyle: Bool = false) async throws -> World {
+        let world = try await World.make(devices: ["a": 1, "b": 2], pageCap: pageCap, mosyle: mosyle)
+        world.stubs["a"]!.add([
+            Self.app(1),
+            Resource(type: "packages", id: "P1", attributes: ["name": .string("Agent from https://deploy:TOPSECRET1@pkgs.example.com/agent.pkg")]),
+            Resource(type: "configurations", id: "C1", attributes: ["name": .string("Office Wi-Fi")]),
+            Resource(type: "users", id: "U1", attributes: ["firstName": .string("Ada"), "lastName": .string("Lovelace")]),
+            Resource(type: "userGroups", id: "G1", attributes: ["name": .string("Engineers")]),
+            Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Office")]),
+        ])
+        Self.relate(world.stubs["a"]!, apps: ["2000000001"])
+        return world
+    }
+
+    static func relate(_ stub: AppleStub, apps: [String]) {
+        stub.relate("blueprints", "B1", "apps", to: apps)
+        stub.relate("blueprints", "B1", "packages", to: ["P1"])
+        stub.relate("blueprints", "B1", "configurations", to: ["C1"])
+        stub.relate("blueprints", "B1", "orgDevices", to: ["ADEV0000000"])
+        stub.relate("blueprints", "B1", "users", to: ["U1"])
+        stub.relate("blueprints", "B1", "userGroups", to: ["G1"])
+    }
+
+    /// Reads Content, People and Devices of the active org, as three screens shown in turn would.
+    static func readEverything(_ world: World, content: Bool = true, people: Bool = true, devices: Bool = true) async {
+        if content { world.content.load() }
+        if people { world.people.load() }
+        if devices { world.devices.load() }
+        if content { await Self.settled(world, 4) }
+        if people { await eventually("the people") { world.people.readsFinished >= 3 } }
+        if devices { await eventually("the devices") { Self.isLoaded(world.devices.state) } }
+    }
+
+    /// Every member is named from the list its own screen read, as that list's row shows it, and the "listed by ID" line is
+    /// gone. A package's name is the row's, masked.
+    @Test func eachRelationshipsMembersAreNamedFromTheirOwnList() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        let requests = world.stubs["a"]!.requests.count
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let names = Dictionary(uniqueKeysWithValues: detail.members.map { ($0.relationship, $0.members) })
+        let package = try #require(world.content.packages.rows.first).name
+        #expect(names[.apps] == [ContentMember(id: "2000000001", name: "App 00001")])
+        #expect(names[.packages] == [ContentMember(id: "P1", name: package)] && package.contains("https://********@pkgs.example.com"))
+        #expect(names[.configurations] == [ContentMember(id: "C1", name: "Office Wi-Fi")])
+        #expect(names[.orgDevices] == [ContentMember(id: "ADEV0000000", name: "ADEV0000000 · MacBook Air")])
+        #expect(names[.users] == [ContentMember(id: "U1", name: "Ada Lovelace")])
+        #expect(names[.userGroups] == [ContentMember(id: "G1", name: "Engineers")])
+        #expect(detail.membersListNote == nil)
+        #expect(!Self.printed(detail).contains("TOPSECRET1"))
+        // Naming reads nothing: the blueprint and its six relationships are the only requests it made.
+        let made = world.stubs["a"]!.requests.dropFirst(requests)
+        #expect(made.count == 7 && made.allSatisfy { $0.contains("/v1/blueprints/B1") }, "\(made)")
+    }
+
+    /// A list nobody read leaves its members as IDs, and the detail says which and until when; a list the app read names its
+    /// own, and loads nothing else.
+    @Test func membersOfAListNotReadAreIDsAndSaySo() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world, people: false, devices: false)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let names = Dictionary(uniqueKeysWithValues: detail.members.map { ($0.relationship, $0.members.first?.name) })
+        #expect(names[.apps] == "App 00001" && names[.packages] != nil && names[.configurations] == "Office Wi-Fi")
+        #expect(names[.orgDevices] == .some(nil) && names[.users] == .some(nil) && names[.userGroups] == .some(nil))
+        #expect(detail.membersListNote == "Apps, packages and configurations are named; devices, users and user groups are listed by ID "
+                + "until the Devices, Users and User groups lists are read.")
+        #expect(world.devices.state == .idle && world.people.users.state == .idle, "naming loaded no other screen")
+    }
+
+    /// One list only: the words name which are named and which wait.
+    @Test func theWordsSayWhichListsAreReadAndWhichAreNot() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world, content: false, people: false)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.membersListNote == "Devices are named; apps, packages, configurations, users and user groups are listed by ID until the "
+                + "Apps, Packages, Configurations, Users and User groups lists are read.")
+    }
+
+    /// A member missing from a list read whole is shown by ID and said as not in that list.
+    @Test func aMemberMissingFromAListReadWholeIsSaid() async throws {
+        let world = try await Self.membersWorld()
+        Self.relate(world.stubs["a"]!, apps: ["2000000001", "2999999999"])
+        await Self.readEverything(world)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let apps = try #require(detail.members.first { $0.relationship == .apps })
+        #expect(apps.members == [ContentMember(id: "2000000001", name: "App 00001"), ContentMember(id: "2999999999", name: nil)])
+        #expect(detail.membersListNote == "Packages, configurations, devices, users and user groups are named; 1 of 2 apps isn't in the apps list "
+                + "read, so is listed by ID.")
+    }
+
+    /// A list the page cap cut can't say a member is absent: the words say the cut.
+    @Test func aMemberMissingFromAListCutAtThePageCapSaysTheCut() async throws {
+        let world = try await Self.membersWorld(pageCap: 1)
+        world.stubs["a"]!.add((2...1001).map(Self.app))
+        Self.relate(world.stubs["a"]!, apps: ["2000001001"])
+        await Self.readEverything(world)
+        #expect(world.content.apps.truncated)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.membersListNote == "Packages, configurations, devices, users and user groups are named; 1 of 1 apps isn't in the part of the "
+                + "apps list read (it stopped at its page cap), so is listed by ID.")
+    }
+
+    /// A list the role can't read is not "not read yet": the words say it couldn't be read.
+    @Test func aListThatCouldNotBeReadIsSaidSo() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.forbid("/v1/users")
+        await Self.readEverything(world)
+        #expect(world.people.users.state == .forbidden)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.membersListNote == "Apps, packages, configurations, devices and user groups are named; users are listed by ID because the "
+                + "Users list couldn't be read.")
+    }
+
+    /// After an org switch the old org's lists name nothing: org b's lists are empty or still loading, and its blueprint's
+    /// members, which carry the same ids, are IDs. A list still loading for org b names nothing yet.
+    @Test func noMemberIsNamedFromAPreviousOrg() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        let named = try await Self.blueprintDetail(world, "B1")
+        #expect(named.membersListNote == nil)
+        let b = world.stubs["b"]!
+        b.add([Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Office")])])
+        Self.relate(b, apps: ["2000000001"])
+        world.gates["b"]!.hold("users", { $0.path() == "/v1/users" })
+        world.gates["b"]!.hold("devices", { $0.path() == "/v1/orgDevices" })
+
+        world.orgs.select("b")
+        await Self.settled(world, 8)
+        await eventually("org b's groups") { Self.isLoaded(world.people.groups.state) }
+        #expect(world.people.users.state == .loading(count: 0))
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.members.allSatisfy { $0.members.allSatisfy { $0.name == nil } }, "\(detail.members)")
+        #expect(!Self.printed(detail).contains("Lovelace") && !Self.printed(detail).contains("App 00001") && !Self.printed(detail).contains("Office Wi-Fi"))
+        #expect(detail.membersListNote?.hasPrefix("Devices and users are listed by ID until the Devices and Users lists are read; ") == true,
+                "\(detail.membersListNote ?? "")")
+        world.gates["b"]!.release("users")
+        world.gates["b"]!.release("devices")
+    }
+
+    /// The open blueprint's members are named, and its words kept true, as the lists arrive: with People not read they are IDs
+    /// and say until when; once People is read they are named and the words drop them. No Apple read is made for it.
+    @Test func aListReadAfterTheDetailOpensNamesItAndTheWordsFollow() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world, people: false)
+        let before = try await Self.blueprintDetail(world, "B1")
+        #expect(before.members.first { $0.relationship == .users }?.members.first?.name == nil)
+        #expect(before.membersListNote == "Apps, packages, configurations and devices are named; users and user groups are listed by ID until the "
+                + "Users and User groups lists are read.")
+        let sent = world.stubs["a"]!.requests.count
+        world.people.load()
+        await eventually("the open detail names its people") {
+            if case .loaded(let detail) = world.content.detail.item { detail.membersListNote == nil } else { false }
+        }
+        let after = try Self.detail(world)
+        #expect(after.members.first { $0.relationship == .users }?.members.first?.name == "Ada Lovelace")
+        #expect(after.members.first { $0.relationship == .userGroups }?.members.first?.name == "Engineers")
+        let made = world.stubs["a"]!.requests.dropFirst(sent)
+        #expect(made.allSatisfy { !$0.contains("/v1/blueprints") }, "a rebuild reads nothing of Apple's for the blueprint: \(made)")
+    }
+
+    /// Refresh with a slow Apps list: the detail lands first, says the apps wait for their list, and is named once it loads.
+    @Test func aRefreshWhoseAppsListIsSlowNamesTheOpenDetailWhenItLoads() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        let gate = world.gates["a"]!
+        gate.hold("apps", Self.appPages)
+        let before = world.content.detail.readsFinished
+        world.content.load(force: true)
+        await Self.detailSettled(world, before + 1)
+        await eventually("the detail says the apps wait") {
+            if case .loaded(let detail) = world.content.detail.item { detail.membersListNote?.contains("apps are listed by ID until the Apps list is read") == true } else { false }
+        }
+        gate.release("apps")
+        await eventually("the apps load") { Self.isLoaded(world.content.apps.state) }
+        await eventually("the detail names its apps") {
+            if case .loaded(let detail) = world.content.detail.item { detail.membersListNote == nil } else { false }
+        }
+        #expect(try Self.detail(world).members.first?.members.first?.name == "App 00001")
+    }
+
+    /// A list that finishes, or is emptied, in the old org after a switch rebuilds nothing: the new org's detail is not the
+    /// old blueprint's, and nothing is shown for a row not chosen.
+    @Test func aListChangingInTheOldOrgAfterASwitchRebuildsNothing() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        let opened = try await Self.blueprintDetail(world, "B1")
+        #expect(opened.title == "Office")
+        world.orgs.select("b")
+        let fired = Self.probe(world.content.detail)
+        await Self.drain()
+        #expect(fired.count == 0, "a rebuild scheduled by the switch's resets touched the detail")
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        #expect(fired.count == 0, "a rebuild after the new org's lists loaded touched the detail")
+        #expect(world.content.detail.shown == nil)
+        if case .loaded(let detail) = world.content.detail.item { Issue.record("a detail for no chosen row: \(detail.title)") }
+        // Org b's own blueprint, opened afterwards, is org b's, whatever the old lists did.
+        let b = world.stubs["b"]!
+        b.add([Resource(type: "blueprints", id: "B2", attributes: ["name": .string("Branch")])])
+        b.relate("blueprints", "B2", "users", to: ["U1"])
+        world.content.load(force: true)
+        await Self.settled(world, 12)
+        let branch = try await Self.blueprintDetail(world, "B2")
+        #expect(branch.title == "Branch" && branch.members.allSatisfy { $0.members.allSatisfy { $0.name == nil } })
+    }
+
+    /// A list that failed after its first page names nothing: its partial rows are shown by their own screen as partial, and
+    /// a member found in them is still an ID, with the words saying the list couldn't be read.
+    @Test func aListThatFailedPartWayNamesNothing() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add((0..<1500).map { Resource(type: "users", id: "F\($0)", attributes: ["firstName": .string("Filler")]) })
+        world.stubs["a"]!.queue(400, for: "/v1/users?cursor=")
+        await Self.readEverything(world)
+        guard case .failed = world.people.users.state else { Issue.record("\(world.people.users.state)"); return }
+        #expect(world.people.users.rows.contains { $0.id == "U1" }, "the member is in the rows read before the failure")
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.members.first { $0.relationship == .users }?.members == [ContentMember(id: "U1", name: nil)])
+        #expect(detail.membersListNote == "Apps, packages, configurations, devices and user groups are named; users are listed by ID because the "
+                + "Users list couldn't be read.")
+    }
+
+    /// A row with no name shows its id: that names nothing, so the member stays an ID, and the words don't call it named.
+    @Test func aRowWithNoNameLeavesItsMemberAnIDAndSaysSo() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add([Resource(type: "apps", id: "N1", attributes: ["bundleId": .string("com.example.noname")])])
+        Self.relate(world.stubs["a"]!, apps: ["N1"])
+        await Self.readEverything(world)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        #expect(detail.members.first?.members == [ContentMember(id: "N1", name: nil)])
+        #expect(detail.membersListNote == "Packages, configurations, devices, users and user groups are named; 1 of 1 apps has no name in the apps "
+                + "list, so is listed by ID.")
+    }
+
+    // MARK: the open detail's rebuilds, held to their show
+
+    /// Counts what a probe saw, from any thread.
+    final class Flag: Sendable {
+        private let value = Mutex(0)
+        func withLock(_ body: (inout Int) -> Void) { value.withLock { body(&$0) } }
+        var count: Int { value.withLock { $0 } }
+    }
+
+    /// A one-shot probe on the detail's `item` and `shown`: counts once either is set.
+    static func probe(_ detail: ContentDetailModel) -> Flag {
+        let fired = Flag()
+        withObservationTracking { _ = detail.item; _ = detail.shown } onChange: { fired.withLock { $0 = 1 } }
+        return fired
+    }
+
+    /// Runs every main-actor job queued before this call (the main queue is first in, first out), so a rebuild a willSet
+    /// scheduled has run: no clock, so "nothing happened" is a fact, not a wait that ran out.
+    static func drain(_ times: Int = 3) async { for _ in 0..<times { await Task.yield() } }
+
+    static func everythingSettled(_ world: World, content: Int, people: Int) async {
+        await settled(world, content)
+        await eventually("people") { world.people.readsFinished >= people }
+        await eventually("devices") { world.devices.devicesReadWhole && isLoaded(world.devices.servicesState) }
+    }
+
+    /// A client move that keeps the active org (the Mosyle org leaves its client) clears every screen; the old show's tracking
+    /// must not bring the detail back when the same org's lists reload.
+    @Test func aClientMoveKeepingTheOrgRebuildsNothing() async throws {
+        let world = try await Self.membersWorld(mosyle: true)
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        let b = try #require(world.orgs.store.client(of: "b")).id
+        let generation = world.orgs.generation
+        try world.orgs.move("m", toClient: b)
+        #expect(world.orgs.generation == generation + 1 && world.orgs.store.active?.id == "a")
+        #expect(world.content.detail.shown == nil)
+        let fired = Self.probe(world.content.detail)
+        await Self.drain()
+        #expect(fired.count == 0, "the switch's resets rebuilt the cleared detail")
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        #expect(fired.count == 0, "the same org's lists reloading rebuilt the cleared detail")
+        #expect(world.content.detail.shown == nil && !Self.isLoadedItem(world.content.detail))
+    }
+
+    static func isLoadedItem(_ detail: ContentDetailModel) -> Bool { if case .loaded = detail.item { true } else { false } }
+
+    /// The detail closed in the same org, then a list changes: nothing comes back.
+    @Test func aClosedDetailStaysClosedWhenAListChanges() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        world.content.selection = nil
+        let fired = Self.probe(world.content.detail)
+        world.people.load(force: true)
+        await eventually("people again") { world.people.readsFinished >= 6 }
+        await Self.drain()
+        #expect(fired.count == 0 && world.content.detail.shown == nil && !Self.isLoadedItem(world.content.detail))
+    }
+
+    /// A blueprint, then an app chosen, then a list changes: the detail stays the app's.
+    @Test func anAppChosenAfterABlueprintIsNotReplacedWhenAListChanges() async throws {
+        let world = try await Self.membersWorld()
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B1")
+        world.content.kind = .apps
+        let before = world.content.detail.readsFinished
+        world.content.selection = "2000000001"
+        await Self.detailSettled(world, before + 1)
+        world.people.load(force: true)
+        await eventually("people again") { world.people.readsFinished >= 6 }
+        await Self.drain()
+        let detail = try Self.detail(world)
+        #expect(detail.title == "App 00001" && world.content.detail.shown?.kind == .apps, "\(detail.title)")
+    }
+
+    /// Tracking stops with the detail: once it closes, the lookup is never asked again however lists change.
+    @Test func trackingStopsWhenTheDetailCloses() async throws {
+        let world = try await Self.membersWorld()
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.sources(devices: devices, people: people)
+        }, otherPhases: { MemberNames.phases(devices: devices, people: people) })
+        model.load()
+        await eventually("own lists") { model.readsFinished >= 4 }
+        model.kind = .blueprints
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await Self.drain()
+        guard case .loaded(let named) = model.detail.item else { Issue.record("\(model.detail.item)"); return }
+        #expect(named.members.first { $0.relationship == .users }?.members.first?.name == "Ada Lovelace", "tracking works while open")
+        model.selection = nil
+        let afterClose = asked.count
+        for round in 0..<3 {
+            people.load(force: true)
+            await eventually("people \(round)") { people.readsFinished >= 6 + 3 * round }
+            await Self.drain()
+        }
+        #expect(asked.count == afterClose, "the lookup was asked \(asked.count - afterClose) times after the detail closed")
+    }
+
+    /// How many times the open detail asks where the lists stand while People reloads, after the detail was opened and closed
+    /// `shows` times and opened once more.
+    static func phaseLookups(afterShows shows: Int) async throws -> Int {
+        let world = try await membersWorld()
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: { MemberNames.sources(devices: devices, people: people) },
+                                 otherPhases: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.phases(devices: devices, people: people)
+        })
+        model.load()
+        await eventually("own lists") { model.readsFinished >= 4 }
+        model.kind = .blueprints
+        for _ in 0..<shows {
+            let before = model.detail.readsFinished
+            model.selection = "B1"
+            await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+            model.selection = nil
+        }
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        await drain()
+        let start = asked.count
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await drain(10)
+        return asked.count - start
+    }
+
+    /// Each show registers one observation chain and the guard in `track` ends the chain of any show that is no longer the
+    /// current one (invariant 7: bounded). Without it every earlier show leaves a permanent chain, and the lookups per list
+    /// change grow with the number of rows ever opened.
+    @Test func openingAndClosingTheDetailLeavesNoObservationBehind() async throws {
+        let once = try await Self.phaseLookups(afterShows: 0)
+        let many = try await Self.phaseLookups(afterShows: 6)
+        // Counts shift a little with when each page's state change is seen; they don't grow with the shows.
+        #expect(once > 0 && many <= 8, "lookups per list change: \(once) after one show, \(many) after seven")
+    }
+
+    /// The clients rule: after a switch nothing of the old client's blueprint stays in the detail model's memory.
+    @Test func aSwitchDropsTheHeldBlueprintRead() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add([Resource(type: "blueprints", id: "B9", attributes: ["name": .string("CANARY-ORG-A-BLUEPRINT"), "description": .string("CANARY-DESC")])])
+        world.stubs["a"]!.relate("blueprints", "B9", "users", to: ["U1"])
+        await Self.readEverything(world)
+        _ = try await Self.blueprintDetail(world, "B9")
+        world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
+        await Self.everythingSettled(world, content: 8, people: 6)
+        await Self.drain()
+        world.content.kind = .apps
+        let dumped = Self.printed(world.content.detail) + Self.printed(world.content)
+        #expect(!dumped.contains("CANARY-ORG-A-BLUEPRINT") && !dumped.contains("CANARY-DESC"), "the old client's blueprint is still held")
+    }
+
+    /// One rule for every kind: a member whose row has no name is shown as its ID, counted as unnamed and said. A device is
+    /// named by its serial, with its model when it has one; a serial alone is a name.
+    @Test func aMemberWithNoNameIsAnIDAndSaidForEveryKind() async throws {
+        let world = try await Self.membersWorld()
+        let stub = world.stubs["a"]!
+        stub.add([Resource(type: "users", id: "U2", attributes: ["email": .string("x@example.com")]),
+                  Resource(type: "userGroups", id: "G2", attributes: ["status": .string("ACTIVE")])])
+        stub.add(devices: [Resource(type: "orgDevices", id: "ADEVNOMODEL", attributes: ["serialNumber": .string("ADEVNOMODEL"), "status": .string("ASSIGNED")])])
+        stub.relate("blueprints", "B1", "users", to: ["U2"])
+        stub.relate("blueprints", "B1", "userGroups", to: ["G2"])
+        stub.relate("blueprints", "B1", "orgDevices", to: ["ADEVNOMODEL"])
+        await Self.readEverything(world)
+        let detail = try await Self.blueprintDetail(world, "B1")
+        let names = Dictionary(uniqueKeysWithValues: detail.members.map { ($0.relationship, $0.members.first?.name) })
+        #expect(names[.users] == .some(nil) && names[.userGroups] == .some(nil))
+        #expect(names[.orgDevices] == "ADEVNOMODEL", "a serial alone is a name")
+        #expect(detail.membersListNote == "Apps, packages, configurations and devices are named; 1 of 1 users has no name in the users list, so is "
+                + "listed by ID; 1 of 1 user groups has no name in the user groups list, so is listed by ID.", "\(detail.membersListNote ?? "")")
+    }
+
+    /// A 10-page list loading under an open detail rebuilds a constant number of times, not once a page: the detail watches
+    /// where the list stands, and builds the names when that changes.
+    @Test func aTenPageListLoadRebuildsTheDetailAConstantNumberOfTimes() async throws {
+        let world = try await Self.membersWorld()
+        world.stubs["a"]!.add((0..<9500).map { Resource(type: "users", id: "F\($0)", attributes: ["firstName": .string("Filler")]) })
+        let asked = Flag(), people = world.people, devices = world.devices
+        let model = ContentModel(orgs: world.orgs, otherNames: {
+            asked.withLock { $0 += 1 }
+            return MemberNames.sources(devices: devices, people: people)
+        }, otherPhases: { MemberNames.phases(devices: devices, people: people) })
+        model.load()
+        devices.load()
+        await eventually("own lists") { model.readsFinished >= 4 && devices.devicesReadWhole }
+        model.kind = .blueprints
+        let before = model.detail.readsFinished
+        model.selection = "B1"
+        await eventually("own detail") { model.detail.readsFinished >= before + 1 }
+        await Self.drain()
+        let start = asked.count
+        people.load()
+        await eventually("people") { people.readsFinished >= 3 }
+        await Self.drain(10)
+        #expect(people.users.rows.count >= 9500, "\(people.users.rows.count) users: ten pages")
+        #expect(asked.count - start <= 2, "the lookup was asked \(asked.count - start) times for one list load")
+        guard case .loaded(let detail) = model.detail.item else { Issue.record("\(model.detail.item)"); return }
+        #expect(detail.members.first { $0.relationship == .users }?.members.first?.name == "Ada Lovelace")
+    }
+
+    /// The words alone: nothing to say when every member shown is named or there is none; an empty relationship is left out.
+    @Test func theNamingWordsAreHeldAlone() {
+        func coverage(_ relationship: Blueprint.Relationship, total: Int, named: Int, _ source: MemberNames.Source) -> ContentWords.Coverage {
+            ContentWords.Coverage(relationship, total: total, named: named, source: source)
+        }
+        let read = MemberNames.Source.read([:], whole: true)
+        #expect(ContentWords.naming([]) == nil)
+        #expect(ContentWords.naming([coverage(.users, total: 0, named: 0, .notRead), coverage(.apps, total: 2, named: 2, read)]) == nil)
+        #expect(ContentWords.naming([coverage(.users, total: 1, named: 0, .notRead), coverage(.apps, total: 2, named: 2, read)])
+                == "Apps are named; users are listed by ID until the Users list is read.")
+        #expect(ContentWords.naming([coverage(.users, total: 1, named: 0, .unreadable)]) == "Users are listed by ID because the Users list couldn't be read.")
+        #expect(ContentWords.naming([coverage(.apps, total: 3, named: 1, read)]) == "2 of 3 apps aren't in the apps list read, so are listed by ID.")
+        #expect(ContentWords.naming([ContentWords.Coverage(.apps, total: 3, named: 1, nameless: 2, source: read)])
+                == "2 of 3 apps have no name in the apps list, so are listed by ID.")
     }
 
     // MARK: configurations
@@ -1106,7 +1572,7 @@ struct ContentTests {
         #expect(detail.attributes.contains { $0.label == "customSettingsValues" && $0.value.contains(CustomSettingsValues.withheld) })
 
         let blueprint = try await Self.blueprintDetail(world, "demo-blueprint-01")
-        #expect(blueprint.members[2].members.first == ContentMember(id: "demo-config-01", name: nil))
+        #expect(blueprint.members[2].members.first == ContentMember(id: "demo-config-01", name: "Example Office Wi-Fi (profile)"))
 
         let content = world.content
         var exposed = [Self.printed(detail), Self.printed(blueprint), Self.printed(content.configurations.rows),

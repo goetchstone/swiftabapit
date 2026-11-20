@@ -28,8 +28,9 @@ struct DemoTests {
 
     struct Unread: Error { let state: LoadState }
 
-    /// Every member of every demo blueprint is listed by id, read one relationship at a time (nothing is included, so none is
-    /// named): none is missing a count, its users and user groups are `DemoPeople`'s.
+    /// Every member of every demo blueprint is listed, read one relationship at a time, none missing a count. Its users and user
+    /// groups are `DemoPeople`'s, its apps, packages and configurations `DemoContent`'s, named from the lists `demo()` read; its
+    /// devices stay IDs, and say so, until the Devices list is read.
     @Test func everyBlueprintMemberIsListed() async throws {
         let world = try await Self.demo()
         let content = world.content
@@ -46,13 +47,36 @@ struct DemoTests {
                 continue
             }
             #expect(detail.membersNote == nil, "\(id)")
+            #expect(detail.membersListNote?.hasSuffix("devices are listed by ID until the Devices list is read.") == true, "\(id): \(detail.membersListNote ?? "")")
             for group in detail.members {
                 #expect(group.count == group.members.count && !group.isTruncated, "\(id) \(group.title)")
-                #expect(group.members.allSatisfy { $0.name == nil && !$0.id.isEmpty }, "\(id) \(group.title)")
+                #expect(group.members.allSatisfy { !$0.id.isEmpty && ($0.name == nil) == (group.relationship == .orgDevices) }, "\(id) \(group.title)")
                 if group.relationship == .users || group.relationship == .userGroups { people += group.members.count }
             }
         }
         #expect(people >= 10, "the demo's blueprints hold users and groups: \(people)")
+    }
+
+    /// Once the Devices list is read too, every member of every demo blueprint is named and the "listed by ID" line is gone.
+    @Test func everyBlueprintMemberIsNamedOnceItsListsAreRead() async throws {
+        let world = try await Self.demo()
+        world.devices.load()
+        await eventually("the devices") { if case .loaded = world.devices.state { true } else { false } }
+        let content = world.content
+        content.kind = .blueprints
+        for id in content.blueprints.rows.map(\.id) {
+            let before = content.detail.readsFinished
+            content.selection = id
+            await eventually("\(id)'s detail") { content.detail.readsFinished > before }
+            guard case .loaded(let detail) = content.detail.item else {
+                Issue.record("\(id): \(content.detail.item)")
+                continue
+            }
+            #expect(detail.membersListNote == nil, "\(id): \(detail.membersListNote ?? "")")
+            for group in detail.members {
+                #expect(group.members.allSatisfy { $0.name != nil }, "\(id) \(group.title): \(group.members.filter { $0.name == nil }.map(\.id))")
+            }
+        }
     }
 
     /// Every audit event names what the demo holds: a person `DemoPeople` has (the one who left only as the id a group still

@@ -565,10 +565,41 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   L6, mutant P4).
 - **Content** (`ContentModel`, `ContentDetailModel`): apps, packages, blueprints and configurations side by side
   (`ContentList` each); the chosen row is read alone. A blueprint is read with no `include` and each of its six relationships on its own
-  (`AppleClient.blueprintWithMembers`, every page, ids only: a member is not named), counted only through
+  (`AppleClient.blueprintWithMembers`, every page, ids only), counted only through
   `BlueprintRead.members`: "N apps", "Showing N of more than N" when the page cap cut a list, and a refused relationship one
-  note and no counts. ("Apple didn't list …" and the names of included members stay in `ContentDetail.init(blueprint:)`,
-  which nothing in the app reaches now.) A configuration's profile is only `profileText`, and one that can't be
+  note and no counts.
+  **Naming a blueprint's members** (2026-11-20): Apple gives a member as an ID and nothing else, so a name comes only from a
+  list the app already read for its own screen, never from a read made to name it (no other screen is loaded for it). Apps,
+  packages and configurations are named from Content's own lists; users and user groups from People's; devices from the
+  Devices screen's (`MemberNames`, wired in `ScreenModels`, asked when the blueprint's detail lands). A member's name is the
+  text its list's row shows: an app's, a configuration's, a user's and a group's name, a device as "serial · model". A
+  package's is `PackageRow.name`, the row's own text through `ContentWords.addresses(in:)`, so an address with a user and
+  password in a package's name is masked in the member list as in the row, the detail and the CSV (invariant 11;
+  `aBlueprintsPackageNamesAreMaskedAsThePackagesOwn`). Only a list that ended names members: one still loading, idle,
+  refused or failed names none (its partial rows aren't used), and every model empties its lists on an org switch, so a
+  lookup after a switch sees only the new org's (`noMemberIsNamedFromAPreviousOrg`). Never silent (invariant 8,
+  `ContentWords.naming`, shown as `membersListNote`): nothing is said when every member shown is named; otherwise the note says which
+  relationships are named, which are listed by ID "until the Devices list is read" (a list not read yet) or "because the Users
+  list couldn't be read", and, for a list read to its end, "1 of 2 apps isn't in the apps list read" (for one the page cap cut,
+  "in the part of the apps list read (it stopped at its page cap)"). One rule for "no name", for all six kinds (the coordinator's decision, 2026-11-20, superseding the
+  executor's earlier dash for a user or group): a member whose row has no name (Apple sent none) is shown as its ID, counted
+  as unnamed and said, "1 of 3 users has no name in the users list, so is listed by ID". A device is named by its serial,
+  with its model when it has one, so a serial alone is a name. The open detail updates as lists arrive
+  (`ContentDetailModel.track`): it keeps the blueprint's read and watches only where each list stands (not read, read to its end or
+  cut, unreadable); when one moves between those, it rebuilds its names and words from the held read, with no new Apple read, so the
+  words never say "until the Users list is read" after it was; a page read changes nothing (a 10-page load asks the lookup a
+  constant number of times, `aTenPageListLoadRebuildsTheDetailAConstantNumberOfTimes`). The held read is dropped by every `show`
+  (a switch clears the selection, so it goes with the org or client: `aSwitchDropsTheHeldBlueprintRead`), and a rebuild is dropped
+  unless it belongs to the row still shown (the show's token; the same guard ends each earlier show's observation chain, so a detail opened and closed seven times asks the lookup no more often than one opened once, `openingAndClosingTheDetailLeavesNoObservationBehind`, invariant 7), so a switch, a client move that keeps the org, another choice or a
+  close rebuilds nothing, and a closed detail stops watching (`aListChangingInTheOldOrgAfterASwitchRebuildsNothing`,
+  `aClientMoveKeepingTheOrgRebuildsNothing`, `aClosedDetailStaysClosedWhenAListChanges`, `trackingStopsWhenTheDetailCloses`,
+  `aListReadAfterTheDetailOpensNamesItAndTheWordsFollow`, `aRefreshWhoseAppsListIsSlowNamesTheOpenDetailWhenItLoads`).
+  Who decided: the operator said "Yes, do it here" to naming members from the lists already loaded (2026-11-20); the design (a lookup
+  the screen models inject, the words, no new read) was the coordinating session's proposal; the executor's refinements that stand
+  were to name only from lists that ended (no partial rows) and to word "couldn't be read" apart from "not read yet"; the coordinator
+  decided, after review, that the open detail rebuilds as lists arrive (the first build was made once and its "until read" words
+  went stale), that it watches list states only, and the one no-name rule above.
+  A configuration's profile is only `profileText`, and one that can't be
   shown says why. A package's location is shown with its user, password, query values, path parameters' values and
   fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
   A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
@@ -778,7 +809,7 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   Content detail and the acceptance pass's `blueprints/{id}` line send no request Apple is known to refuse (the line is `ok`). Cost:
   members are ids only, since nothing is included to name them; a relationship Apple refuses makes the members `.refused` as before;
   a list the page cap cut says "Showing N of more than N". Which value of `include` Apple refuses (all six together, or one, or the
-  `limit[...]` beside it) is still unknown. The stub now refuses any `include` on a single blueprint by default (400 `PARAMETER_ERROR.ILLEGAL`, `source.parameter` `include`, as seen live twice: the stub had answered 200 with the members, which a role that could read every relationship never got from Apple). `AppleClient.blueprint(_:include:)`, its include-refused fallback, `AppleRead.blueprint`'s include parameters, `Blueprint.related`/`included` and the naming of included members in `ContentDetail` are deleted: nothing in the app could reach them. **When members get names later** (from lists the app already loads), a package's address must be masked there as the package's own row masks it (`ContentWords.shown`, invariant 11), with a test; the detail says "Listed by ID: Apple's blueprint reads give IDs only." until then.
+  `limit[...]` beside it) is still unknown. The stub now refuses any `include` on a single blueprint by default (400 `PARAMETER_ERROR.ILLEGAL`, `source.parameter` `include`, as seen live twice: the stub had answered 200 with the members, which a role that could read every relationship never got from Apple). `AppleClient.blueprint(_:include:)`, its include-refused fallback, `AppleRead.blueprint`'s include parameters, `Blueprint.related`/`included` and the naming of included members in `ContentDetail` are deleted: nothing in the app could reach them. **Members were named later (2026-11-20, the Content bullet above)**, from lists the app already loads, a package's address masked as its row masks it (`ContentWords.shown`, invariant 11), with a test. At the time of this entry the detail said "Listed by ID: Apple's blueprint reads give IDs only."; that wording is gone.
 - `mdmServers/{id}/relationships/devices` was `ok` (the 2026-11-19 pass skipped it because the services list failed).
 - **`orgDevices/{id}/appleCareCoverage` printed `ok, 0 items`** on both passes (2026-11-19 and 2026-11-20; the pass reads one
   device's coverage). So an empty answer is a real answer: "no record" may mean "no AppleCare" rather than "expired", and
