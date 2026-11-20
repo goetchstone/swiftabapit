@@ -81,7 +81,9 @@ struct CollectorTests {
     /// setting and an Apple-managed device; org `b` with one device.
     static func world(devices: [String: Int] = ["a": 2, "b": 1], pageCap: Int = AppleClient.defaultPageCap, profiles: [OrgProfile]? = nil,
                       history: Result<SnapshotStore, SnapshotStore.Failure>? = nil) async throws -> World {
-        let world = try await World.make(devices: devices, pageCap: pageCap, profiles: profiles, history: history)
+        var opener: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)?
+        if let history { opener = { history } }
+        let world = try await World.make(devices: devices, pageCap: pageCap, profiles: profiles, history: opener)
         let a = world.stubs["a"]!
         var main = World.service("S1", name: "Main MDM").attributes
         main["lastConnectedIp"] = .string("198.51.100.234")
@@ -152,6 +154,19 @@ struct CollectorTests {
         #expect(stored.attributes["customSettingsValues"] == .null)
         #expect(stored.attributes["name"]?.string == "Office Wi-Fi")
         #expect(!world.stubs["a"]!.requests.contains { $0.contains("/v1/configurations/") }, "no single configuration read")
+    }
+
+    /// Every string of a package is masked, nested ones too (a bundle id that is an address with a password in it).
+    @Test func aPackagesNestedStringsAreMasked() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.add([Resource(type: "packages", id: "P2", attributes: [
+            "name": .string("Tool"), "bundleIds": .array([.string("com.example.tool"), .string("https://deploy:CANARYBUNDLEPW@x.example.com/t")]),
+        ])])
+        let snapshot = try await Self.recorded(world)
+        let stored = try #require(snapshot.resources["packages"]?.first { $0.id == "P2" })
+        let ids = stored.attributes["bundleIds"]?.array?.compactMap(\.string) ?? []
+        #expect(ids.count == 2 && ids[0] == "com.example.tool" && ids[1].contains(ProfileText.mask) && !ids[1].contains("CANARY"), "\(ids)")
+        #expect(snapshot.summary.notes["packages"] == "an address was masked in 2 items")
     }
 
     /// The operator's 2026-11-20 answer: blueprints are kept, their members aren't. The list is read without `include`, and
@@ -251,15 +266,52 @@ struct CollectorTests {
     }
 
     /// A list the page cap stopped is kept as read and said (invariant 8), with Apple's total when it gave one.
+    /// It is a part read (review, 2026-11-20): its items with the error `page cap`, so `latest` never takes it for a good copy
+    /// and a Needs-attention rule doesn't judge it whole; and so are the assignments built from a service's cut device list.
     @Test func aListCutAtThePageCapIsNoted() async throws {
         let world = try await Self.world(devices: ["a": 1001, "b": 0], pageCap: 1)
+        for index in 0...1000 { world.stubs["a"]!.assign(String(format: "ADEV%07d", index), to: "S1") }
         let snapshot = try await Self.recorded(world)
         #expect(snapshot.summary.counts["devices"] == 1000)
         #expect(snapshot.summary.notes["devices"] == "stopped at the page limit: 1000 read, more not read")
-        #expect(snapshot.summary.errors["devices"] == nil)
+        #expect(snapshot.summary.errors["devices"] == "page cap")
+        #expect(snapshot.summary.counts["assignments"] == 1000)
+        #expect(snapshot.summary.errors["assignments"] == "page cap")
+        #expect(snapshot.summary.notes["assignments"] == "1 service's device list stopped at the page limit")
+        for resource in ["devices", "assignments"] {
+            guard case .failed(_, "page cap", nil)? = try await world.history!.latest(resource, org: world.orgs.active!) else {
+                Issue.record("a cut \(resource) list is a good copy")
+                continue
+            }
+        }
         world.stubs["a"]!.reportTotals()
         let again = try await Self.recorded(world)
         #expect(again.summary.notes["devices"] == "stopped at the page limit: 1000 of 1002 read")
+    }
+
+    /// A services list cut at the page cap leaves assignments over the services read only: said, and a part read.
+    @Test func aCutServicesListCoversOnlyTheServicesRead() async throws {
+        let world = try await Self.world(pageCap: 1)
+        world.stubs["a"]!.add(services: (3...1001).map { World.service(String(format: "S%04d", $0), name: "Service \($0)") })
+        let snapshot = try await Self.recorded(world)
+        #expect(snapshot.summary.counts["mdm_servers"] == 1000 && snapshot.summary.errors["mdm_servers"] == "page cap")
+        #expect(snapshot.summary.errors["assignments"] == "page cap")
+        #expect(snapshot.summary.notes["assignments"] == "covers only the services read: their list stopped at the page limit")
+        #expect(snapshot.resources["assignments"]?.map(\.id) == ["ADEV0000000", "ADEV0000001"])
+    }
+
+    /// A list that failed part-way, through the same read as the rest: what it read is kept, with the error, and is never a
+    /// good copy.
+    @Test func aListThatFailedPartWayKeepsWhatItRead() async throws {
+        let world = try await Self.world(devices: ["a": 1001, "b": 0])
+        world.stubs["a"]!.queue(403, for: "/v1/orgDevices?limit=1000&cursor=")
+        let snapshot = try await Self.recorded(world)
+        #expect(snapshot.summary.counts["devices"] == 1000)
+        #expect(snapshot.summary.errors["devices"] == "HTTP 403")
+        guard case .failed(_, "HTTP 403", nil)? = try await world.history!.latest("devices", org: world.orgs.active!) else {
+            Issue.record("a part read is a good copy")
+            return
+        }
     }
 
     /// One service's device list refused leaves the other's assignments, recorded with the error so the history never takes
@@ -281,6 +333,54 @@ struct CollectorTests {
         let none = try await Self.recorded(refused)
         #expect(none.summary.errors == ["mdm_servers": "HTTP 403 FORBIDDEN_ERROR", "assignments": "not read: mdm_servers failed"])
         #expect(none.summary.counts["assignments"] == nil && none.summary.counts["mdm_servers"] == nil)
+    }
+
+    /// Every service's device list failing is a failed read, never "none assigned".
+    @Test func assignmentsWhenEveryListFailedAreFailedNotNone() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.forbid("/v1/mdmServers/S1/relationships")
+        world.stubs["a"]!.forbid("/v1/mdmServers/S2/relationships")
+        let snapshot = try await Self.recorded(world)
+        #expect(snapshot.summary.counts["assignments"] == nil)
+        #expect(snapshot.summary.errors["assignments"] == "HTTP 403 FORBIDDEN_ERROR")
+        #expect(snapshot.summary.notes["assignments"] == "2 of 2 services' device lists couldn't be read")
+    }
+
+    /// A service whose id can't be sent is never asked for, and the assignments are a part read without it.
+    @Test func anUnsendableServiceIDLeavesTheAssignmentsPartial() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.add(services: [World.service("BAD ID", name: "Spaced")])
+        let snapshot = try await Self.recorded(world)
+        #expect(snapshot.resources["assignments"]?.map(\.id) == ["ADEV0000000", "ADEV0000001"])
+        #expect(snapshot.summary.errors["assignments"] == "unsendable id")
+        #expect(snapshot.summary.notes["assignments"] == "1 service's id isn't one Apple can be asked for, so its devices weren't read")
+        #expect(!world.stubs["a"]!.requests.contains { $0.contains("BAD") })
+        guard case .failed(_, "unsendable id", nil)? = try await world.history!.latest("assignments", org: world.orgs.active!) else {
+            Issue.record("assignments without a service are a good copy")
+            return
+        }
+    }
+
+    /// A sign-in failure on one service's device list stops the asking there too: the services after it aren't asked, and
+    /// the note tells those apart from the one that failed.
+    @Test func aSignInFailureStopsTheAssignmentsAsking() async throws {
+        let world = try await Self.world()
+        let a = world.stubs["a"]!, gate = world.gates["a"]!
+        a.add(services: [World.service("S3", name: "Third")])
+        gate.hold("S1") { $0.path().hasPrefix("/v1/mdmServers/S1/") }
+        let running = Task { await world.snapshots.run() }
+        await eventually("the run at S1's devices") { gate.held == 1 }
+        a.revokeAccount()
+        gate.release("S1")
+        guard case .recorded(let id) = await running.value else {
+            Issue.record("not recorded")
+            return
+        }
+        let summary = try await world.history!.load(id, org: world.orgs.active!).summary
+        #expect(summary.errors["assignments"] == "HTTP 401")
+        #expect(summary.notes["assignments"] == "1 of 3 services' device lists couldn't be read; 2 weren't asked after the sign-in failed")
+        #expect(summary.errors["users"] == "not asked after HTTP 401")
+        #expect(!a.requests.contains { $0.contains("/v1/mdmServers/S2/") || $0.contains("/v1/mdmServers/S3/") }, "\(a.requests)")
     }
 
     /// A failure of the account stops the asking: every later read would fail the same way (and a refused Touch ID would be
@@ -311,7 +411,7 @@ struct CollectorTests {
         gate.release("users")
         #expect(await running.value == .cancelled)
         #expect(try await world.history!.orgIDs().isEmpty)
-        #expect(!world.snapshots.isRunning && world.snapshots.lastOutcome == .cancelled)
+        #expect(!world.snapshots.isRunning && world.snapshots.lastOutcome == nil, "a stopped run's outcome isn't shown under the new org")
         // The next run reads the org now active, and records under it.
         let next = try await Self.recorded(world)
         #expect(next.summary.orgID == "b" && next.summary.counts["devices"] == 1 && next.summary.counts["blueprints"] == 0)
@@ -343,10 +443,53 @@ struct CollectorTests {
         Task { second.outcome = await world.snapshots.run() }
         await eventually("the second run answered") { second.outcome != nil }
         #expect(second.outcome == .notRun("A snapshot is already being taken."))
+        #expect(world.snapshots.refusal == "A snapshot is already being taken.", "the refusal leaves a trace")
         world.snapshots.cancel()
         gate.release("packages")
         #expect(await running.value == .cancelled)
+        #expect(world.snapshots.lastOutcome == .cancelled, "a cancel without a switch is said")
         #expect(try await world.history!.orgIDs().isEmpty)
+    }
+
+    /// After a switch, the run still going is the previous org's, stopping: a second run is refused in those words, and a
+    /// switch clears what was said of the old org.
+    @Test func aRefusalAfterASwitchSaysThePreviousRunIsStopping() async throws {
+        let world = try await Self.world()
+        let first = try await Self.recorded(world)
+        #expect(world.snapshots.lastOutcome == .recorded(first.summary.id))
+        world.orgs.select("b")
+        #expect(world.snapshots.lastOutcome == nil, "a switch clears the outcome")
+        world.orgs.select("a")
+        let gate = world.gates["a"]!
+        gate.hold("users") { $0.path() == "/v1/users" }
+        let running = Task { await world.snapshots.run() }
+        await eventually("the run at the users") { gate.held == 1 }
+        world.orgs.select("b")
+        // Asked at once, on the main actor, before the stopped run has had a turn to end.
+        let refused = await world.snapshots.run()
+        #expect(refused == .notRun("A snapshot of the previous organization is still stopping. Try again in a moment."))
+        #expect(world.snapshots.refusal == "A snapshot of the previous organization is still stopping. Try again in a moment.")
+        gate.release("users")
+        #expect(await running.value == .cancelled)
+        #expect(world.snapshots.lastOutcome == nil)
+        world.orgs.select("a")
+        #expect(world.snapshots.refusal == nil, "a switch clears the refusal")
+    }
+
+    /// A switch during the write lets it finish under the org the run started for (what was read is that org's), and its
+    /// outcome isn't shown under the new org.
+    @Test func aSwitchDuringTheWriteFinishesUnderTheOrgItStartedFor() async throws {
+        let world = try await Self.world()
+        world.snapshots.beforeWrite = { world.orgs.select("b") }
+        let outcome = await world.snapshots.run()
+        guard case .recorded(let id) = outcome else {
+            Issue.record("\(outcome)")
+            return
+        }
+        #expect(world.orgs.active?.id == "b")
+        #expect(try await world.history!.load(id, org: world.orgs.store["a"]!).summary.orgID == "a")
+        #expect(try await world.history!.snapshots(org: world.orgs.store["b"]!).isEmpty)
+        #expect(world.snapshots.lastOutcome == nil, "the old org's outcome isn't shown under the new one")
     }
 
     /// A snapshot records the org as the run captured it when it started: an edit that changes no account (a rename) doesn't
@@ -417,17 +560,43 @@ struct CollectorTests {
     /// A history that didn't open can't say which ids it holds: an Add is refused, in words, rather than risk one.
     @Test func aHistoryThatDidntOpenRefusesAnAdd() async throws {
         let failure = SnapshotStore.Failure.hardLinked(path: "/x/history.sqlite")
-        let world = try await World.make(history: .failure(failure))
+        let opens = Answer()
+        let world = try await World.make(history: {
+            opens.count += 1
+            return .failure(failure)
+        })
         var draft = OrgDraft()
         (draft.name, draft.clientID, draft.keyID) = ("Acme", "BUSINESSAPI.acme-1", "KEY-1")
         do {
             try await world.orgs.save(draft, key: World.imported(P256.Signing.PrivateKey()), editing: nil)
             Issue.record("an org was added with no history to check its id against")
         } catch let error as OrgsModel.SaveFailure {
-            #expect(error.message.hasSuffix(failure.message) && error.message.contains("couldn't be opened"), "\(error.message)")
+            #expect(error.message.contains(failure.message) && error.message.contains("couldn't be opened"), "\(error.message)")
+            #expect(error.message.hasSuffix("then add the organization again: the history is opened again at each Add."), "the remedy is said")
         }
+        #expect(opens.count == 2, "opened at launch, and again at the Add")
         #expect(world.orgs.store["acme"] == nil)
         #expect(try await world.vault.inventory()["acme"] == nil, "refused before the Keychain")
+    }
+
+    /// A history that failed to open at launch (a file since moved aside, say) is opened again at the next Add, which then
+    /// goes ahead: one failure doesn't block Adds for the session.
+    @Test func aHistoryThatFailedToOpenIsOpenedAgainAtTheNextAdd() async throws {
+        let failure = SnapshotStore.Failure.notThisAppsFile(path: "/x/history.sqlite")
+        let later = try SnapshotStore(storage: .memory, appVersion: "test")
+        try await later.record(org: World.profile("acme"), takenAt: Date(), resources: ["devices": []])
+        let opens = Answer()
+        let world = try await World.make(history: {
+            opens.count += 1
+            return opens.count == 1 ? .failure(failure) : .success(later)
+        })
+        #expect(world.history == nil)
+        var draft = OrgDraft()
+        (draft.name, draft.clientID, draft.keyID) = ("Acme", "BUSINESSAPI.acme-1", "KEY-1")
+        let added = try await world.orgs.save(draft, key: World.imported(P256.Signing.PrivateKey()), editing: nil)
+        #expect(added.id == "acme-2", "the reopened history's ids are avoided")
+        #expect(world.history != nil && opens.count == 2)
+        #expect(await world.snapshots.run() != .notRun(failure.message), "the collector uses the reopened history")
     }
 
     // MARK: the policy itself
@@ -484,9 +653,10 @@ struct CollectorTests {
 
     // MARK: helpers
 
-    /// A run's outcome, once it has one.
+    /// A run's outcome, once it has one; or how many times something was called.
     final class Answer {
         var outcome: SnapshotCollector.Outcome?
+        var count = 0
     }
 
     /// A new folder under the temporary folder, by its real path (`SQLITE_OPEN_NOFOLLOW` refuses the `/var` link).

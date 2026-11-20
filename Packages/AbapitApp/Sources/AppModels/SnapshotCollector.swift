@@ -12,15 +12,17 @@ import Orgs
 ///
 /// - **One org, captured.** A run captures the org's profile, its client and the orgs' `generation` when it starts, reads
 ///   only through that client and records under that profile. An org or client switch (anything that bumps the
-///   generation, `OrgsModel.onSwitch`) or `cancel()` stops it: it checks after every page and every await, and records
-///   nothing. So nothing read for one org is ever written under another, and a run stopped before it recorded writes
-///   nothing at all (the clients rule: nothing mixes clients).
+///   generation, `OrgsModel.onSwitch`) or `cancel()` stops it: it checks after every page and every await, so a run stopped
+///   before its write writes nothing. A switch during the write lets it finish under the org it started for, and its
+///   outcome is not shown under the new org: a switch clears `lastOutcome` and `refusal`, and a run that finishes after one
+///   leaves them clear. So nothing read for one org is ever written or shown under another (the clients rule).
 /// - **Per resource, never all or nothing** (abapit's `_collect`): a resource that fails is recorded as an error code
 ///   (`SnapshotPolicy.code`: never Apple's text or a URL), with whatever it read before failing, and the run goes on; a
 ///   failure of the key, the token or the account stops the asking (`SnapshotPolicy.stopsTheRun`), and every resource not
-///   read after it says so. `notes` say what was read only in part: a list cut at the page cap, fields Apple didn't send,
-///   attributes left out because this version doesn't know them, addresses masked. Every resource tried is in `counts`
-///   (the store's), so "read and found none" isn't "not read".
+///   read after it says so. A list the page cap cut is a part read too: its items with the error `page cap`
+///   (`SnapshotPolicy.pageCap`), so `SnapshotStore.latest` never takes it for a whole read. `notes` say what was read only in
+///   part: a list cut at the page cap, fields Apple didn't send, attributes left out because this version doesn't know them,
+///   addresses masked. Every resource read is in `counts` (the store's), so "read and found none" isn't "not read".
 /// - **Apple School Manager** has no people, content or Apple MDM reads: a School org's snapshot doesn't try them.
 /// - **Bounded** (invariant 7): every list stops at the client's page cap and says so; every read waits on the org's rate
 ///   limiter (the client's, shared with the screens); a run is one task, cancellable, and only one runs at a time.
@@ -42,54 +44,82 @@ public final class SnapshotCollector {
     public private(set) var isRunning = false
     /// The resource being read (the store's name), while a run goes.
     public private(set) var reading: String?
+    /// How the last run for the orgs' current generation ended; nil after a switch.
     public private(set) var lastOutcome: Outcome?
+    /// Why the last `run()` was refused while another run went, in words; nil once a run starts, and after a switch.
+    public private(set) var refusal: String?
 
     private let orgs: OrgsModel
     private let now: @Sendable () -> Date
     @ObservationIgnored private var task: Task<Outcome, Never>?
     /// The current run's token: a run checks it after every page and await, so a cancelled or superseded run writes nothing.
     @ObservationIgnored private var token = 0
+    /// The generation the running run started for; nil when none runs.
+    @ObservationIgnored private var runningGeneration: Int?
+    /// Run after a run's last check and before its write, when set: the tests switch orgs there, as a switch can come while
+    /// the store writes. `package`: the app never sets it.
+    @ObservationIgnored package var beforeWrite: (@MainActor () async -> Void)?
     /// Runs that have returned: what the tests wait on. `package`: the app never sees it.
     @ObservationIgnored package private(set) var runsFinished = 0
 
     static let alreadyRunning = "A snapshot is already being taken."
+    static let windingDown = "A snapshot of the previous organization is still stopping. Try again in a moment."
 
     public init(orgs: OrgsModel, now: @escaping @Sendable () -> Date = { Date() }) {
         self.orgs = orgs
         self.now = now
-        orgs.onSwitch { [weak self] in self?.cancel() }
+        orgs.onSwitch { [weak self] in self?.switched() }
     }
 
-    /// Takes a snapshot of the active org and records it; returns how it ended. One run at a time.
-    @discardableResult
+    /// Takes a snapshot of the active org and records it; returns how it ended. One run at a time: a call while one runs is
+    /// refused, and the refusal stays in `refusal` for a screen to say.
     public func run() async -> Outcome {
-        guard !isRunning else { return .notRun(Self.alreadyRunning) }
-        let store: SnapshotStore
-        switch orgs.history {
-        case .success(let opened): store = opened
-        case .failure(let failure): return finish(.notRun(failure.message))
+        if isRunning {
+            // After a switch the run still going is the previous org's, stopping: said as that, not as a snapshot being taken.
+            let words = runningGeneration == orgs.generation ? Self.alreadyRunning : Self.windingDown
+            refusal = words
+            return .notRun(words)
         }
-        guard let profile = orgs.active, let client = orgs.appleClient else { return finish(.notRun(ScreenWords.unusable(orgs))) }
+        refusal = nil
+        let store: SnapshotStore
+        switch orgs.openHistory() {
+        case .success(let opened): store = opened
+        case .failure(let failure): return finish(.notRun(failure.message), for: orgs.generation)
+        }
+        guard let profile = orgs.active, let client = orgs.appleClient else {
+            return finish(.notRun(ScreenWords.unusable(orgs)), for: orgs.generation)
+        }
         token += 1
         let run = Run(org: profile, client: client, generation: orgs.generation, token: token, takenAt: now())
         isRunning = true
+        runningGeneration = run.generation
         let task = Task { await self.collect(run, into: store) }
         self.task = task
         let outcome = await task.value
         self.task = nil
         isRunning = false
+        runningGeneration = nil
         reading = nil
-        return finish(outcome)
+        return finish(outcome, for: run.generation)
     }
 
-    /// Stops the run going, if any: it records nothing. An org or client switch calls this.
+    /// Stops the run going, if any: a run stopped before its write records nothing.
     public func cancel() {
         token += 1
         task?.cancel()
     }
 
-    private func finish(_ outcome: Outcome) -> Outcome {
-        lastOutcome = outcome
+    /// An org or client switch: the run stops, and nothing said of the old org stays.
+    private func switched() {
+        lastOutcome = nil
+        refusal = nil
+        cancel()
+    }
+
+    /// `outcome` becomes `lastOutcome` only while the orgs are on the generation it was for: a run that a switch stopped, or
+    /// whose write finished after one, is never shown under the new org.
+    private func finish(_ outcome: Outcome, for generation: Int) -> Outcome {
+        if generation == orgs.generation { lastOutcome = outcome }
         runsFinished += 1
         return outcome
     }
@@ -153,6 +183,9 @@ public final class SnapshotCollector {
         reading = nil
         guard current(run) else { return .cancelled }
         let notes = collected.notes.mapValues { $0.joined(separator: "; ") }
+        // The last check: from here the write goes on under the org the run started for, even if a switch comes while the
+        // store writes (what was read is that org's), and `finish` keeps its outcome off the new org.
+        if let beforeWrite { await beforeWrite() }
         do {
             // Under the profile captured at the start, never `orgs.active`.
             return .recorded(try await store.record(org: run.org, takenAt: run.takenAt, resources: collected.resources,
@@ -195,7 +228,11 @@ public final class SnapshotCollector {
         guard current(run) else { return nil }
         if failure == nil || !views.isEmpty { keep(views.map(\.resource), rule, &collected) }
         if let last {
-            if last.truncated { collected.note(rule, Self.cut(views.count, total: last.total)) }
+            if last.truncated {
+                // A part read: its items, and an error, so the history never takes it for a whole one.
+                collected.note(rule, Self.cut(views.count, total: last.total))
+                if failure == nil { collected.errors[rule.name] = SnapshotPolicy.pageCap }
+            }
             if last.note != nil {
                 // Apple refused the field list (the services, 2026-11-19) and the read took Apple's default fields: which kept
                 // attributes no item came back with, as data (`Page.absent`), never Apple's words.
@@ -225,13 +262,11 @@ public final class SnapshotCollector {
             return
         }
         reading = rule.name
-        var items: [Resource] = [], failure: (any Error)?, failed = 0, cut = 0, unsendable = 0
-        for service in services.views {
-            // An id that can't go in a path is never sent: the client would call a service Apple has just listed "no such item".
-            guard AppleRead.isPathSafe(service.id) else {
-                unsendable += 1
-                continue
-            }
+        // An id that can't go in a path is never sent: the client would call a service Apple has just listed "no such item".
+        let sendable = services.views.filter { AppleRead.isPathSafe($0.id) }
+        let unsendable = services.views.count - sendable.count
+        var items: [Resource] = [], failure: (any Error)?, failed = 0, cut = 0, notAsked = 0
+        for (index, service) in sendable.enumerated() {
             let name = service.attributes["serverName"] ?? .string(service.id)
             do {
                 for try await page in run.client.serviceDeviceIDs(service.id) {
@@ -245,7 +280,10 @@ public final class SnapshotCollector {
                 failed += 1
                 // The first failure is the one recorded, unless a later one stops the asking: that one is said.
                 if failure == nil || SnapshotPolicy.stopsTheRun(error) { failure = error }
-                if SnapshotPolicy.stopsTheRun(error) { break }
+                if SnapshotPolicy.stopsTheRun(error) {
+                    notAsked = sendable.count - index - 1
+                    break
+                }
             }
         }
         if failure == nil || !items.isEmpty { keep(items, rule, &collected) }
@@ -255,11 +293,17 @@ public final class SnapshotCollector {
             collected.note(rule, "\(Self.services(unsendable)) id\(unsendable == 1 ? " isn't" : "s aren't") one Apple can be asked for, "
                            + "so \(unsendable == 1 ? "its" : "their") devices weren't read")
         }
-        if failed > 0 { collected.note(rule, "\(failed) of \(services.views.count) services' device lists couldn't be read") }
+        if failed > 0 {
+            collected.note(rule, "\(failed) of \(services.views.count) services' device lists couldn't be read"
+                           + (notAsked > 0 ? "; \(notAsked) \(notAsked == 1 ? "wasn't" : "weren't") asked after the sign-in failed" : ""))
+        }
+        // Anything short of every service's whole list is a part read, said with an error so the history never takes it whole.
         if let failure {
             fail(rule, failure, &collected)
         } else if unsendable > 0 {
             collected.errors[rule.name] = "unsendable id"
+        } else if services.cut || cut > 0 {
+            collected.errors[rule.name] = SnapshotPolicy.pageCap
         }
     }
 

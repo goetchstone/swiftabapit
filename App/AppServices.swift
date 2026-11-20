@@ -38,7 +38,8 @@ final class AppServices {
     static var storageRoot: URL { URL.applicationSupportDirectory.appending(path: "abapit") }
 
     /// The snapshot history: `history.sqlite` beside `orgs.json` (plan §3.7), or in memory for the demo, which never touches
-    /// the real files. Opened once at launch; a file that can't be opened is said, never replaced (docs/domains/history.md).
+    /// the real files. Opened at launch, and again at an Add or a snapshot while it fails; a file that can't be opened is said,
+    /// never replaced (docs/domains/history.md).
     static func history(in folder: URL?) -> Result<SnapshotStore, SnapshotStore.Failure> {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         return Result { () throws(SnapshotStore.Failure) in
@@ -58,7 +59,7 @@ final class AppServices {
         }
         #endif
         let vault = Vault(store: KeychainStore())
-        let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault, history: history(in: storageRoot)) { account, rate in
+        let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault, history: { history(in: storageRoot) }) { account, rate in
             AppleClient(account: account, vault: vault, readsPerMinute: rate)
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault)
@@ -89,7 +90,7 @@ final class AppServices {
         // A second client: a Mosyle org with no Apple org (the active client has one), read from the same stub.
         if clients { try? orgs.add(OrgProfile(id: DemoMosyle.secondOrgID, name: DemoMosyle.secondName, provider: .mosyle)) }
         orgs.activeID = DemoOrg.orgID
-        let model = OrgsModel(storage: .memory, vault: vault, store: orgs, history: history(in: nil)) { account, _ in
+        let model = OrgsModel(storage: .memory, vault: vault, store: orgs, history: { history(in: nil) }) { account, _ in
             AppleClient(account: account, vault: vault, transport: stub)
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault, transport: mosyleStub)

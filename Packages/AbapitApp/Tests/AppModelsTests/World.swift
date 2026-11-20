@@ -40,9 +40,9 @@ struct World {
     let vault: Vault
     let keys: [String: P256.Signing.PrivateKey]
     let stall: Stall
-    /// The snapshot history the orgs and the collector share: in memory unless `make(history:)` gave another; nil when the
-    /// one it gave didn't open.
-    let history: SnapshotStore?
+    /// The snapshot history the orgs and the collector share, as the orgs hold it now: in memory unless `make(history:)`
+    /// gave another opener; nil while it doesn't open.
+    var history: SnapshotStore? { try? orgs.history.get() }
     var snapshots: SnapshotCollector { screens.snapshots }
 
     static func clientID(_ org: String) -> String { "BUSINESSAPI.00000000-0000-4000-8000-0000000000\(org == "a" ? "a1" : org == "b" ? "b1" : "c1")" }
@@ -59,8 +59,10 @@ struct World {
     /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, moved into the client of the first org (`a`).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap,
-                     history: Result<SnapshotStore, SnapshotStore.Failure>? = nil) async throws -> World {
-        let history = history ?? Self.history()
+                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil) async throws -> World {
+        // One store, opened once: the orgs ask again only after a failure.
+        let opened = Self.history()
+        let history = history ?? { opened }
         let keychain = MemoryStore()
         let vault = Vault(store: keychain)
         let mosyleStub = MosyleStub()
@@ -109,8 +111,7 @@ struct World {
         let screens = ScreenModels(orgs: orgs)
         return World(orgs: orgs, screens: screens, devices: screens.devices, detail: screens.detail, people: screens.people,
                      content: screens.content, appleMDM: screens.appleMDM, activity: screens.activity, dashboard: screens.dashboard,
-                     mosyle: screens.mosyle, reconciliation: screens.reconciliation, mosyleStub: mosyleStub, stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall,
-                     history: try? history.get())
+                     mosyle: screens.mosyle, reconciliation: screens.reconciliation, mosyleStub: mosyleStub, stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
     }
 
     /// A snapshot history in memory, as the demo's.

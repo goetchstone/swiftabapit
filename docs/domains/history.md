@@ -116,8 +116,11 @@ events in phase 2a; their notes are below.
   slugs of names, so a removed org's id can come round again. A new org's id (`OrgStore.uniqueID(for:avoiding:)`) avoids
   `SnapshotStore.orgIDs()` (snapshots and, since PR #33, findings) as it avoids the ids with Keychain items: `OrgsModel.takenIDs`, wired in the collector PR with
   the `AppModels → History` edge, for an Apple and a Mosyle Add alike (`aNewOrgNeverTakesAnIDWithHistory`). A history
-  that didn't open can't say which ids it holds, so an Add is refused, in words, until it opens
-  (`aHistoryThatDidntOpenRefusesAnAdd`; the executor's choice, for review). Removing an org keeps its history; the offer
+  that didn't open can't say which ids it holds, so it is opened again at each Add (and each snapshot), and an Add is
+  refused only while it still can't be, saying why and what to do: fix what the message names or move `history.sqlite`
+  aside, then add again (`aHistoryThatDidntOpenRefusesAnAdd`, `aHistoryThatFailedToOpenIsOpenedAgainAtTheNextAdd`; the
+  executor's choice, refined by the coordinating session's review: one failure must not block Adds for the session).
+  Removing an org keeps its history; the offer
   to delete it (`removeAll(org:)`) is a question in Settings' removal, so it comes with the Changes screen, the first UI
   over the history.
 - **What it never holds**: a secret, or a custom setting's profile (operator, 2026-10-31; Gotchas below). The collectors
@@ -152,8 +155,8 @@ events in phase 2a; their notes are below.
     of snapshots there too?", the operator answered "Leave them out (Recommended)": `devices` keeps no IMEI, MEID or MAC
     address, and `theAllowlistIsTheOperatorsMinimal` holds every list to no `imei`, `meid`, `eid` or `…MacAddress` by
     name, so one Apple adds can't join a list unseen. `eid` (the eSIM's identifier) wasn't named in the question; it is left
-    out as a hardware identifier of the same kind, the coordinating session's reading of the answer (the side that stores
-    less), which the operator can overrule.
+    out as a hardware identifier of the same kind: the coordinator's reading of the operator's device-list answer (the side
+    that stores less), which the operator can overrule.
   - Asked whether to keep blueprints (abapit kept them: name, description, status, dates; not their members), the operator
     answered "Keep them (Recommended)": `blueprints` is the list as abapit read it (no `include`), with
     `appLicenseDeficient`, which Apple's blueprint resource carries and abapit stored; never a member, a single blueprint
@@ -182,20 +185,27 @@ events in phase 2a; their notes are below.
   | `activation_lock` (sweep) | per device | `isLocked`, `lockType` |
   | `mdm_details` (sweep) | per Apple-managed device | the posture: no IMEI, MEID, MAC address or `deviceName` |
 
-  Not kept: org units, blueprints' members, audit events and webhooks. Who decided: the operator, the lists, the minus
-  list, the device list's identifiers and blueprints; the coordinating session, the scope (no org units, blueprint members,
-  audit events or webhooks) and `eid` left out with the other identifiers; the executor, for review, `user_groups`' and `mdm_enrolled`'s lists (no names) and masking a
-  package's other strings.
+  Not kept: org units, blueprints' members, audit events and webhooks. Who decided: the operator decided what to keep (the
+  "Minimal" answer, the device list's identifiers, blueprints); the lists are the executor's translation of those words,
+  reviewed; the coordinating session, the scope (no org units, blueprint members, audit events or webhooks) and `eid` left
+  out with the other identifiers (the coordinator's reading of the operator's device-list answer); the executor, for
+  review, `user_groups`' and `mdm_enrolled`'s lists (no names) and masking a package's other strings.
 - **Errors are codes** (`SnapshotPolicy.code`): the HTTP status and Apple's `code` when it is two or more words of capital
   ASCII letters joined by `_` or `.` ("HTTP 403 FORBIDDEN_ERROR", "HTTP 400 PARAMETER_ERROR.INVALID"), or this app's word
   ("transport", "keychain", "malformed"); never Apple's `detail`, a parameter, a URL or a `code` of another shape.
 - **Per resource, never all or nothing** (abapit's `_collect`): a resource that fails is its code in `errors`, the rest
   are read; one that failed after some pages keeps them, in `counts` and `errors` both, so `latest` never takes it for a
-  good copy, and one that failed before any is in `errors` only. A failure of the key, the token or the account
-  (401, the token endpoint, the Keychain) stops the asking: every later read would fail the same way, and a refused
-  Touch ID would be asked again for each, so each resource after it is "not asked after HTTP 401". `assignments` is
-  "not read: mdm_servers failed" when the services weren't read, and keeps what the other services' lists gave when one
-  fails (its code, and "1 of 2 services' device lists couldn't be read").
+  good copy, and one that failed before any is in `errors` only (`aListThatFailedPartWayKeepsWhatItRead`). **A list the
+  page cap cut is a part read too** (the review, 2026-11-20): its items with the error `page cap`
+  (`SnapshotPolicy.pageCap`), so `latest` never takes it for a good copy and a Needs-attention rule, whose caller judges
+  only whole reads, doesn't judge it; so are `assignments` built from a cut services list or a service's cut device list.
+  A failure of the key, the token or the account (401, the token endpoint, the Keychain) stops the asking: every later
+  read would fail the same way, and a refused Touch ID would be asked again for each, so each resource after it is "not
+  asked after HTTP 401", and the services' device lists after it aren't asked either ("1 of 3 services' device lists
+  couldn't be read; 2 weren't asked after the sign-in failed"). `assignments` is "not read: mdm_servers failed" when the
+  services weren't read, a failed read (never "none assigned") when every service's list failed, and keeps what the other
+  services' lists gave when one fails (its code, and "1 of 2 services' device lists couldn't be read"); a service whose id
+  can't be sent is never asked for and makes the assignments a part read ("unsendable id").
 - **`notes`** say what was read in part: a list the page cap stopped ("stopped at the page limit: 1000 of 1001 read", or
   "…, more not read" without Apple's total), the services read with Apple's default fields and the kept attributes no
   service came back with (`Page.absent`), attributes left out unknown, addresses masked in a package, and for
@@ -204,15 +214,21 @@ events in phase 2a; their notes are below.
   reads only through that client (the screens', so the org's rate limiter and page cap) and records under that profile,
   never `orgs.active`: a rename mid-run records the name it started with (`theSnapshotIsTheCapturedOrgs`). An org or
   client switch (`onSwitch`) or `cancel()` stops it; it checks its token, its task and the generation after every page
-  and await, so it writes nothing, under the new org or the old (`anOrgSwitchMidRunWritesNothing`,
-  `aClientSwitchMidRunWritesNothing`). One run at a time.
+  and await. **A run stopped before its write writes nothing; a switch during the write lets it finish under the org it
+  started for, and its outcome is not shown under the new org** (`anOrgSwitchMidRunWritesNothing`,
+  `aClientSwitchMidRunWritesNothing`, `aSwitchDuringTheWriteFinishesUnderTheOrgItStartedFor`, which switches through the
+  collector's `package` hook `beforeWrite`, after the last check). A switch clears `lastOutcome` and `refusal`, and
+  `finish` shows an outcome only while the orgs are on the generation its run started for. One run at a time: a call
+  while one runs is refused, and the refusal stays in `refusal` (`run()`'s result can't be discarded); after a switch it
+  says the previous organization's snapshot is still stopping (`aRefusalAfterASwitchSaysThePreviousRunIsStopping`).
 - **School**: a rule marked `businessOnly` isn't tried for an Apple School Manager org, which then has `devices`,
   `mdm_servers` and `assignments` only, and sends nothing else.
 - **The sweeps** (AppleCare, Activation Lock and the Apple MDM details: one read per device) have their rules here and
   their slot in the collector; they run in the next PR, with plan §3.6's bounded fan-out and retry pass. Until then a
   snapshot has none of them in `counts` or `errors`, so `latest` passes over it for them.
-- **The store** is made once at launch in `AppServices` (`history.sqlite` in `Application Support/abapit`, beside
-  `orgs.json`; in memory for the demo) and handed to `OrgsModel`, which the collector reads it from. No screen starts a
+- **The store** is opened at launch in `AppServices` (`history.sqlite` in `Application Support/abapit`, beside
+  `orgs.json`; in memory for the demo) through an opener handed to `OrgsModel`, which opens it again when it is needed
+  while the last try failed (`openHistory`); the collector takes it from there. No screen starts a
   snapshot yet: the Changes screen and "Snapshot now" come later.
 
 ### Needs attention: the store and the local settings (PR #33)
@@ -530,9 +546,12 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   detail; a blueprint without its members; canaries for the profile's password, a package's url and description, a
   service's IP, a user's names, email, phone, job title and department, a device's and a group's names, a device's IMEI,
   MEID, EID and MAC addresses and a blueprint's members, in no byte of the folder's files; an attribute off the
-  allowlist left out and counted; a 403 leaving the rest; error codes, never Apple's text; the services' default fields;
-  the page cap; assignments in part; a credential failure stopping the asking; an org switch, a client switch, a cancel and
-  a rename mid-run; School; no org or no history; a new org's id avoiding the history's; the allowlist written out).
+  allowlist left out and counted; a package's nested strings masked; a 403 leaving the rest; error codes, never Apple's
+  text; the services' default fields; the page cap, a part read, `latest` included; a list failed part-way; assignments in
+  part, when every list failed, with an unsendable service id, over a cut services list, and stopped by a sign-in failure;
+  a credential failure stopping the asking; an org switch, a client switch, a cancel and a rename mid-run; a switch during
+  the write; a refused second run and its words after a switch; School; no org or no history; the history opened again at
+  an Add; a new org's id avoiding the history's; the allowlist written out).
 - The store: `SnapshotStoreTests` (what reads back; the last duplicate; `latest` answering from the newest attempt, none
   and failed included; the bounded list; one org at a time; an org with no id; prune by id with its items, counting the
   org's own only; removing an org's history; `orgIDs`; a NUL kept; a secret-looking attribute left out and counted,

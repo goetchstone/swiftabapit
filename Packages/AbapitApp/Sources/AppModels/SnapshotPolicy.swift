@@ -208,6 +208,10 @@ public enum SnapshotPolicy {
         return text
     }
 
+    /// The error of a list the page cap cut: kept as read, but a part read, never a good copy (`SnapshotStore.latest`), so
+    /// a Needs-attention rule doesn't judge it as whole.
+    public static let pageCap = "page cap"
+
     /// A failure after which no more is asked of the org in this run: the key, the token or the account. Every later read
     /// would fail the same way, and a Touch ID refused once would be asked again for each.
     static func stopsTheRun(_ error: any Error) -> Bool {
