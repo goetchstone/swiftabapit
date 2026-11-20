@@ -100,6 +100,38 @@ struct SchemaTests {
         #expect(SnapshotStore.Failure.notThisAppsFile(path: path).message.contains("import abapit's history instead"))
     }
 
+    /// The empty-file check is made again under the write lock (the review's probe, 2026-11-20): another connection holds
+    /// `BEGIN IMMEDIATE` when the store first looks and sees an empty file, then makes abapit's tables and commits. The
+    /// store refuses the file and leaves it at version 0.
+    @Test func aFileFilledAfterTheFirstLookIsRefusedUnderTheLock() throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        let other = Unchecked<SQLiteDatabase?>(nil)
+        #expect(throws: SnapshotStore.Failure.notThisAppsFile(path: path)) {
+            _ = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(SnapshotStore.Failure) in
+                switch step {
+                case .opening:
+                    // The file exists, empty; the other connection takes the write lock first.
+                    other.value = try? Scratch.open(path)
+                    try? other.value?.execute("BEGIN IMMEDIATE")
+                case .foundEmpty:
+                    // The store has seen it empty; the other fills it and lets go.
+                    try? other.value?.execute(Schema.abapit)
+                    try? other.value?.execute("COMMIT")
+                default:
+                    break
+                }
+            }
+        }
+        other.value = nil
+        let file = try Scratch.open(path)
+        #expect(try file.userVersion() == 0)
+        #expect(try Scratch.count(file, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'snapshots'") == 1)
+        #expect(try file.rows("PRAGMA table_info(snapshots)") { try $0.text(1) ?? "" }.contains("org_id") == false)
+    }
+
     /// An empty file this app didn't make is made this app's (a file left empty by a crash before its schema).
     @Test func anEmptyFileWithOneNameIsMadeThisAppsOwn() async throws {
         let root = try Scratch.folder()

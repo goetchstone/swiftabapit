@@ -39,7 +39,9 @@ recent events in phase 2a; their notes are below.
   snapshot's items go with it.
 - **Only a file this app made** (coordinating session's proposal, 2026-11-20, for the operator): a file at version 0 that
   already holds tables (abapit's history copied in, another program's database) is refused (`.notThisAppsFile`: "import
-  abapit's history instead") before any lock is taken on it, and an existing file with a second name on disk (a hard
+  abapit's history instead") before any write lock is taken on it, and again under the write lock (another connection
+  can fill an empty file between the two: `aFileFilledAfterTheFirstLookIsRefusedUnderTheLock`). An existing file with a
+  second name on disk (a hard
   link) is refused before SQLite opens it (`.hardLinked`). Either is left as it was, bytes and mode: a file's mode is
   narrowed only once it is accepted. The import (a later PR) reads abapit's file read-only and copies its rows, as the
   plan says; nothing here changes abapit's file.
@@ -61,8 +63,13 @@ recent events in phase 2a; their notes are below.
     anywhere in that path when SQLite opens it is refused (`aLinkSwappedInAfterTheChecksIsRefused`). It makes its journal
     by path later, opened without following a link in its last name (a link planted there fails the write and its target
     isn't made, `aLinkedJournalIsNeverWrittenThrough`).
-  - Not covered: a folder above swapped for a link after SQLite has opened the file, before a journal is made, could
-    receive that journal. Only something running as the same user can do it, and that can read the file anyway.
+  - What the walk guarantees (made `0600`, one name, its folder `0700`) holds for the file behind the store's
+    descriptor. SQLite opens a path, not that descriptor: something running as the same user that renames a real folder
+    on the path (no link) between the walk and SQLite's open can make SQLite open another file there, which the walk
+    never looked at (the delta review's probe, 2026-11-20). After the open, a folder above swapped for a link could
+    receive a journal SQLite makes by path; SQLite refuses to write once the database's path no longer reaches the file
+    it opened (`SQLITE_READONLY_DBMOVED`), which narrows that window to the instant between its check and the journal's
+    creation. Both need code running as the operator, which can read the file anyway.
 - **The API** (an actor; each call throws `SnapshotStore.Failure`, whose `message` is in the operator's words):
   - `record(org:takenAt:resources:errors:notes:)`: one transaction, so a failure part way leaves no row. Items by
     abapit's `INSERT OR REPLACE INTO items VALUES (?, ?, ?, ?)`: two items of a resource with one id keep the last.
@@ -79,9 +86,11 @@ recent events in phase 2a; their notes are below.
   - `latest(_:org:)` (coordinating session's proposal, 2026-11-20, for the operator): the newest snapshot that tried to
     read the resource (it is in that snapshot's `counts` or `errors`) answers. If it read it, `.read` with what it found,
     possibly nothing ("none at T2", where abapit's `latest_resource` showed an older copy as current); if it failed,
-    `.failed` with its error and the newest copy that holds items ("failed at T2; showing T1"). A snapshot that didn't
-    try is passed over; nil when none tried. Each answer carries its snapshot's `takenAt`, so its age always shows
-    (invariant 8).
+    `.failed` with its error and the last good copy: the newest snapshot that read the resource without an error, an
+    empty read included ("failed at T2; showing T1"; T1 read a device, T2 none, T3 failed: "failed at T3; showing T2's
+    none", plan §2.3 defect 13). A read that recorded part and then failed (in `counts` and `errors` both) is never a good
+    copy. A snapshot that didn't try is passed over; nil when none tried. Each answer carries its snapshot's `takenAt`, so
+    its age always shows (invariant 8).
   - `prune(org:keep:)` keeps the org's newest `keep` **by id** (an import records old snapshots after new ones, so
     `taken_at` would keep the wrong ones), and the items go too; a negative `keep` removes nothing. `removeAll(org:)`
     for an org the operator removed with its history.
@@ -94,12 +103,19 @@ recent events in phase 2a; their notes are below.
   `SnapshotStore.orgIDs()`, as it already avoids ids with Keychain items, and removing an org offers to delete its
   history (`removeAll(org:)`). Both are wired in the collector PR, which adds the `AppModels → History` edge.
 - **What it never holds**: a secret, or a custom setting's profile (operator, 2026-10-31; Gotchas below). The collectors
-  decide what is recorded; as a backstop, `record` refuses the whole snapshot (`.sensitive`, naming the resource and the
-  key, never the value) when any attribute, at any depth, has a name `ExportPolicy.isSensitive` reads as a secret's.
-  Audit events aren't snapshotted: their `eventDataAccountPasswordChanged` keys would be refused.
+  decide what is recorded. As a backstop (coordinating session's decision, 2026-11-20, for the operator), `record` leaves
+  out every attribute, at any depth, whose name `ExportPolicy.isSensitive` reads as a secret's, keeps the rest of the
+  item, and adds to that resource's note the number left out ("2 attributes left out: their names look like a
+  secret's"), never their names: an object keyed by data (a device's name, say) would echo the data. A member left out
+  isn't looked into. The trade-off: an attribute Apple adds whose name only looks like a secret's is left out and
+  counted, never stored, until a collector or this rule changes. Audit events aren't snapshotted: their
+  `eventDataAccountPasswordChanged` and `eventDataBatchPasswordResetInitiated` keys would be left out.
 - **A row changed outside the app says so** (`.corrupt`, never an empty value or U+FFFD): attributes, errors, notes or
-  counts that don't read as theirs (abapit's `json.loads` raised too), and text in any column that isn't UTF-8, naming
-  the column.
+  counts that don't read as theirs (abapit's `json.loads` raised too); text in any column that isn't UTF-8, naming the
+  column; and a JSON escape of half a character (a lone surrogate, `\uD800` to `\uDFFF` without its other half),
+  naming the column. `JSONValue.parse` reads that escape as U+FFFD, which would change an id or merge two keys, so the
+  store looks for one before it parses (`SnapshotStore.hasLoneSurrogate`); `JSONValue.parse` itself is unchanged for
+  its other callers. This app never writes one: `StoredJSON` writes a pair.
 - **Numbers keep their text** (the one deviation in `StoredJSON`): abapit's `json.dumps` writes what Python read, so
   `-0` became `0`, `1.50` `1.5`, `1e2` `100.0`, `3.0e-5` `3e-05` and `1e400` `Infinity`; this store keeps `-0`,
   `1.50`, `1e2`, `3.0e-5` and `1e400`. So a diff must compare numbers by value (1 is 1.0, as the operator reads them),
@@ -162,9 +178,10 @@ recent events in phase 2a; their notes are below.
 - **abapit's items alone can't tell "read and found none" from "didn't read"**: abapit's `latest_resource` showed an
   older copy as current after a read that came back empty. `counts` records every resource read, zero included, and
   `latest` answers from the newest attempt.
-- **Closing any descriptor to a file drops the process's POSIX locks on it**, SQLite's included. The store holds the
-  database's descriptor until it has accepted the file (to narrow its mode after), and closes it only when SQLite holds
-  no lock (no transaction open).
+- **The store's own descriptor and SQLite's locks**: the store holds the database's descriptor until it has accepted
+  the file (to narrow its mode after) and closes it outside any transaction. POSIX drops a process's `fcntl` locks on a
+  file when any descriptor to it closes; the delta review's two-store probe (2026-11-20) found SQLite's locks on this Mac
+  unaffected by such a close, and closing outside a transaction keeps it harmless either way.
 - **Resource names and the keys of `errors` and `notes` are Swift dictionary keys**, which merge canonically equivalent
   strings. They are the app's ASCII constants; an item's id is never a key (items are an array, ordered by bytes).
 - **The editing tool decodes JSON's `\uXXXX`**: a test literal written with `\u0301` and `\ud83d\ude00` landed in
@@ -244,15 +261,21 @@ recent events in phase 2a; their notes are below.
 
 - The store: `SnapshotStoreTests` (what reads back; the last duplicate; `latest` answering from the newest attempt, none
   and failed included; the bounded list; one org at a time; an org with no id; prune by id with its items, counting the
-  org's own only; removing an org's history; `orgIDs`; a NUL kept; a secret's attribute refused, canary and all; a fault
+  org's own only; removing an org's history; `orgIDs`; a NUL kept; a secret-looking attribute left out and counted,
+  canary and all; the last good copy, empty included, never a part read that failed; an escape of half a character; a fault
   part way through a record; the folder, file and journal modes; the mode the moment the file exists; a wider folder and
   file narrowed; a linked folder, a link above it, a linked file, a link swapped in during the walk and after it, a
   linked journal; a path that isn't the store's; a newer file read-only; a row changed outside the app; text that isn't
   UTF-8) and `SchemaTests` (abapit's `SCHEMA` by SHA-256; the tables, columns, foreign key, index and views a new file
   has, and abapit's statements as SQLite keeps them; a current file isn't migrated again; abapit's file, copied or hard
-  linked, refused and unchanged; an empty file made this app's; the three views; `StoredJSON` against Python 3.12's
-  `json.dumps(sort_keys=True)`, and the number deviation; `taken_at`). The parity golden for the store (`Tests/Fixtures/parity/history.json`, from
-  the goldens PR) isn't on `main` yet: the SHA-256 pin holds the schema until its test lands.
+  linked, refused and unchanged; a file filled after the first look refused under the lock; an empty file made this
+  app's; the three views; `StoredJSON` against Python 3.12's `json.dumps(sort_keys=True)`, and the number deviation;
+  `taken_at`).
+- The store's parity golden, `Tests/Fixtures/parity/history.json`, merged in #28; its `schema` has the SHA-256 the pin
+  holds. Its test is wired in the import PR: its reads use abapit's client-id API, and its `latest` cases encode defect
+  13 (abapit's `latest_resource` passing over an empty read), so they need a listed deviation there.
+- **For the import PR**: imported rows must fill `counts` (abapit's rows have none; without it `latest` passes over
+  every imported snapshot).
 - Goldens: `csv.json` (88 cases, 43 listed deviations: containers as JSON, and 6 for the wider guard; and
   the guard's `blank` and `triggers` sets) and `reports.json` (`device_stats` 33 cases, 1 deviation, the
   Counter fleet; `assignment_summary` 22 cases; `audit_digest` 26 cases, 15 drawn and 11 hand-written

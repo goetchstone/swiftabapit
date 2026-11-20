@@ -90,8 +90,8 @@ struct SnapshotStoreTests {
         #expect(try await store.latest("people", org: org) == nil)
     }
 
-    /// The newest attempt failed: the latest says so, when, and why, and shows the newest copy that holds items, with its
-    /// own age (invariant 8). Recorded `[X]` at T1, an error at T2: "failed at T2; showing T1".
+    /// The newest attempt failed: the latest says so, when, and why, and shows the last good copy, with its own age
+    /// (invariant 8). Recorded `[X]` at T1, an error at T2: "failed at T2; showing T1".
     @Test func aFailedAttemptSaysSoAndShowsTheNewestCopy() async throws {
         let store = try SnapshotStore(storage: .memory, appVersion: "1")
         let org = Scratch.apple("acme")
@@ -106,6 +106,33 @@ struct SnapshotStoreTests {
         let other = Scratch.apple("other")
         let only = try await store.record(org: other, takenAt: Scratch.noon, resources: [:], errors: ["devices": "HTTP 403"])
         #expect(try await store.latest("devices", org: other) == .failed(try await store.load(only, org: other).summary, error: "HTTP 403", newest: nil))
+    }
+
+    /// The last good copy is the newest read without an error, even an empty one (plan §2.3 defect 13): T1 read a device,
+    /// T2 read none, T3 failed, so the latest shows T2's none, never T1's device, which T2 proved gone.
+    @Test func theLastGoodCopyIsTheNewestReadWithoutAnErrorEvenEmpty() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")]])
+        let t2 = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(60), resources: ["devices": []])
+        let t3 = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(120), resources: [:], errors: ["devices": "HTTP 500"])
+        let (summary2, summary3) = (try await store.load(t2, org: org).summary, try await store.load(t3, org: org).summary)
+        #expect(try await store.latest("devices", org: org) == .failed(summary3, error: "HTTP 500", newest: SnapshotStore.Copy(summary: summary2, items: [])))
+    }
+
+    /// A read that recorded part and then failed is never the last good copy: T1 read three devices, T2 recorded one and
+    /// failed, so the latest says T2 failed and shows T1's three.
+    @Test func aPartReadThatFailedIsNeverTheLastGoodCopy() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        let devices = (1...3).map { Scratch.device("SERIAL000\($0)") }
+        let t1 = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": devices])
+        let t2 = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(60), resources: ["devices": [devices[0]]],
+                                        errors: ["devices": "page 2: HTTP 500"])
+        let (summary1, summary2) = (try await store.load(t1, org: org).summary, try await store.load(t2, org: org).summary)
+        #expect(summary2.counts == ["devices": 1])
+        let copy = SnapshotStore.Copy(summary: summary1, items: devices.map { Resource(type: "devices", id: $0.id, attributes: $0.attributes) })
+        #expect(try await store.latest("devices", org: org) == .failed(summary2, error: "page 2: HTTP 500", newest: copy))
     }
 
     @Test func theListIsNewestFirstAndBounded() async throws {
@@ -240,35 +267,49 @@ struct SnapshotStoreTests {
         #expect(snapshot.resources["devices"]?.map { Array($0.id.utf8) } == [Array("SERIAL\u{0}0001".utf8)])
     }
 
-    /// History never keeps a secret: an attribute named for one, at any depth, refuses the whole record, and nothing of it
-    /// reaches the file, the canary least of all. A backstop: the collectors never hand one over.
-    @Test func anAttributeNamedForASecretRefusesTheRecord() async throws {
+    /// History never keeps a secret: an attribute whose name looks like a secret's, at any depth, is left out and the rest
+    /// of the item kept (coordinating session's decision, 2026-11-20). The resource's note counts what was left out, never
+    /// names it, and the canary reaches neither the file, the journal, the notes nor an error. A backstop: the collectors
+    /// never hand one over.
+    @Test func anAttributeNamedLikeASecretIsLeftOutAndCounted() async throws {
         let root = try Scratch.folder()
         defer { Scratch.remove(root) }
         let folder = root.appending(path: "store")
-        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-        let org = Scratch.apple("acme")
         let canary = "canary-7f3a91c2"
+        let journals = Shared<[Data]>([])
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(Failure) in
+            guard case .recording = step else { return }
+            if let bytes = try? Data(contentsOf: folder.appending(path: "history.sqlite-journal")) { journals.set(journals.value + [bytes]) }
+        }
+        let org = Scratch.apple("acme")
         let nested = Resource(type: "configurations", id: "CFG-0001", attributes: [
             "name": .string("Wi-Fi"),
-            "payloads": .array([.object(["kind": .string("wifi"), "settings": .object(["ssid": .string("Example"), "Password": .string(canary)])])]),
+            "payloads": .array([.object(["kind": .string("wifi"), "settings": .object([
+                "ssid": .string("Example"), "Password": .string(canary), "Credentials": .object(["UserPassword": .string(canary)]),
+            ])])]),
         ])
-        let failure = Failure.sensitive(resource: "configurations", key: "Password")
-        await #expect(throws: failure) {
-            try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")], "configurations": [nested]])
-        }
-        #expect(!failure.message.contains(canary))
-        #expect(try await store.snapshots(org: org).isEmpty)
-        for name in ["history.sqlite", "history.sqlite-journal"] {
-            let bytes = (try? Data(contentsOf: folder.appending(path: name))) ?? Data()
-            #expect(bytes.firstRange(of: Data(canary.utf8)) == nil, "\(name) holds the canary")
-        }
-        // A top-level key too.
-        await #expect(throws: Failure.sensitive(resource: "devices", key: "activation_bypass")) {
-            try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [
-                Resource(type: "devices", id: "SERIAL0001", attributes: ["activation_bypass": .string(canary)]),
-            ]])
-        }
+        let device = Resource(type: "orgDevices", id: "SERIAL0001", attributes: ["deviceModel": .string("MacBook Air"), "activation_bypass": .string(canary)])
+        let id = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [device], "configurations": [nested]],
+                                        notes: ["devices": "showing 1 of at least 2"])
+
+        let snapshot = try await store.load(id, org: org)
+        // The rest of each item is kept.
+        #expect(snapshot.resources["configurations"]?.first?.attributes == [
+            "name": .string("Wi-Fi"),
+            "payloads": .array([.object(["kind": .string("wifi"), "settings": .object(["ssid": .string("Example")])])]),
+        ])
+        #expect(snapshot.resources["devices"]?.first?.attributes == ["deviceModel": .string("MacBook Air")])
+        // Counted per resource, after any note the collector wrote; a member left out isn't looked into.
+        #expect(snapshot.summary.notes == [
+            "configurations": "2 attributes left out: their names look like a secret's",
+            "devices": "showing 1 of at least 2; 1 attribute left out: its name looks like a secret's",
+        ])
+        #expect(snapshot.summary.counts == ["configurations": 1, "devices": 1])
+        for note in snapshot.summary.notes.values { #expect(!note.contains("Password") && !note.contains("bypass") && !note.contains(canary)) }
+        let file = try Data(contentsOf: folder.appending(path: "history.sqlite"))
+        #expect(file.firstRange(of: Data(canary.utf8)) == nil, "the database holds the canary")
+        #expect(!journals.value.isEmpty, "the journal was looked at mid-record")
+        for journal in journals.value { #expect(journal.firstRange(of: Data(canary.utf8)) == nil, "the journal holds the canary") }
     }
 
     // MARK: whole or not at all
@@ -525,6 +566,43 @@ struct SnapshotStoreTests {
         #expect(try await store.snapshots(org: org).first?.errors == ["devices": "1"])
         try file.execute("UPDATE snapshots SET counts = '{\"devices\": -1}'")
         await #expect(throws: Failure.corrupt("a snapshot's counts")) { try await store.snapshots(org: org) }
+    }
+
+    /// An escape of half a character (a lone surrogate) in a JSON column says which column, never reads as U+FFFD, which
+    /// would change an id or merge two keys. A whole pair, as `StoredJSON` writes one, still reads.
+    @Test func anEscapeOfHalfACharacterSaysWhichColumn() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        let org = Scratch.apple("acme")
+        let id = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [
+            Resource(type: "orgDevices", id: "SERIAL0001", attributes: ["name": .string("\u{1F600}")]),
+        ]])
+        #expect(try await store.load(id, org: org).resources["devices"]?.first?.attributes["name"] == .string("\u{1F600}"))
+        let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
+        let u = "\u{5C}u"  // a backslash and a u, so the escapes below are SQL text, not Swift's
+        let half = Failure.corrupt("the column attributes holds an escape of half a character")
+        try file.execute("UPDATE items SET attributes = '{\"name\": \"\(u)d800x\"}'")
+        await #expect(throws: half) { try await store.load(id, org: org) }
+        // Two keys that would both read as U+FFFD, and merge.
+        try file.execute("UPDATE items SET attributes = '{\"\(u)dc00\": 1, \"\(u)dbff\": 2}'")
+        await #expect(throws: half) { try await store.latest("devices", org: org) }
+        try file.execute("UPDATE items SET attributes = '{}'")
+        try file.execute("UPDATE snapshots SET errors = '{\"devices\": \"\(u)d800\"}'")
+        await #expect(throws: Failure.corrupt("the column errors holds an escape of half a character")) { try await store.snapshots(org: org) }
+        try file.execute("UPDATE snapshots SET errors = '{}', counts = '{\"\(u)d800\": 1}'")
+        await #expect(throws: Failure.corrupt("the column counts holds an escape of half a character")) { try await store.snapshots(org: org) }
+    }
+
+    /// Which escapes are half a character. `~` stands for a backslash and a u.
+    @Test(arguments: [
+        ("~d83d~de00", false), ("~0041", false), ("\\\\ud800", false), ("plain", false),
+        ("~d800", true), ("~dc00", true), ("~d83d~0041", true), ("~d83dx", true), ("~d83d~d83d", true), ("~de00~d83d", true),
+    ])
+    func aLoneSurrogateIsFound(_ escapes: String, lone: Bool) {
+        let text = escapes.replacingOccurrences(of: "~", with: "\u{5C}u")
+        #expect(SnapshotStore.hasLoneSurrogate("{\"a\": \"" + text + "\"}") == lone, "\(text)")
     }
 
     /// Bytes that aren't UTF-8 in a text column say which column, never read as U+FFFD (a changed id or name would pass for

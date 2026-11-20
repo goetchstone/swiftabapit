@@ -1307,6 +1307,8 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 - **Import abapit history**: the operator picks `~/.local/share/abapit/history.sqlite` (the open
   panel shows hidden files). Open it read-only, copy rows, map client IDs to org IDs. **Export a
   copy** for sqlite3/Datasette.
+  - Imported rows fill `counts` (abapit's have none; `latest` answers from it, docs/domains/history.md), and the store
+    refuses abapit's file if it meets one in its own folder: it is imported, never changed in place.
 - **Collectors per provider** (Apple now; Mosyle in Phase 7):
   - devices, mdm_servers, assignments, people, content, mdm_enrolled (+ details);
   - **AppleCare sweep** and **Activation Lock sweep** (§3.6);

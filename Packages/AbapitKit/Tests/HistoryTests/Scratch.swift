@@ -72,3 +72,11 @@ final class Shared<Value: Sendable>: Sendable {
 
     func set(_ value: Value) { mutex.withLock { $0 = value } }
 }
+
+/// A value a hook can set and the test read, for a type that isn't `Sendable` (a second connection). Hooks run on the
+/// store's caller, one at a time, so nothing reaches it at once.
+final class Unchecked<Value>: @unchecked Sendable {
+    var value: Value
+
+    init(_ value: Value) { self.value = value }
+}

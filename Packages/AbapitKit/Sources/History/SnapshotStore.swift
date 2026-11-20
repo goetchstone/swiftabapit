@@ -22,7 +22,8 @@ import SQLite3
 ///
 /// What it never holds: a secret, and a custom setting's profile (operator, 2026-10-31: what can be read again from Apple
 /// isn't kept; a collector stores `Configuration.resource`, the profile withheld). As a backstop to the collectors, an
-/// attribute whose name says it holds a secret (`ExportPolicy.isSensitive`), at any depth, refuses the whole record.
+/// attribute whose name looks like a secret's (`ExportPolicy.isSensitive`), at any depth, is left out of what is stored,
+/// and the snapshot's `notes` say how many were left out of each resource (never their names).
 public actor SnapshotStore {
     public enum Storage: Sendable {
         /// `history.sqlite` in this folder (the app's: `Application Support/abapit`, inside the sandbox container).
@@ -55,10 +56,9 @@ public actor SnapshotStore {
         case noOrg
         /// No snapshot with that id for that org (there may be one for another org: it isn't said).
         case noSnapshot(Int64)
-        /// A row that doesn't read (JSON that isn't, text that isn't UTF-8): the file was changed outside this app.
+        /// A row that doesn't read (JSON that isn't, text that isn't UTF-8, an escape of half a character): the file was
+        /// changed outside this app.
         case corrupt(String)
-        /// An item has an attribute whose name says it holds a secret: nothing of the snapshot was recorded.
-        case sensitive(resource: String, key: String)
 
         public var message: String {
             switch self {
@@ -75,8 +75,6 @@ public actor SnapshotStore {
             case .noOrg: "The organization has no id, so its snapshots can't be kept apart from another's."
             case .noSnapshot(let id): "There's no snapshot \(id) for this organization."
             case .corrupt(let what): "The snapshot history holds a row this app can't read (\(what)); it was changed outside abapit."
-            case .sensitive(let resource, let key):
-                "The snapshot wasn't recorded: \(resource) has an attribute named \(key), which may hold a secret, and history never keeps one."
             }
         }
     }
@@ -125,8 +123,9 @@ public actor SnapshotStore {
     public enum Latest: Sendable, Equatable {
         /// The newest snapshot that tried to read the resource read it: what it found, possibly nothing.
         case read(Copy)
-        /// The newest snapshot that tried failed, with this error; `newest` is the newest copy that holds items, if any,
-        /// which is older (or that same snapshot, when it read some items before failing).
+        /// The newest snapshot that tried failed, with this error; `newest` is the last good copy: the newest snapshot that
+        /// read the resource without an error, what it found possibly nothing (plan §2.3 defect 13). A snapshot that read
+        /// part of it and then failed is never a good copy.
         case failed(Summary, error: String, newest: Copy?)
     }
 
@@ -149,6 +148,8 @@ public actor SnapshotStore {
         case created(path: String)
         /// The folder and file are open and checked; SQLite opens the path next.
         case opening(path: String)
+        /// A file at version 0 was found empty; the write lock is taken next, and the file looked at again under it.
+        case foundEmpty(path: String)
         /// Inside `record`'s transaction: the snapshot row and `items` items are written.
         case recording(items: Int)
     }
@@ -166,7 +167,7 @@ public actor SnapshotStore {
         switch storage {
         case .memory:
             let database = try Self.guarded { try SQLiteDatabase(path: ":memory:", flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) }
-            opened = (database, try Self.prepare(database, path: ":memory:"))
+            opened = (database, try Self.prepare(database, path: ":memory:", hook: hook))
         case .folder(let folder):
             opened = try Self.openFile(in: folder, hook: hook)
         }
@@ -182,20 +183,24 @@ public actor SnapshotStore {
     /// resource item, its attributes as abapit stores them (`StoredJSON`; its relationships aren't kept, as abapit kept
     /// none). Every resource in `resources` is counted as read (`counts`), an empty list included; one that failed goes in
     /// `errors`. Whole or not at all: a failure part way leaves no row. Two items of a resource with one id keep the last
-    /// (abapit's `INSERT OR REPLACE`). An attribute named for a secret, at any depth, refuses it all (`.sensitive`).
-    /// Returns the snapshot's id.
+    /// (abapit's `INSERT OR REPLACE`). An attribute whose name looks like a secret's, at any depth, is left out, and the
+    /// resource's note says how many were (`Self.leftOut`). Returns the snapshot's id.
     @discardableResult
     public func record(org: OrgProfile, takenAt: Date, resources: [String: [Resource]], errors: [String: String] = [:],
                        notes: [String: String] = [:]) throws(Failure) -> Int64 {
         try writable()
         let orgID = try Self.id(of: org)
         let names = resources.keys.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
-        var counts = JSONObject()
+        var counts = JSONObject(), kept: [String: [(id: String, attributes: JSONObject)]] = [:], notes = notes
         for name in names {
             let items = resources[name] ?? []
-            for item in items {
-                if let key = Self.sensitiveKey(in: .object(item.attributes)) { throw .sensitive(resource: name, key: key) }
+            var dropped = 0
+            kept[name] = items.map { item in
+                let (attributes, count) = Self.withoutSecrets(item.attributes)
+                dropped += count
+                return (item.id, attributes)
             }
+            if dropped > 0 { notes[name] = [notes[name], Self.leftOut(dropped)].compactMap { $0 }.joined(separator: "; ") }
             // Distinct ids by bytes: what the primary key keeps after `INSERT OR REPLACE`.
             counts[name] = .number(String(Set(items.map { Array($0.id.utf8) }).count))
         }
@@ -212,7 +217,7 @@ public actor SnapshotStore {
                 try hook?(.recording(items: written))
                 let insert = try database.prepare("INSERT OR REPLACE INTO items VALUES (?, ?, ?, ?)")
                 for name in names {
-                    for item in resources[name] ?? [] {
+                    for item in kept[name] ?? [] {
                         try insert.run([.integer(snapshot), .text(name), .text(item.id), .text(StoredJSON.text(.object(item.attributes)))])
                         written += 1
                         try hook?(.recording(items: written))
@@ -291,7 +296,8 @@ public actor SnapshotStore {
     }
 
     /// What the newest of `org`'s snapshots that tried to read `resource` found: its items (possibly none), or its error
-    /// with the newest copy that holds items. A snapshot that didn't try is passed over. Nil when none tried.
+    /// with the last good copy, the newest snapshot that read it without an error (possibly empty). A snapshot that didn't
+    /// try is passed over. Nil when none tried.
     public func latest(_ resource: String, org: OrgProfile) throws(Failure) -> Latest? {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
@@ -301,13 +307,14 @@ public actor SnapshotStore {
                     OR EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?)) ORDER BY s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource), .text(resource)], Self.summary).first else { return nil }
                 // The error by the key's bytes, as SQLite compares them, not by a Swift dictionary's equivalence.
-                let error = try database.rows("SELECT e.value FROM snapshots s, json_each(s.errors) e WHERE s.id = ? AND e.key = ?",
+                let error = try database.rows("SELECT e.value AS errors FROM snapshots s, json_each(s.errors) e WHERE s.id = ? AND e.key = ?",
                                               [.integer(attempt.id), .text(resource)]) { try $0.text(0) ?? "" }.first
                 guard let error else { return .read(Copy(summary: attempt, items: try items(resource, in: attempt.id))) }
                 guard let id = try database.rows("""
-                    SELECT DISTINCT s.id FROM snapshots s JOIN items i ON i.snapshot_id = s.id AND i.resource = ? \
-                    WHERE s.org_id = ? ORDER BY s.id DESC LIMIT 1
-                    """, [.text(resource), .text(orgID)], { $0.integer(0) }).first,
+                    SELECT s.id FROM snapshots s WHERE s.org_id = ? \
+                    AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
+                    AND NOT EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?) ORDER BY s.id DESC LIMIT 1
+                    """, [.text(orgID), .text(resource), .text(resource)], { $0.integer(0) }).first,
                       let summary = try database.rows(Self.summarySQL + "WHERE s.id = ?", [.integer(id)], Self.summary).first
                 else { return .failed(attempt, error: error, newest: nil) }
                 return .failed(attempt, error: error, newest: Copy(summary: summary, items: try items(resource, in: id)))
@@ -347,7 +354,7 @@ public actor SnapshotStore {
             if error.code == SQLiteDatabase.cantOpenSymlink { throw .link(path: file) }
             throw .database(code: error.code, message: error.message)
         }
-        let access = try prepare(database, path: file)
+        let access = try prepare(database, path: file, hook: hook)
         if !made {
             var info = stat()
             guard fstat(fileFD, &info) == 0 else { throw .unopenable(path: file, errno: errno) }
@@ -445,7 +452,7 @@ public actor SnapshotStore {
     /// Foreign keys on (abapit's `PRAGMA foreign_keys = ON`: a snapshot's items go with it), then the schema. A file at
     /// this version opens; a newer one is queried only; one at version 0 is made version 1 only when it holds nothing:
     /// one that holds tables (abapit's history, another program's database) is refused and left as it is.
-    private static func prepare(_ database: SQLiteDatabase, path: String) throws(Failure) -> Access {
+    private static func prepare(_ database: SQLiteDatabase, path: String, hook: Hook?) throws(Failure) -> Access {
         try guarded {
             try database.execute("PRAGMA foreign_keys = ON")
             let found = try database.userVersion()
@@ -455,8 +462,9 @@ public actor SnapshotStore {
             }
             guard found < Schema.version else { return .readWrite }
             func isEmpty() throws -> Bool { try database.rows("SELECT COUNT(*) FROM sqlite_master") { $0.integer(0) }.first == 0 }
-            // Looked at before any lock is taken on a file that may not be this app's.
+            // Looked at before any write lock is taken on a file that may not be this app's.
             guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
+            try hook?(.foundEmpty(path: path))
             try database.transaction {
                 // Read again under the write lock: another store may have made it meanwhile.
                 guard try database.userVersion() == 0 else { return }
@@ -478,17 +486,58 @@ public actor SnapshotStore {
     private static func summary(_ row: SQLiteDatabase.Row) throws -> Summary {
         Summary(id: row.integer(0), takenAt: try row.text(1) ?? "", orgID: try row.text(2) ?? "", orgName: try row.text(3) ?? "",
                 orgScope: try row.text(4) ?? "", clientID: try row.text(5) ?? "", writtenBy: try row.text(6) ?? "",
-                errors: try words(row.text(7), "a snapshot's errors"), notes: try words(row.text(8), "a snapshot's notes"),
+                errors: try words(row.text(7), "a snapshot's errors", column: "errors"),
+                notes: try words(row.text(8), "a snapshot's notes", column: "notes"),
                 counts: try counts(row.text(9)), deviceCount: Int(row.integer(10)))
     }
 
     /// An item from `item_id` and `attributes` at `column` and the next.
     private static func item(_ row: SQLiteDatabase.Row, resource: String, from column: Int32) throws -> Resource {
         let id = try row.text(column) ?? ""
-        guard let attributes = JSONValue.parse(try row.text(column + 1) ?? "")?.object else {
+        guard let attributes = try json(row.text(column + 1), column: "attributes")?.object else {
             throw Failure.corrupt("the attributes of \(resource) \(id)")
         }
         return Resource(type: resource, id: id, attributes: attributes)
+    }
+
+    /// A JSON column's text parsed, or nil when it isn't JSON. An escape of half a character (a lone surrogate, `\uD800`
+    /// to `\uDFFF` without its other half) throws, naming the column: `JSONValue.parse` reads one as U+FFFD (a Swift
+    /// string can't hold it), which would change an id or merge two keys silently. This app never writes one
+    /// (`StoredJSON` writes a pair). `JSONValue.parse` itself is left as it is for its other callers.
+    private static func json(_ text: String?, column: String) throws -> JSONValue? {
+        let text = text ?? ""
+        if hasLoneSurrogate(text) { throw Failure.corrupt("the column \(column) holds an escape of half a character") }
+        return JSONValue.parse(text)
+    }
+
+    /// Whether JSON text holds a `\u` escape of a surrogate that isn't half of a pair.
+    static func hasLoneSurrogate(_ text: String) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        var index = 0, high = false
+        func unit(at start: Int) -> UInt32? {
+            guard start + 6 <= scalars.count, scalars[start] == "\\", scalars[start + 1] == "u" else { return nil }
+            return UInt32(String(String.UnicodeScalarView(scalars[(start + 2)..<(start + 6)])), radix: 16)
+        }
+        while index < scalars.count {
+            if let value = unit(at: index) {
+                switch value {
+                case 0xD800...0xDBFF:
+                    if high { return true }
+                    high = true
+                case 0xDC00...0xDFFF:
+                    if !high { return true }
+                    high = false
+                default:
+                    if high { return true }
+                }
+                index += 6
+                continue
+            }
+            if high { return true }
+            // Any other escape is two scalars (`\\` included, so a backslash it escapes never starts one).
+            index += scalars[index] == "\\" ? 2 : 1
+        }
+        return high
     }
 
     /// `errors` and `notes` as stored: a JSON object of strings.
@@ -499,8 +548,8 @@ public actor SnapshotStore {
     }
 
     /// `errors` or `notes` read back. A value that isn't a string (abapit wrote strings) shows as its JSON.
-    private static func words(_ text: String?, _ what: String) throws -> [String: String] {
-        guard let object = JSONValue.parse(text ?? "")?.object else { throw Failure.corrupt(what) }
+    private static func words(_ text: String?, _ what: String, column: String) throws -> [String: String] {
+        guard let object = try json(text, column: column)?.object else { throw Failure.corrupt(what) }
         var found: [String: String] = [:]
         for (key, value) in object { found[key] = value.string ?? value.jsonText }
         return found
@@ -508,7 +557,7 @@ public actor SnapshotStore {
 
     /// `counts` read back: a JSON object of whole numbers, none negative.
     private static func counts(_ text: String?) throws -> [String: Int] {
-        guard let object = JSONValue.parse(text ?? "")?.object else { throw Failure.corrupt("a snapshot's counts") }
+        guard let object = try json(text, column: "counts")?.object else { throw Failure.corrupt("a snapshot's counts") }
         var found: [String: Int] = [:]
         for (key, value) in object {
             guard let count = value.int, count >= 0 else { throw Failure.corrupt("a snapshot's counts") }
@@ -517,20 +566,36 @@ public actor SnapshotStore {
         return found
     }
 
-    /// The first key, at any depth, whose name says it holds a secret.
-    private static func sensitiveKey(in value: JSONValue) -> String? {
-        switch value {
-        case .object(let object):
-            for (key, member) in object {
-                if ExportPolicy.isSensitive(key) { return key }
-                if let found = sensitiveKey(in: member) { return found }
+    /// `attributes` without every member, at any depth, whose name looks like a secret's (`ExportPolicy.isSensitive`), and
+    /// how many were left out (a member left out isn't looked into).
+    static func withoutSecrets(_ attributes: JSONObject) -> (JSONObject, Int) {
+        var dropped = 0
+        func clean(_ value: JSONValue) -> JSONValue {
+            switch value {
+            case .object(let object):
+                var kept = JSONObject()
+                for (key, member) in object {
+                    if ExportPolicy.isSensitive(key) {
+                        dropped += 1
+                    } else {
+                        kept[key] = clean(member)
+                    }
+                }
+                return .object(kept)
+            case .array(let items):
+                return .array(items.map(clean))
+            case .null, .bool, .number, .string:
+                return value
             }
-            return nil
-        case .array(let items):
-            return items.lazy.compactMap(sensitiveKey).first
-        case .null, .bool, .number, .string:
-            return nil
         }
+        guard case .object(let kept) = clean(.object(attributes)) else { return (attributes, 0) }
+        return (kept, dropped)
+    }
+
+    /// The note for a resource that had `count` attributes left out: the count only, never the names (a key can be data,
+    /// such as a device's name in an object keyed by device).
+    static func leftOut(_ count: Int) -> String {
+        count == 1 ? "1 attribute left out: its name looks like a secret's" : "\(count) attributes left out: their names look like a secret's"
     }
 
     // MARK: helpers
