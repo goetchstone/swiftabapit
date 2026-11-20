@@ -31,7 +31,7 @@ PACKAGE = ROOT / "Packages" / "AbapitKit"
 # dependency, AbapitKit by path; products only; no unsafeFlags, which could name AbapitKit's package and reopen it.
 APP_PACKAGE = ROOT / "Packages" / "AbapitApp"
 APP_EDGES = {"AppModels": {"product:AppleBusiness", "product:AppleModels", "product:Orgs", "product:Vault", "product:Reports",
-                           "product:Mosyle", "product:MosyleModels", "product:JSONAPI"}}
+                           "product:Mosyle", "product:MosyleModels", "product:JSONAPI", "product:History"}}
 APP_TESTS = {"AppModelsTests": {"AppModels", "product:JSONAPI", "product:HTTPCore", "product:TestSupport"} | APP_EDGES["AppModels"]}
 
 # A new edge is a reviewed change to this list, PackageGraphTests' list and the plan.

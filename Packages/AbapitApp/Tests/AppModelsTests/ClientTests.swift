@@ -93,7 +93,7 @@ struct ClientScreenTests {
         let vault = Vault(store: keychain)
         try await vault.replaceSet([.mosyleAccessToken: Secret("t"), .mosyleEmail: Secret("e"), .mosylePassword: Secret("p")], for: "m")
         let before = try await vault.inventory()
-        let orgs = OrgsModel(storage: .folder(dir), vault: Vault(store: keychain)) { account, _ in
+        let orgs = OrgsModel(storage: .folder(dir), vault: Vault(store: keychain), history: World.history()) { account, _ in
             AppleClient(account: account, vault: Vault(store: keychain), transport: AppleStub())
         }
         #expect(orgs.problem == nil && orgs.clients.map(\.orgs) == [["a", "m"], ["b"]])
@@ -135,7 +135,7 @@ struct ClientReviewTests {
 
     static func model(_ dir: URL) -> OrgsModel {
         let keychain = MemoryStore()
-        return OrgsModel(storage: .folder(dir), vault: Vault(store: keychain)) { account, _ in
+        return OrgsModel(storage: .folder(dir), vault: Vault(store: keychain), history: World.history()) { account, _ in
             AppleClient(account: account, vault: Vault(store: keychain), transport: AppleStub())
         }
     }

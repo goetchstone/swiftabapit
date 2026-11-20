@@ -357,8 +357,9 @@ job (§6.6).
 
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
-AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, Mosyle, MosyleModels, JSONAPI}   the screen models, in Packages/AbapitApp (AbapitKit's
-                                                               products: its public API only); never HTTPCore, Wire or ChangeCore
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, Mosyle, MosyleModels, JSONAPI, History}   the screen models, in Packages/AbapitApp
+                                                               (AbapitKit's products: its public API only); never HTTPCore, Wire or ChangeCore.
+                                                               History (Phase 3): the snapshot collector records through SnapshotStore.record
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
@@ -1291,7 +1292,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** in progress, split into PRs (2026-11-20). Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), and the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29). The store is built on branch `phase-3-snapshot-store` (PR #30). Not started or not merged: collectors, the diff in Swift, the Changes screen, abapit's history import and scheduled snapshots.
+**Status:** in progress, split into PRs (2026-11-20). Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29), and the snapshot store (`History/`, PR #30). On branch `phase-3-apple-collector`: the Apple collector (`AppModels/{SnapshotPolicy,SnapshotCollector}.swift`, no UI), keeping only what the operator chose on 2026-11-20 ("Minimal"), as a per-resource allowlist; the store made in `AppServices`; a new org's id avoiding the history's ids; the `AppModels → History` edge. Not started or not merged: the per-device sweeps (AppleCare, Activation Lock, the Apple MDM details: their rules are in `SnapshotPolicy`), the Mosyle collector, the diff in Swift, the Changes screen, abapit's history import and scheduled snapshots. For the operator: abapit kept blueprints, which the "Minimal" list doesn't name, so a snapshot doesn't keep them yet.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.
@@ -1301,9 +1302,9 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 - **SnapshotStore** (SQLite3): abapit's schema + `schema_version` + `org_id`; foreign keys on; dir
   `0700`, file `0600`.
   - **An org's history is never inherited** (coordinating session's proposal, 2026-11-20, for the operator): org ids are
-    slugs of names and can come round again, so `OrgStore.uniqueID(for:avoiding:)` also avoids `SnapshotStore.orgIDs()`,
-    and removing an org offers to delete its history (`removeAll(org:)`). Both are wired in the collector PR, which adds
-    the `AppModels → History` edge.
+    slugs of names and can come round again, so `OrgStore.uniqueID(for:avoiding:)` also avoids `SnapshotStore.orgIDs()`
+    (wired in the collector PR, with the `AppModels → History` edge), and removing an org offers to delete its history
+    (`removeAll(org:)`: a question in Settings' removal, so with the Changes screen, the first UI over the history).
 - **Import abapit history**: the operator picks `~/.local/share/abapit/history.sqlite` (the open
   panel shows hidden files). Open it read-only, copy rows, map client IDs to org IDs. **Export a
   copy** for sqlite3/Datasette.

@@ -1,0 +1,209 @@
+import AppleBusiness
+import AppleModels
+import Foundation
+import History
+import JSONAPI
+
+/// What a snapshot keeps of each Apple resource, and nothing else (plan Phase 3; docs/domains/history.md, "The Apple
+/// collector"). The operator decided it on 2026-11-20, answering "Minimal (Recommended)": devices, services, apps, packages,
+/// configurations, AppleCare and Activation Lock as abapit kept them, minus package download URLs, services' last-connected
+/// IPs, MDM-detail IMEI/MEID/MAC addresses and error text (codes only); people only the Managed Apple Account, status,
+/// external flag and dates, no names, emails, phones, job titles or departments; and (2026-10-31) no custom setting's
+/// profile, so a configuration is kept as `Configuration.resource`, its profile withheld.
+///
+/// Each resource's attributes are an **allowlist**, written out here and compared by bytes: an attribute Apple adds later is
+/// left out until a review adds it, and the snapshot's note counts what was left out that this version doesn't know (never
+/// its name). abapit stored every attribute Apple sent; a denylist here would store the next one unreviewed.
+public enum SnapshotPolicy {
+    /// One resource a snapshot records.
+    public struct Rule: Sendable, Equatable {
+        /// Its name in the store: abapit's (`devices`, `mdm_servers`, `assignments`, …), so abapit's views and an imported
+        /// history read the same rows.
+        public let name: String
+        /// The attributes kept, by Apple's names, in Apple's documented order. Nothing else is stored.
+        public let kept: [String]
+        /// Every attribute this version knows the read sends (the view's `fields`, held to Apple's contract by
+        /// `ModelContractTests`): an attribute outside `known` and `kept` is one Apple added since, counted in the note.
+        public let known: [String]
+        /// Apple School Manager's API has no such read (plan §2.4): a School org's snapshot doesn't try it.
+        public let businessOnly: Bool
+        /// Every string kept goes through `ContentWords.addresses(in:)`, as a package's row, detail and CSV do, so a user
+        /// and password written into its name or description never reach the file (invariant 11).
+        public let masksAddresses: Bool
+
+        init(_ name: String, kept: [String], known: [String], businessOnly: Bool = false, masksAddresses: Bool = false) {
+            self.name = name
+            self.kept = kept
+            self.known = known
+            self.businessOnly = businessOnly
+            self.masksAddresses = masksAddresses
+        }
+    }
+
+    // MARK: the lists the collector reads
+
+    /// `orgDevices`, keyed by serial number: every attribute Apple documents (the operator: devices as abapit kept them).
+    /// The minus list names the MDM details' IMEI, MEID and MAC addresses, not the device record's, which are kept.
+    public static let devices = Rule("devices", kept: [
+        "serialNumber", "addedToOrgDateTime", "releasedFromOrgDateTime", "updatedDateTime", "deviceModel", "productFamily",
+        "productType", "deviceCapacity", "partNumber", "orderNumber", "color", "status", "orderDateTime", "imei", "meid", "eid",
+        "purchaseSourceId", "purchaseSourceType", "wifiMacAddress", "bluetoothMacAddress", "ethernetMacAddress",
+        "isMdmMigrationCapable", "mdmMigrationStatus", "mdmMigrationDeadlineDateTime",
+    ], known: OrgDevice.fields)
+
+    /// `mdmServers`: everything but `lastConnectedIp` (the operator's minus list).
+    public static let services = Rule("mdm_servers", kept: [
+        "createdDateTime", "defaultProductFamilies", "deviceCount", "enableMdmDisownFlag", "lastConnectedDateTime", "serverName",
+        "serverType", "status", "updatedDateTime",
+    ], known: MDMService.fields)
+
+    /// Which service holds which device, as abapit recorded it: one item per serial, `serverId` and `serverName`, built
+    /// from each service's device list.
+    public static let assignments = Rule("assignments", kept: ["serverId", "serverName"], known: ["serverId", "serverName"])
+
+    /// `users`: the Managed Apple Account, status, external flag and dates only (the operator). No name, email, phone,
+    /// job title, department, cost centre, division, employee number or roles.
+    public static let users = Rule("users", kept: [
+        "status", "managedAppleAccount", "isExternalUser", "startDateTime", "createdDateTime", "updatedDateTime",
+    ], known: User.fields, businessOnly: true)
+
+    /// `userGroups`: the executor's minimal reading of the operator's People line (2026-11-20, for review): a group's status,
+    /// type, member count and dates, and not its name, which can name people, or its org unit, which a snapshot doesn't keep.
+    public static let userGroups = Rule("user_groups", kept: ["status", "type", "totalMemberCount", "createdDateTime", "updatedDateTime"],
+                                        known: UserGroup.fields, businessOnly: true)
+
+    public static let apps = Rule("apps", kept: ["name", "bundleId", "websiteUrl", "version", "supportedOS", "isCustomApp", "appStoreUrl"],
+                                  known: ContentApp.fields, businessOnly: true)
+
+    /// `packages`: everything but `url`, the download location (the operator's minus list), each string with any address in
+    /// it masked as the Content screen masks it.
+    public static let packages = Rule("packages", kept: ["name", "hash", "bundleIds", "description", "version", "createdDateTime", "updatedDateTime"],
+                                      known: ContentPackage.fields, businessOnly: true, masksAddresses: true)
+
+    /// `configurations`, from `Configuration.resource`: a custom setting's profile withheld (operator, 2026-10-31), and read
+    /// from the list, which sends it as null; the single read that carries it is never made for a snapshot.
+    public static let configurations = Rule("configurations", kept: [
+        "type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime",
+    ], known: Configuration.fields, businessOnly: true)
+
+    /// `mdmDevices`, as abapit kept the list (`mdm_enrolled`): the serial, family and enrolled user's id. Not `deviceName`,
+    /// which commonly holds its user's name (the executor's reading of the operator's People line, for review).
+    public static let mdmEnrolled = Rule("mdm_enrolled", kept: ["serialNumber", "productFamily", "enrolledUserId"],
+                                         known: MDMDevice.fields, businessOnly: true)
+
+    /// The lists, in the order a snapshot reads them (abapit's `_collect`). Not kept: org units, blueprints and their
+    /// members, audit events and webhooks.
+    public static let lists: [Rule] = [devices, services, assignments, users, userGroups, apps, packages, configurations, mdmEnrolled]
+
+    // MARK: the sweeps (one read per device; the next PR runs them)
+
+    /// `orgDevices/{serial}/appleCareCoverage`, as abapit's `fetch_applecare_bulk` kept it: every attribute, and the serial
+    /// number it was read for (`applecare_view` reads it).
+    public static let appleCare = Rule("applecare", kept: [
+        "agreementNumber", "contractCancelDateTime", "description", "endDateTime", "isCanceled", "isRenewable", "paymentType",
+        "startDateTime", "status", "serialNumber",
+    ], known: AppleCareCoverage.fields + ["serialNumber"])
+
+    /// `orgDevices/{serial}/activationLockStatus`, keyed by serial (`activation_lock_view`).
+    public static let activationLock = Rule(SnapshotStore.activationLockResource, kept: ["isLocked", "lockType"], known: ActivationLockStatus.fields)
+
+    /// `mdmDevices/{id}/details`: the posture only (the operator's minus list: no IMEI, MEID or MAC address; and no
+    /// `deviceName`, as for `mdm_enrolled`).
+    public static let mdmDetails = Rule("mdm_details", kept: [
+        "serialNumber", "deviceModel", "osVersion", "platform", "lastCheckInDateTime", "isFirewallEnabled", "isFileVaultEnabled",
+        "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus",
+    ], known: MDMDeviceDetail.fields, businessOnly: true)
+
+    /// The per-device sweeps (plan §3.6: bounded fan-out at the limiter's rate, cancellable). Their rules are decided here;
+    /// the collector doesn't run them yet, so a snapshot has them in neither `counts` nor `errors`.
+    public static let sweeps: [Rule] = [appleCare, activationLock, mdmDetails]
+
+    public static let all: [Rule] = lists + sweeps
+
+    // MARK: keeping
+
+    /// One item as a snapshot keeps it.
+    struct Kept {
+        let item: Resource
+        /// The attributes left out that this version doesn't know (Apple added them), by their bytes: counted in the
+        /// snapshot's note, never stored or named.
+        let unknown: Set<[UInt8]>
+        /// Whether a string of it had an address masked.
+        let masked: Bool
+    }
+
+    /// `resource` with only `rule.kept`'s attributes, compared by bytes (a key canonically equal to a kept one but other
+    /// bytes is another key), and with `rule.masksAddresses`, every string of them through `ContentWords.addresses(in:)`.
+    static func keep(_ resource: Resource, _ rule: Rule) -> Kept {
+        let kept = Set(rule.kept.map { Array($0.utf8) }), known = Set(rule.known.map { Array($0.utf8) })
+        var attributes = JSONObject(), unknown: Set<[UInt8]> = [], masked = false
+        for (key, value) in resource.attributes {
+            let bytes = Array(key.utf8)
+            guard kept.contains(bytes) else {
+                if !known.contains(bytes) { unknown.insert(bytes) }
+                continue
+            }
+            if rule.masksAddresses {
+                let shown = value.mappingStrings(ContentWords.addresses(in:))
+                masked = masked || shown != value
+                attributes[key] = shown
+            } else {
+                attributes[key] = value
+            }
+        }
+        return Kept(item: Resource(type: rule.name, id: resource.id, attributes: attributes), unknown: unknown, masked: masked)
+    }
+
+    // MARK: errors
+
+    /// An error as a snapshot records it: a code, never Apple's text or a URL (the operator: "error text (codes only)").
+    /// The HTTP status and Apple's error `code` when it has a code's shape (`appleCode`), or this app's word for a failure
+    /// that has no status.
+    public static func code(_ error: any Error) -> String {
+        switch error {
+        case let error as AppleAPIError:
+            switch error {
+            case .unauthorized: "HTTP 401"
+            case .forbidden(let code): status(403, code)
+            case .notFound: "HTTP 404"
+            case .conflict(let code, _): status(409, code)
+            case .unprocessable: "HTTP 422"
+            case .badRequest(let code, _, _): status(400, code)
+            case .rateLimited: "HTTP 429"
+            case .server(let status), .unexpected(let status): "HTTP \(status)"
+            case .notJSON: "not JSON"
+            case .malformed: "malformed"
+            case .http: "transport"
+            case .token: "token"
+            case .vault: "keychain"
+            case .wrongHost: "wrong host"
+            case .notInScope, .webhooksNotInScope: "not in scope"
+            }
+        case is CancellationError: "cancelled"
+        default: "failed"
+        }
+    }
+
+    private static func status(_ status: Int, _ code: String?) -> String {
+        ["HTTP \(status)", appleCode(code)].compactMap { $0 }.joined(separator: " ")
+    }
+
+    /// Apple's error `code` (`FORBIDDEN_ERROR`, `PARAMETER_ERROR.INVALID`) when it is two or more words of capital ASCII
+    /// letters joined by `_` or `.`, at most 64 bytes; anything else (prose, an identifier, a name) is dropped.
+    static func appleCode(_ text: String?) -> String? {
+        guard let text, (1...64).contains(text.utf8.count) else { return nil }
+        let words = text.utf8.split(omittingEmptySubsequences: false) { $0 == UInt8(ascii: "_") || $0 == UInt8(ascii: ".") }
+        guard words.count >= 2, words.allSatisfy({ !$0.isEmpty && $0.allSatisfy { (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains($0) } })
+        else { return nil }
+        return text
+    }
+
+    /// A failure after which no more is asked of the org in this run: the key, the token or the account. Every later read
+    /// would fail the same way, and a Touch ID refused once would be asked again for each.
+    static func stopsTheRun(_ error: any Error) -> Bool {
+        switch error as? AppleAPIError {
+        case .unauthorized?, .token?, .vault?: true
+        default: false
+        }
+    }
+}

@@ -18,6 +18,9 @@ public final class ScreenModels {
     public let mosyle: MosyleModel
     /// Counts `devices` and `mosyle`'s devices.
     public let reconciliation: ReconciliationModel
+    /// Takes the active Apple org's snapshots into `orgs.history`. No screen starts one yet (Phase 3's Changes screen and
+    /// "Snapshot now" come later).
+    public let snapshots: SnapshotCollector
 
     public init(orgs: OrgsModel) {
         let devices = DevicesModel(orgs: orgs), people = PeopleModel(orgs: orgs)
@@ -32,6 +35,7 @@ public final class ScreenModels {
         activity = ActivityModel(orgs: orgs)
         dashboard = DashboardModel(orgs: orgs, devices: devices)
         reconciliation = ReconciliationModel(orgs: orgs, devices: devices, mosyle: mosyle)
+        snapshots = SnapshotCollector(orgs: orgs)
     }
 
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices
