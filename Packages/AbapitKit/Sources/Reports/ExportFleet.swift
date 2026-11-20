@@ -31,6 +31,13 @@ private func finish(_ list: ListRead, identity: JSONObject, full: JSONObject, ju
     return attributes
 }
 
+/// A list that wasn't read and left no rows still says so (invariant 8): one row whose `listRead` cell says why and whose
+/// other cells are empty, so the file is never a bare header that reads as "nothing to report".
+func withSentinel(_ list: ListRead, rows: [CSV.Item]) -> [CSV.Item] {
+    guard list.isNotRead, rows.isEmpty else { return rows }
+    return [CSV.Item(id: "", attributes: ["listRead": .string(list.csvWords)])]
+}
+
 private func text(_ value: String?) -> JSONValue { value.map(JSONValue.string) ?? .null }
 
 private func identity(_ device: OrgDevice) -> JSONObject {
@@ -39,7 +46,9 @@ private func identity(_ device: OrgDevice) -> JSONObject {
 }
 
 extension ActivationLockReport {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             var attributes = identity(row.device).merging(["state": .string(Self.title(row.group)), "blocksRelease": .string(row.blocksReleaseWords),
                                                            "isLocked": text(row.isLockedSent), "lockType": text(row.lockTypeSent)])
@@ -54,7 +63,9 @@ extension ActivationLockReport {
 }
 
 extension MigrationReport {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             var attributes = identity(row.device).merging([
                 "state": .string(Self.title(row.group)), "mdmMigrationStatus": text(row.status?.rawValue),
@@ -85,7 +96,9 @@ extension MigrationReport {
 }
 
 extension ServiceHealth {
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         rows.map { row in
             let name: JSONObject = ["serverName": .string(row.service.name)]
             var attributes: JSONObject = name.merging(["serverType": text(sent(row.service.attributes, "serverType")),
@@ -121,7 +134,9 @@ extension WarrantyReport {
         }
     }
 
-    public var csvItems: [CSV.Item] {
+    public var csvItems: [CSV.Item] { withSentinel(list, rows: items) }
+
+    private var items: [CSV.Item] {
         let formatter = Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!)
         return rows.map { row in
             var attributes = identity(row.device).merging(["orderDateTime": text(Self.orderDateCell(row.device))])

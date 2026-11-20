@@ -220,4 +220,26 @@ struct WarrantyReportTests {
         let text = CSV.text(WarrantyReport([device], coverage: ["S": .read([])], now: Fleet.now).csvItems, columns: ExportPolicy.warrantyReport)
         #expect(!text.contains("canary"))
     }
+
+    /// Each fleet report's CSV for a list that was not read and left no rows is one row saying so, the other cells empty;
+    /// a list that was read and left none is a header only.
+    @Test func everyFleetCSVOfANotReadEmptyListHasOneRowThatSaysSo() throws {
+        let why = "your role can't read this"
+        let unread = ListRead.notRead(why)
+        let csvs: [(String, [CSV.Item], ExportPolicy.Columns, [CSV.Item])] = [
+            ("activation lock", ActivationLockReport([], reads: [:], list: unread).csvItems, ExportPolicy.activationLockReport, ActivationLockReport([], reads: [:]).csvItems),
+            ("migration", MigrationReport([], now: Fleet.now, list: unread).csvItems, ExportPolicy.migrationReport, MigrationReport([], now: Fleet.now).csvItems),
+            ("services", ServiceHealth([], now: Fleet.now, list: unread).csvItems, ExportPolicy.serviceHealth, ServiceHealth([], now: Fleet.now).csvItems),
+            ("warranty", WarrantyReport([], coverage: [:], now: Fleet.now, list: unread).csvItems, ExportPolicy.warrantyReport, WarrantyReport([], coverage: [:], now: Fleet.now).csvItems),
+        ]
+        for (name, items, columns, read) in csvs {
+            let text = CSV.text(items, columns: columns)
+            let lines = text.components(separatedBy: "\r\n").filter { !$0.isEmpty }
+            #expect(lines.count == 2, "\(name)")
+            let row = try #require(Fleet.table(text)[""], "\(name)")
+            #expect(row["listRead"] == "not read: \(why)", "\(name)")
+            #expect(row.filter { $0.key != "listRead" && $0.key != "id" }.allSatisfy { $0.value.isEmpty }, "\(name)")
+            #expect(CSV.text(read, columns: columns).components(separatedBy: "\r\n").filter { !$0.isEmpty }.count == 1, "\(name) read")
+        }
+    }
 }

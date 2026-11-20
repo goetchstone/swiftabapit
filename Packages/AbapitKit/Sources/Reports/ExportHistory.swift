@@ -20,17 +20,17 @@ extension ExportPolicy {
 /// allowlist and denylist as every other export. A cell is abapit's `_cell` (`True`, `4.3`, nothing for null).
 public enum ExportHistory {
     public static func refreshCandidates(_ report: FleetAgeReport) -> String {
-        CSV.text(report.candidates.map { candidate in
+        CSV.text(withSentinel(report.list, rows: report.candidates.map { candidate in
             CSV.Item(id: candidate.serial, attributes: [
                 "listRead": .string(report.list.csvWords), "serialNumber": .string(candidate.serial), "deviceModel": candidate.model, "productFamily": candidate.family,
                 "ordered": candidate.ordered, "ageYears": .number(String(candidate.ageYears)),
                 "activeCoverage": candidate.notRead ? .string("not read") : (candidate.covered.map(JSONValue.bool) ?? .null),
             ])
-        }, columns: ExportPolicy.refreshCandidates)
+        }), columns: ExportPolicy.refreshCandidates)
     }
 
     public static func coverageExpiring(_ report: CoverageReport) -> String {
-        CSV.text(report.expiring.map { CSV.Item(id: $0.attributes["serialNumber"]?.string ?? "", attributes: $0.attributes.merging(["listRead": .string(report.list.csvWords)])) },
+        CSV.text(withSentinel(report.list, rows: report.expiring.map { CSV.Item(id: $0.attributes["serialNumber"]?.string ?? "", attributes: $0.attributes.merging(["listRead": .string(report.list.csvWords)])) }),
                  columns: ExportPolicy.coverageExpiring)
     }
 }

@@ -70,4 +70,17 @@ struct ExportHistoryTests {
         let rows = ExportHistory.coverageExpiring(expiring).split(separator: "\r\n").dropFirst().map(String.init)
         #expect(rows == ["D1,read in part: 2 of 9,D1,,,,2026-10-26T12:00:00Z,10,"])
     }
+
+    /// A list that wasn't read still says so in its CSV: one row, `listRead` saying why, every other cell empty; never a bare header.
+    @Test func aNotReadListExportsOneRowThatSaysSo() {
+        let why = "your role can't read this"
+        let candidates = ExportHistory.refreshCandidates(CoverageFleetAgeTests.fleetAge(devices: [], applecare: [], years: 1, now: CoverageFleetAgeTests.now,
+                                                                                         notRead: [], list: .notRead(why)))
+        #expect(candidates == "id,listRead,serialNumber,deviceModel,productFamily,ordered,ageYears,activeCoverage\r\n,not read: \(why),,,,,,\r\n")
+        let expiring = ExportHistory.coverageExpiring(CoverageFleetAgeTests.coverage(applecare: [], devices: [], days: 30, now: CoverageFleetAgeTests.now,
+                                                                                      notRead: [], list: .notRead(why)))
+        #expect(expiring == "id,listRead,serialNumber,description,paymentType,startDateTime,endDateTime,days_left,isRenewable\r\n,not read: \(why),,,,,,,\r\n")
+        // A list that was read and left no rows stays a header.
+        #expect(!ExportHistory.coverageExpiring(CoverageFleetAgeTests.coverage(applecare: [], devices: [], days: 30, now: CoverageFleetAgeTests.now, notRead: [])).contains("not read"))
+    }
 }

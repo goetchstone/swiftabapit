@@ -211,7 +211,7 @@ events in phase 2a; their notes are below.
   they sit under; keys that match no listed device still count toward `expiring`, and equal `days_left` keep the device
   list's order, then the other keys by bytes. With every device read and the list whole both reports equal the goldens
   (32 coverage and 35 fleet-age cases, the same two fleet-age deviations). `FleetAgeReport`'s map is optional: nil is no
-  coverage data; an empty map is data in which nobody was read. A list that wasn't read exports a header and no rows.
+  coverage data; an empty map is data in which nobody was read. A list that wasn't read and left no rows exports one row, `listRead` saying why and every other cell empty (every fleet CSV and both history CSVs; never a bare header).
 - **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
   allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
 - **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
