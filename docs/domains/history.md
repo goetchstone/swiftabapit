@@ -4,13 +4,18 @@
 
 **Owns invariant(s):** #6, #8, and #11 for CSV export
 
-**Status:** stub — filled in by phase 3. Until then, read the plan section named above and the nearest
-SwiftGamGui runbook. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in
-phase 1b, and the audit digests and the dashboard's quiet services and recent events in phase 2a; their notes
-are below.
+**Status:** Phase 3 in progress (split into PRs, 2026-11-20): the snapshot store is built (`SnapshotStore`, below); the
+collectors, the abapit import, the diff, the reports and scheduled snapshots follow. The Reports module (CSV, the export
+policy, Find, the dashboard's stats) shipped in phase 1b, and the audit digests and the dashboard's quiet services and
+recent events in phase 2a; their notes are below.
 
 ## Files
 
+- `Packages/AbapitKit/Sources/History/`: `SQLite.swift` (a thin wrapper over the system `SQLite3`: values bound and
+  read by their bytes, a transaction that rolls back on any error), `Schema.swift` (abapit's `SCHEMA` word for word, this
+  app's additions, `StoredJSON`, `taken_at`'s text) and `SnapshotStore.swift` (the actor).
+- `Packages/AbapitKit/Tests/HistoryTests/`: `SnapshotStoreTests`, `SchemaTests`, and `Scratch` (a temporary folder by
+  its real path, synthetic orgs and devices, a second connection that looks at the file from outside the store).
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
   (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
@@ -21,6 +26,52 @@ are below.
   `gen_reports` (`stats_edges`, `audit_edges`, `corrected_audit_digest`, and `audit_types`, abapit's two sets).
 
 ## How it works
+
+### The snapshot store
+
+- **One file on abapit's schema** (plan L7): `history.sqlite` in the folder the app injects (`Application
+  Support/abapit`, beside `orgs.json`), or `.memory` for the demo and the tests. abapit's `SCHEMA` runs first, unchanged
+  (`SchemaTests` pins its SHA-256 to abapit's text at the pin); then version 1's additions: `org_id` and `notes` on
+  `snapshots`, an index on `(org_id, id)`, and `activation_lock_view` (serial, `is_locked`, `lock_type`) over the items
+  recorded as `SnapshotStore.activationLockResource` (`activation_lock`). The plan's `schema_version` is `PRAGMA
+  user_version` (1), set in the same transaction, which reads it again under the write lock. Foreign keys are on for
+  every connection the store opens, so a snapshot's items go with it.
+- **A file from a newer version is read, never written**: a `user_version` above `Schema.version` opens with `PRAGMA
+  query_only`, `access` is `.readOnly(version:)`, and `record`, `prune` and `removeAll` throw `.readOnly`, whose message
+  says a newer abapit wrote it.
+- **The owner's alone, from the first instant**: missing folders are made `0700` by `mkdir`, and the store's own folder
+  is narrowed to `0700` if it was wider. `history.sqlite` is made by `open(O_CREAT | O_EXCL | O_NOFOLLOW, 0600)` before
+  SQLite opens it (without `SQLITE_OPEN_CREATE`), so it is never wider, even between a crash and a `chmod`; an existing
+  wider file is narrowed. SQLite gives its journal (abapit's default rollback journal; a WAL would be the same) the
+  database's mode.
+- **Never through a link**: the store walks every folder from `/` down with `lstat` and refuses a link before it makes
+  anything; the file is opened `O_NOFOLLOW`; then `SQLITE_OPEN_NOFOLLOW` refuses a link anywhere in the path, which
+  catches one swapped in after the walk. SQLite opens a journal `O_NOFOLLOW` itself: a link planted where the journal
+  goes fails the write, and its target is never made.
+- **The API** (an actor; each call throws `SnapshotStore.Failure`, whose `message` is in the operator's words):
+  - `record(org:takenAt:resources:errors:notes:)`: one transaction, so a failure part way leaves no row. Items by
+    abapit's `INSERT OR REPLACE INTO items VALUES (?, ?, ?, ?)`: two items of a resource with one id keep the last.
+    Attributes are stored as abapit stores them (`StoredJSON`: `json.dumps(sort_keys=True)`, ASCII escapes), so they
+    load in abapit's order (keys sorted). `errors` and `notes` are JSON objects of words, keys sorted (abapit kept the
+    collectors' order; a Swift dictionary has none). `taken_at` is abapit's `strftime` text (UTC, whole seconds); the
+    caller passes the time, so an import can keep the original one. `org_scope` is the Apple scope, or the provider's
+    name (`mosyle`) for another org; `org_client_id` is empty for a Mosyle org; `abapit_version` is `swiftabapit
+    <version>`, so a row this app wrote is never taken for abapit's.
+  - `snapshots(org:limit:)` newest first by id, at most 100 by default, with abapit's `device_count`;
+    `load(_:org:)` every item, each resource's items by id; `latest(_:org:)` abapit's `latest_resource`.
+  - `prune(org:keep:)` keeps the newest `keep` **by id** (an import records old snapshots after new ones, so `taken_at`
+    would keep the wrong ones), and the items go too; a negative `keep` removes nothing. `removeAll(org:)` for an org
+    the operator removed with its history.
+- **One org at a time**: every query filters by `org_id`, the org's `OrgProfile.id` (never the client ID: a Mosyle org
+  has none, and the id never changes). Another org's snapshot is refused as one that isn't there (`.noSnapshot`); an org
+  with no id is refused (`.noOrg`). abapit's own file, brought up in place, keeps its rows with `org_id` empty: no org's,
+  until an import names one.
+- **What it never holds**: a secret, or a custom setting's profile (operator, 2026-10-31; Gotchas below). The store
+  writes what it is given; the collectors decide what that is.
+- **A row changed outside the app says so**: attributes, errors or notes that aren't a JSON object throw `.corrupt`
+  (abapit's `json.loads` raised too), never an empty value.
+
+### Reports
 
 - **An export names its columns** (invariant 11): `CSV.text(items, columns:)` takes an
   `ExportPolicy.Columns`, which only the Reports module can make, so a screen exports one of the fixed lists in
@@ -69,6 +120,20 @@ are below.
 
 ## Gotchas / stub-lies traps
 
+- **`standardizedFileURL` drops `/private`**: Foundation turns `/private/var/…` into `/var/…`, and `/var` is a link,
+  so every test folder was refused. The store takes the folder's path as given (refusing `.` and `..`), and the tests
+  use the temporary folder's `realpath` (`Scratch.folder()`).
+- **`SQLITE_OPEN_NOFOLLOW` refuses a link anywhere in the path** (`SQLITE_CANTOPEN_SYMLINK`, 1550), not only the last
+  component: `/tmp/…` and `/var/…` fail. The app's container path holds none.
+- **`latest` passes over a snapshot with no items of the resource**, as abapit's did: when the newest read of a
+  resource came back empty or failed, the older copy is what `latest` returns, with its own `takenAt`, so its age shows
+  (invariant 8).
+- **Resource names and the keys of `errors` and `notes` are Swift dictionary keys**, which merge canonically equivalent
+  strings. They are the app's ASCII constants; an item's id is never a key (items are an array, ordered by bytes).
+- **The editing tool decodes JSON's `\uXXXX`**: a test literal written with `\u0301` and `\ud83d\ude00` landed in
+  the file as the characters themselves, and only the test's own failure said so (`check_text.py` passes a visible
+  combining mark). Write such escapes from a script, and look for non-ASCII in what you wrote
+  (`grep -nP '[^\x00-\x7F]'`).
 - **A snapshot keeps no custom-setting profile** (operator, 2026-10-31: what can be read again from Apple isn't kept).
   `Configuration.resource` withholds it; the profile as Apple sent it (`Configuration.received`, `package`) holds Wi-Fi
   and VPN passwords and a certificate's key, and a snapshot is SQLite on disk, outside the Keychain (invariants 3, 11).
@@ -140,6 +205,15 @@ are below.
 
 ## Testing / live-verification status
 
+- The store: `SnapshotStoreTests` (what reads back; the last duplicate; `latest`; the bounded list; one org at a time;
+  an org with no id; prune by id with its items; removing an org's history; a fault part way through a record; the
+  folder, file and journal modes; a crash right after the file is made; a wider folder and file narrowed; a linked
+  folder, a link above it, a linked file, a link swapped in after the checks, a linked journal; a path that isn't the
+  store's; a newer file read-only; a row changed outside the app) and `SchemaTests` (abapit's `SCHEMA` by SHA-256; the
+  tables, columns, foreign key, index and views a new file has, and abapit's statements as SQLite keeps them; a current
+  file isn't migrated again; abapit's own file brought up; the three views; `StoredJSON` against Python 3.12's
+  `json.dumps(sort_keys=True)`; `taken_at`). The parity golden for the store (`Tests/Fixtures/parity/history.json`, from
+  the goldens PR) isn't on `main` yet: the SHA-256 pin holds the schema until its test lands.
 - Goldens: `csv.json` (88 cases, 43 listed deviations: containers as JSON, and 6 for the wider guard; and
   the guard's `blank` and `triggers` sets) and `reports.json` (`device_stats` 33 cases, 1 deviation, the
   Counter fleet; `assignment_summary` 22 cases; `audit_digest` 26 cases, 15 drawn and 11 hand-written
@@ -152,6 +226,9 @@ are below.
 
 ## To do common tasks here
 
+- **Change the schema**: add `Schema.toVersion2` (never edit abapit's text: `abapitsSchemaIsCopiedByteForByte`), bump
+  `Schema.version`, and run it in `SnapshotStore.prepare` for a file below it, in the same transaction that reads the
+  version again. A file above it stays read-only.
 - **Export a new view**: add its `Columns` to `ExportPolicy` (documented attributes only, nothing secret),
   call `CSV.text(items, columns: ExportPolicy.<view>)`, and pin the list and the denylist check in
   `ExportPolicyTests`. Never make `Columns.init` public: the compiler is the allowlist's enforcement.

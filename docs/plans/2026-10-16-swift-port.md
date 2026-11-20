@@ -364,7 +364,7 @@ AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
 MosyleModels → {JSONAPI}
 HTTPCore → {Wire}
-History → {AppleModels, MosyleModels, Reports}
+History → {Orgs, AppleModels, MosyleModels, Reports, JSONAPI}   stores and reads JSON:API resources
 Planners → {AppleModels, MosyleModels, JSONAPI, Wire}  (builds WireOperation via package init)
 Reports → {AppleModels, MosyleModels, JSONAPI}
 Assist → {Planners, Reports}                            never a client, HTTPCore or ChangeCore
@@ -1291,7 +1291,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** not started.
+**Status:** split into PRs (2026-11-20); the store is built on branch `phase-3-snapshot-store`.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.
