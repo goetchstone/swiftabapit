@@ -72,14 +72,17 @@ public struct CoverageReport: Sendable {
         let cutoff = start + days * Instant.day
         var rows: [(offset: Int, row: Expiring)] = []
         var covered: Set<[UInt8]> = []
+        // The map is read by bytes, as the rest of this module compares ids: a `Dictionary` takes a canonically equivalent
+        // spelling (NFC and NFD) for the same key, which would count one device's records twice or hand them to another.
+        let reads = Dictionary(coverage.map { (Instant.bytes($0.key), $0.value) }) { first, _ in first }
+        var keys: [[UInt8]] = []
         var seen: Set<[UInt8]> = []
-        var keys: [String] = []
-        for device in devices where seen.insert(Instant.bytes(device.id)).inserted { keys.append(device.id) }
-        if !list.isNotRead { keys += coverage.keys.filter { !seen.contains(Instant.bytes($0)) }.sorted { Instant.bytes($0).lexicographicallyPrecedes(Instant.bytes($1)) } }
+        for device in devices where seen.insert(Instant.bytes(device.id)).inserted { keys.append(Instant.bytes(device.id)) }
+        if !list.isNotRead { keys += reads.keys.filter { !seen.contains($0) }.sorted { $0.lexicographicallyPrecedes($1) } }
         for key in keys {
-            guard case .read(let records)? = coverage[key] else { continue }
+            guard case .read(let records)? = reads[key] else { continue }
             for item in records where item.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") {
-                covered.insert(Instant.bytes(key))
+                covered.insert(key)
                 guard let end = ISODate.parse(item.attributes["endDateTime"]?.string).map(Instant.micros) else {
                     if let value = item.attributes["endDateTime"], value != .null { unreadable.append(item) }
                     continue
@@ -91,7 +94,7 @@ public struct CoverageReport: Sendable {
         }
         // Python's sort is stable: equal days_left keep the input order.
         expiring = rows.sorted { $0.row.daysLeft != $1.row.daysLeft ? $0.row.daysLeft < $1.row.daysLeft : $0.offset < $1.offset }.map(\.row)
-        let unreadBytes = Set(devices.filter { if case .read? = coverage[$0.id] { false } else { true } }.map { Instant.bytes($0.id) })
+        let unreadBytes = Set(devices.filter { if case .read? = reads[Instant.bytes($0.id)] { false } else { true } }.map { Instant.bytes($0.id) })
         let missing = devices.filter { !covered.contains(Instant.bytes($0.id)) }
         uncovered = missing.filter { !unreadBytes.contains(Instant.bytes($0.id)) }
         notRead = missing.filter { unreadBytes.contains(Instant.bytes($0.id)) }

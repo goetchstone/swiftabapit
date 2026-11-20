@@ -31,10 +31,11 @@ private func finish(_ list: ListRead, identity: JSONObject, full: JSONObject, ju
     return attributes
 }
 
-/// A list that wasn't read and left no rows still says so (invariant 8): one row whose `listRead` cell says why and whose
+/// A list that wasn't read, or was read in part, and left no rows still says so (invariant 8): one row whose `listRead` cell says why and whose
 /// other cells are empty, so the file is never a bare header that reads as "nothing to report".
 func withSentinel(_ list: ListRead, rows: [CSV.Item]) -> [CSV.Item] {
-    guard list.isNotRead, rows.isEmpty else { return rows }
+    if case .whole = list { return rows }
+    guard rows.isEmpty else { return rows }
     return [CSV.Item(id: "", attributes: ["listRead": .string(list.csvWords)])]
 }
 
@@ -90,7 +91,7 @@ extension MigrationReport {
         switch device.attributes["isMdmMigrationCapable"] {
         case nil, .null?: nil
         case .bool(let flag)?: flag ? "yes" : "no"
-        case let value?: value.jsonText
+        case let value?: shownJSON(value)
         }
     }
 }

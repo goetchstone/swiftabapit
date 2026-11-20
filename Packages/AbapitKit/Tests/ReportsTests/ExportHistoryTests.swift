@@ -83,4 +83,15 @@ struct ExportHistoryTests {
         // A list that was read and left no rows stays a header.
         #expect(!ExportHistory.coverageExpiring(CoverageFleetAgeTests.coverage(applecare: [], devices: [], days: 30, now: CoverageFleetAgeTests.now, notRead: [])).contains("not read"))
     }
+
+    /// A list read in part that left no rows says so too: one row, `listRead` saying how much, never a bare header.
+    @Test func aPartlyReadEmptyListExportsOneRowThatSaysSo() {
+        let how = "showing 0 of at least 9"
+        let candidates = ExportHistory.refreshCandidates(CoverageFleetAgeTests.fleetAge(devices: [], applecare: [], years: 1, now: CoverageFleetAgeTests.now,
+                                                                                         notRead: [], list: .partly(how)))
+        #expect(candidates.hasSuffix("\r\n,read in part: \(how),,,,,,\r\n"))
+        let expiring = ExportHistory.coverageExpiring(CoverageFleetAgeTests.coverage(applecare: [], devices: [], days: 30, now: CoverageFleetAgeTests.now,
+                                                                                      notRead: [], list: .partly(how)))
+        #expect(expiring.hasSuffix("\r\n,read in part: \(how),,,,,,,\r\n"))
+    }
 }

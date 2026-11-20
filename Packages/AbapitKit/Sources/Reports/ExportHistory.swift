@@ -22,15 +22,22 @@ public enum ExportHistory {
     public static func refreshCandidates(_ report: FleetAgeReport) -> String {
         CSV.text(withSentinel(report.list, rows: report.candidates.map { candidate in
             CSV.Item(id: candidate.serial, attributes: [
-                "listRead": .string(report.list.csvWords), "serialNumber": .string(candidate.serial), "deviceModel": candidate.model, "productFamily": candidate.family,
-                "ordered": candidate.ordered, "ageYears": .number(String(candidate.ageYears)),
+                "listRead": .string(report.list.csvWords), "serialNumber": .string(candidate.serial), "deviceModel": masking(candidate.model, depth: 0), "productFamily": masking(candidate.family, depth: 0),
+                "ordered": masking(candidate.ordered, depth: 0), "ageYears": .number(String(candidate.ageYears)),
                 "activeCoverage": candidate.notRead ? .string("not read") : (candidate.covered.map(JSONValue.bool) ?? .null),
             ])
         }), columns: ExportPolicy.refreshCandidates)
     }
 
     public static func coverageExpiring(_ report: CoverageReport) -> String {
-        CSV.text(withSentinel(report.list, rows: report.expiring.map { CSV.Item(id: $0.attributes["serialNumber"]?.string ?? "", attributes: $0.attributes.merging(["listRead": .string(report.list.csvWords)])) }),
+        CSV.text(withSentinel(report.list, rows: report.expiring.map { CSV.Item(id: $0.attributes["serialNumber"]?.string ?? "", attributes: maskedObject($0.attributes).merging(["listRead": .string(report.list.csvWords)])) }),
                  columns: ExportPolicy.coverageExpiring)
     }
+}
+
+/// A record's attributes with every secret-keyed value inside an object or list value withheld, as `shownJSON` does (invariant 11).
+private func maskedObject(_ object: JSONObject) -> JSONObject {
+    var out = JSONObject()
+    for (key, value) in object { out[key] = masking(value, depth: 0) }
+    return out
 }

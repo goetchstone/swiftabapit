@@ -142,6 +142,24 @@ struct CoverageFleetAgeTests {
         #expect(none.uncovered.isEmpty && none.notRead.isEmpty && none.coveredCount == 0 && none.expiring.isEmpty)
     }
 
+    /// Ids are compared by bytes: a device whose id is NFC with its coverage under the NFD spelling is not that device's read (a
+    /// `Dictionary` would take them for one key and count the record twice), and the record still counts once toward `expiring`.
+    @Test func idsInTwoUnicodeSpellingsAreTwoIds() {
+        let nfc = "caf\u{E9}", nfd = "cafe\u{301}"
+        #expect(nfc == nfd && Array(nfc.utf8) != Array(nfd.utf8))
+        let devices = [Self.device(nfc)]
+        let reads: [String: DeviceRead<[Resource]>] = [nfd: .read([Self.care(nfd, end: Self.stamp(86_400))])]
+        let report = CoverageReport(devices: devices, coverage: reads, days: 30, now: Self.now)
+        #expect(report.expiring.count == 1)
+        #expect(report.notRead.map(\.id) == [nfc] && report.coveredCount == 0 && report.uncovered.isEmpty)
+        // Both spellings listed, each with its own read: neither borrows the other's.
+        let both = CoverageReport(devices: [Self.device(nfc), Self.device(nfd)], coverage: reads, days: 30, now: Self.now)
+        #expect(both.expiring.count == 1 && both.coveredCount == 1 && both.notRead.count == 1)
+        let aged = Self.device(nfc, order: Self.stamp(-5 * 365 * 86_400))
+        let fleet = FleetAgeReport(devices: [aged], coverage: reads, years: 4, now: Self.now)
+        #expect(fleet.candidates.map(\.notRead) == [true] && fleet.candidates.map(\.covered) == [nil])
+    }
+
     @Test func theWindowIsClosedAtBothEndsToTheMicrosecond() {
         let devices = [Self.device("D1")]
         func expiring(_ end: String) -> Int {

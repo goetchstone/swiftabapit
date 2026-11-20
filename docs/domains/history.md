@@ -188,7 +188,7 @@ events in phase 2a; their notes are below.
   `strict_equal` has the same blind spot: a golden case for `NaN` is a follow-up for the generator.
 - **`CoverageReport`** is `coverage_report`: an `ACTIVE` record (exactly) covers its serial; an end between now and
   now + days, both ends included, to the microsecond (`Instant` works in whole microseconds, as a `Date`'s `Double` can't);
-  `days_left` is `timedelta.days` (floor); soonest first, equal days in input order. Added, not in abapit: `notRead`, the
+  `days_left` is `timedelta.days` (floor); soonest first; equal days keep the order of the records as the device list reaches them (the device list's order, then keys matching no listed device by bytes, then the record's own order within a device; abapit's was the flat list's order, and the two agree on the goldens: **a recorded deviation**). Added, not in abapit: `notRead`, the
   devices whose coverage wasn't read (see "Read as the fleet reports do" below); never `uncovered` (an unread device is not
   an unprotected one); with every device read it is abapit's.
 - **`FleetAgeReport`** is `fleet_age_report`: age is `timedelta.days / 365.25` (days floored) from `orderDateTime`, else
@@ -210,8 +210,8 @@ events in phase 2a; their notes are below.
   ("read in full", "read in part: how"), written over any record attribute of that name. Records are a device's by the key
   they sit under; keys that match no listed device still count toward `expiring`, and equal `days_left` keep the device
   list's order, then the other keys by bytes. With every device read and the list whole both reports equal the goldens
-  (32 coverage and 35 fleet-age cases, the same two fleet-age deviations). `FleetAgeReport`'s map is optional: nil is no
-  coverage data; an empty map is data in which nobody was read. A list that wasn't read and left no rows exports one row, `listRead` saying why and every other cell empty (every fleet CSV and both history CSVs; never a bare header).
+  (32 coverage and 35 fleet-age cases, the same two fleet-age deviations). **Recorded deviations from abapit**: the tie order above, and a leading `listRead` column on both history CSVs (abapit's two CSVs had none). Ids are matched by bytes: an NFC id with coverage under the NFD spelling is not that device's read. `FleetAgeReport`'s map is optional: nil is no
+  coverage data; an empty map is data in which nobody was read. A list that wasn't read, or was read in part, and left no rows exports one row, `listRead` saying why and every other cell empty (every fleet CSV and both history CSVs; never a bare header).
 - **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
   allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
 - **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
@@ -360,7 +360,7 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   tokens, inputs and CSV columns (`quiet-services` isn't one: `service-health`'s `quiet` group answers it). `resolve` takes
   only known values: case and spaces around a value or its colon normalize to the canonical token (`lock:user` and
   `status: SUCCESS` work), anything else (`lock:bogus`) is a problem, so a token never silently matches nothing.
-- **A quoted cell** means Apple sent a value in a shape this app didn't expect; it is shown as sent (its JSON text: a
+- **A quoted cell** means Apple sent a value in a shape this app didn't expect; it is shown as sent (its JSON text, with any value under a secret-looking key, at any depth, replaced by the audit payloads' withheld marker, never shown: a
   string keeps its quotes). This holds on every row kind: an `orderDateTime` that isn't a date is quoted on active,
   status-unknown, not-read, no-record and no-active-coverage rows alike, and an ACTIVE record whose `endDateTime` isn't a
   date is never exported blank: `activeCoverageEnds` reads `end date not readable: "<as sent>"`, after the latest readable

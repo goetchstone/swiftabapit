@@ -65,8 +65,10 @@ public struct FleetAgeReport: Sendable {
         let devices = list.isNotRead ? [] : listed
         let years = min(max(requested, 0), Self.maximumYears)
         /// A device's state: true or false when its records were read, nil when they weren't.
+        // By bytes, as the rest of this module compares ids (a `Dictionary` takes NFC and NFD for one key).
+        let reads = coverage.map { map in Dictionary(map.map { (Instant.bytes($0.key), $0.value) }) { first, _ in first } }
         func state(_ device: Resource) -> Bool? {
-            guard case .read(let records)? = coverage?[device.id] else { return nil }
+            guard case .read(let records)? = reads?[Instant.bytes(device.id)] else { return nil }
             return records.contains { $0.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") }
         }
         let start = Instant.micros(now)

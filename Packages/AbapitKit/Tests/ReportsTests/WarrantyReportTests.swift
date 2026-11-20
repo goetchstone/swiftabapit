@@ -242,4 +242,20 @@ struct WarrantyReportTests {
             #expect(CSV.text(read, columns: columns).components(separatedBy: "\r\n").filter { !$0.isEmpty }.count == 1, "\(name) read")
         }
     }
+
+    @Test func everyFleetCSVOfAPartlyReadEmptyListHasOneRowThatSaysSo() throws {
+        let how = "showing 0 of at least 9"
+        let part = ListRead.partly(how)
+        let csvs: [(String, [CSV.Item], ExportPolicy.Columns)] = [
+            ("activation lock", ActivationLockReport([], reads: [:], list: part).csvItems, ExportPolicy.activationLockReport),
+            ("migration", MigrationReport([], now: Fleet.now, list: part).csvItems, ExportPolicy.migrationReport),
+            ("services", ServiceHealth([], now: Fleet.now, list: part).csvItems, ExportPolicy.serviceHealth),
+            ("warranty", WarrantyReport([], coverage: [:], now: Fleet.now, list: part).csvItems, ExportPolicy.warrantyReport),
+        ]
+        for (name, items, columns) in csvs {
+            let row = try #require(Fleet.table(CSV.text(items, columns: columns))[""], "\(name)")
+            #expect(row["listRead"] == "read in part: \(how)", "\(name)")
+            #expect(row.filter { $0.key != "listRead" && $0.key != "id" }.allSatisfy { $0.value.isEmpty }, "\(name)")
+        }
+    }
 }
