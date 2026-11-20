@@ -59,8 +59,12 @@ public enum AppleRead {
                     template: "/v1/orgDevices/{id}/relationships/assignedServer")
     }
 
-    /// The attributes `services(_:)` asks for: all of the contract's `fields[mdmServers]` values but the `devices` relationship.
-    public static let serviceFields = ["serverName", "serverType", "status", "deviceCount", "lastConnectedDateTime", "lastConnectedIp",
+    /// The attributes `services(_:)` asks for: the contract's `fields[mdmServers]` values but the `devices` relationship and
+    /// `deviceCount`. Apple's live server refused a list naming `deviceCount` on 2026-11-20 (its reason named the field), and
+    /// its default fields carry the other nine; a service's device count is the app's own count of the relationship read
+    /// (`mdmServers/{id}/relationships/devices`), so Apple's attribute isn't needed. `MDMService.deviceCount` still reads it
+    /// if Apple ever sends it.
+    public static let serviceFields = ["serverName", "serverType", "status", "lastConnectedDateTime", "lastConnectedIp",
                                        "defaultProductFamilies", "enableMdmDisownFlag", "createdDateTime", "updatedDateTime"]
 
     /// The services, without their device relationships. `fields: false` leaves out `fields[mdmServers]` and so reads Apple's

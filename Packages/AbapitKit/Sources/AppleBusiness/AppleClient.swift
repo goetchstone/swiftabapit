@@ -350,6 +350,34 @@ public actor AppleClient {
         return BlueprintRead(blueprint: blueprint, members: .read(related: related, included: document.included.map(Configuration.withholdingProfile)))
     }
 
+    /// One blueprint with its members, read one relationship at a time: the blueprint without `include` (Apple's live server
+    /// refused the include of all six on 2026-11-19 and again on 2026-11-20: 400 `PARAMETER_ERROR.ILLEGAL include`), then each
+    /// of the six relationships' own list (`blueprints/{id}/relationships/<name>`, every page, which Apple served), so no
+    /// request Apple is known to refuse is sent first. Members come as ids only: nothing is included, so none is named.
+    /// A relationship that comes back cut by the page cap says so (`Blueprint.Related.isTruncated`). A relationship Apple
+    /// refuses (a 400 or a 403: a role that can't read users) makes the answer `.refused`, never a count of the others as if
+    /// they were the blueprint's members; any other failure is thrown.
+    public func blueprintWithMembers(_ id: String) async throws -> BlueprintRead {
+        try businessOnly(.blueprints)
+        guard let read = AppleRead.blueprint(id: id) else { throw AppleAPIError.notFound }
+        let blueprint = try Blueprint(resource: Self.resource(of: try await documentOf(read), read.template))
+        var related: [Blueprint.Relationship: Blueprint.Related] = [:]
+        for relationship in Blueprint.Relationship.allCases {
+            var linkages: [Linkage] = []
+            var cut = false
+            do {
+                for try await page in blueprintMemberIDs(id, relationship) {
+                    linkages += page.items.map { Linkage(type: relationship.resourceType, id: $0) }
+                    cut = page.truncated || (page.total.map { $0 > linkages.count } ?? false)
+                }
+            } catch let error as AppleAPIError where Self.refusesInclude(error) {
+                return BlueprintRead(blueprint: blueprint, members: .refused(error))
+            }
+            related[relationship] = Blueprint.Related(linkages: linkages, isTruncated: cut)
+        }
+        return BlueprintRead(blueprint: blueprint, members: .read(related: related, included: []))
+    }
+
     /// Apple's answer to an include it won't serve: a 400 (what abapit saw) or a 403. Nothing else is retried.
     static func refusesInclude(_ error: AppleAPIError) -> Bool {
         switch error {

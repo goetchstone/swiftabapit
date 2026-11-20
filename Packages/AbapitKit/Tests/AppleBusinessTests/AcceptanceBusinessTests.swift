@@ -6,7 +6,7 @@ import Testing
 import TestSupport
 
 /// The acceptance pass over the Business-only reads (plan §8, Phase 2: "the acceptance pass covers every read"): each
-/// line is `ok` only for a read that ran and fully succeeded, the blueprint's include fallback is said, and every read
+/// line is `ok` only for a read that ran and fully succeeded, a refused members read is said, and every read
 /// it walks is checked as it reads it.
 @Suite("Acceptance pass, Business reads", .serialized)
 struct AcceptanceBusinessTests {
@@ -22,38 +22,42 @@ struct AcceptanceBusinessTests {
         try #require(report.lines.first { $0.resource == resource }, "\(resource): \(report.text)")
     }
 
-    /// Apple refused the include and the blueprint was read without it: the line is the refusal's status with what was
-    /// read, never `ok`, and says the members weren't read (invariant 8). The six relationship reads still run.
-    @Test(arguments: [(400, "error 400", "PARAMETER_ERROR.ILLEGAL include"), (403, "forbidden", "FORBIDDEN_ERROR")])
-    func aRefusedIncludeIsSaidNeverOk(status: Int, said: String, code: String) async throws {
-        let (harness, report) = try await Self.pass { harness in
-            harness.stub.forbid("/v1/users")
-            harness.stub.refuseIncludes(with: status)
+    /// The blueprint line is the app's own read: the blueprint with no `include` (Apple refused it live on 2026-11-19 and
+    /// 2026-11-20) and each relationship's list, so against the stub, which still refuses an include, the line is `ok` with no
+    /// refused request sent.
+    @Test func theBlueprintLineIsOkWithoutARefusedRequest() async throws {
+        let (harness, report) = try await Self.pass { $0.stub.refuseIncludes(with: 400) }
+        let line = try Self.line(report, "blueprints/{id}")
+        #expect(line.ok && line.count == 1, "\(report.text)")
+        #expect(report.text.contains("\nblueprints/{id}: ok, 1 item · unknown values status=PAUSED · apps 1, packages 1, configurations 1, orgDevices 2, users 1, userGroups 1\n"), "\(report.text)")
+        let reads = harness.reads.filter { $0.contains("/v1/blueprints/BP1") }
+        #expect(!reads.contains { $0.contains("include") }, "\(reads)")
+        #expect(reads.filter { !$0.contains("/relationships/") }.count == 1, "\(reads)")
+        #expect(Blueprint.Relationship.allCases.allSatisfy { name in reads.contains { $0.contains("/relationships/\(name.rawValue)") } })
+    }
+
+    /// Apple refused a relationship's list: the line is the refusal's status with what was read, never `ok`, and says the
+    /// members weren't read (invariant 8). The six relationship lines still run.
+    @Test(arguments: [(400, "error 400", ""), (403, "forbidden", "FORBIDDEN_ERROR")])
+    func aRefusedMembersReadIsSaidNeverOk(status: Int, said: String, code: String) async throws {
+        let (_, report) = try await Self.pass { harness in
+            if status == 403 { harness.stub.forbid("/v1/blueprints/BP1/relationships/users") } else { harness.stub.queue(400, for: "/v1/blueprints/BP1/relationships/users") }
         }
         let line = try Self.line(report, "blueprints/{id}")
         #expect(!line.ok && line.count == 1)
         #expect(report.text.contains("\nblueprints/{id}: \(said), 1 item · unknown values status=PAUSED · "
-                                     + "the include was refused, so the blueprint was read without its members · \(code)\n"), "\(report.text)")
-        #expect(harness.reads.filter { $0.contains("/v1/blueprints/BP1") && !$0.contains("/relationships/") }.count == 2)
-        #expect(try Self.line(report, "blueprints/{id}/relationships/apps").ok && Self.line(report, "blueprints/{id}/relationships/users").ok)
+                                     + "a members read was refused, so the blueprint's members weren't read\(code.isEmpty ? "" : " · " + code)\n"), "\(report.text)")
+        #expect(try Self.line(report, "blueprints/{id}/relationships/apps").ok)
     }
 
-    /// A relationship the include's limit cut is `truncated`, and so is one Apple asked for and didn't list, whose count
-    /// is a dash: none was read, so none is said (it read 0).
-    @Test func aRelationshipCutOrNotListedIsTruncated() async throws {
-        let (_, cut) = try await Self.pass { $0.stub.relate("blueprints", "BP1", "orgDevices", to: (0..<1_001).map { String(format: "TESTD%07d", $0) }) }
-        #expect(cut.text.contains("\nblueprints/{id}: truncated, 1 item · unknown values status=PAUSED · orgDevices cut at the include's limit · "
+    /// A relationship the page cap cut is `truncated`, the others counted.
+    @Test func aRelationshipTheCapCutIsTruncated() async throws {
+        let (_, cut) = try await Self.pass({ $0.stub.relate("blueprints", "BP1", "orgDevices", to: (0..<1_001).map { String(format: "TESTD%07d", $0) }) }, pageCap: 1)
+        #expect(cut.text.contains("\nblueprints/{id}: truncated, 1 item · unknown values status=PAUSED · orgDevices cut at the page cap · "
                                   + "apps 1, packages 1, configurations 1, orgDevices 1000, users 1, userGroups 1\n"), "\(cut.text)")
-        #expect(cut.text.contains("\nblueprints/{id}/relationships/orgDevices: ok, 1001 items\n"))
-
-        let (_, unlisted) = try await Self.pass { harness in
-            harness.stub.queue(200, for: "/v1/blueprints/BP1?include=", body: #"""
-                {"data":{"type":"blueprints","id":"BP1","attributes":{"name":"Marketing"},"relationships":{"apps":{"data":[]},"users":{"links":{}}}},
-                 "links":{"self":"x"}}
-                """#)
-        }
-        #expect(unlisted.text.contains("\nblueprints/{id}: truncated, 1 item · packages, configurations, orgDevices, users, userGroups not listed · "
-                                       + "apps 0, packages -, configurations -, orgDevices -, users -, userGroups -\n"), "\(unlisted.text)")
+        let (_, whole) = try await Self.pass { $0.stub.relate("blueprints", "BP1", "orgDevices", to: (0..<1_001).map { String(format: "TESTD%07d", $0) }) }
+        #expect(whole.text.contains("\nblueprints/{id}: ok, 1 item · unknown values status=PAUSED · apps 1, packages 1, configurations 1, orgDevices 1001, users 1, userGroups 1\n"), "\(whole.text)")
+        #expect(whole.text.contains("\nblueprints/{id}/relationships/orgDevices: ok, 1001 items\n"))
     }
 
     /// The audit log is read cursor by cursor whole, with each page's filters; a repeated cursor is malformed with what
@@ -168,7 +172,7 @@ struct AcceptanceBusinessTests {
             harness.stub.queue(200, for: "/v1/apps/361309726", body: #"{"data":{"type":"packages","id":"361309726"}}"#)
             harness.stub.queue(200, for: "/v1/organizationalUnits/OU789012/relationships/users", body: #"{"data":[{"type":"userGroups","id":"UG123456"}]}"#)
             harness.stub.queue(200, for: "/v1/mdmDevices/MD1/details", body: #"{"data":{"type":"mdmDevices","id":"MD1"}}"#)
-            harness.stub.queue(200, for: "/v1/blueprints/BP1?include=", body: #"{"data":{"type":"blueprints","id":"BP2"},"links":{"self":"x"}}"#)
+            harness.stub.queue(200, for: "/v1/blueprints/BP1", body: #"{"data":{"type":"blueprints","id":"BP2"},"links":{"self":"x"}}"#)
         }
         let expected = [
             "packages": "error malformed, 0 items · items of type packages", "users/{id}": "error malformed, 0 items · the users item asked for",

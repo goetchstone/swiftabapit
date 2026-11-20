@@ -98,7 +98,9 @@ struct AcceptancePassTests {
         }
         // The configuration read alone is the custom setting, though a built-in one comes first.
         #expect(harness.reads.contains { $0.hasPrefix("GET api-business.apple.com/v1/configurations/config-12345") })
-        #expect(harness.reads.contains { $0.contains("/v1/blueprints/BP1?include=apps%2Cpackages%2Cconfigurations%2CorgDevices%2Cusers%2CuserGroups") })
+        // The blueprint is read without `include` (Apple refused it live, 2026-11-19 and 2026-11-20), its members one relationship at a time.
+        #expect(!harness.reads.contains { $0.contains("/v1/blueprints/") && $0.contains("include") })
+        #expect(harness.reads.contains { $0 == "GET api-business.apple.com/v1/blueprints/BP1" })
     }
 
     /// The Business-only reads' lines in a pass, between Phase 1's eight and the probes: Phase 2's 25 and the webhooks' 3.

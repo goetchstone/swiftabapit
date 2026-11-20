@@ -28,9 +28,9 @@ struct DemoTests {
 
     struct Unread: Error { let state: LoadState }
 
-    /// Every member of every demo blueprint is named from what the stub included: its users and user groups are
-    /// `DemoPeople`'s, its devices the fleet's, its apps, packages and configurations `DemoContent`'s.
-    @Test func everyBlueprintMemberNamesSomething() async throws {
+    /// Every member of every demo blueprint is listed by id, read one relationship at a time (nothing is included, so none is
+    /// named): none is missing a count, its users and user groups are `DemoPeople`'s.
+    @Test func everyBlueprintMemberIsListed() async throws {
         let world = try await Self.demo()
         let content = world.content
         content.kind = .blueprints
@@ -47,8 +47,8 @@ struct DemoTests {
             }
             #expect(detail.membersNote == nil, "\(id)")
             for group in detail.members {
-                let unnamed = group.members.filter { $0.name == nil }.map(\.id)
-                #expect(unnamed.isEmpty, "\(id) \(group.title) names nothing for \(unnamed)")
+                #expect(group.count == group.members.count && !group.isTruncated, "\(id) \(group.title)")
+                #expect(group.members.allSatisfy { $0.name == nil && !$0.id.isEmpty }, "\(id) \(group.title)")
                 if group.relationship == .users || group.relationship == .userGroups { people += group.members.count }
             }
         }

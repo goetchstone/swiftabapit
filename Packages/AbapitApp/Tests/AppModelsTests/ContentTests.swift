@@ -985,84 +985,68 @@ struct ContentTests {
         return try Self.detail(world)
     }
 
-    /// A blueprint is read with every relationship included, each member named from what Apple included where it can be,
-    /// its id always, and each count from `members`.
+    /// A blueprint is read without `include` (Apple's live server refused it on 2026-11-19 and 2026-11-20) and each of its six
+    /// relationships on its own: each member is its id (nothing is included, so none is named), each count from `members`.
     @Test func aBlueprintsMembersAreReadWithIt() async throws {
         let world = try await World.make()
         Self.stocked(world)
         let detail = try await Self.blueprintDetail(world, "demo-blueprint-01")
-        let read = try #require(world.stubs["a"]!.requests.first { $0.contains("/v1/blueprints/demo-blueprint-01") }?.removingPercentEncoding)
+        let reads = world.stubs["a"]!.requests.filter { $0.contains("/v1/blueprints/demo-blueprint-01") }
+        #expect(!reads.contains { $0.contains("include") } && reads.filter { !$0.contains("/relationships/") } == ["GET api-business.apple.com/v1/blueprints/demo-blueprint-01"], "\(reads)")
         for relationship in ["apps", "packages", "configurations", "orgDevices", "users", "userGroups"] {
-            #expect(read.contains("limit[\(relationship)]=1000") && read.contains(relationship), "\(read)")
+            #expect(reads.contains { $0.contains("/relationships/\(relationship)?") && $0.contains("limit=1000") }, "\(reads)")
         }
         #expect(detail.title == "Example Office Macs" && detail.membersNote == nil)
         #expect(detail.members.map(\.title) == ["Apps", "Packages", "Configurations", "Devices", "Users", "User groups"])
         #expect(detail.members.map(\.summary) == ["5 apps", "3 packages", "4 configurations", "3 devices", "None", "1 user group"])
         #expect(detail.members.map(\.count) == [5, 3, 4, 3, 0, 1])
         let apps = try #require(detail.members.first)
-        #expect(apps.members.first == ContentMember(id: "1000000001", name: "Example Field Notes"))
-        #expect(detail.members[3].members.first == ContentMember(id: "ADEV0000000", name: "MacBook Air"))
+        #expect(apps.members.first == ContentMember(id: "1000000001", name: nil))
+        #expect(detail.members[3].members.first == ContentMember(id: "ADEV0000000", name: nil))
         // DemoPeople's group, by its id; named once DemoPeople is loaded too, as the demo org does (DemoTests).
         #expect(detail.members[5].members.map(\.id) == ["DEMOUG01"])
         #expect(detail.fields.contains(ContentField("Licences", "Enough for its apps")) && detail.fields.contains(ContentField("Status", "Active")))
     }
 
-    /// A relationship cut at the include's limit says "showing N of more than N", never the count as all.
-    @Test func aRelationshipCutAtTheIncludesLimitSaysSo() async throws {
-        let world = try await World.make()
+    /// A relationship cut at the page cap says "showing N of more than N", never the count as all.
+    @Test func aRelationshipCutAtThePageCapSaysSo() async throws {
+        let world = try await World.make(pageCap: 1)
         world.stubs["a"]!.add([Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Big")])])
         world.stubs["a"]!.relate("blueprints", "B1", "orgDevices", to: (0..<1001).map { String(format: "TEST%07d", $0) })
         world.stubs["a"]!.relate("blueprints", "B1", "apps", to: ["1"])
         let detail = try await Self.blueprintDetail(world, "B1")
         let devices = try #require(detail.members.first { $0.relationship == .orgDevices })
         #expect(devices.isTruncated && devices.count == 1000 && devices.members.count == 1000)
-        #expect(devices.summary == "Showing 1,000 of more than 1,000 devices: Apple lists at most 1,000 of each with the blueprint.")
+        #expect(devices.summary == "Showing 1,000 of more than 1,000 devices: the read stopped at its page cap.")
         #expect(detail.members.first?.summary == "1 app" && detail.members.first?.isTruncated == false)
     }
 
-    /// A relationship Apple didn't list (links only) is said, with no count: never "None".
-    @Test func aRelationshipAppleDidNotListIsSaidWithNoCount() async throws {
-        let world = try await World.make()
-        world.stubs["a"]!.add([Resource(type: "blueprints", id: "B1", attributes: ["name": .string("Partial")])])
-        let base = "https://api-business.apple.com/v1/blueprints/B1"
-        func listed(_ name: String, _ ids: [String]) -> String {
-            "\"\(name)\":{\"links\":{\"self\":\"\(base)/relationships/\(name)\"},\"data\":[\(ids.map { "{\"type\":\"\(name)\",\"id\":\"\($0)\"}" }.joined(separator: ","))]}"
-        }
-        let relationships = [listed("apps", ["1", "2"]), listed("packages", []), listed("configurations", []), listed("orgDevices", []),
-                             "\"users\":{\"links\":{\"self\":\"\(base)/relationships/users\"}}", listed("userGroups", [])].joined(separator: ",")
-        world.stubs["a"]!.queue(200, for: "/v1/blueprints/B1?include=", body: """
-            {"data":{"type":"blueprints","id":"B1","attributes":{"name":"Partial"},"relationships":{\(relationships)}},"links":{"self":"\(base)"},"included":[]}
-            """)
-        let detail = try await Self.blueprintDetail(world, "B1")
-        let users = try #require(detail.members.first { $0.relationship == .users })
-        #expect(users.count == nil && users.members.isEmpty && users.summary == "Apple didn't list the blueprint's users, so none are shown or counted.")
-        #expect(detail.members.first?.summary == "2 apps" && detail.members[1].summary == "None")
-    }
-
-    /// A refused include (a 400, or a 403 for a role that can't read users) is said, and nothing is counted: the bare
+    /// A refused relationship (a 403 for a role that can't read users, or a 400) is said, and nothing is counted: the bare
     /// blueprint still shows (Phase 2a review L5: a refusal read as no members).
-    @Test func aRefusedIncludeIsSaidAndCountsNothing() async throws {
+    @Test func aRefusedMembersReadIsSaidAndCountsNothing() async throws {
         for status in [400, 403] {
             let world = try await World.make()
             Self.stocked(world)
-            world.stubs["a"]!.forbid("/v1/users")
-            if status == 403 { world.stubs["a"]!.refuseIncludes(with: 403) }
+            if status == 403 { world.stubs["a"]!.forbid("/v1/blueprints/demo-blueprint-02/relationships/users") }
+            else { world.stubs["a"]!.queue(400, for: "/v1/blueprints/demo-blueprint-02/relationships/users") }
             let detail = try await Self.blueprintDetail(world, "demo-blueprint-02")
             #expect(detail.title == "Example Field iPads" && detail.members.isEmpty, "\(status)")
             let note = try #require(detail.membersNote)
             if status == 403 {
-                #expect(note == "Your role can't read this: Apple refused to include the blueprint's members, so none are shown or counted.")
+                #expect(note == "Your role can't read this: Apple refused to list the blueprint's members, so none are shown or counted.")
             } else {
-                #expect(note.hasPrefix("Apple refused to include the blueprint's members, so none are shown or counted: Apple refused the request"), "\(note)")
+                #expect(note.hasPrefix("Apple refused to list the blueprint's members, so none are shown or counted: Apple refused the request"), "\(note)")
             }
-            // Read with the include, refused, then read again without it.
+            // The blueprint once, with no include.
             let reads = world.stubs["a"]!.requests.filter { $0.contains("/v1/blueprints/demo-blueprint-02") }
-            #expect(reads.count == 2 && reads[0].contains("include=") && !reads[1].contains("include="), "\(reads)")
+            #expect(!reads.contains { $0.contains("include") } && reads.filter { !$0.contains("/relationships/") }.count == 1, "\(reads)")
         }
     }
 
     /// Phase 2b verifier round 3: a blueprint's included packages were named raw in its member list, where the package's
-    /// own row, detail and CSV mask an address in its name; the list masks it the same way (`ContentWords.shown`).
+    /// own row, detail and CSV mask an address in its name; the list masks it the same way (`ContentWords.shown`). The blueprint
+    /// is read without `include` now, so a member is its id alone and no address of the package's reaches the detail; the
+    /// naming (and its masking) for an included member stays in `ContentDetail.init(blueprint:)`, which nothing in the app reaches.
     @Test func aBlueprintsPackageNamesAreMaskedAsThePackagesOwn() async throws {
         let world = try await World.make()
         let stub = world.stubs["a"]!
@@ -1074,8 +1058,8 @@ struct ContentTests {
         let row = try #require(world.content.packages.rows.first)
         let detail = try await Self.blueprintDetail(world, "B1")
         let packages = try #require(detail.members.first { $0.relationship == .packages })
-        #expect(packages.members == [ContentMember(id: "P1", name: "Agent from https://********@pkgs.example.com/agent.pkg")], "\(packages.members)")
-        #expect(packages.members.first?.name == row.name)
+        #expect(packages.members == [ContentMember(id: "P1", name: nil)], "\(packages.members)")
+        #expect(row.name.contains("https://********@pkgs.example.com") && !Self.printed(detail).contains("TOPSECRET1"), "\(row.name)")
     }
 
     // MARK: configurations
@@ -1118,7 +1102,7 @@ struct ContentTests {
         #expect(detail.attributes.contains { $0.label == "customSettingsValues" && $0.value.contains(CustomSettingsValues.withheld) })
 
         let blueprint = try await Self.blueprintDetail(world, "demo-blueprint-01")
-        #expect(blueprint.members[2].members.first == ContentMember(id: "demo-config-01", name: "Example Office Wi-Fi (profile)"))
+        #expect(blueprint.members[2].members.first == ContentMember(id: "demo-config-01", name: nil))
 
         let content = world.content
         var exposed = [Self.printed(detail), Self.printed(blueprint), Self.printed(content.configurations.rows),

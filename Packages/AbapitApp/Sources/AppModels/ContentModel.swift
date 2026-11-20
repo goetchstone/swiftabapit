@@ -393,7 +393,7 @@ public final class ContentDetailModel {
         switch selection.kind {
         case .apps: ContentDetail(app: try await client.app(selection.id))
         case .packages: ContentDetail(package: try await client.package(selection.id))
-        case .blueprints: ContentDetail(blueprint: try await client.blueprint(selection.id, include: Set(Blueprint.Relationship.allCases)))
+        case .blueprints: ContentDetail(blueprint: try await client.blueprintWithMembers(selection.id))
         case .configurations: ContentDetail(configuration: try await client.configuration(selection.id))
         }
     }
@@ -430,7 +430,7 @@ public struct ContentMemberGroup: Identifiable, Sendable, Equatable {
     public let members: [ContentMember]
     /// How many members Apple listed; nil when it didn't list them, never a zero nobody counted.
     public let count: Int?
-    /// The include's limit cut the list: there are more than `count`.
+    /// The page cap cut the list: there are more than `count`.
     public let isTruncated: Bool
     public let summary: String
 
@@ -916,18 +916,18 @@ package enum ContentWords {
     }
 
     /// A relationship's count in words: "5 apps", "1 user group", "None", or "showing N of more than N" when the
-    /// include's limit cut it (invariant 8).
+    /// page cap cut its list (invariant 8).
     static func members(_ count: Int, _ relationship: Blueprint.Relationship, truncated: Bool) -> String {
         if truncated {
             return "Showing \(count.formatted()) of more than \(count.formatted()) \(relationship.noun(2)): "
-                + "Apple lists at most \(AppleRead.pageLimit.formatted()) of each with the blueprint."
+                + "the read stopped at its page cap."
         }
         return count == 0 ? "None" : "\(count.formatted()) \(relationship.noun(count))"
     }
 
-    /// Why a blueprint's members aren't shown: Apple refused the include, and the blueprint was read without it.
+    /// Why a blueprint's members aren't shown: Apple refused one relationship's list, and none are shown or counted.
     static func refusal(_ error: AppleAPIError) -> String {
-        let said = "Apple refused to include the blueprint's members, so none are shown or counted"
+        let said = "Apple refused to list the blueprint's members, so none are shown or counted"
         if case .forbidden = error { return "Your role can't read this: \(said)." }
         return "\(said): \(error.message)"
     }

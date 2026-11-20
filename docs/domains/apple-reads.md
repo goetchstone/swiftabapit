@@ -178,7 +178,9 @@ org editor's save).
   Business host anyway: `.wrongHost`). The stub fails a School request for them as unhandled, and
   `theBusinessOnlyReadsAreWhatSchoolLacks` holds the gate to the two contracts. The acceptance pass gives a School org
   each of those lines as `skipped: not in Apple School Manager's API`.
-- **The blueprint include fallback** (abapit `client.py` `blueprint`): Apple refuses the whole blueprint read when the
+- **The blueprint include fallback** (abapit `client.py` `blueprint`; since 2026-11-20 nothing in the app sends an include, see
+  "Answered live 2026-11-20": `AppleClient.blueprint(_:include:)` and this fallback stay for any caller that does, and are
+  tested): Apple refuses the whole blueprint read when the
   role can't read one of the included relationships (abapit saw a role that gets 403 on users and user groups get a
   400 here). `blueprint(_:include:)` reads once more without the include on a 400 or a 403, and only when something
   was included; any other status, a 400 with nothing included, and a failure of the second read are thrown. The
@@ -571,9 +573,11 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   keeps its rows, is partial and doesn't export (`aListRefusedPartWayIsPartial`, `groupsRefusedPartWayArePartial`; review
   L6, mutant P4).
 - **Content** (`ContentModel`, `ContentDetailModel`): apps, packages, blueprints and configurations side by side
-  (`ContentList` each); the chosen row is read alone. A blueprint is read with its six relationships at `limit=1000` and
-  counted only through `BlueprintRead.members`: "N apps", "Showing N of more than N", "Apple didn't list …" with no count,
-  and a refused include one note and no counts. A configuration's profile is only `profileText`, and one that can't be
+  (`ContentList` each); the chosen row is read alone. A blueprint is read with no `include` and each of its six relationships on its own
+  (`AppleClient.blueprintWithMembers`, every page, ids only: a member is not named), counted only through
+  `BlueprintRead.members`: "N apps", "Showing N of more than N" when the page cap cut a list, and a refused relationship one
+  note and no counts. ("Apple didn't list …" and the names of included members stay in `ContentDetail.init(blueprint:)`,
+  which nothing in the app reaches now.) A configuration's profile is only `profileText`, and one that can't be
   shown says why. A package's location is shown with its user, password, query values, path parameters' values and
   fragment masked (`ContentWords.location`) and never exported; App Store and website addresses are text, never opened.
   A scheme is only a leading `[A-Za-z][A-Za-z0-9+.-]*:`, a leading `//` starts an authority, and with no `//` an `@` ahead
@@ -738,7 +742,7 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
 ### Answered live 2026-11-19 (first acceptance pass on a real Apple Business org; no tenant data here)
 - **`GET /v1/mdmServers` with `fields[mdmServers]` answered 400 `PARAMETER_ERROR.INVALID`, `source.parameter`
   `fields[mdmServers]`**, although every value the client sent is in the contract's `allowedValues` (2.6 and 2.8). Which
-  value Apple refuses is unknown: Apple's `detail` wasn't captured. The client now asks again once without
+  value Apple refuses was unknown: Apple's `detail` wasn't captured (it is `deviceCount`, known 2026-11-20, below). The client now asks again once without
   `fields[mdmServers]` (Apple's default attributes), keeps `limit`, remembers the refusal for the client's life (memory
   only), and says so: `Page.note` on each page, the Services screen's note (`services.fieldsNote`), and the acceptance
   pass's `mdmServers` line, which says which of the ten fields Apple's `detail` names, as whole identifiers (`Apple's reason mentions: a, b`, or that it mentions none or every
@@ -762,3 +766,27 @@ Each screen's model is in `Packages/AbapitApp/Sources/AppModels/`, its view in `
   that dropped `fields[...]` would have other attributes than page 1.
 - Every other read ran and all 11 probes were `ok`, except `mdmServers/{id}/relationships/devices`, which was `skipped`
   because the services list failed (the blueprint's `include` read answered 400, above, and its fallback read it).
+
+### Answered live 2026-11-20 (the acceptance pass again, build of main 513dbc5; no tenant data here)
+- **`GET /v1/mdmServers` answered 400 `PARAMETER_ERROR.INVALID` on `fields[mdmServers]`, and Apple's reason mentions
+  `deviceCount`.** So the field refused on 2026-11-19 is `deviceCount`, although the contract allows it. The read without a field
+  list (the fallback) came back with every other attribute the app asks for (`status`, `lastConnectedDateTime` and the rest),
+  not the four of Apple's docc example of the bare read. The note said `Absent from every service: deviceCount`. The Services
+  screen's device count is the app's own count of `mdmServers/{id}/relationships/devices` (`model.deviceCount`), which was `ok`,
+  so Apple's attribute isn't needed. **Changed:** `AppleRead.serviceFields` lists nine fields, without `deviceCount`, so the first
+  read is accepted and needs no fallback; the refusal fallback, its memory and its note are unchanged for any future refusal;
+  `MDMService.deviceCount` still reads the attribute if Apple ever sends it (the Services column falls back to it, and to a
+  dash when neither exists). **The stub** refuses a field list naming `deviceCount` by default, with the 400
+  `PARAMETER_ERROR.INVALID` shape and `source.parameter` `fields[mdmServers]` (the code, the parameter and the field's name in the
+  reason were seen live; the `detail`'s wording is the stub's). `refuseServiceFields()` (refuse any list) stays for the fallback
+  tests. A read without `fields` still serves Apple's docc four attributes by default (the stricter case: a screen can't count
+  on `status` or `lastConnectedDateTime`); `serveLiveDefaultServiceFields()` serves what live sent, everything but `deviceCount`.
+- **`GET /v1/blueprints/{id}` with `include` answered 400 `PARAMETER_ERROR.ILLEGAL include` again** (same answer as 2026-11-19), and every
+  `blueprints/{id}/relationships/*` read on its own was `ok`. **Changed:** the app no longer sends `include` (or `limit[<name>]`) on
+  the blueprint: `AppleClient.blueprintWithMembers` reads the blueprint bare, then each relationship's list, every page, so the
+  Content detail and the acceptance pass's `blueprints/{id}` line send no request Apple is known to refuse (the line is `ok`). Cost:
+  members are ids only, since nothing is included to name them; a relationship Apple refuses makes the members `.refused` as before;
+  a list the page cap cut says "Showing N of more than N". Which value of `include` Apple refuses (all six together, or one, or the
+  `limit[...]` beside it) is still unknown. The stub's include refusal stays as it is (`PARAMETER_ERROR.ILLEGAL`, seen live).
+- `mdmServers/{id}/relationships/devices` was `ok` (the 2026-11-19 pass skipped it because the services list failed).
+- Decisions: the change was the coordinating session's proposal; the operator said "Yes, do it here".

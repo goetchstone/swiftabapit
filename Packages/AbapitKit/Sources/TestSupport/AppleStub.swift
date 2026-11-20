@@ -75,6 +75,7 @@ public final class AppleStub: Transport, Sendable {
         var details: [String: Resource] = [:]
         var includeRefusal = 400
         var refusesServiceFields = false
+        var servesLiveDefaultFields = false
         var repeatingCursors: Set<String> = []
         var forbiddenPaths: Set<String> = []
         var queued: [(path: String, status: Int, headers: [String: String], body: Data?)] = []
@@ -129,6 +130,11 @@ public final class AppleStub: Transport, Sendable {
     /// 2026-11-19 although the contract allows every value sent; which value it refuses is unknown. Off by default: the
     /// stub otherwise follows the contract. A list read without `fields[mdmServers]` is served as ever.
     public func refuseServiceFields() { state.withLock { $0.refusesServiceFields = true } }
+    /// A services list read without `fields[mdmServers]` answers every attribute the stub holds but `deviceCount`, as Apple's live
+    /// server did on 2026-11-20 (its default fields carried the nine the client asks for), and not the four of Apple's docc
+    /// example, which is the default. Both are held: the example's is the stricter case (a screen can't count on `status` or
+    /// `lastConnectedDateTime`), the live one is what Apple sent.
+    public func serveLiveDefaultServiceFields() { state.withLock { $0.servesLiveDefaultFields = true } }
     /// Every page under `path` names its own cursor as the next one, as a broken cursor would: the client must stop.
     public func repeatCursors(on path: String) { state.withLock { _ = $0.repeatingCursors.insert(path) } }
     /// Every request under `path` answers 403, as a role without that permission gets.
@@ -302,8 +308,22 @@ public final class AppleStub: Transport, Sendable {
                 return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "A value isn't allowed in fields[mdmServers].",
                                   parameter: "fields[mdmServers]")
             }
+            // Seen live 2026-11-20: Apple refuses a field list that names `deviceCount` (400 `PARAMETER_ERROR.INVALID`,
+            // `source.parameter` `fields[mdmServers]`, the field's name in the reason), although the contract allows it. The
+            // code, the parameter and the field's name in the reason were seen; the `detail`'s wording is the stub's own.
+            if let asked = query["fields[mdmServers]"], asked.split(separator: ",").contains("deviceCount") {
+                return Self.error(400, "PARAMETER_ERROR.INVALID", "A parameter has an invalid value", "The field deviceCount isn't allowed in fields[mdmServers].",
+                                  parameter: "fields[mdmServers]")
+            }
             var services = state.withLock { $0.services }
-            if query["fields[mdmServers]"] == nil {
+            if query["fields[mdmServers]"] == nil, state.withLock({ $0.servesLiveDefaultFields }) {
+                // What Apple's live default fields carried (2026-11-20): every attribute asked for but `deviceCount`.
+                services = services.map { service in
+                    var kept = service.attributes
+                    kept["deviceCount"] = nil
+                    return Resource(type: service.type, id: service.id, attributes: kept, relationships: service.relationships)
+                }
+            } else if query["fields[mdmServers]"] == nil {
                 // A read without `fields` answers what Apple's own example of this list has (Tests/Fixtures/docc/business/get-mdm-servers.response.json):
                 // four attributes per service, no status, no lastConnectedDateTime, no deviceCount, so a screen can't count on the
                 // others (failure-log 2026-11-19). Whatever the switch: Apple answers a read without `fields` the same way.
