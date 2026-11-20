@@ -29,9 +29,14 @@ enum Instant {
 /// is covered and never expiring. A serial is a string compared by bytes; a record with no string serial covers no
 /// device. `days_left` is `timedelta.days`, so a coverage ending in 29 days and a second is 29.
 ///
-/// One addition: `notRead`, the serials whose coverage a sweep could not read. A device with no active coverage
-/// that is in it is listed there and not as uncovered (an unread device isn't an unprotected one), and counted
-/// apart; a device with an active record is covered whatever the sweep said. With none given the report is abapit's.
+/// Two additions to abapit's report. `notRead` names the serials whose coverage a sweep could not read (callers must say
+/// who: a missing entry can't pass for a read one). A device with no active coverage that is among them is listed
+/// there and not as uncovered (an unread device isn't an unprotected one); a device with an active record is covered
+/// whatever the sweep said. With none it is abapit's report. And `unreadableEnd`: an active record whose
+/// `endDateTime` is there (not null) but isn't a date, counted apart as `QuietServices` counts `unreadable`; abapit
+/// quietly took it as never expiring (a recorded deviation, in the code only: Apple types the field as a date-time).
+/// A missing or null end is still never expiring. `days` is held to 0...1825 (abapit's route allowed 1...1825; the
+/// golden calls 0).
 public struct CoverageReport: Sendable {
     public struct Expiring: Sendable, Equatable {
         /// The record's attributes with `days_left` set over them, abapit's `{**attrs, "days_left": n}`.
@@ -45,17 +50,28 @@ public struct CoverageReport: Sendable {
     public let notRead: [Resource]
     /// Devices with an active coverage, each counted once by its id.
     public let coveredCount: Int
+    /// Active records with an `endDateTime` that isn't a date (not a string, an empty one, or one that doesn't read):
+    /// covered, but when they end is not known.
+    public let unreadableEnd: [Resource]
     public let days: Int
 
-    public init(applecare: [Resource], devices: [Resource], days: Int, now: Date, notRead unread: [String] = []) {
+    /// The most days a window looks ahead (abapit's route: `min(days, 1825)`).
+    public static let maximumDays = 1825
+
+    public init(applecare: [Resource], devices: [Resource], days requested: Int, now: Date, notRead unread: [String]) {
+        let days = min(max(requested, 0), Self.maximumDays)
+        var unreadable: [Resource] = []
         let start = Instant.micros(now)
         let cutoff = start + days * Instant.day
         var rows: [(offset: Int, row: Expiring)] = []
         var covered: Set<[UInt8]> = []
         for item in applecare where item.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") {
             if let serial = item.attributes["serialNumber"]?.string { covered.insert(Instant.bytes(serial)) }
-            guard let end = ISODate.parse(item.attributes["endDateTime"]?.string).map(Instant.micros),
-                  start <= end, end <= cutoff else { continue }
+            guard let end = ISODate.parse(item.attributes["endDateTime"]?.string).map(Instant.micros) else {
+                if let value = item.attributes["endDateTime"], value != .null { unreadable.append(item) }
+                continue
+            }
+            guard start <= end, end <= cutoff else { continue }
             let left = Instant.days(end - start)
             rows.append((rows.count, Expiring(attributes: item.attributes.merging(["days_left": .number(String(left))]), daysLeft: left)))
         }
@@ -66,6 +82,7 @@ public struct CoverageReport: Sendable {
         uncovered = missing.filter { !unreadBytes.contains(Instant.bytes($0.id)) }
         notRead = missing.filter { unreadBytes.contains(Instant.bytes($0.id)) }
         coveredCount = Set(devices.map { Instant.bytes($0.id) }).intersection(covered).count
+        unreadableEnd = unreadable
         self.days = days
     }
 }

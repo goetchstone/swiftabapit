@@ -22,13 +22,13 @@ struct ExportHistoryTests {
                                                                   "addedToOrgDateTime": .string("2019-01-01T00:00:00Z")]),
         ]
         let care = [Resource(type: "applecare", id: "D1:0", attributes: ["serialNumber": .string("D1"), "status": .string("ACTIVE")])]
-        let report = FleetAgeReport(devices: devices, applecare: care, years: 1, now: CoverageFleetAgeTests.now)
+        let report = FleetAgeReport(devices: devices, applecare: care, years: 1, now: CoverageFleetAgeTests.now, notRead: [])
         let text = ExportHistory.refreshCandidates(report)
         #expect(text == "id,serialNumber,deviceModel,productFamily,ordered,ageYears,activeCoverage\r\n"
                 + "D2,D2,iPad,iPad,2019-01-01T00:00:00Z,7.8,False\r\n"
                 + "D1,D1,\"Mac, 13\"\"\",Mac,2020-01-01T00:00:00Z,6.8,True\r\n")
         // No coverage data: nothing, not False.
-        let none = ExportHistory.refreshCandidates(FleetAgeReport(devices: devices, applecare: nil, years: 7, now: CoverageFleetAgeTests.now))
+        let none = ExportHistory.refreshCandidates(FleetAgeReport(devices: devices, applecare: nil, years: 7, now: CoverageFleetAgeTests.now, notRead: []))
         #expect(none == "id,serialNumber,deviceModel,productFamily,ordered,ageYears,activeCoverage\r\nD2,D2,iPad,iPad,2019-01-01T00:00:00Z,7.8,\r\n")
     }
 
@@ -38,10 +38,18 @@ struct ExportHistoryTests {
             "endDateTime": .string("2026-10-26T12:00:00Z"), "isRenewable": .bool(true), "secretToken": .string("CANARY"),
             "nested": .object(["apiKey": .string("CANARY")]),
         ])
-        let report = CoverageReport(applecare: [record], devices: [], days: 30, now: CoverageFleetAgeTests.now)
+        let report = CoverageReport(applecare: [record], devices: [], days: 30, now: CoverageFleetAgeTests.now, notRead: [])
         let text = ExportHistory.coverageExpiring(report)
         #expect(text == "id,serialNumber,description,paymentType,startDateTime,endDateTime,days_left,isRenewable\r\n"
                 + "D1,D1,'=AppleCare+,,,2026-10-26T12:00:00Z,10,True\r\n")
         #expect(!text.contains("CANARY"))
+    }
+
+    /// A candidate whose sweep failed is written with no coverage cell, not `False`.
+    @Test func aCandidateNotReadHasAnEmptyCoverageCell() {
+        let devices = ["D1", "D2"].map { Resource(type: "orgDevices", id: $0, attributes: ["orderDateTime": .string("2019-01-01T00:00:00Z")]) }
+        let report = FleetAgeReport(devices: devices, applecare: [], years: 1, now: CoverageFleetAgeTests.now, notRead: ["D2"])
+        let rows = ExportHistory.refreshCandidates(report).split(separator: "\r\n").dropFirst().map(String.init)
+        #expect(rows == ["D1,D1,,,2019-01-01T00:00:00Z,7.8,False", "D2,D2,,,2019-01-01T00:00:00Z,7.8,"])
     }
 }

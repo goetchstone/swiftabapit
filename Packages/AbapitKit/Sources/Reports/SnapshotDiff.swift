@@ -30,13 +30,25 @@ public enum SnapshotDiff {
         }
 
         /// Rows as the store keeps them; a repeated `(resource, id)` keeps the last, as a dict does.
+        /// Linear in the rows: each resource's object is built in place, once, and set into the snapshot at the end
+        /// (setting a nested value back per row copied the whole resource each time).
         public init(rows: [(resource: String, id: String, attributes: JSONObject)]) {
-            var resources = JSONObject()
+            var order: [String] = [], position: [[UInt8]: Int] = [:], built: [JSONObject] = []
             for row in rows {
-                var items = resources[row.resource]?.object ?? JSONObject()
-                items[row.id] = .object(row.attributes)
-                resources[row.resource] = .object(items)
+                let key = Array(row.resource.utf8)
+                let index: Int
+                if let known = position[key] {
+                    index = known
+                } else {
+                    index = built.count
+                    position[key] = index
+                    order.append(row.resource)
+                    built.append(JSONObject())
+                }
+                built[index][row.id] = .object(row.attributes)
             }
+            var resources = JSONObject()
+            for (name, items) in zip(order, built) { resources[name] = .object(items) }
             self.resources = resources
         }
 
@@ -118,13 +130,17 @@ public enum SnapshotDiff {
         }
     }
 
-    /// Python's number equality: two integers exactly (any length); two floats as doubles (`NaN` is never equal,
-    /// as two separately parsed `NaN`s aren't); an integer and a float exactly, so `10**16 == 1e16` and
-    /// `2**53 + 1 != 2.0**53`.
+    /// Python's number equality: two integers exactly (any length); two floats as doubles; an integer and a float
+    /// exactly, so `10**16 == 1e16` and `2**53 + 1 != 2.0**53`. Two `NaN`s are equal (the operator's decision): abapit's
+    /// `json.loads` hands every `NaN` the same object, and a container's `==` takes identity first, so abapit sees no
+    /// change between two snapshots that hold `NaN` in the same place. (A `NaN` that is itself a field, in an item that
+    /// has another change, abapit would list, since `nan != nan`; here it is no change, as in a list.)
     static func sameNumber(_ x: String, _ y: String) -> Bool {
         switch (isInteger(x), isInteger(y)) {
         case (true, true): return normalized(x).elementsEqual(normalized(y))
-        case (false, false): return JSONValue.number(x).double == JSONValue.number(y).double
+        case (false, false):
+            let a = JSONValue.number(x).double, b = JSONValue.number(y).double
+            return a == b || (a?.isNaN == true && b?.isNaN == true)
         case (true, false): return integer(x, equals: y)
         case (false, true): return integer(y, equals: x)
         }
@@ -165,9 +181,9 @@ public enum SnapshotDiff {
     // MARK: label
 
     /// abapit's `item_label`: the first of `deviceModel`, `name`, `serverName`, `managedAppleAccount` and
-    /// `description` that holds a truthy value, as text; otherwise nothing. Apple sends these as strings; any other
-    /// value is shown as Python's `str` would for a number or a boolean (a list or an object as its JSON, where
-    /// Python shows its repr: unreachable from Apple's documents).
+    /// `description` that holds a truthy value, as text; otherwise nothing. Apple sends these as strings. Any other
+    /// value keeps its JSON text (`1e2`, `NaN`, a list or an object as JSON) where Python's `str` would show `100.0`,
+    /// `nan` or a repr; a boolean is shown as Python shows it, `True`. Unreachable from Apple's documents.
     public static func label(_ attributes: JSONObject) -> String {
         for key in ["deviceModel", "name", "serverName", "managedAppleAccount", "description"] {
             guard let value = attributes[key], value.isTruthy else { continue }

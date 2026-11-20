@@ -141,4 +141,33 @@ struct SnapshotDiffTests {
         #expect(SnapshotDiff.Snapshot(.object(["r": .array([])])) == nil)
         #expect(SnapshotDiff.Snapshot(.array([])) == nil)
     }
+
+    // MARK: review fixes
+
+    /// Two NaNs are equal (abapit's json.loads shares one NaN object, and a container's == takes identity first).
+    @Test func twoNaNsAreEqual() {
+        let nan = JSONValue.number("NaN")
+        #expect(Self.pair(["n": nan], ["n": nan]).isEmpty)
+        #expect(Self.pair(["l": .array([.number("1"), nan])], ["l": .array([.number("1"), nan])]).isEmpty)
+        let other = Self.pair(["l": .array([nan]), "k": .number("1")], ["l": .array([nan]), "k": .number("2")])
+        #expect(other.first?.changed.first?.fields.map(\.field) == ["k"])
+        #expect(Self.pair(["n": .number("Infinity")], ["n": .number("Infinity")]).isEmpty)
+        #expect(!Self.pair(["n": nan], ["n": .number("1")]).isEmpty && !Self.pair(["n": nan], ["n": .number("Infinity")]).isEmpty)
+        #expect(!Self.pair(["n": nan], ["n": .null]).isEmpty)
+    }
+
+    /// 16,000 rows load in one pass: a per-row copy of the resource made this quadratic. The bound is generous for a linear load (milliseconds; a
+    /// per-row copy took about three seconds in a debug build); the rest is the rule: the last of a repeated id wins, and
+    /// resources keep the order they first appeared in.
+    @Test func rowsLoadInOnePass() {
+        var rows: [(resource: String, id: String, attributes: JSONObject)] = []
+        for index in 0..<16_000 { rows.append((index % 2 == 0 ? "b" : "a", "id-\(index / 2)", ["n": .number(String(index))])) }
+        rows.append(("b", "id-0", ["n": .string("last")]))
+        let started = Date()
+        let snapshot = SnapshotDiff.Snapshot(rows: rows)
+        #expect(Date().timeIntervalSince(started) < 1)
+        let added = SnapshotDiff.diff(old: .init(rows: []), new: snapshot)
+        #expect(added.map(\.resource) == ["a", "b"] && added.allSatisfy { $0.added.count == 8_000 })
+        #expect(added[1].added.first { $0.id == "id-0" }?.attributes["n"] == .string("last"))
+    }
 }

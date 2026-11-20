@@ -1294,7 +1294,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 **Status:** in progress. Merged: the parity goldens (`diff.json`, `history.json`, and the coverage and fleet-age cases of
 `reports.json`). On branch `phase-3-diff-coverage-age`: the ports of abapit's snapshot diff, `item_label`, coverage report
 and fleet-age report (`Reports/{SnapshotDiff,Coverage,FleetAge}.swift`) and the two history CSVs
-(`Reports/ExportHistory.swift`), each held to its golden, with the operator's three decisions of 2026-11-20. Not built: the
+(`Reports/ExportHistory.swift`), each held to its golden, with the operator's two diff decisions of 2026-11-20 and the generator's fleet-age correction. Not built: the
 snapshot store and collectors, scheduling, and the Changes and Reports screens.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,

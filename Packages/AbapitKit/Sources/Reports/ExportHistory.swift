@@ -3,7 +3,8 @@ import JSONAPI
 
 extension ExportPolicy {
     /// The refresh-candidates export (invariant 11: an allowlist), abapit's `/export/refresh-candidates.csv` columns
-    /// in its order: `serialNumber`, `deviceModel`, `productFamily`, `ordered`, `ageYears`, `activeCoverage`.
+    /// in its order: `serialNumber`, `deviceModel`, `productFamily`, `ordered`, `ageYears`, `activeCoverage`
+    /// (`True`, `False`, or empty: no coverage data, or the device's sweep failed).
     public static let refreshCandidates = Columns([
         "serialNumber", "deviceModel", "productFamily", "ordered", "ageYears", "activeCoverage",
     ])

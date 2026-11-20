@@ -76,7 +76,10 @@ are below.
   is 6 cases): a boolean is not a number, so `true` against `1` is a change (asked "should swiftabapit report true <-> 1
   as a change", answer "Report it (Recommended)"); an item is changed only when a field really changed, so `null`
   against a missing field is no change and yields no item (answer "Only real changes (Recommended)"). `1` against `1.0`
-  is still no change.
+  is still no change. Two `NaN`s are equal (not a deviation: abapit's `json.loads` shares one `NaN` object and a
+  container's `==` takes identity first, so abapit sees no change either; only a `NaN` that is itself a field, in an item
+  with another change, abapit would list, since `nan != nan`; the port treats it as no change). The generator's
+  `strict_equal` has the same blind spot: a golden case for `NaN` is a follow-up for the generator.
 - **`CoverageReport`** is `coverage_report`: an `ACTIVE` record (exactly) covers its serial; an end between now and
   now + days, both ends included, to the microsecond (`Instant` works in whole microseconds, as a `Date`'s `Double` can't);
   `days_left` is `timedelta.days` (floor); soonest first, equal days in input order. Added, not in abapit: `notRead`, the
@@ -85,10 +88,25 @@ are below.
 - **`FleetAgeReport`** is `fleet_age_report`: age is `timedelta.days / 365.25` (days floored) from `orderDateTime`, else
   `addedToOrgDateTime` (a value that is empty or doesn't read as a date falls through, but `ordered` shows the order
   text when it is truthy, even unreadable); `ageYears` is `Python.round1`, and candidates (age at least `years`)
-  sort by that rounded age, descending, ties in input order. Deviation, the operator's decision (`FLEET_AGE_DEVIATIONS`,
-  2 fleets): a device ordered more than 365 days ahead is "< 1 yr", never a candidate; abapit's
+  sort by that rounded age, descending, ties in input order. Deviation, the generator's correction (`FLEET_AGE_DEVIATIONS`,
+  2 fleets; not one of the operator's two diff decisions): a device ordered more than 365 days ahead is "< 1 yr", never a
+  candidate; abapit's
   `bucket_labels[min(int(age), 4)]` read `int(-1.2) = -1` as "4+ yrs". The clamp is on the bucket only: an age is never
-  clamped, so a device ahead by days is not a candidate even at `years` 0.
+  clamped, so a device ahead by days is not a candidate even at `years` 0. The generator's correction is right only for
+  `int(age) = -1` (a device 366 to 730 days ahead): a case 731 or more days ahead (`int(age) = -2`, abapit's index -2, "3-4
+  yrs") would be corrected from the wrong bucket. A follow-up for the generator; the port clamps every negative to "< 1 yr".
+- **Who wasn't read** (`notRead`, no default: a caller must say, so a missing entry can't pass for a read one): both
+  reports take the serials whose AppleCare sweep failed. A device with no active record that is among them is `notRead`
+  in `CoverageReport`, and `covered` nil in `FleetAgeReport` (counted in `notReadCandidates`, never in
+  `uncoveredCandidates`; the export's cell is empty, not `False`). A later PR (the collector and the Reports screen, after
+  PR #29 merges) aligns both with #29's `DeviceRead`/`ListRead`, which treat a missing entry as not read; this PR imports
+  none of it.
+- **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
+  allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
+- **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
+  isn't a date (a number, an empty string, text) is counted apart, as `QuietServices` counts `unreadable`. abapit quietly
+  took it as never expiring: a recorded deviation, in the code only (Apple types the field as a date-time, so no golden
+  case). A missing or null end is still never expiring.
 - **`ExportHistory`** writes abapit's two CSVs through `CSV.text`, so the allowlist columns (`ExportPolicy.
   refreshCandidates`, `coverageExpiring`), the denylist and the formula guard apply as for every export. A coverage
   record's other attributes never leave (abapit chose these seven keys too).
