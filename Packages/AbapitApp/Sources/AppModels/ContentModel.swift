@@ -369,10 +369,13 @@ public final class ContentDetailModel {
     /// Detail reads that have returned, superseded ones included: what tests wait on.
     @ObservationIgnored package private(set) var readsFinished = 0
 
-    /// What the app has read to name a blueprint's members, asked when the blueprint's read lands (so the active org's lists
-    /// as they are then). The detail is made once: lists read after it don't rename it; it is read again on Refresh, on
-    /// choosing the row again or on an org switch (which clears it).
+    /// What the app has read to name a blueprint's members (the active org's lists as they are now). Asked when the
+    /// blueprint's read lands and again whenever a list it reads changes (`track`): the open blueprint's members are named,
+    /// and its words kept true, as lists arrive, from the held read and no new Apple read.
     private let names: @MainActor () -> MemberNames
+    /// The open blueprint's read, with the token of the `show` that made it: a rebuild uses it only while that is still the
+    /// current one, so a switch or another choice retires it (a list finishing in the old org rebuilds nothing).
+    @ObservationIgnored private var held: (read: BlueprintRead, token: Int)?
 
     init(orgs: OrgsModel, names: @escaping @MainActor () -> MemberNames = { MemberNames() }) {
         self.orgs = orgs
@@ -401,8 +404,11 @@ public final class ContentDetailModel {
         task = Task { [weak self] in
             defer { self?.readsFinished += 1 }
             let result: Panel<ContentDetail>
+            var blueprint: BlueprintRead?
             do {
-                result = .loaded(try await Self.read(selection, from: client, names: names))
+                let read = try await Self.read(selection, from: client, names: names)
+                result = .loaded(read.detail)
+                blueprint = read.blueprint
             } catch is CancellationError {
                 return
             } catch {
@@ -411,15 +417,33 @@ public final class ContentDetailModel {
             }
             guard let self, self.token == token, !Task.isCancelled else { return }
             self.item = result
+            if let blueprint {
+                held = (blueprint, token)
+                track(token)
+            }
         }
     }
 
-    private static func read(_ selection: ContentSelection, from client: AppleClient, names: @MainActor () -> MemberNames) async throws -> ContentDetail {
+    /// Rebuilds the open blueprint's detail from its held read and the lists as they are now, and watches those lists: when
+    /// one changes, once more. Only while `token` is the current show's.
+    private func track(_ token: Int) {
+        guard let held, held.token == token, self.token == token else { return }
+        let names = withObservationTracking { self.names() } onChange: { [weak self] in
+            Task { @MainActor in self?.track(token) }
+        }
+        let rebuilt = ContentDetail(blueprint: held.read, names: names)
+        if case .loaded(let now) = item, now.members == rebuilt.members, now.membersListNote == rebuilt.membersListNote { return }
+        item = .loaded(rebuilt)
+    }
+
+    private static func read(_ selection: ContentSelection, from client: AppleClient, names: @MainActor () -> MemberNames) async throws -> (detail: ContentDetail, blueprint: BlueprintRead?) {
         switch selection.kind {
-        case .apps: ContentDetail(app: try await client.app(selection.id))
-        case .packages: ContentDetail(package: try await client.package(selection.id))
-        case .blueprints: ContentDetail(blueprint: try await client.blueprintWithMembers(selection.id), names: names())
-        case .configurations: ContentDetail(configuration: try await client.configuration(selection.id))
+        case .apps: return (ContentDetail(app: try await client.app(selection.id)), nil)
+        case .packages: return (ContentDetail(package: try await client.package(selection.id)), nil)
+        case .blueprints:
+            let read = try await client.blueprintWithMembers(selection.id)
+            return (ContentDetail(blueprint: read, names: names()), read)
+        case .configurations: return (ContentDetail(configuration: try await client.configuration(selection.id)), nil)
         }
     }
 }
@@ -543,13 +567,18 @@ public struct ContentDetail: Sendable {
             groups = Blueprint.Relationship.allCases.compactMap { relationship in
                 related[relationship].map { listed in
                     let source = names[relationship]
-                    var named = 0
+                    var named = 0, nameless = 0
                     let members = listed.linkages.map { linkage -> ContentMember in
                         guard case .read(let list, _) = source, let name = list[linkage.id] else { return ContentMember(id: linkage.id, name: nil) }
+                        // A row with no name shows its id (`AppRow.name`): that names nothing, so it stays an ID, and is said.
+                        if name == linkage.id {
+                            nameless += 1
+                            return ContentMember(id: linkage.id, name: nil)
+                        }
                         named += 1
-                        return ContentMember(id: linkage.id, name: name == linkage.id ? nil : name)
+                        return ContentMember(id: linkage.id, name: name)
                     }
-                    coverage.append(ContentWords.Coverage(relationship, total: members.count, named: named, source: source))
+                    coverage.append(ContentWords.Coverage(relationship, total: members.count, named: named, nameless: nameless, source: source))
                     return ContentMemberGroup(relationship: relationship, title: relationship.title, members: members, count: members.count,
                                               isTruncated: listed.isTruncated, summary: ContentWords.members(members.count, relationship, truncated: listed.isTruncated))
                 }
@@ -599,32 +628,40 @@ package enum ContentWords {
             case unreadable
             /// The list was read but `missing` of the members aren't in it; `whole` is false when the page cap cut it.
             case missing(Int, whole: Bool)
+            /// Every member is in the list, but some rows have no name (they show their id).
+            case nameless
         }
 
         package let relationship: Blueprint.Relationship
         package let total: Int
         package let how: How
+        /// How many members are in the list but have no name there.
+        package let nameless: Int
 
-        package init(_ relationship: Blueprint.Relationship, total: Int, named: Int, source: MemberNames.Source) {
+        package init(_ relationship: Blueprint.Relationship, total: Int, named: Int, nameless: Int = 0, source: MemberNames.Source) {
             self.relationship = relationship
             self.total = total
+            self.nameless = nameless
             switch source {
             case .notRead: how = total == 0 ? .named : .notRead
             case .unreadable: how = total == 0 ? .named : .unreadable
-            case .read(_, let whole): how = named == total ? .named : .missing(total - named, whole: whole)
+            case .read(_, let whole):
+                let missing = total - named - nameless
+                how = missing > 0 ? .missing(missing, whole: whole) : nameless > 0 ? .nameless : .named
             }
         }
     }
 
     /// Said under a blueprint's members (invariant 8: never silent): which relationships are named and which are listed by
     /// ID, and why. Apple's blueprint reads give members as IDs only, so a name comes from a list the app has already read.
-    /// Nil when every member shown is named (or none is shown); a relationship with no members is left out.
+    /// Nil when every member shown is named (a member whose row has no name is not); none shown is nil too; a relationship with no members is left out.
     package static func naming(_ coverage: [Coverage]) -> String? {
         let relevant = coverage.filter { $0.total > 0 }
         func titles(_ how: (Coverage.How) -> Bool) -> [Coverage] { relevant.filter { how($0.how) } }
         let named = titles { $0 == .named }, notRead = titles { $0 == .notRead }, unreadable = titles { $0 == .unreadable }
         let missing = relevant.filter { if case .missing = $0.how { true } else { false } }
-        guard missing.count + notRead.count + unreadable.count > 0 else { return nil }
+        let nameless = relevant.filter { $0.nameless > 0 }
+        guard missing.count + notRead.count + unreadable.count + nameless.count > 0 else { return nil }
         var parts: [String] = []
         if !named.isEmpty { parts.append("\(joined(named.map { $0.relationship.noun(2) })) are named") }
         if !notRead.isEmpty {
@@ -642,6 +679,10 @@ package enum ContentWords {
             let noun = group.relationship.noun(2)
             let list = whole ? "the \(noun) list read" : "the part of the \(noun) list read (it stopped at its page cap)"
             parts.append("\(count.formatted()) of \(group.total.formatted()) \(noun) \(count == 1 ? "isn't" : "aren't") in \(list), so \(count == 1 ? "is" : "are") listed by ID")
+        }
+        for group in nameless {
+            let noun = group.relationship.noun(2), count = group.nameless
+            parts.append("\(count.formatted()) of \(group.total.formatted()) \(noun) \(count == 1 ? "has" : "have") no name in the \(noun) list, so \(count == 1 ? "is" : "are") listed by ID")
         }
         let sentence = parts.joined(separator: "; ")
         return sentence.prefix(1).uppercased() + sentence.dropFirst() + "."
