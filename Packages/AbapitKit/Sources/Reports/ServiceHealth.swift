@@ -9,19 +9,23 @@ public enum ServiceDeviceCount: Sendable, Equatable {
     case atLeast(Int)
 }
 
-/// The MDM service health report (plan Phase 3): per service, when it last connected (`QuietServices.lastConnected`,
-/// the rule the Overview and the Services screen use), its status, its device count and a verdict. No abapit counterpart.
+/// The MDM service health report (plan Phase 3): per service, when it last connected, its status, its device count and a
+/// verdict. No abapit counterpart.
 ///
-/// The services list may have been read with default fields (apple-reads, "Answered live 2026-11-19/-20"): `notSent`
-/// is the attributes no service came back with (`Page.absent`), and a service that needs one to be judged is
-/// `cannot-judge`, never healthy and never "never connected". The device count is the relationship's count when the
-/// screen read it, else Apple's `deviceCount` attribute, else not read. A `DELETED` service is its own group: it
-/// can't connect again, so it's neither healthy nor quiet.
+/// **One quiet rule.** The `quiet` group is exactly `QuietServices`' rows for the same services, `now` and `days` (the
+/// Overview's card and the Services screen's column use them): never connected, a date this app can't read, or silent more
+/// than `days` days, a `DELETED` service excepted. Status is a column beside it: a quiet service may be inactive. A service
+/// that isn't quiet is `healthy` when `ACTIVE`, else `inactive`, `other-status` (raw) or, with no status, `cannot-judge`.
+///
+/// Services read with default fields (apple-reads, "Answered live 2026-11-19/-20"): `notSent` is the attributes Apple sent
+/// for no service. A service whose `lastConnectedDateTime` wasn't sent is `cannot-judge`, never quiet and never "never
+/// connected" (a known `DELETED` one is still `deleted`). The device count is the relationship's count when the screen
+/// read it, else Apple's `deviceCount`, else not read.
 public struct ServiceHealth: Sendable {
     public enum Health: Sendable, Equatable {
         /// `ACTIVE` and not quiet.
         case healthy
-        /// `ACTIVE` and quiet by `QuietServices`' rule (never connected, unreadable, or older than `days`).
+        /// In `QuietServices`' result.
         case quiet
         case inactive
         case deleted
@@ -35,8 +39,22 @@ public struct ServiceHealth: Sendable {
         /// Apple didn't send the attribute for any service: not "never connected".
         case notSent
         case never
+        /// Not a date this app reads: as Apple sent it, as JSON text.
         case unreadable(String)
+        /// Whole 24-hour periods ago, truncated as the Services screen does: 0 is today.
         case at(ISODate, daysAgo: Int)
+        /// A stamp after `now`.
+        case inFuture(ISODate)
+
+        public var words: String {
+            switch self {
+            case .notSent: "not sent by Apple"
+            case .never: "never connected"
+            case .unreadable(let raw): "unreadable date: \(raw)"
+            case .at(_, let days): days <= 0 ? "today" : "\(days) day\(days == 1 ? "" : "s") ago"
+            case .inFuture: "in the future"
+            }
+        }
     }
 
     public struct Row: Sendable, Identifiable {
@@ -65,7 +83,7 @@ public struct ServiceHealth: Sendable {
     public let days: Int
     /// The attributes Apple sent for no service, by name, sorted.
     public let notSent: [String]
-    /// Quiet first, then the rest in the order given; see `fixedGroups` for the order of groups.
+    /// In group order (`fixedGroups`); within `quiet`, `QuietServices`' order (most stale first), within the rest the order given.
     public let rows: [Row]
 
     /// `deviceCounts` is keyed by service id (the relationship counts); `notSent` is `Page.absent`.
@@ -74,16 +92,18 @@ public struct ServiceHealth: Sendable {
         self.list = list
         self.days = days
         self.notSent = notSent.sorted(by: byBytes)
+        let quietOrder = notSent.contains("lastConnectedDateTime") ? [] : QuietServices(services, now: now, days: days).rows.map(\.service.id)
         let built = services.map { service -> Row in
             let connected = Self.connected(service, notSent: notSent, now: now)
-            let count = deviceCounts[service.id] ?? service.deviceCount.map(ServiceDeviceCount.exactly)
-            return Row(service: service, health: Self.health(service, connected: connected, notSent: notSent, now: now, days: days),
-                       lastConnected: connected, deviceCount: count)
+            return Row(service: service, health: Self.health(service, quiet: quietOrder.contains(service.id), connected: connected, notSent: notSent),
+                       lastConnected: connected, deviceCount: deviceCounts[service.id] ?? service.deviceCount.map(ServiceDeviceCount.exactly))
         }
         let order = Self.fixedGroups
         rows = built.enumerated().sorted { a, b in
             let (x, y) = (order.firstIndex(of: a.element.group) ?? order.count, order.firstIndex(of: b.element.group) ?? order.count)
-            return x != y ? x < y : a.offset < b.offset
+            if x != y { return x < y }
+            if a.element.group == "quiet", let p = quietOrder.firstIndex(of: a.element.id), let q = quietOrder.firstIndex(of: b.element.id) { return p < q }
+            return a.offset < b.offset
         }.map(\.element)
     }
 
@@ -91,47 +111,55 @@ public struct ServiceHealth: Sendable {
         if notSent.contains("lastConnectedDateTime") { return .notSent }
         switch QuietServices.lastConnected(service) {
         case .never: return .never
-        case .unreadable: return .unreadable(service.attributes["lastConnectedDateTime"]?.string ?? "not text")
-        case .at(let date): return .at(date, daysAgo: Int((now.timeIntervalSince(date.date) / 86_400).rounded(.down)))
+        case .unreadable: return .unreadable(service.attributes["lastConnectedDateTime"].map(unreadableDate) ?? "")
+        case .at(let date):
+            let seconds = now.timeIntervalSince(date.date)
+            return seconds < 0 ? .inFuture(date) : .at(date, daysAgo: Int(seconds / 86_400))
         }
     }
 
-    static func health(_ service: MDMService, connected: Connected, notSent: Set<String>, now: Date, days: Int) -> Health {
+    static func health(_ service: MDMService, quiet: Bool, connected: Connected, notSent: Set<String>) -> Health {
+        if service.status == .known(.deleted) { return .deleted }
+        if case .notSent = connected { return .cannotJudge("Apple didn't send when the service last connected") }
+        if quiet { return .quiet }
         if notSent.contains("status") { return .cannotJudge("Apple didn't send the service's status") }
         switch service.status {
-        case nil: return .cannotJudge("this service has no status")
-        case .known(.deleted)?: return .deleted
+        case nil:
+            // A status that is present but not text is shown as Apple sent it.
+            if let raw = sent(service.attributes, "status") { return .otherStatus(raw) }
+            return .cannotJudge("this service has no status")
+        case .known(.active)?: return .healthy
         case .known(.inactive)?: return .inactive
+        case .known(.deleted)?: return .deleted
         case .unknown(let raw)?: return .otherStatus(raw)
-        case .known(.active)?: break
         }
-        if case .notSent = connected { return .cannotJudge("Apple didn't send when the service last connected") }
-        return QuietServices([service], now: now, days: days).rows.isEmpty ? .healthy : .quiet
     }
 
     public func rows(group: String) -> [Row] { rows.filter { $0.group == group } }
 
     public var healthy: Int { rows(group: "healthy").count }
 
+    /// A list that wasn't read says only that.
     public var words: [String] {
+        if case .notRead = list { return [list.words] }
         var lines = [list.words]
         if !notSent.isEmpty {
             lines.append("Apple didn't send \(notSent.joined(separator: ", ")) for any service (read with default fields): services that need it can't be judged.")
         }
         for key in Self.fixedGroups {
             let count = rows(group: key).count
-            if count > 0 { lines.append("\(Self.title(key)): \(count)") }
+            if count > 0 { lines.append("\(title(key)): \(count)") }
         }
         return lines
     }
 
-    static func title(_ key: String) -> String {
+    func title(_ key: String) -> String {
         switch key {
-        case "healthy": "Active and connected within the last days window"
-        case "quiet": "Active but quiet (never connected, or silent past the window)"
-        case "inactive": "Inactive"
+        case "healthy": "Active and connected within the last \(days) days"
+        case "quiet": "Quiet: never connected, or silent more than \(days) days (the Overview's rule; the status is beside it)"
+        case "inactive": "Inactive, and not quiet"
         case "deleted": "Deleted (not counted as healthy)"
-        case "other-status": "A status this version doesn't know"
+        case "other-status": "A status this version doesn't know, and not quiet"
         default: "Can't be judged (Apple didn't send what's needed)"
         }
     }

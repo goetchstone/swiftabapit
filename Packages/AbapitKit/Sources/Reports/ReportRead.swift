@@ -1,4 +1,5 @@
 import Foundation
+import JSONAPI
 
 /// How much of a list a report was given (invariant 8). A report says it in its own words and never reads a list it
 /// didn't get whole as the whole fleet: the screens that load the lists (the page cap, a refused role) build one.
@@ -33,3 +34,16 @@ func byBytes(_ a: String, _ b: String) -> Bool { a.utf8.lexicographicallyPrecede
 
 /// "yes" and "no" for a CSV cell, and nothing for a value Apple didn't send.
 func yesNo(_ flag: Bool?) -> String { flag.map { $0 ? "yes" : "no" } ?? "" }
+
+/// What Apple sent for `key`, in words: nil when it is absent or null; a string as it is; any other value as its JSON text.
+/// A value that was sent is never shown as "not sent" (review, item 8).
+func sent(_ object: JSONObject, _ key: String) -> String? {
+    switch object[key] {
+    case nil, .null?: nil
+    case .string(let text)?: text
+    case let value?: value.jsonText
+    }
+}
+
+/// A value that isn't a date `ISODate` reads, as the Services screen shows it: its JSON text.
+func unreadableDate(_ value: JSONValue) -> String { value.jsonText }

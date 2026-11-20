@@ -9,23 +9,39 @@ struct ServiceHealthTests {
     static let recent = JSONValue.string(Fleet.stamp(-86_400))
     static let old = JSONValue.string(Fleet.stamp(-40 * 86_400))
 
+    static let mixed = [
+        Fleet.service("ok", last: recent), Fleet.service("quiet", last: old), Fleet.service("never"),
+        Fleet.service("gone", status: "DELETED", last: recent), Fleet.service("gone-never", status: "DELETED"),
+        Fleet.service("off", status: "INACTIVE", last: recent), Fleet.service("off-old", status: "INACTIVE", last: old),
+        Fleet.service("odd", status: "PAUSED", last: recent), Fleet.service("odd-never", status: "PAUSED"),
+        Fleet.service("garbled", last: .string("yesterday")), Fleet.service("nostatus-old", status: nil, last: old),
+        Fleet.service("old-too", last: .string(Fleet.stamp(-90 * 86_400))),
+    ]
+
     @Test func healthIsActiveAndRecentAndADeletedServiceIsNeverHealthy() {
-        let report = ServiceHealth([
-            Fleet.service("ok", last: Self.recent), Fleet.service("quiet", last: Self.old), Fleet.service("never"),
-            Fleet.service("gone", status: "DELETED", last: Self.recent), Fleet.service("gone-never", status: "DELETED"),
-            Fleet.service("off", status: "INACTIVE", last: Self.recent), Fleet.service("odd", status: "PAUSED", last: Self.recent),
-            Fleet.service("garbled", last: .string("yesterday")),
-        ], now: Fleet.now)
+        let report = ServiceHealth(Self.mixed, now: Fleet.now)
         #expect(report.rows(group: "healthy").map(\.service.id) == ["ok"])
         #expect(report.healthy == 1)
-        #expect(report.rows(group: "quiet").map(\.service.id) == ["quiet", "never", "garbled"])
         #expect(report.rows(group: "deleted").map(\.service.id) == ["gone", "gone-never"])
         #expect(report.rows(group: "inactive").map(\.service.id) == ["off"])
         #expect(report.rows(group: "other-status").map(\.service.id) == ["odd"])
         #expect(report.words.contains("Deleted (not counted as healthy): 2"))
         #expect(report.rows.first { $0.service.id == "odd" }?.health == .otherStatus("PAUSED"))
         #expect(report.rows.first { $0.service.id == "never" }?.lastConnected == .never)
-        #expect(report.rows.first { $0.service.id == "garbled" }?.lastConnected == .unreadable("yesterday"))
+        #expect(report.rows.first { $0.service.id == "garbled" }?.lastConnected == .unreadable("\"yesterday\""))
+    }
+
+    /// One rule, two screens: the quiet group is exactly QuietServices' rows, in its order, whatever the status.
+    @Test func theQuietGroupIsExactlyQuietServices() {
+        let report = ServiceHealth(Self.mixed, now: Fleet.now)
+        let quiet = QuietServices(Self.mixed, now: Fleet.now)
+        #expect(!quiet.rows.isEmpty)
+        #expect(report.rows(group: "quiet").map(\.service.id) == quiet.rows.map(\.service.id))
+        #expect(Set(quiet.rows.map(\.service.id)) == ["quiet", "never", "off-old", "odd-never", "garbled", "nostatus-old", "old-too"])
+        for days in [1, 7, 40, 90] {
+            #expect(ServiceHealth(Self.mixed, now: Fleet.now, days: days).rows(group: "quiet").map(\.service.id)
+                    == QuietServices(Self.mixed, now: Fleet.now, days: days).rows.map(\.service.id), "\(days)")
+        }
     }
 
     @Test func theDaysWindowFollowsQuietServicesRule() {
@@ -35,20 +51,49 @@ struct ServiceHealthTests {
         #expect(ServiceHealth([Fleet.service("a", last: over)], now: Fleet.now, days: 7).rows[0].health == .quiet)
         guard case .at(_, let days) = ServiceHealth([Fleet.service("a", last: Self.old)], now: Fleet.now).rows[0].lastConnected else { Issue.record("no date"); return }
         #expect(days == 40)
+        #expect(ServiceHealth([], now: Fleet.now, days: 12).title("healthy").contains("12 days"))
     }
 
-    /// Services read with default fields: what Apple didn't send is said, and never read as "never" or "not deleted".
+    /// The Services screen's words: whole days truncated, 0 is today; a stamp after now is said so, never "-1 days ago".
+    @Test func theWordsMatchTheServicesColumn() {
+        func words(_ seconds: TimeInterval) -> String {
+            ServiceHealth([Fleet.service("a", last: .string(Fleet.stamp(seconds)))], now: Fleet.now).rows[0].lastConnected.words
+        }
+        #expect(words(-60) == "today")
+        #expect(words(-86_400 + 1) == "today")
+        #expect(words(-86_400) == "1 day ago")
+        #expect(words(-3 * 86_400) == "3 days ago")
+        #expect(words(3_600) == "in the future")
+        let future = ServiceHealth([Fleet.service("a", last: .string(Fleet.stamp(3_600)))], now: Fleet.now).rows[0]
+        #expect(future.health == .healthy)
+        let text = CSV.text(ServiceHealth([Fleet.service("a", last: .string(Fleet.stamp(3_600)))], now: Fleet.now).csvItems, columns: ExportPolicy.serviceHealth)
+        #expect(text.contains("in the future") && !text.contains("-1 day"))
+    }
+
+    /// Services read with default fields: what Apple didn't send is said, and never read as "never" or "quiet".
     @Test func fieldsAppleDidNotSendAreSaidAndNotGuessed() {
-        let lastMissing = ServiceHealth([Fleet.service("a")], notSent: ["lastConnectedDateTime", "deviceCount"], now: Fleet.now)
-        #expect(lastMissing.rows[0].lastConnected == .notSent)
-        #expect(lastMissing.rows[0].health == .cannotJudge("Apple didn't send when the service last connected"))
+        let lastMissing = ServiceHealth([Fleet.service("a"), Fleet.service("b", status: "INACTIVE"), Fleet.service("c", status: "DELETED")],
+                                        notSent: ["lastConnectedDateTime", "deviceCount"], now: Fleet.now)
+        #expect(lastMissing.rows.allSatisfy { $0.lastConnected == .notSent })
+        #expect(lastMissing.rows(group: "quiet").isEmpty)
+        #expect(lastMissing.rows.first { $0.service.id == "a" }?.health == .cannotJudge("Apple didn't send when the service last connected"))
+        #expect(lastMissing.rows(group: "deleted").map(\.service.id) == ["c"])
         #expect(lastMissing.notSent == ["deviceCount", "lastConnectedDateTime"])
         #expect(lastMissing.words.contains { $0.contains("didn't send deviceCount, lastConnectedDateTime") })
         let statusMissing = ServiceHealth([Fleet.service("a", status: nil, last: Self.recent), Fleet.service("b", status: "DELETED", last: Self.recent)],
                                           notSent: ["status"], now: Fleet.now)
-        #expect(statusMissing.rows.allSatisfy { $0.group == "cannot-judge" })
-        // A service with no status of its own, though Apple sent the field for others.
+        #expect(statusMissing.rows.first { $0.service.id == "a" }?.health == .cannotJudge("Apple didn't send the service's status"))
         #expect(ServiceHealth([Fleet.service("a", status: nil, last: Self.recent)], now: Fleet.now).rows[0].health == .cannotJudge("this service has no status"))
+    }
+
+    /// The CSV says "not sent by Apple" for a last connection Apple didn't send, never "never".
+    @Test func theCSVSaysNotSentNeverNever() throws {
+        let text = CSV.text(ServiceHealth([Fleet.service("a"), Fleet.service("b")], notSent: ["lastConnectedDateTime"], now: Fleet.now).csvItems,
+                            columns: ExportPolicy.serviceHealth)
+        #expect(text.contains("not sent by Apple"))
+        #expect(!text.contains("never"))
+        let never = CSV.text(ServiceHealth([Fleet.service("a")], now: Fleet.now).csvItems, columns: ExportPolicy.serviceHealth)
+        #expect(never.contains("never connected"))
     }
 
     @Test func deviceCountsComeFromTheRelationshipThenTheAttributeThenAreNotRead() {
@@ -65,6 +110,13 @@ struct ServiceHealthTests {
         #expect(text.contains("at least"))
     }
 
+    @Test func aNonTextStatusIsShownAsSent() {
+        let odd = MDMService(resource: Resource(type: "mdmServers", id: "o", attributes: ["serverName": .string("o"), "status": .number("4"), "lastConnectedDateTime": Self.recent]))
+        let report = ServiceHealth([odd], now: Fleet.now)
+        #expect(report.rows[0].health == .otherStatus("4"))
+        #expect(CSV.text(report.csvItems, columns: ExportPolicy.serviceHealth).contains("status 4"))
+    }
+
     @Test func theCSVNeverCarriesTheIPAndSaysWhatWasNotSent() {
         let service = MDMService(resource: Resource(type: "mdmServers", id: "s", attributes: [
             "serverName": .string("Mosyle"), "status": .string("ACTIVE"), "lastConnectedDateTime": Self.recent, "lastConnectedIp": .string("192.0.2.1"),
@@ -78,6 +130,6 @@ struct ServiceHealthTests {
     }
 
     @Test func theListsReadIsSaid() {
-        #expect(ServiceHealth([], now: Fleet.now, list: .notRead("your role can't read this")).words.first == "Not read: your role can't read this. Nothing below can be judged.")
+        #expect(ServiceHealth(Self.mixed, now: Fleet.now, list: .notRead("your role can't read this")).words == ["Not read: your role can't read this. Nothing below can be judged."])
     }
 }

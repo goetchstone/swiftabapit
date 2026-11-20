@@ -38,4 +38,16 @@ enum Fleet {
     static func stamp(_ seconds: TimeInterval) -> String {
         Date(timeIntervalSince1970: now.timeIntervalSince1970 + seconds).formatted(Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!))
     }
+
+    /// One CSV line's fields, honouring quotes.
+    static func fields(_ line: String) -> [String] {
+        var out: [String] = [], current = "", quoted = false
+        var iterator = line.makeIterator()
+        while let ch = iterator.next() {
+            if ch == "\"" { quoted.toggle(); if quoted == false { continue } else { continue } }
+            if ch == "," && !quoted { out.append(current); current = "" } else { current.append(ch) }
+        }
+        out.append(current)
+        return out
+    }
 }

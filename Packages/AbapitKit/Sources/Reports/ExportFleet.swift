@@ -5,9 +5,12 @@ import JSONAPI
 extension ExportPolicy {
     /// The Activation Lock report's export. Every cell is computed from `isLocked` and `lockType`; nothing of the device's
     /// attributes beyond the three identifying ones is copied, so a bypass code or an unknown key never leaves (invariant 11).
-    public static let activationLockReport = Columns(["serialNumber", "deviceModel", "productFamily", "state", "lockType", "blocksRelease", "notRead"])
+    /// `blocksRelease` is yes or no only where it can be judged; else "unknown" or "not read".
+    public static let activationLockReport = Columns(["serialNumber", "deviceModel", "productFamily", "state", "lockType", "blocksRelease", "note"])
+    /// `pastDue` is yes or no only where it can be judged; `overdue` is "overdue N days" (N at least 1) and `daysToDeadline`
+    /// the whole days left, never both.
     public static let migrationReport = Columns(["serialNumber", "deviceModel", "productFamily", "state", "mdmMigrationStatus", "isMdmMigrationCapable",
-                                                 "mdmMigrationDeadlineDateTime", "daysToDeadline", "pastDue"])
+                                                 "mdmMigrationDeadlineDateTime", "daysToDeadline", "overdue", "pastDue"])
     public static let serviceHealth = Columns(["serverName", "serverType", "status", "health", "healthReason", "lastConnectedDateTime", "lastConnected",
                                                "deviceCount", "deviceCountIs", "notSentByApple"])
     public static let warrantyReport = Columns(["serialNumber", "deviceModel", "productFamily", "orderDateTime", "coverage", "activeCoverageEnds",
@@ -17,20 +20,21 @@ extension ExportPolicy {
 private func text(_ value: String?) -> JSONValue { value.map(JSONValue.string) ?? .null }
 
 private func identity(_ device: OrgDevice) -> JSONObject {
-    ["serialNumber": .string(device.serialNumber), "deviceModel": text(device.deviceModel), "productFamily": text(device.productFamily?.rawValue)]
+    ["serialNumber": .string(device.serialNumber), "deviceModel": text(sent(device.attributes, "deviceModel")),
+     "productFamily": text(sent(device.attributes, "productFamily"))]
 }
 
 extension ActivationLockReport {
     public var csvItems: [CSV.Item] {
         rows.map { row in
-            var attributes = identity(row.device)
-            attributes = attributes.merging(["state": .string(Self.title(row.group)), "blocksRelease": .string(yesNo(row.blocksRelease))])
+            var attributes = identity(row.device).merging(["state": .string(Self.title(row.group)), "blocksRelease": .string(row.blocksReleaseWords)])
             switch row.kind {
             case .userLock: attributes = attributes.merging(["lockType": .string("USER")])
             case .mdmLock: attributes = attributes.merging(["lockType": .string("MDM")])
             case .otherLock(let raw): attributes = attributes.merging(["lockType": .string(raw)])
-            case .notRead(let why): attributes = attributes.merging(["notRead": .string(why)])
-            case .unlocked, .unclear: break
+            case .notRead(let why): attributes = attributes.merging(["note": .string(why)])
+            case .unclear(let raw): attributes = attributes.merging(["note": .string(raw.map { "isLocked sent as \($0)" } ?? "no isLocked sent")])
+            case .unlocked: break
             }
             return CSV.Item(id: row.device.id, attributes: attributes)
         }
@@ -42,15 +46,15 @@ extension MigrationReport {
         rows.map { row in
             var attributes = identity(row.device).merging([
                 "state": .string(Self.title(row.group)), "mdmMigrationStatus": text(row.status?.rawValue),
-                "isMdmMigrationCapable": .string(yesNo(row.device.isMigrationCapable)), "pastDue": .string(yesNo(row.pastDue)),
+                "isMdmMigrationCapable": .string(yesNo(row.device.isMigrationCapable)), "pastDue": .string(row.pastDueWords),
             ])
+            let deadline = text(sent(row.device.attributes, "mdmMigrationDeadlineDateTime"))
             switch row.deadline {
             case .none: break
-            case .unreadable(let raw): attributes = attributes.merging(["mdmMigrationDeadlineDateTime": .string(raw), "daysToDeadline": .string("deadline not readable")])
-            case .left(let days): attributes = attributes.merging(["mdmMigrationDeadlineDateTime": text(row.device.attributes.string("mdmMigrationDeadlineDateTime")),
-                                                                   "daysToDeadline": .string(String(days))])
-            case .overdue(let days): attributes = attributes.merging(["mdmMigrationDeadlineDateTime": text(row.device.attributes.string("mdmMigrationDeadlineDateTime")),
-                                                                      "daysToDeadline": .string("\(days) days overdue")])
+            case .unreadable(let raw): attributes = attributes.merging(["mdmMigrationDeadlineDateTime": .string(raw)])
+            case .left(let days): attributes = attributes.merging(["mdmMigrationDeadlineDateTime": deadline, "daysToDeadline": .string(String(days))])
+            case .overdue(let days):
+                attributes = attributes.merging(["mdmMigrationDeadlineDateTime": deadline, "overdue": .string("overdue \(days) day\(days == 1 ? "" : "s")")])
             }
             return CSV.Item(id: row.device.id, attributes: attributes)
         }
@@ -60,17 +64,15 @@ extension MigrationReport {
 extension ServiceHealth {
     public var csvItems: [CSV.Item] {
         rows.map { row in
-            var attributes: JSONObject = ["serverName": .string(row.service.name), "serverType": text(row.service.type?.rawValue),
-                                          "status": text(row.service.status?.rawValue), "health": .string(row.group),
-                                          "notSentByApple": .string(notSent.joined(separator: "; "))]
+            var attributes: JSONObject = ["serverName": .string(row.service.name), "serverType": text(sent(row.service.attributes, "serverType")),
+                                          "status": text(sent(row.service.attributes, "status")), "health": .string(row.group),
+                                          "notSentByApple": .string(notSent.joined(separator: "; ")), "lastConnected": .string(row.lastConnected.words)]
             if case .cannotJudge(let why) = row.health { attributes = attributes.merging(["healthReason": .string(why)]) }
             if case .otherStatus(let raw) = row.health { attributes = attributes.merging(["healthReason": .string("status \(raw)")]) }
             switch row.lastConnected {
-            case .notSent: attributes = attributes.merging(["lastConnected": .string("not sent by Apple")])
-            case .never: attributes = attributes.merging(["lastConnected": .string("never")])
-            case .unreadable(let raw): attributes = attributes.merging(["lastConnected": .string("not a date"), "lastConnectedDateTime": .string(raw)])
-            case .at(let date, let days):
-                attributes = attributes.merging(["lastConnected": .string("\(days) days ago"), "lastConnectedDateTime": .string(date.isoformat)])
+            case .notSent, .never: break
+            case .unreadable(let raw): attributes = attributes.merging(["lastConnectedDateTime": .string(raw)])
+            case .at(let date, _), .inFuture(let date): attributes = attributes.merging(["lastConnectedDateTime": .string(date.isoformat)])
             }
             switch row.deviceCount {
             case nil: attributes = attributes.merging(["deviceCountIs": .string("not read")])
@@ -86,11 +88,14 @@ extension WarrantyReport {
     public var csvItems: [CSV.Item] {
         let formatter = Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!)
         return rows.map { row in
-            var attributes = identity(row.device).merging(["orderDateTime": text(row.device.attributes.string("orderDateTime"))])
+            var attributes = identity(row.device).merging(["orderDateTime": text(sent(row.device.attributes, "orderDateTime"))])
             switch row.kind {
             case .active(let ends): attributes = attributes.merging(["coverage": .string("active AppleCare coverage"), "activeCoverageEnds": text(ends?.isoformat)])
             case .noActiveCoverage(let statuses):
                 attributes = attributes.merging(["coverage": .string("coverage records read, none ACTIVE"), "recordStatuses": .string(statuses.joined(separator: "; "))])
+            case .statusUnknown(let statuses):
+                attributes = attributes.merging(["coverage": .string("coverage status not known to this version: not out of warranty, not estimated"),
+                                                 "recordStatuses": .string(statuses.joined(separator: "; "))])
             case .noRecord: attributes = attributes.merging(["coverage": .string("no coverage record (may mean no AppleCare, not expired)")])
             case .notRead(let why): attributes = attributes.merging(["coverage": .string("not read: \(why)")])
             }
