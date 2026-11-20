@@ -22,7 +22,7 @@ struct SchemaTests {
         #expect(Schema.toVersion1.utf8.starts(with: Schema.abapit.utf8))
     }
 
-    /// abapit's tables and views as abapit wrote them, the two columns, the index and the new view; version 1.
+    /// abapit's tables and views as abapit wrote them, the two columns, the index and the new view; version 1, then the attention table: version 2.
     @Test func aNewDatabaseIsAbapitsSchemaPlusTheAdditions() throws {
         let root = try Scratch.folder()
         defer { Scratch.remove(root) }
@@ -31,7 +31,7 @@ struct SchemaTests {
         let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
 
         #expect(try file.userVersion() == Schema.version)
-        #expect(Schema.version == 1)
+        #expect(Schema.version == 2)
         let columns = { (table: String) in try file.rows("PRAGMA table_info(\(table))") { try $0.text(1) ?? "" } }
         #expect(try columns("snapshots") == ["id", "taken_at", "org_client_id", "org_name", "org_scope", "abapit_version", "errors",
                                              "org_id", "notes", "counts"])
@@ -40,9 +40,10 @@ struct SchemaTests {
         let keys = try file.rows("PRAGMA foreign_key_list(items)") { try [$0.text(2) ?? "", $0.text(3) ?? "", $0.text(4) ?? "", $0.text(6) ?? ""] }
         #expect(keys == [["snapshots", "snapshot_id", "id", "CASCADE"]])
         let named = { (type: String) in try file.rows("SELECT name FROM sqlite_master WHERE type = '\(type)' AND name NOT LIKE 'sqlite_%' ORDER BY name") { try $0.text(0) ?? "" } }
-        #expect(try named("table") == ["items", "snapshots"])
+        #expect(try named("table") == ["attention", "items", "snapshots"])
         #expect(try named("view") == ["activation_lock_view", "applecare_view", "devices_view"])
         #expect(try named("index") == ["snapshots_by_org"])
+        #expect(try columns("attention") == ["org_id", "rule", "subject", "first_seen", "last_seen", "dismissed_at", "snoozed_until"])
 
         // SQLite keeps each statement as written, less `IF NOT EXISTS` and the `;`: abapit's items table and two views
         // are abapit's text.
@@ -55,7 +56,7 @@ struct SchemaTests {
         }
     }
 
-    /// A file at version 1 opens as it is: the additions aren't run again (they would fail: a column can't be added twice).
+    /// A file at the current version opens as it is: the additions aren't run again (they would fail: a column can't be added twice).
     @Test func aCurrentFileOpensWithoutMigratingAgain() async throws {
         let root = try Scratch.folder()
         defer { Scratch.remove(root) }
@@ -142,7 +143,7 @@ struct SchemaTests {
         #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]))
         let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
         #expect(store.access == .readWrite)
-        #expect(try Scratch.open(path).userVersion() == 1)
+        #expect(try Scratch.open(path).userVersion() == Schema.version)
     }
 
     /// abapit's two views and the new one read what a snapshot records.
