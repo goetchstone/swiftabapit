@@ -270,12 +270,15 @@ public struct NeedsAttention: Sendable {
     public static let ruleLimit = 64
     public static let subjectLimit = 128
 
-    /// Whether `text` can be a rule or a subject in the attention store: 1 to `limit` characters, none whitespace, a control,
-    /// a format character, a quote, a slash or a backslash. A serial number, a UUID or a numeric id passes; a name with a
-    /// space ("Jane Example's MacBook Pro") doesn't. A one-word name would pass: callers pass identifiers, and this is the
-    /// backstop. One rule for the store (`SnapshotStore.seen` refuses what fails it) and for the findings it is given.
+    /// Whether `text` can be a rule or a subject in the attention store: 1 to `limit` characters and at most four bytes a
+    /// character in all (`limit * 4` UTF-8 bytes, so one character carrying thousands of combining marks can't pass as one),
+    /// none whitespace, a control, a format character (a direction override, a joiner, a zero-width space), a quote, a slash
+    /// or a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
+    /// doesn't. A one-word name would pass: callers pass identifiers, and this is the backstop. One rule for the store
+    /// (`SnapshotStore.seen` refuses what fails it) and for the findings it is given. Compared by bytes elsewhere:
+    /// precomposed and decomposed "e with acute" both pass, and are two subjects.
     public static func isIdentifier(_ text: String, limit: Int) -> Bool {
-        guard !text.isEmpty, text.count <= limit else { return false }
+        guard !text.isEmpty, text.utf8.count <= limit * 4, text.count <= limit else { return false }
         return text.unicodeScalars.allSatisfy { scalar in
             !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format
               || "\"'`/\\".unicodeScalars.contains(scalar))

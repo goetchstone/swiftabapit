@@ -163,9 +163,11 @@ events in phase 2a; their notes are below.
   - **The caller's contract**: call `seen` only for a run that judged the rule over a complete read, `[]` included. For a
     rule skipped as not read, or a partial read (cut at a page cap, a resource that failed), don't call it at all, not even
     with `[]`, which would age every finding of the rule. `at` is the current time.
-  - **Identifiers only**: `rule` (up to 64 characters) and `subject` (up to 128) can't be empty or hold whitespace, a control
-    or format character, a quote, a slash or a backslash (`.notAnIdentifier`), so a name with a space ("Jane Example's
-    MacBook Pro") can't be stored. A one-word name would pass: the collectors pass serials and ids, and this is the backstop.
+  - **Identifiers only**: `rule` (up to 64 characters) and `subject` (up to 128), and at most four bytes a character in all
+    (256 and 512 UTF-8 bytes: "e" with 5,000 combining marks is one character and is refused), can't be empty or hold
+    whitespace, a control or format character (U+202E, U+200D and U+200B are refused), a quote, a slash or a backslash
+    (`.notAnIdentifier`), so a name with a space ("Jane Example's MacBook Pro") can't be stored. The rule is
+    `NeedsAttention.isIdentifier`, which the findings are checked by too. A one-word name would pass: the collectors pass serials and ids, and this is the backstop.
     Subjects are compared by bytes: precomposed and decomposed "e with acute" are two rows.
   - `orgIDs()` lists orgs with snapshots or findings, so an org that has only findings is still a name in use.
   - There is no undo for a dismissal yet; a later screen PR adds it if the operator wants it.
