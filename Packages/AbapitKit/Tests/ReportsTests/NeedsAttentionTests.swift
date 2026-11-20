@@ -79,6 +79,22 @@ struct NeedsAttentionTests {
         #expect(result.words.count == 1 && result.words[0].contains("skipped") && !result.words[0].contains("found"), sourceLocation: sourceLocation)
     }
 
+    /// A partial rule shows what it found in what was read, says how much wasn't read, marks every finding partial, and hands
+    /// the store nothing (the operator, 2026-11-20: "Show what it found, marked partial").
+    static func expectPartial(_ result: NeedsAttention.RuleResult, containing text: String, found: [String],
+                              sourceLocation: SourceLocation = #_sourceLocation) {
+        guard case .partial(let why) = result.verdict else {
+            Issue.record("\(result.rule) is \(result.verdict), expected partial: \(text)", sourceLocation: sourceLocation)
+            return
+        }
+        #expect(why.contains(text), "\(why)", sourceLocation: sourceLocation)
+        #expect(result.findings.map(\.subject) == found, sourceLocation: sourceLocation)
+        #expect(result.findings.allSatisfy(\.isPartial) && !result.isJudged, sourceLocation: sourceLocation)
+        #expect(result.subjectsToRecord == nil, sourceLocation: sourceLocation)
+        #expect(result.words.first?.contains("read in part") == true && result.words.contains { $0.contains("isn't kept for later") },
+                sourceLocation: sourceLocation)
+    }
+
     // MARK: every rule
 
     @Test func ruleIDsAreIdentifiersTheStoreKeeps() {
@@ -165,10 +181,12 @@ struct NeedsAttentionTests {
         #expect(result.isJudged && result.findings.isEmpty)
     }
 
-    @Test func missingFromAppleMDMIsSkippedOverAnythingLessThanWhole() {
+    /// The side assigned in Apple read in part: what was read is looked for, marked partial. The side searched (Apple MDM's
+    /// list) read in part: an absence can't be judged, so the rule is skipped and names that list.
+    @Test func missingFromAppleMDMIsPartialOverAPartAssignedSideAndSkippedOverAPartMDMList() {
         var input = Self.appleMDMInput()
         input.services.read = .partly("showing 100 of at least 120")
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "read in part (showing 100 of at least 120)")
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM), containing: "read in part (showing 100 of at least 120)", found: ["S2"])
 
         input = Self.appleMDMInput()
         input.services.notSent = ["serverType"]
@@ -176,19 +194,30 @@ struct NeedsAttentionTests {
 
         input = Self.appleMDMInput()
         input.services.items.append(Self.service("svc-untyped", type: nil))
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "1 of 4 services came with no type")
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM), containing: "1 of 4 services came with no type", found: ["S2"])
 
+        // The only Apple MDM service's devices not read: nothing to look for.
         input = Self.appleMDMInput()
         input.serviceDevices["svc-apple"] = nil
         Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "The device list of Service svc-apple wasn't read")
+        input.serviceDevices["svc-apple"] = .notRead("your role can't read this")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "wasn't read (your role can't read this)")
+
+        // One of two Apple MDM services read: partial over the one read.
+        input = Self.appleMDMInput()
+        input.services.items.append(Self.service("svc-apple-2", type: "APPLE_MDM"))
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM), containing: "The device list of Service svc-apple-2 wasn't read", found: ["S2"])
 
         input = Self.appleMDMInput()
         input.serviceDevices["svc-apple"]?.read = .partly("the page limit")
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "read in part (the page limit)")
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM), containing: "read in part (the page limit)", found: ["S2"])
 
         input = Self.appleMDMInput()
         input.appleMDM.read = .partly("showing 1 of at least 3")
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "Apple MDM's device list was read in part")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM),
+                           containing: "Apple MDM's device list was read in part (showing 1 of at least 3), so a device can't be called absent from it")
+        input.appleMDM = .notRead("Apple answered 500")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "Apple MDM's device list wasn't read (Apple answered 500)")
 
         // An enrolled device with no serial could be the assigned one: never called missing.
         input = Self.appleMDMInput()
@@ -230,9 +259,15 @@ struct NeedsAttentionTests {
         input.serviceDevices["svc-mosyle"]?.read = .notRead("your role can't read this")
         Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "wasn't read (your role can't read this)")
 
+        // The side searched (Mosyle) read in part: skipped, and says so. The assigned side read in part: partial.
         input = Self.mosyleInput()
         input.mosyle = .devices(.init([Self.mosyle("S1")], read: .partly("showing 1 of at least 3")))
-        Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "Mosyle's device list was read in part")
+        Self.expectSkipped(Self.run(input).result(.missingFromMosyle),
+                           containing: "Mosyle's device list was read in part (showing 1 of at least 3), so a device can't be called absent from it")
+        input = Self.mosyleInput()
+        input.serviceDevices["svc-mosyle"]?.read = .partly("showing 3 of at least 5")
+        Self.expectPartial(Self.run(input).result(.missingFromMosyle), containing: "The device list of Service svc-mosyle was read in part (showing 3 of at least 5)",
+                           found: ["S2"])
     }
 
     // MARK: 2. in the MDM, not in Apple
@@ -245,8 +280,13 @@ struct NeedsAttentionTests {
         #expect(result.findings.map(\.subject) == ["S9"])
         #expect(result.notes == ["1 of Apple MDM's devices came with no serial number: not compared with Apple's device list."])
 
+        // Apple MDM's list read in part: partial. Apple's list (the one searched) read in part: skipped, and says which.
+        var part = input
+        part.appleMDM.read = .partly("showing 3 of at least 4")
+        Self.expectPartial(Self.run(part).result(.appleMDMNotInApple), containing: "Apple MDM's device list was read in part", found: ["S9"])
         input.devices.read = .partly("showing 1 of at least 2")
-        Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "Apple's device list was read in part")
+        Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple),
+                           containing: "Apple's device list was read in part (showing 1 of at least 2), so a device can't be called absent from it")
         input = Self.base()
         input.appleMDM = .notRead("Apple School Manager has no Apple MDM")
         Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "Apple School Manager has no Apple MDM")
@@ -264,8 +304,11 @@ struct NeedsAttentionTests {
         #expect(found == ["S7", "S8"])
 
         input.mosyle = .devices(.init(mosyle, read: .partly("showing 5 of at least 9")))
-        Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "Mosyle's device list was read in part")
+        Self.expectPartial(Self.run(input).result(.mosyleNotInApple), containing: "Mosyle's device list was read in part (showing 5 of at least 9)",
+                           found: ["S7", "S8"])
         input.mosyle = .devices(Self.whole(mosyle))
+        input.devices.read = .partly("showing 3 of at least 4")
+        Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "Apple's device list was read in part (showing 3 of at least 4), so a device can't be called absent from it")
         input.devices = .notRead("your role can't read this")
         Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "Apple's device list wasn't read (your role can't read this)")
     }
@@ -306,15 +349,22 @@ struct NeedsAttentionTests {
         #expect(Self.subjects(Self.coverageInput(["MINE": [record]]), .appleCareExpiring) == ["MINE"])
     }
 
-    @Test func appleCareExpiringIsSkippedWhenAnyDevicesCoverageWasntRead() {
+    /// Some devices' coverage not read: partial over the rest, and says how many. None read: skipped.
+    @Test func appleCareExpiringIsPartialWhenSomeCoverageWasntReadAndSkippedWhenNone() {
         var input = Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: Fleet.stamp(Self.day))], "B": [], "C": []])
         input.coverage.reads["B"] = nil
-        Self.expectSkipped(Self.run(input).result(.appleCareExpiring), containing: "AppleCare coverage wasn't read for 1 of 3 devices (the sweep didn't reach it)")
+        Self.expectPartial(Self.run(input).result(.appleCareExpiring), containing: "AppleCare coverage wasn't read for 1 of 3 devices (the sweep didn't reach it)",
+                           found: ["A"])
         input.coverage.reads["C"] = .notRead("your role can't read this")
-        Self.expectSkipped(Self.run(input).result(.appleCareExpiring), containing: "2 of 3 devices (the sweep didn't reach it; your role can't read this)")
-        input = Self.coverageInput(["A": []])
+        Self.expectPartial(Self.run(input).result(.appleCareExpiring), containing: "2 of 3 devices (the sweep didn't reach it; your role can't read this)",
+                           found: ["A"])
+        input.coverage.reads["A"] = nil
+        Self.expectSkipped(Self.run(input).result(.appleCareExpiring), containing: "AppleCare coverage wasn't read for 3 of 3 devices")
+        input = Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: Fleet.stamp(Self.day))]])
         input.devices.read = .partly("showing 1 of at least 2")
-        Self.expectSkipped(Self.run(input).result(.appleCareExpiring), containing: "Apple's device list was read in part")
+        Self.expectPartial(Self.run(input).result(.appleCareExpiring), containing: "Apple's device list was read in part (showing 1 of at least 2)", found: ["A"])
+        input.devices = .notRead("your role can't read this")
+        Self.expectSkipped(Self.run(input).result(.appleCareExpiring), containing: "Apple's device list wasn't read (your role can't read this)")
     }
 
     @Test func appleCareExpiringSaysWhatItCouldntJudge() {
@@ -355,8 +405,8 @@ struct NeedsAttentionTests {
         var input = Self.base()
         input.mosyle = .devices(.init([Self.mosyle("A")], read: .whole, notSent: ["lastCheckIn"]))
         Self.expectSkipped(Self.run(input).result(.mosyleCheckIn), containing: "Mosyle didn't send when its devices last checked in")
-        input.mosyle = .devices(.init([Self.mosyle("A")], read: .partly("showing 1 of at least 2")))
-        Self.expectSkipped(Self.run(input).result(.mosyleCheckIn), containing: "read in part")
+        input.mosyle = .devices(.init([Self.mosyle("A"), Self.mosyle("B", checkIn: nil)], read: .partly("showing 2 of at least 3")))
+        Self.expectPartial(Self.run(input).result(.mosyleCheckIn), containing: "Mosyle's device list was read in part (showing 2 of at least 3)", found: ["B"])
     }
 
     static func appleMDMDevices() -> Input {
@@ -381,15 +431,19 @@ struct NeedsAttentionTests {
         #expect(result.notes == ["2 of Apple MDM's devices have no last check-in in their details: unknown, not judged."])
     }
 
-    @Test func appleMDMCheckInIsSkippedWhenAnyDetailsWerentRead() {
+    /// Details read for only some devices (the screen reads 50): partial over those read. None read: skipped.
+    @Test func appleMDMCheckInIsPartialWhenSomeDetailsWerentRead() {
         var input = Self.appleMDMDevices()
         input.appleMDMDetails.reads["m2"] = nil
-        Self.expectSkipped(Self.run(input).result(.appleMDMCheckIn), containing: "Apple MDM's device detail wasn't read for 1 of 5 devices")
+        Self.expectPartial(Self.run(input).result(.appleMDMCheckIn), containing: "Apple MDM's device detail wasn't read for 1 of 5 devices", found: ["GARBLED", "EDGE"])
         input.appleMDMDetails.reads["m3"] = .notRead("Apple answered 403")
-        Self.expectSkipped(Self.run(input).result(.appleMDMCheckIn), containing: "2 of 5 devices (the sweep didn't reach it; Apple answered 403)")
+        Self.expectPartial(Self.run(input).result(.appleMDMCheckIn), containing: "2 of 5 devices (the sweep didn't reach it; Apple answered 403)",
+                           found: ["GARBLED", "EDGE"])
+        input.appleMDMDetails = .init()
+        Self.expectSkipped(Self.run(input).result(.appleMDMCheckIn), containing: "Apple MDM's device detail wasn't read for 5 of 5 devices")
         input = Self.appleMDMDevices()
         input.appleMDM.read = .partly("showing 5 of at least 6")
-        Self.expectSkipped(Self.run(input).result(.appleMDMCheckIn), containing: "Apple MDM's device list was read in part")
+        Self.expectPartial(Self.run(input).result(.appleMDMCheckIn), containing: "Apple MDM's device list was read in part", found: ["GARBLED", "EDGE"])
     }
 
     // MARK: 5. FileVault and the firewall
@@ -423,15 +477,18 @@ struct NeedsAttentionTests {
         }
     }
 
-    /// Only a Mac's details are needed: an iPhone's unread details skip nothing, a Mac's skip the rule.
-    @Test func fileVaultIsSkippedOnlyWhenAMacsDetailsWerentRead() {
+    /// Only a Mac's details are needed: an iPhone's unread details change nothing, a Mac's make the rule partial, and no Mac's
+    /// read skips it.
+    @Test func fileVaultIsPartialOnlyWhenAMacsDetailsWerentRead() {
         var input = Self.securityInput()
         input.appleMDMDetails.reads["m5"] = nil
         input.appleMDMDetails.reads["m7"] = .notRead("Apple answered 500")
         #expect(Self.run(input).result(.fileVaultOff).findings.map(\.subject) == ["MAC-OFF"])
         input.appleMDMDetails.reads["m2"] = nil
-        Self.expectSkipped(Self.run(input).result(.fileVaultOff), containing: "Apple MDM's device detail wasn't read for 1 of 5 Macs")
-        Self.expectSkipped(Self.run(input).result(.firewallOff), containing: "1 of 5 Macs")
+        Self.expectPartial(Self.run(input).result(.fileVaultOff), containing: "Apple MDM's device detail wasn't read for 1 of 5 Macs", found: ["MAC-OFF"])
+        Self.expectPartial(Self.run(input).result(.firewallOff), containing: "1 of 5 Macs", found: ["MAC-OFF"])
+        for mac in ["m1", "m3", "m4", "m8"] { input.appleMDMDetails.reads[mac] = .notRead("Apple answered 403") }
+        Self.expectSkipped(Self.run(input).result(.fileVaultOff), containing: "Apple MDM's device detail wasn't read for 5 of 5 Macs")
         input = Self.securityInput()
         input.mosyle = .noMosyleOrg
         #expect(Self.run(input).result(.fileVaultOff).notes.allSatisfy { !$0.contains("Mosyle") })
@@ -461,15 +518,17 @@ struct NeedsAttentionTests {
         #expect(result.notes == ["2 devices are locked by a type this version can't place, or sent no readable isLocked: can't say whether they block release."])
     }
 
-    @Test func activationLockIsSkippedWhenAnyDeviceWasntRead() {
+    @Test func activationLockIsPartialWhenSomeDevicesWerentRead() {
         var input = Self.lockInput()
         input.activationLock.reads["MDM"] = nil
-        Self.expectSkipped(Self.run(input).result(.activationLock), containing: "Activation Lock status wasn't read for 1 of 6 devices")
+        Self.expectPartial(Self.run(input).result(.activationLock), containing: "Activation Lock status wasn't read for 1 of 6 devices", found: ["USER"])
         input.activationLock.reads["OPEN"] = .notRead("Apple answered 429")
-        Self.expectSkipped(Self.run(input).result(.activationLock), containing: "2 of 6 devices")
+        Self.expectPartial(Self.run(input).result(.activationLock), containing: "2 of 6 devices", found: ["USER"])
+        input.activationLock = .init()
+        Self.expectSkipped(Self.run(input).result(.activationLock), containing: "Activation Lock status wasn't read for 6 of 6 devices")
         input = Self.lockInput()
         input.devices.read = .partly("showing 6 of at least 9")
-        Self.expectSkipped(Self.run(input).result(.activationLock), containing: "Apple's device list was read in part (showing 6 of at least 9)")
+        Self.expectPartial(Self.run(input).result(.activationLock), containing: "Apple's device list was read in part (showing 6 of at least 9)", found: ["USER"])
     }
 
     // MARK: 7. quiet services
@@ -505,7 +564,8 @@ struct NeedsAttentionTests {
         input.services = .init(Self.mixedServices, read: .whole, notSent: ["status"])
         #expect(Self.run(input).result(.quietService).notes == ["Apple didn't send the services' status, so a deleted service can't be told apart and may be listed."])
         input.services = .init(Self.mixedServices, read: .partly("showing 10 of at least 12"))
-        Self.expectSkipped(Self.run(input).result(.quietService), containing: "read in part")
+        Self.expectPartial(Self.run(input).result(.quietService), containing: "The device management services list was read in part (showing 10 of at least 12)",
+                           found: QuietServices(Self.mixedServices, now: Fleet.now).rows.map(\.service.id))
     }
 
     // MARK: 8. migration deadlines
@@ -553,10 +613,13 @@ struct NeedsAttentionTests {
         #expect(Self.subjects(input, .migrationDeadline, longer).contains("PAST-EDGE"))
     }
 
-    @Test func aMigrationDeadlineIsSkippedOverAPartList() {
+    @Test func aMigrationDeadlineIsPartialOverAPartList() {
         var input = Self.migrationInput()
+        let complete = Self.run(input).result(.migrationDeadline).findings.map(\.subject)
         input.devices.read = .partly("showing 10 of at least 11")
-        Self.expectSkipped(Self.run(input).result(.migrationDeadline), containing: "Apple's device list was read in part")
+        Self.expectPartial(Self.run(input).result(.migrationDeadline), containing: "Apple's device list was read in part (showing 10 of at least 11)", found: complete)
+        input.devices = .notRead("your role can't read this")
+        Self.expectSkipped(Self.run(input).result(.migrationDeadline), containing: "Apple's device list wasn't read (your role can't read this)")
     }
 
     // MARK: subjects, age

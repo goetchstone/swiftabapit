@@ -4,8 +4,12 @@ import JSONAPI
 
 /// "Needs attention" (plan §8.0): work that should have been done and hasn't, found by deterministic rules over what was
 /// read. **A model never decides what's overdue**: it can be unavailable, and a wrong "nothing's overdue" fails silently
-/// (invariant 8). So every rule here is judged only over a complete read, and says so; a rule whose input was read in part,
-/// not read, or belongs to an org this client doesn't have is **skipped, in words**, and never reads as "nothing found".
+/// (invariant 8). So a rule is **judged**, and recorded, only over a complete read. Over an input read in part (cut at a page
+/// limit, some devices not read) it is **partial** (the operator, 2026-11-20: "Show what it found, marked partial"): what it
+/// found in what was read is shown, how much wasn't read is said, and nothing is recorded. A comparison is partial only when
+/// the list it searches for an absence was read whole: an absence from a list read in part can't be judged. A rule whose
+/// input wasn't read at all, or belongs to an org this client doesn't have, is **skipped, in words**. None of the three ever
+/// reads as "nothing's overdue" when it isn't known.
 ///
 /// Each rule reuses the report that already answers it, so one rule shows the same on two screens: the reconciliation's
 /// buckets (`Reconciliation`), the coverage window (`CoverageReport`), stale check-ins (`StaleDevices`), the Activation Lock
@@ -171,9 +175,15 @@ public struct NeedsAttention: Sendable {
         }
     }
 
-    /// Whether the rule was judged over a complete read, or why it wasn't.
+    /// Whether the rule was judged over a complete read, over part of one, or not at all.
     public enum Verdict: Sendable, Equatable {
+        /// Over a complete read: the findings are every one there is, and the store is told.
         case judged
+        /// Over what was read, which wasn't all of it (the operator, 2026-11-20: "Show what it found, marked partial"): the
+        /// findings are real, the text says how much wasn't read, and nothing is recorded, so dismissals and "first seen" stay
+        /// accurate. Only a per-device rule, or a comparison whose searched side was read whole, is ever partial.
+        case partial(String)
+        /// Nothing could be judged: the text says why.
         case skipped(String)
     }
 
@@ -185,6 +195,8 @@ public struct NeedsAttention: Sendable {
         public let reason: String
         /// When the oldest snapshot among the rule's inputs was taken; nil when every input was read live.
         public let takenAt: Date?
+        /// Found over a partial read: shown, never recorded.
+        public let isPartial: Bool
 
         /// Whether the attention store can keep it (`isIdentifier`). One it can't is still shown, and said.
         public var isTrackable: Bool { NeedsAttention.isIdentifier(subject, limit: NeedsAttention.subjectLimit) }
@@ -194,7 +206,7 @@ public struct NeedsAttention: Sendable {
         public let rule: Rule
         public let title: String
         public let verdict: Verdict
-        /// Empty when skipped: a skipped rule found nothing because it judged nothing.
+        /// Empty when skipped: a skipped rule found nothing because it judged nothing. Over a partial read, what that part held.
         public let findings: [Finding]
         /// What the rule read whole but couldn't judge for some items (a Mac that sent no FileVault value), in words.
         public let notes: [String]
@@ -202,19 +214,25 @@ public struct NeedsAttention: Sendable {
         public let takenAt: Date?
 
         /// The subjects to hand `SnapshotStore.seen`: every trackable finding's, possibly none, when the rule was judged over a
-        /// complete read; nil when it was skipped, so the store isn't told anything (not even `[]`, which would age every
-        /// finding of the rule).
+        /// complete read; nil when it was partial or skipped, so the store isn't told anything (not even `[]`, which would age
+        /// every finding of the rule, nor a partial run's findings, which would make "first seen" and dismissals wrong).
         public var subjectsToRecord: [String]? {
             guard verdict == .judged else { return nil }
             return findings.filter(\.isTrackable).map(\.subject)
         }
 
+        /// Judged over a complete read (not partial, not skipped).
         public var isJudged: Bool { verdict == .judged }
 
-        /// The rule's line, then what it couldn't judge. A skipped rule says only why: never a count.
+        /// The rule's line, then what it couldn't judge. A skipped rule says only why: never a count. A partial one says it was
+        /// read in part, how much wasn't, and that what it found isn't kept.
         public var words: [String] {
             switch verdict {
             case .skipped(let why): return ["\(title): skipped. \(why)."]
+            case .partial(let why):
+                let found = findings.isEmpty ? "none found in what was read." : "\(findings.count) found in what was read."
+                return ["\(title): read in part, \(found)", "\(why).",
+                        "What was read in part isn't kept for later (dismiss, snooze, first seen) until a complete read."] + notes
             case .judged:
                 var lines = ["\(title): " + (findings.isEmpty ? "none found." : "\(findings.count) found.")]
                 lines += notes
@@ -288,7 +306,10 @@ public struct NeedsAttention: Sendable {
 
 // MARK: the rules
 
-/// One rule's judgment over one input. Every rule returns `skipped` the moment an input it needs wasn't read whole.
+/// One rule's judgment over one input. An input that wasn't read at all skips the rule. An input read in part makes a
+/// per-device rule partial (its findings are real, never recorded); a comparison is partial only when the side it searches
+/// for an absence was read whole, because an absence from a list read in part can't be judged, so it skips then, and says
+/// which list.
 private struct Judge {
     let input: NeedsAttention.Input
     let thresholds: NeedsAttention.Thresholds
@@ -300,24 +321,34 @@ private struct Judge {
     func skipped(_ why: String) -> Result { .skipped(rule, thresholds, why) }
 
     /// Judged: `found` as (subject, reason) in the report's order, the first of a subject kept (the store keys by subject).
-    func judged(_ found: [(subject: String, reason: String)], notes: [String] = [], takenAt: [Date?]) -> Result {
+    /// `partial` holds, in words, every part of the input that wasn't read: any makes the verdict partial.
+    func judged(_ found: [(subject: String, reason: String)], notes: [String] = [], takenAt: [Date?], partial: [String] = []) -> Result {
         let age = takenAt.compactMap { $0 }.min()
         var seen: Set<[UInt8]> = []
         let findings = found.filter { seen.insert(Array($0.subject.utf8)).inserted }
-            .map { NeedsAttention.Finding(rule: rule, subject: $0.subject, reason: $0.reason, takenAt: age) }
-        return Result(rule: rule, title: rule.title(thresholds), verdict: .judged, findings: findings, notes: notes, takenAt: age)
+            .map { NeedsAttention.Finding(rule: rule, subject: $0.subject, reason: $0.reason, takenAt: age, isPartial: !partial.isEmpty) }
+        let verdict: NeedsAttention.Verdict = partial.isEmpty ? .judged : .partial(partial.joined(separator: "; "))
+        return Result(rule: rule, title: rule.title(thresholds), verdict: verdict, findings: findings, notes: notes, takenAt: age)
     }
 
-    /// Why a list can't be judged, in words; nil when it was read whole.
-    func gap<E>(_ name: String, _ listed: NeedsAttention.Listed<E>) -> String? {
-        switch listed.read {
-        case .whole: nil
-        case .partly(let how): "\(name) was read in part (\(how))"
-        case .notRead(let why): "\(name) wasn't read (\(why))"
-        }
+    /// Why nothing can be judged from a list, in words: nil unless it wasn't read at all.
+    func unread<E>(_ name: String, _ listed: NeedsAttention.Listed<E>) -> String? {
+        if case .notRead(let why) = listed.read { return "\(name) wasn't read (\(why))" }
+        return nil
     }
 
-    /// Why a sweep can't be judged: `whys` holds one reason per item it didn't read. Nil when it read every item.
+    /// How much of a list wasn't read, in words: nil unless it was read in part.
+    func part<E>(_ name: String, _ listed: NeedsAttention.Listed<E>) -> String? {
+        if case .partly(let how) = listed.read { return "\(name) was read in part (\(how))" }
+        return nil
+    }
+
+    /// Why an absence from a list can't be judged: it wasn't read, or was read in part. Nil when it was read whole.
+    func searched<E>(_ name: String, _ listed: NeedsAttention.Listed<E>) -> String? {
+        unread(name, listed) ?? part(name, listed).map { "\($0), so a device can't be called absent from it" }
+    }
+
+    /// How much of a sweep wasn't read: `whys` holds one reason per item it didn't read. Nil when it read every item.
     func sweepGap(_ name: String, whys: [String], of total: Int, _ noun: String) -> String? {
         guard !whys.isEmpty else { return nil }
         var reasons: [String] = []
@@ -341,33 +372,38 @@ private struct Judge {
     /// Whether Apple MDM listed the device with a serial number the reconciliation can join on.
     static func hasSerial(_ device: MDMDevice) -> Bool { device.serialNumber.map { !Reconciliation.key($0).isEmpty } ?? false }
 
-    // 1. Assigned in Apple to an MDM service, and missing from that MDM.
+    // 1. Assigned in Apple to an MDM service, and missing from that MDM. The MDM's list is the one searched.
 
     func missingFromAppleMDM() -> Result {
         let services = input.services
-        if let why = gap("The device management services list", services) { return skipped(why) }
+        if let why = unread("The device management services list", services) { return skipped(why) }
         if services.notSent.contains("serverType") {
             return skipped("Apple didn't send the services' type (read with default fields), so Apple MDM's service can't be told apart")
         }
+        var partial = [part("The device management services list", services)].compactMap { $0 }
         let untyped = services.items.filter { $0.type == nil }
         if !untyped.isEmpty {
-            return skipped("\(untyped.count) of \(services.items.count) services came with no type Apple sent as text, so Apple MDM's service can't be told apart")
+            partial.append("\(untyped.count) of \(services.items.count) services came with no type Apple sent as text, so their devices weren't looked for")
         }
         let apple = services.items.filter { $0.type == .known(.appleMDM) }
-        // No Apple MDM service: nothing can be assigned to it, read over the whole services list.
-        guard !apple.isEmpty else { return judged([], takenAt: [services.takenAt]) }
-        var assigned: [Resource] = [], serviceOf: [[UInt8]: String] = [:], ages = [services.takenAt]
+        // No Apple MDM service among those read: nothing read can be assigned to it.
+        guard !apple.isEmpty else { return judged([], takenAt: [services.takenAt], partial: partial) }
+        var assigned: [Resource] = [], serviceOf: [[UInt8]: String] = [:], ages = [services.takenAt], lists = 0
         for service in apple {
-            guard let listed = input.serviceDevices[service.id] else { return skipped("The device list of \(service.name) wasn't read") }
-            if let why = gap("The device list of \(service.name)", listed) { return skipped(why) }
+            guard let listed = input.serviceDevices[service.id] else { partial.append("The device list of \(service.name) wasn't read"); continue }
+            if let why = unread("The device list of \(service.name)", listed) { partial.append(why); continue }
+            if let why = part("The device list of \(service.name)", listed) { partial.append(why) }
+            lists += 1
             ages.append(listed.takenAt)
             for id in listed.items {
                 assigned.append(Resource(type: OrgDevice.resourceType, id: id))
                 serviceOf[Reconciliation.key(id)] = serviceOf[Reconciliation.key(id)] ?? service.name
             }
         }
+        // No Apple MDM service's devices read: nothing to look for.
+        guard lists > 0 else { return skipped(partial.joined(separator: "; ")) }
         let mdm = input.appleMDM
-        if let why = gap("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = searched("Apple MDM's device list", mdm) { return skipped(why) }
         let unnamed = mdm.items.filter { !Self.hasSerial($0) }
         if !unnamed.isEmpty {
             return skipped("\(unnamed.count) of Apple MDM's devices came with no serial number, so a device assigned to Apple MDM can't be called missing from it")
@@ -376,7 +412,7 @@ private struct Judge {
         let report = Reconciliation(apple: assigned, mosyle: mdm.items.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
         return judged(report.appleOnly.map { row in
             (row.serial, "Assigned in Apple to \(serviceOf[Reconciliation.key(row.serial)] ?? "Apple MDM"); Apple MDM doesn't list it.")
-        }, takenAt: ages)
+        }, takenAt: ages, partial: partial)
     }
 
     func missingFromMosyle() -> Result {
@@ -389,42 +425,42 @@ private struct Judge {
         }
         let name = input.services.items.first { $0.id.utf8.elementsEqual(serviceID.utf8) }?.name ?? "the service set as your Mosyle org"
         guard let listed = input.serviceDevices[serviceID] else { return skipped("The device list of \(name) wasn't read") }
-        if let why = gap("The device list of \(name)", listed) { return skipped(why) }
-        if let why = gap("Mosyle's device list", mosyle) { return skipped(why) }
+        if let why = unread("The device list of \(name)", listed) { return skipped(why) }
+        if let why = searched("Mosyle's device list", mosyle) { return skipped(why) }
         let report = Reconciliation(apple: listed.items.map { Resource(type: OrgDevice.resourceType, id: $0) }, mosyle: mosyle.items)
         return judged(report.appleOnly.map { ($0.serial, "Assigned in Apple to \(name), your Mosyle org's service; Mosyle doesn't list it.") },
-                      takenAt: [listed.takenAt, mosyle.takenAt])
+                      takenAt: [listed.takenAt, mosyle.takenAt], partial: [part("The device list of \(name)", listed)].compactMap { $0 })
     }
 
-    // 2. In the MDM, and not in Apple.
+    // 2. In the MDM, and not in Apple. Apple's device list is the one searched.
 
     func appleMDMNotInApple() -> Result {
-        if let why = gap("Apple's device list", input.devices) { return skipped(why) }
         let mdm = input.appleMDM
-        if let why = gap("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = unread("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = searched("Apple's device list", input.devices) { return skipped(why) }
         let named = mdm.items.filter(Self.hasSerial)
         let notes = named.count == mdm.items.count ? []
             : ["\(mdm.items.count - named.count) of Apple MDM's devices came with no serial number: not compared with Apple's device list."]
         let report = Reconciliation(apple: input.devices.items.map(\.resource),
                                     mosyle: named.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
         return judged(report.mosyleOnly.map { ($0.serial, "Enrolled in Apple MDM; Apple's device list doesn't have it.") }, notes: notes,
-                      takenAt: [input.devices.takenAt, mdm.takenAt])
+                      takenAt: [input.devices.takenAt, mdm.takenAt], partial: [part("Apple MDM's device list", mdm)].compactMap { $0 })
     }
 
     func mosyleNotInApple() -> Result {
         guard case .devices(let mosyle) = input.mosyle else { return skipped("This client has no Mosyle Business org") }
-        if let why = gap("Apple's device list", input.devices) { return skipped(why) }
-        if let why = gap("Mosyle's device list", mosyle) { return skipped(why) }
+        if let why = unread("Mosyle's device list", mosyle) { return skipped(why) }
+        if let why = searched("Apple's device list", input.devices) { return skipped(why) }
         let report = Reconciliation(apple: input.devices.items.map(\.resource), mosyle: mosyle.items)
         return judged(report.mosyleOnly.map { ($0.serial, "In Mosyle; Apple's device list doesn't have it.") },
-                      takenAt: [input.devices.takenAt, mosyle.takenAt])
+                      takenAt: [input.devices.takenAt, mosyle.takenAt], partial: [part("Mosyle's device list", mosyle)].compactMap { $0 })
     }
 
     // 3. AppleCare expiring.
 
     func appleCareExpiring() -> Result {
         let devices = input.devices
-        if let why = gap("Apple's device list", devices) { return skipped(why) }
+        if let why = unread("Apple's device list", devices) { return skipped(why) }
         let coverage = input.coverage.reads.mapValues { read -> DeviceRead<[Resource]> in
             switch read {
             case .read(let records): .read(records.map(\.resource))
@@ -438,7 +474,8 @@ private struct Judge {
             if case .notRead(let why)? = reads[Array(device.id.utf8)] { return why }
             return Self.unreached
         }
-        if let why = sweepGap("AppleCare coverage", whys: whys, of: devices.items.count, "devices") { return skipped(why) }
+        let sweep = sweepGap("AppleCare coverage", whys: whys, of: devices.items.count, "devices")
+        if let sweep, whys.count == devices.items.count { return skipped(sweep) }
         var notes: [String] = []
         if !report.unreadableEnd.isEmpty {
             notes.append("\(report.unreadableEnd.count) ACTIVE coverages have an end date this app can't read: covered, but not judged.")
@@ -447,14 +484,15 @@ private struct Judge {
             notes.append("The threshold, \(Self.days(thresholds.appleCareExpiringDays)), is past the most the coverage report looks ahead: \(Self.days(CoverageReport.maximumDays)) were used.")
         }
         return judged(report.expiring.map { ($0.device, $0.daysLeft == 0 ? "AppleCare coverage ends in less than a day." : "AppleCare coverage ends in \(Self.days($0.daysLeft)).") },
-                      notes: notes, takenAt: [devices.takenAt, input.coverage.takenAt])
+                      notes: notes, takenAt: [devices.takenAt, input.coverage.takenAt],
+                      partial: [part("Apple's device list", devices), sweep].compactMap { $0 })
     }
 
     // 4. No check-in for N days.
 
     func mosyleCheckIn() -> Result {
         guard case .devices(let mosyle) = input.mosyle else { return skipped("This client has no Mosyle Business org") }
-        if let why = gap("Mosyle's device list", mosyle) { return skipped(why) }
+        if let why = unread("Mosyle's device list", mosyle) { return skipped(why) }
         if mosyle.notSent.contains("lastCheckIn") {
             return skipped("Mosyle didn't send when its devices last checked in (the column wasn't read)")
         }
@@ -465,12 +503,12 @@ private struct Judge {
             case .null, .string(""): return (row.serial, "Never checked in to Mosyle.")
             case let value: return (row.serial, "Mosyle's last check-in isn't a date this app reads: \(shownJSON(value)).")
             }
-        }, takenAt: [mosyle.takenAt])
+        }, takenAt: [mosyle.takenAt], partial: [part("Mosyle's device list", mosyle)].compactMap { $0 })
     }
 
     func appleMDMCheckIn() -> Result {
         let mdm = input.appleMDM
-        if let why = gap("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = unread("Apple MDM's device list", mdm) { return skipped(why) }
         let reads = Self.byBytes(input.appleMDMDetails.reads)
         var stamped: [Resource] = [], none = 0, whys: [String] = []
         for device in mdm.items {
@@ -486,20 +524,22 @@ private struct Judge {
                 }
             }
         }
-        if let why = sweepGap("Apple MDM's device detail", whys: whys, of: mdm.items.count, "devices") { return skipped(why) }
+        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: mdm.items.count, "devices")
+        if let sweep, whys.count == mdm.items.count { return skipped(sweep) }
         let report = StaleDevices(stamped, days: thresholds.checkInDays, now: now)
         let notes = none == 0 ? [] : ["\(none) of Apple MDM's devices have no last check-in in their details: unknown, not judged."]
         return judged(report.rows.map { row in
             row.daysStale.map { (row.serial, "Last checked in to Apple MDM \(Self.days($0)) ago.") }
                 ?? (row.serial, "Apple MDM's last check-in isn't a date this app reads: \(shownJSON(row.lastCheckIn)).")
-        }, notes: notes, takenAt: [mdm.takenAt, input.appleMDMDetails.takenAt])
+        }, notes: notes, takenAt: [mdm.takenAt, input.appleMDMDetails.takenAt],
+           partial: [part("Apple MDM's device list", mdm), sweep].compactMap { $0 })
     }
 
     // 5. FileVault or the firewall off: Macs only, from Apple MDM's details. A value that wasn't sent is unknown, never off.
 
     func securitySetting(_ key: String, _ name: String) -> Result {
         let mdm = input.appleMDM
-        if let why = gap("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = unread("Apple MDM's device list", mdm) { return skipped(why) }
         let macs = mdm.items.filter { $0.productFamily == .known(.mac) }
         let unplaced = mdm.items.filter { $0.productFamily?.known == nil }.count
         let reads = Self.byBytes(input.appleMDMDetails.reads)
@@ -517,22 +557,25 @@ private struct Judge {
                 }
             }
         }
-        if let why = sweepGap("Apple MDM's device detail", whys: whys, of: macs.count, macs.count == 1 ? "Mac" : "Macs") { return skipped(why) }
+        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: macs.count, macs.count == 1 ? "Mac" : "Macs")
+        if let sweep, whys.count == macs.count { return skipped(sweep) }
         var notes: [String] = []
         if unknown > 0 { notes.append("\(unknown) Macs have no \(name) value in Apple MDM's details (none sent, or not a yes or no): unknown, not counted as off.") }
         if unplaced > 0 { notes.append("\(unplaced) of Apple MDM's devices came with no product family this version knows: not judged (only Macs are).") }
         if case .devices = input.mosyle { notes.append("Mosyle's devices aren't judged: this app reads no \(name) value from Mosyle.") }
-        return judged(off, notes: notes, takenAt: [mdm.takenAt, input.appleMDMDetails.takenAt])
+        return judged(off, notes: notes, takenAt: [mdm.takenAt, input.appleMDMDetails.takenAt],
+                      partial: [part("Apple MDM's device list", mdm), sweep].compactMap { $0 })
     }
 
     // 6. Activation Lock blocking a redeploy.
 
     func activationLock() -> Result {
         let devices = input.devices
-        if let why = gap("Apple's device list", devices) { return skipped(why) }
+        if let why = unread("Apple's device list", devices) { return skipped(why) }
         let report = ActivationLockReport(devices.items, reads: input.activationLock.reads, list: devices.read)
         let whys = report.rows.compactMap { row -> String? in if case .notRead(let why) = row.kind { why } else { nil } }
-        if let why = sweepGap("Activation Lock status", whys: whys, of: devices.items.count, "devices") { return skipped(why) }
+        let sweep = sweepGap("Activation Lock status", whys: whys, of: devices.items.count, "devices")
+        if let sweep, whys.count == devices.items.count { return skipped(sweep) }
         let unplaced = report.rows.filter { row in
             switch row.kind {
             case .otherLock, .unclear: true
@@ -542,14 +585,15 @@ private struct Judge {
         let notes = unplaced == 0 ? []
             : ["\(unplaced) devices are locked by a type this version can't place, or sent no readable isLocked: can't say whether they block release."]
         return judged(report.rows.filter(\.blocksRelease).map { ($0.device.id, ActivationLockReport.title("lock:USER") + ".") },
-                      notes: notes, takenAt: [devices.takenAt, input.activationLock.takenAt])
+                      notes: notes, takenAt: [devices.takenAt, input.activationLock.takenAt],
+                      partial: [part("Apple's device list", devices), sweep].compactMap { $0 })
     }
 
     // 7. A quiet service.
 
     func quietService() -> Result {
         let services = input.services
-        if let why = gap("The device management services list", services) { return skipped(why) }
+        if let why = unread("The device management services list", services) { return skipped(why) }
         if services.notSent.contains("lastConnectedDateTime") {
             return skipped("Apple didn't send when the services last connected (read with default fields), so a quiet service can't be judged")
         }
@@ -564,14 +608,14 @@ private struct Judge {
             case .notSent, .inFuture: row.lastConnected.words
             }
             return (row.service.id, "\(row.service.name): \(when).")
-        }, notes: notes, takenAt: [services.takenAt])
+        }, notes: notes, takenAt: [services.takenAt], partial: [part("The device management services list", services)].compactMap { $0 })
     }
 
     // 8. A migration deadline near.
 
     func migrationDeadline() -> Result {
         let devices = input.devices
-        if let why = gap("Apple's device list", devices) { return skipped(why) }
+        if let why = unread("Apple's device list", devices) { return skipped(why) }
         let report = MigrationReport(devices.items, now: now, list: devices.read)
         let limit = thresholds.migrationDeadlineDays
         var found: [(String, String)] = [], unknownStatus = 0, unreadable = 0
@@ -601,6 +645,6 @@ private struct Judge {
             notes.append("\(unknownStatus) devices with a deadline within \(Self.days(limit)) or past have no migration status this version knows: not judged.")
         }
         if unreadable > 0 { notes.append("\(unreadable) devices have a migration deadline this app can't read: not judged.") }
-        return judged(found, notes: notes, takenAt: [devices.takenAt])
+        return judged(found, notes: notes, takenAt: [devices.takenAt], partial: [part("Apple's device list", devices)].compactMap { $0 })
     }
 }
