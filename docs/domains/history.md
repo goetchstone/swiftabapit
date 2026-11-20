@@ -21,10 +21,14 @@ events in phase 2a; their notes are below.
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
   (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
-  in N days; `lastConnected` public, so the Services screen reads a service's last connection the same way), and
-  the Phase 3 fleet reports (below: `ActivationLockReport`, `MigrationReport`, `ServiceHealth`, `WarrantyReport`, `ReportCatalog`, `ExportFleet`).
+  in N days; `lastConnected` public, so the Services screen reads a service's last connection the same way),
+  `SnapshotDiff.swift` (`diff_snapshots`, `item_label`), `Coverage.swift` (`coverage_report`), `FleetAge.swift`
+  (`fleet_age_report`), `ExportHistory.swift` (the refresh-candidates and expiring-coverage CSVs), and the Phase 3 fleet
+  reports (below: `ActivationLockReport`, `MigrationReport`, `ServiceHealth`, `WarrantyReport`, `ReportCatalog`, `ExportFleet`).
 - `Packages/AbapitKit/Tests/ReportsTests/`: parity against `Tests/Fixtures/parity/{csv,reports}.json`,
-  `ExportPolicyTests`, `FindTests`, `AuditDigestTests`, `QuietServicesTests`, and one suite per fleet report.
+  `ExportPolicyTests`, `FindTests`, `AuditDigestTests`, `QuietServicesTests`, and one suite per fleet report;
+  `SnapshotDiffTests` (`diff.json` and `history.json`'s diff reads), `CoverageFleetAgeTests` (`reports.json`),
+  `ExportHistoryTests`.
 - `scripts/gen_fixtures.py`: `gen_csv` (`csv_edges`, `corrected_safe`, the `csv.reader` round trip) and
   `gen_reports` (`stats_edges`, `audit_edges`, `corrected_audit_digest`, and `audit_types`, abapit's two sets).
 
@@ -164,6 +168,55 @@ events in phase 2a; their notes are below.
 - **`QuietServices`** lists the services more than `days` days of 86,400 s past their last connection (exactly
   `days` isn't), and those that never connected or sent a stamp that isn't a date (said apart: `never`, `unreadable`),
   most stale first; a `DELETED` service is skipped.
+
+### Diff, coverage and fleet age (phase 3)
+
+- **`SnapshotDiff.diff(old:new:)`** is abapit's `diff_snapshots` over two in-memory `Snapshot`s (`{resource: {id:
+  attributes}}`, kept as `JSONObject`s, so an NFC and an NFD id stay two). Resources, ids and fields are ordered by
+  code point (`Python.precedes`) and are distinct by bytes; a field missing from one side reads as null. Numbers
+  compare by value without `Double` where both are integers: `2**53 + 1` differs from `2**53`, `10**16` equals `1e16`
+  (an integer against a float compares the float's exact integer value). The store that fills a `Snapshot` from SQLite
+  is the History module's. `SnapshotDiff.label` is `item_label` (no golden: abapit's web layer calls it; held by tests).
+- **Two listed deviations** (the operator's decisions of 2026-11-20, in the golden's `abapit` field; `DIFF_DEVIATIONS`
+  is 6 cases): a boolean is not a number, so `true` against `1` is a change (asked "should swiftabapit report true <-> 1
+  as a change", answer "Report it (Recommended)"); an item is changed only when a field really changed, so `null`
+  against a missing field is no change and yields no item (answer "Only real changes (Recommended)"). `1` against `1.0`
+  is still no change. Two `NaN`s are equal (abapit's `json.loads` shares one `NaN` object and a
+  container's `==` takes identity first, so abapit sees no change either; only a `NaN` that is itself a field, in an item
+  with another change, abapit would list, since `nan != nan`; the port treats it as no change: **a listed deviation**,
+  unreachable from Apple's or Mosyle's JSON, with no golden case). The generator's
+  `strict_equal` has the same blind spot: a golden case for `NaN` is a follow-up for the generator.
+- **`CoverageReport`** is `coverage_report`: an `ACTIVE` record (exactly) covers its serial; an end between now and
+  now + days, both ends included, to the microsecond (`Instant` works in whole microseconds, as a `Date`'s `Double` can't);
+  `days_left` is `timedelta.days` (floor); soonest first, equal days in input order. Added, not in abapit: `notRead`, the
+  serials whose coverage sweep failed. A device with no active record that is in it is `notRead`, never `uncovered`
+  (an unread device is not an unprotected one); with none given the report is abapit's.
+- **`FleetAgeReport`** is `fleet_age_report`: age is `timedelta.days / 365.25` (days floored) from `orderDateTime`, else
+  `addedToOrgDateTime` (a value that is empty or doesn't read as a date falls through, but `ordered` shows the order
+  text when it is truthy, even unreadable); `ageYears` is `Python.round1`, and candidates (age at least `years`)
+  sort by that rounded age, descending, ties in input order. Deviation, the generator's correction (`FLEET_AGE_DEVIATIONS`,
+  2 fleets; not one of the operator's two diff decisions): a device ordered more than 365 days ahead is "< 1 yr", never a
+  candidate; abapit's
+  `bucket_labels[min(int(age), 4)]` read `int(-1.2) = -1` as "4+ yrs". The clamp is on the bucket only: an age is never
+  clamped, so a device ahead by days is not a candidate even at `years` 0. The generator's correction is right only for
+  `int(age) = -1` (a device 366 to 730 days ahead): a case 731 or more days ahead (`int(age) = -2`, abapit's index -2, "3-4
+  yrs") would be corrected from the wrong bucket. A follow-up for the generator; the port clamps every negative to "< 1 yr".
+- **Who wasn't read** (`notRead`, no default: a caller must say, so a missing entry can't pass for a read one): both
+  reports take the serials whose AppleCare sweep failed. A device with no active record that is among them is `notRead`
+  in `CoverageReport`, and `covered` nil in `FleetAgeReport` (counted in `notReadCandidates`, never in
+  `uncoveredCandidates`; the refresh-candidates CSV writes `not read` in `activeCoverage`, where no coverage data leaves it
+  empty and a read device says `True` or `False`). A later PR (the collector and the Reports screen, after
+  PR #29 merges) aligns both with #29's `DeviceRead`/`ListRead`, which treat a missing entry as not read; this PR imports
+  none of it.
+- **Bounds**: `days` is held to 0...1825 and `years` to 0...10 in the initializers, with no overflow (abapit's routes
+  allowed 1...1825 and 1...10; the goldens call `days` 0 and `years` 0, so the lower bound is 0).
+- **An unreadable end** (`CoverageReport.unreadableEnd`): an active record whose `endDateTime` is there and not null but
+  isn't a date (a number, an empty string, text) is counted apart, as `QuietServices` counts `unreadable`. abapit quietly
+  took it as never expiring: a recorded deviation with no golden case (Apple types the field as a date-time;
+  none is needed). A missing or null end is still never expiring.
+- **`ExportHistory`** writes abapit's two CSVs through `CSV.text`, so the allowlist columns (`ExportPolicy.
+  refreshCandidates`, `coverageExpiring`), the denylist and the formula guard apply as for every export. A coverage
+  record's other attributes never leave (abapit chose these seven keys too).
 
 ## Invariants & failure history
 
@@ -348,7 +401,9 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   generator reads every expected CSV back with Python's
   `csv.reader` and fails if a cell splits, joins or starts (after blanks) with a trigger.
 - Mutants for the Phase 1b fixes and verifier rounds 1 and 2 are listed in the branch's commit messages.
-- Phase 3 goldens (generated, nothing reads them in Swift yet): `diff.json` (40 drawn + 32 hand-written
+- Phase 3 goldens (read in Swift by `SnapshotDiffTests` (diff.json: 72 cases, 6 deviations; history.json's 7 diff reads)
+  and `CoverageFleetAgeTests` (reports.json: coverage 32 cases, no deviation; fleet age 35 cases, 2 deviations); the
+  rest of history.json waits for the store): `diff.json` (40 drawn + 32 hand-written
   `diff_edges`; 6 deviations, both the operator's decisions of 2026-11-20: a boolean is not a number, asked "should
   swiftabapit report true <-> 1 as a change", answer "Report it (Recommended)" (4 cases); an item is changed only
   when a field really changed, answer "Only real changes (Recommended)" (None against a missing field, 2 cases);
