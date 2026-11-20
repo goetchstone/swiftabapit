@@ -11,6 +11,17 @@ public enum ListRead: Sendable, Equatable {
     /// None of it: the text says why ("your role can't read this").
     case notRead(String)
 
+    /// Short words for a CSV's leading `listRead` column.
+    public var csvWords: String {
+        switch self {
+        case .whole: "read in full"
+        case .partly(let how): "read in part: \(how)"
+        case .notRead(let why): "not read: \(why)"
+        }
+    }
+
+    public var isNotRead: Bool { if case .notRead = self { true } else { false } }
+
     public var words: String {
         switch self {
         case .whole: "Read in full."
@@ -41,6 +52,14 @@ func sent(_ object: JSONObject, _ key: String) -> String? {
     switch object[key] {
     case nil, .null?: nil
     case .string(let text)?: text
+    case let value?: value.jsonText
+    }
+}
+
+/// A value Apple sent where a number or a flag is expected, as JSON text (a string keeps its quotes); nil when absent or null.
+func sentRaw(_ object: JSONObject, _ key: String) -> String? {
+    switch object[key] {
+    case nil, .null?: nil
     case let value?: value.jsonText
     }
 }

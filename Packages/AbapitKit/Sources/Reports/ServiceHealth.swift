@@ -7,6 +7,8 @@ public enum ServiceDeviceCount: Sendable, Equatable {
     case exactly(Int)
     /// The relationship read was cut at the page cap.
     case atLeast(Int)
+    /// Apple's `deviceCount` attribute isn't a whole number: shown as sent, as JSON text.
+    case unreadable(String)
 }
 
 /// The MDM service health report (plan Phase 3): per service, when it last connected, its status, its device count and a
@@ -96,7 +98,7 @@ public struct ServiceHealth: Sendable {
         let built = services.map { service -> Row in
             let connected = Self.connected(service, notSent: notSent, now: now)
             return Row(service: service, health: Self.health(service, quiet: quietOrder.contains(service.id), connected: connected, notSent: notSent),
-                       lastConnected: connected, deviceCount: deviceCounts[service.id] ?? service.deviceCount.map(ServiceDeviceCount.exactly))
+                       lastConnected: connected, deviceCount: deviceCounts[service.id] ?? Self.attributeCount(service))
         }
         let order = Self.fixedGroups
         rows = built.enumerated().sorted { a, b in
@@ -105,6 +107,11 @@ public struct ServiceHealth: Sendable {
             if a.element.group == "quiet", let p = quietOrder.firstIndex(of: a.element.id), let q = quietOrder.firstIndex(of: b.element.id) { return p < q }
             return a.offset < b.offset
         }.map(\.element)
+    }
+
+    static func attributeCount(_ service: MDMService) -> ServiceDeviceCount? {
+        if let count = service.deviceCount { return .exactly(count) }
+        return sentRaw(service.attributes, "deviceCount").map { .unreadable($0) }
     }
 
     static func connected(_ service: MDMService, notSent: Set<String>, now: Date) -> Connected {
@@ -146,6 +153,9 @@ public struct ServiceHealth: Sendable {
         if !notSent.isEmpty {
             lines.append("Apple didn't send \(notSent.joined(separator: ", ")) for any service (read with default fields): services that need it can't be judged.")
         }
+        if notSent.contains("status") {
+            lines.append("Apple didn't send the services' status, so deleted services can't be told apart and are counted.")
+        }
         for key in Self.fixedGroups {
             let count = rows(group: key).count
             if count > 0 { lines.append("\(title(key)): \(count)") }
@@ -156,7 +166,7 @@ public struct ServiceHealth: Sendable {
     func title(_ key: String) -> String {
         switch key {
         case "healthy": "Active and connected within the last \(days) days"
-        case "quiet": "Quiet: never connected, or silent more than \(days) days (the Overview's rule; the status is beside it)"
+        case "quiet": "Quiet: never connected, a last-connected value this app can't read, or silent more than \(days) days (the Overview's rule; the status is beside it)"
         case "inactive": "Inactive, and not quiet"
         case "deleted": "Deleted (not counted as healthy)"
         case "other-status": "A status this version doesn't know, and not quiet"

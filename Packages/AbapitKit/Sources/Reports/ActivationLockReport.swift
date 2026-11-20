@@ -26,7 +26,17 @@ public struct ActivationLockReport: Sendable {
     public struct Row: Sendable, Identifiable {
         public let device: OrgDevice
         public let kind: Kind
+        /// What Apple sent for `isLocked` and `lockType`, as sent (JSON text for anything but a string), nil when not sent or not read.
+        public let isLockedSent: String?
+        public let lockTypeSent: String?
         public var id: String { device.id }
+
+        init(device: OrgDevice, kind: Kind, isLockedSent: String? = nil, lockTypeSent: String? = nil) {
+            self.device = device
+            self.kind = kind
+            self.isLockedSent = isLockedSent
+            self.lockTypeSent = lockTypeSent
+        }
 
         /// The display group: `lock:USER`, `lock:MDM`, `lock:<raw type>`, `unlocked`, `unclear`, `not-read`.
         public var group: String {
@@ -81,7 +91,8 @@ public struct ActivationLockReport: Sendable {
             switch reads[device.id] {
             case nil: Row(device: device, kind: .notRead("the sweep didn't reach this device"))
             case .notRead(let why)?: Row(device: device, kind: .notRead(why))
-            case .read(let status)?: Row(device: device, kind: Self.kind(status))
+            case .read(let status)?:
+                Row(device: device, kind: Self.kind(status), isLockedSent: sentRaw(status.attributes, "isLocked"), lockTypeSent: sent(status.attributes, "lockType"))
             }
         }.sorted { a, b in
             let (x, y) = (Self.rank(a.kind), Self.rank(b.kind))
@@ -93,7 +104,7 @@ public struct ActivationLockReport: Sendable {
 
     static func kind(_ status: ActivationLockStatus) -> Kind {
         switch status.isLocked {
-        case nil: return .unclear(sent(status.attributes, "isLocked"))
+        case nil: return .unclear(sentRaw(status.attributes, "isLocked"))
         case false?: return .unlocked
         case true?: break
         }

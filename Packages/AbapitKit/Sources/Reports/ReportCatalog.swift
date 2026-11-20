@@ -45,7 +45,7 @@ public enum ReportCatalog {
         Entry(id: .activationLock, title: "Activation Lock",
               summary: "Devices by who holds the Activation Lock; a USER lock blocks redeploy and release. Devices whose status wasn't read are counted apart, never as unlocked.",
               filters: [Filter(name: "group", values: ActivationLockReport.fixedGroups, isNumber: false,
-                               summary: "lock:USER, lock:MDM, lock:NONE, lock:other (a type this version doesn't know), unlocked, unclear or not-read")],
+                               summary: "lock:USER, lock:MDM, lock:NONE, lock:other (a type this version doesn't know, or locked with no type sent), unlocked, unclear or not-read")],
               inputs: [Input(resource: "orgDevices", note: "the device list"),
                        Input(resource: "activationLockStatus", note: "each device's status, read one by one; a device not reached counts as not read")],
               csvColumns: ExportPolicy.activationLockReport.names),
@@ -53,7 +53,7 @@ public enum ReportCatalog {
               summary: "Devices by migration status, days to each deadline, and which are past it (a known status other than SUCCESS).",
               filters: [Filter(name: "group", values: MigrationReport.fixedGroups + [MigrationReport.pastDueToken, MigrationReport.pastDueStatusUnknownToken],
                                isNumber: false,
-                               summary: "status:REQUESTED, status:STARTED, status:SUCCESS, status:FAILED, status:other, no-status, no-data, past-due or past-due-status-unknown")],
+                               summary: "status:REQUESTED, status:STARTED, status:SUCCESS, status:FAILED, status:other (a status this version doesn't know), no-status, no-data, past-due or past-due-status-unknown")],
               inputs: [Input(resource: "orgDevices", note: "the device list, with its migration attributes")],
               csvColumns: ExportPolicy.migrationReport.names),
         Entry(id: .serviceHealth, title: "Device management service health",
@@ -65,7 +65,7 @@ public enum ReportCatalog {
                        Input(resource: "mdmServers/{id}/relationships/devices", note: "each service's device count, when read")],
               csvColumns: ExportPolicy.serviceHealth.names),
         Entry(id: .outOfWarranty, title: "Out of warranty",
-              summary: "Devices with no ACTIVE AppleCare coverage, kept apart from devices with no coverage record at all, with a status this version doesn't know, and not read. Any estimate is from the order date and assumes Apple's one-year limited warranty from the order date; the real term varies by country and product and starts at purchase or delivery.",
+              summary: "Devices with no ACTIVE AppleCare coverage, kept apart from devices with no coverage record at all, with a status this version doesn't know, and not read. Any estimate is from the order date. \(WarrantyReport.assumption)",
               filters: [Filter(name: "group", values: WarrantyReport.fixedGroups + [WarrantyReport.estimatedPastToken], isNumber: false,
                                summary: "active, no-active-coverage, no-record, status-unknown, not-read or estimated-past-limit")],
               inputs: [Input(resource: "orgDevices", note: "the device list, with its order dates"),
@@ -89,10 +89,15 @@ public enum ReportCatalog {
     public static func resolve(_ id: ID, tokens: [String: String]) -> Resolution {
         let entry = entry(id)
         var resolved: [String: String] = [:], problems: [String] = []
+        var seen: Set<String> = []
         for (rawName, rawValue) in tokens.sorted(by: { byBytes($0.key, $1.key) }) {
             let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard let filter = entry.filters.first(where: { $0.name == name }) else {
                 problems.append("\(entry.title) has no filter named \(rawName)")
+                continue
+            }
+            guard seen.insert(name).inserted else {
+                problems.append("\(entry.title) filter \(name) is given twice")
                 continue
             }
             let value = tidy(rawValue)

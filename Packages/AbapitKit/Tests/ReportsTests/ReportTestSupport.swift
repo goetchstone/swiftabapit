@@ -39,13 +39,35 @@ enum Fleet {
         Date(timeIntervalSince1970: now.timeIntervalSince1970 + seconds).formatted(Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!))
     }
 
-    /// One CSV line's fields, honouring quotes.
+    /// A report's CSV as `id -> column -> cell`.
+    static func table(_ text: String) -> [String: [String: String]] {
+        let lines = text.components(separatedBy: "\r\n").filter { !$0.isEmpty }
+        let header = fields(lines[0])
+        var out: [String: [String: String]] = [:]
+        for line in lines.dropFirst() {
+            let cells = fields(line)
+            out[cells[0]] = Dictionary(uniqueKeysWithValues: zip(header, cells))
+        }
+        return out
+    }
+
+    static func header(_ text: String) -> String { text.components(separatedBy: "\r\n")[0] }
+
+    /// One CSV line's fields, as `csv.reader` reads them: a quoted field may hold commas and `""` for a quote.
     static func fields(_ line: String) -> [String] {
         var out: [String] = [], current = "", quoted = false
-        var iterator = line.makeIterator()
-        while let ch = iterator.next() {
-            if ch == "\"" { quoted.toggle(); if quoted == false { continue } else { continue } }
-            if ch == "," && !quoted { out.append(current); current = "" } else { current.append(ch) }
+        let scalars = Array(line.unicodeScalars)
+        var i = 0
+        while i < scalars.count {
+            let ch = scalars[i]
+            if quoted {
+                if ch == "\"" {
+                    if i + 1 < scalars.count, scalars[i + 1] == "\"" { current.unicodeScalars.append("\""); i += 1 } else { quoted = false }
+                } else { current.unicodeScalars.append(ch) }
+            } else if ch == "\"" { quoted = true }
+            else if ch == "," { out.append(current); current = "" }
+            else { current.unicodeScalars.append(ch) }
+            i += 1
         }
         out.append(current)
         return out

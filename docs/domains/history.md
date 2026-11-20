@@ -7,8 +7,8 @@
 **Status:** stub — filled in by phase 3. Until then, read the plan section named above and the nearest
 SwiftGamGui runbook. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in
 phase 1b, and the audit digests and the dashboard's quiet services and recent events in phase 2a; their notes
-are below. The Phase 3 fleet reports (Activation Lock, migration, service health, out of warranty, the catalog) are on branch
-`phase-3-new-reports`, not yet merged; the parity goldens for the store, diff and coverage are merged (PR #28), and the Swift snapshot store, collectors and diff are still to do.
+are below. The Phase 3 fleet reports (Activation Lock, migration, service health, out of warranty, the catalog) are built (PR #29);
+the parity goldens for the store, diff and coverage are merged (PR #28), and the Swift snapshot store, collectors and diff are still to do.
 
 ## Files
 
@@ -140,7 +140,7 @@ are below. The Phase 3 fleet reports (Activation Lock, migration, service health
   full-width U+FF1D or `"\u{2212}1"` as a formula wasn't tested; the wider guard costs a `'` on such a cell
   either way. A leading combining mark isn't skipped: it shows on its own, and no trimmer drops it.
 
-## Fleet reports (Phase 3, built on branch `phase-3-new-reports`)
+## Fleet reports (Phase 3, PR #29)
 
 Pure, deterministic reports in `Reports/`: no UI, no store, no Apple reads of their own. They take what a screen or a
 sweep already read, and each says how much of it it was given. No abapit counterpart, so no golden: the tests hold them.
@@ -165,10 +165,10 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   past due; an unreadable deadline is counted, shown as sent and never past due. The CSV writes an overdue deadline in its
   own `overdue` column ("overdue N days"), never as bare days, and `pastDue` says `status unknown` or `deadline not readable`
   where it can't say yes or no.
-- **Service health**: `quiet` is exactly `QuietServices`' rows for the same services, `now` and `days` (one rule for the
+- **Service health**: `quiet` (never connected, a last-connected value this app can't read, or silent more than `days`) is exactly `QuietServices`' rows for the same services, `now` and `days` (one rule for the
   Overview's card and this report; the status is a column beside it), `healthy` is ACTIVE and not quiet, then `inactive`,
   `deleted` (never healthy, never quiet), `other-status` (raw), `cannot-judge`. Services read with default fields: `notSent`
-  lists the attributes Apple sent for no service; a service whose `lastConnectedDateTime` wasn't sent is `cannot-judge`, never
+  lists the attributes Apple sent for no service (without `status` the words say deleted services can't be told apart and are counted); a service whose `lastConnectedDateTime` wasn't sent is `cannot-judge`, never
   quiet or "never connected", and the CSV says "not sent by Apple". Days ago are whole days, truncated as the Services screen
   does (0 is "today"); a stamp after now says "in the future". The device count is the relationship's (`exactly` or
   `atLeast`), else Apple's `deviceCount`, else "not read".
@@ -183,16 +183,22 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   tokens, inputs and CSV columns (`quiet-services` isn't one: `service-health`'s `quiet` group answers it). `resolve` takes
   only known values: case and spaces around a value or its colon normalize to the canonical token (`lock:user` and
   `status: SUCCESS` work), anything else (`lock:bogus`) is a problem, so a token never silently matches nothing.
-- **CSV**: `ExportPolicy.{activationLockReport,migrationReport,serviceHealth,warrantyReport}`. Each cell is computed; no source
+- **CSV**: `ExportPolicy.{activationLockReport,migrationReport,serviceHealth,warrantyReport}`. Every export leads with a
+  `listRead` column ("read in full", "read in part: how", "not read: why"); a list that wasn't read exports no judgment cells
+  (they say "not read"). Every value Apple sent is written as sent (a string as it is where text is expected; any other value
+  as its JSON text, so a flag sent as the string `"true"` shows its quotes), yes and no only where a value can be judged
+  (`isMdmMigrationCapable` is blank when not sent); a lock type sent on any row is written, and `isLocked` beside it. A past
+  deadline of a migration that isn't past due says "deadline passed N days ago", never "overdue". Each cell is computed; no source
   attribute is copied beyond the named identifying ones, so a bypass code or nested secret can't leave (a canary test per report);
   the service export never carries `lastConnectedIp`.
 - **Who decided what.** The operator asked for out-of-warranty and voice reports (2026-11-20) and "just add and follow the
   plan, do it where it makes the most logical sense". The design is the coordinating session's proposal. The coordinating
   session decided, after review: "unknown" and "not read" cells instead of "no"; a separate group for an unknown coverage
   status; no count lines for an unread input; catalog values normalized and unknown ones refused; one quiet rule and no
-  `quiet-services` entry; reads passed by device id; past due counting only known non-SUCCESS statuses, with the day rule
-  above. The executor's choices, for review: the UTC calendar-year estimate, `SUCCESS` excluded from past due, `lock:other`
-  and `status:other` as the catalog's names for unknown values, `ListRead`/`DeviceRead` living in Reports.
+  `quiet-services` entry; reads passed by device id; past due counting only known non-SUCCESS statuses (so `SUCCESS` is never
+  past due), with the day rule above; the `listRead` column. The executor's choices, for review: the UTC calendar-year estimate,
+  `lock:other` and `status:other` as the catalog's names for unknown values, `ListRead`/`DeviceRead` living in Reports, a total
+  migration order (readable deadline by instant, then none, then serial).
 - **Not decided here**: whether Apple lists the standard limited warranty as a coverage (a live check); the estimate stays an
   estimate until then.
 

@@ -98,18 +98,71 @@ struct MigrationReportTests {
         #expect(MigrationReport([], now: Fleet.now, list: .notRead("failed")).words == ["Not read: failed. Nothing below can be judged."])
     }
 
-    /// An overdue deadline is its own column, "overdue N days"; never bare days beside the countdown.
+    /// An overdue deadline is its own column, "overdue N days"; never bare days beside the countdown; a completed migration's
+    /// passed deadline is never called overdue.
     @Test func theCSVHasTheCountdownAndTheOverdueColumn() throws {
         let ahead = OrgDevice(resource: Resource(type: "orgDevices", id: "A", attributes:
             Self.device("A", status: "REQUESTED", capable: true, deadline: Fleet.stamp(3 * Self.day)).attributes.merging(["accessToken": .string("canary-token")])))
         let late = Self.device("L", status: "FAILED", deadline: Fleet.stamp(-Self.day - 60))
-        let text = CSV.text(MigrationReport([ahead, late], now: Fleet.now).csvItems, columns: ExportPolicy.migrationReport)
-        let lines = text.components(separatedBy: "\r\n")
-        #expect(lines[0] == "id,serialNumber,deviceModel,productFamily,state,mdmMigrationStatus,isMdmMigrationCapable,mdmMigrationDeadlineDateTime,daysToDeadline,overdue,pastDue")
-        let a = Fleet.fields(try #require(lines.first { $0.hasPrefix("A,") }))
-        #expect(a[8] == "3" && a[9] == "" && a[10] == "no")
-        let l = Fleet.fields(try #require(lines.first { $0.hasPrefix("L,") }))
-        #expect(l[8] == "" && l[9] == "overdue 2 days" && l[10] == "yes")
+        let done = Self.device("D", status: "SUCCESS", deadline: Fleet.stamp(-3 * Self.day))
+        let unknown = Self.device("U", status: "PAUSED", deadline: Fleet.stamp(-Self.day))
+        let text = CSV.text(MigrationReport([ahead, late, done, unknown], now: Fleet.now).csvItems, columns: ExportPolicy.migrationReport)
+        #expect(Fleet.header(text) == "id,listRead,serialNumber,deviceModel,productFamily,state,mdmMigrationStatus,isMdmMigrationCapable,mdmMigrationDeadlineDateTime,daysToDeadline,overdue,pastDue")
+        let table = Fleet.table(text)
+        #expect(table["A"]?["daysToDeadline"] == "3" && table["A"]?["overdue"] == "" && table["A"]?["pastDue"] == "no")
+        #expect(table["L"]?["daysToDeadline"] == "" && table["L"]?["overdue"] == "overdue 2 days" && table["L"]?["pastDue"] == "yes")
+        #expect(table["D"]?["overdue"] == "deadline passed 3 days ago" && table["D"]?["pastDue"] == "no")
+        #expect(table["U"]?["overdue"] == "deadline passed 1 day ago" && table["U"]?["pastDue"] == "status unknown")
         #expect(!text.contains("canary-token"))
+    }
+
+    /// Yes or no only where Apple sent a boolean; anything else it sent is written as sent, and nothing sent is blank.
+    @Test func theCapableCellIsNeverGuessed() {
+        let devices = [Self.device("T", capable: true), Self.device("F", capable: false), Self.device("N"),
+                       Fleet.device("S", ["isMdmMigrationCapable": .string("true")]), Fleet.device("Z", ["isMdmMigrationCapable": .number("1")]),
+                       Fleet.device("X", ["isMdmMigrationCapable": .null])]
+        let table = Fleet.table(CSV.text(MigrationReport(devices, now: Fleet.now).csvItems, columns: ExportPolicy.migrationReport))
+        #expect(table["T"]?["isMdmMigrationCapable"] == "yes")
+        #expect(table["F"]?["isMdmMigrationCapable"] == "no")
+        #expect(table["N"]?["isMdmMigrationCapable"] == "")
+        #expect(table["X"]?["isMdmMigrationCapable"] == "")
+        #expect(table["S"]?["isMdmMigrationCapable"] == "\"true\"")
+        #expect(table["Z"]?["isMdmMigrationCapable"] == "1")
+        #expect(MigrationReport(devices, now: Fleet.now).capableNotSent == 4)
+    }
+
+    /// An unreadable deadline's raw value stays in the CSV, quoted as the Services screen shows it.
+    @Test func anUnreadableDeadlineKeepsItsRawValueInTheCSV() {
+        let odd = Self.device("A", status: "REQUESTED", deadline: "soon")
+        let table = Fleet.table(CSV.text(MigrationReport([odd], now: Fleet.now).csvItems, columns: ExportPolicy.migrationReport))
+        #expect(table["A"]?["mdmMigrationDeadlineDateTime"] == "\"soon\"")
+        #expect(table["A"]?["pastDue"] == "deadline not readable")
+    }
+
+    /// The order is total and stable: every arrangement of the same devices gives one order (equal instants in different
+    /// offsets, one with no deadline, one with an unreadable one all included).
+    @Test func theOrderIsTotalWhateverTheInputOrder() {
+        let a = Self.device("D1", status: "REQUESTED", deadline: "2026-12-01T10:00:00+02:00")
+        let b = Self.device("D2", status: "REQUESTED", deadline: "2026-12-01T08:00:00Z")
+        let c = Self.device("D3", status: "REQUESTED", deadline: "2026-11-30T08:00:00Z")
+        let d = Self.device("A1", status: "REQUESTED")
+        let e = Self.device("A2", status: "REQUESTED", deadline: "soon")
+        let devices = [a, b, c, d, e]
+        func orders(_ items: [OrgDevice]) -> [[OrgDevice]] {
+            items.count <= 1 ? [items] : items.indices.flatMap { i in
+                var rest = items; let head = rest.remove(at: i)
+                return orders(rest).map { [head] + $0 }
+            }
+        }
+        let results = Set(orders(devices).map { MigrationReport($0, now: Fleet.now).rows.map(\.device.serialNumber).joined(separator: ",") })
+        #expect(results == ["D3,D1,D2,A1,A2"])
+    }
+
+    @Test func theCSVOfAnUnreadListJudgesNothing() throws {
+        let late = Self.device("L", status: "FAILED", deadline: Fleet.stamp(-Self.day - 60))
+        let row = try #require(Fleet.table(CSV.text(MigrationReport([late], now: Fleet.now, list: .notRead("failed")).csvItems, columns: ExportPolicy.migrationReport))["L"])
+        #expect(row["listRead"] == "not read: failed")
+        #expect(row["pastDue"] == "not read" && row["overdue"] == "not read" && row["state"] == "not read")
+        #expect(row["mdmMigrationStatus"] == "" && row["mdmMigrationDeadlineDateTime"] == "")
     }
 }

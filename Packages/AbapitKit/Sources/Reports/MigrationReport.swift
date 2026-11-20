@@ -106,9 +106,14 @@ public struct MigrationReport: Sendable {
             let (x, y) = (Self.rank(a), Self.rank(b))
             if x != y { return x < y }
             if a.group != b.group { return byBytes(a.group, b.group) }
-            switch (a.device.migrationDeadline, b.device.migrationDeadline) {
+            // A total order: a readable deadline first, by instant (not the offset it was written in), then none, then serial, then id.
+            switch (a.device.migrationDeadline?.date, b.device.migrationDeadline?.date) {
             case let (p?, q?) where p != q: return p < q
-            default: return byBytes(a.device.serialNumber, b.device.serialNumber)
+            case (.some, .none): return true
+            case (.none, .some): return false
+            default:
+                if a.device.serialNumber != b.device.serialNumber { return byBytes(a.device.serialNumber, b.device.serialNumber) }
+                return byBytes(a.device.id, b.device.id)
             }
         }
         capable = devices.filter { $0.isMigrationCapable == true }.count

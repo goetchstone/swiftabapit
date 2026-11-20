@@ -110,6 +110,39 @@ struct ServiceHealthTests {
         #expect(text.contains("at least"))
     }
 
+    /// A `deviceCount` Apple sent that isn't a whole number is written as sent, never "not read".
+    @Test func aDeviceCountSentAsTextIsWrittenAsSent() {
+        let odd = MDMService(resource: Resource(type: "mdmServers", id: "o", attributes: ["serverName": .string("o"), "status": .string("ACTIVE"),
+                                                                                       "lastConnectedDateTime": Self.recent, "deviceCount": .string("12")]))
+        let none = Fleet.service("n", last: Self.recent)
+        let report = ServiceHealth([odd, none], now: Fleet.now)
+        #expect(report.rows.first { $0.id == "o" }?.deviceCount == .unreadable("\"12\""))
+        let table = Fleet.table(CSV.text(report.csvItems, columns: ExportPolicy.serviceHealth))
+        #expect(table["o"]?["deviceCount"] == "\"12\"")
+        #expect(table["o"]?["deviceCountIs"] == "not a whole number")
+        #expect(table["n"]?["deviceCountIs"] == "not read" && table["n"]?["deviceCount"] == "")
+        // The relationship's count still wins.
+        #expect(ServiceHealth([odd], deviceCounts: ["o": .exactly(3)], now: Fleet.now).rows[0].deviceCount == .exactly(3))
+    }
+
+    /// The quiet title says what the rule counts, including a last-connected value this app can't read; a status not sent is said.
+    @Test func theWordsSayWhatQuietCountsAndWhatWasNotSent() {
+        let report = ServiceHealth(Self.mixed, notSent: ["status"], now: Fleet.now)
+        #expect(report.title("quiet").contains("a last-connected value this app can't read"))
+        #expect(report.words.contains("Apple didn't send the services' status, so deleted services can't be told apart and are counted."))
+        #expect(!ServiceHealth(Self.mixed, now: Fleet.now).words.contains { $0.contains("can't be told apart") })
+    }
+
+    /// A list that wasn't read exports no judgment cells and says so.
+    @Test func theCSVCarriesTheListsReadState() throws {
+        let unread = ServiceHealth([Fleet.service("a", last: Self.old)], now: Fleet.now, list: .notRead("your role can't read this"))
+        let row = try #require(Fleet.table(CSV.text(unread.csvItems, columns: ExportPolicy.serviceHealth))["a"])
+        #expect(row["listRead"] == "not read: your role can't read this")
+        #expect(row["health"] == "not read" && row["lastConnected"] == "not read" && row["lastConnectedDateTime"] == "")
+        let whole = Fleet.table(CSV.text(ServiceHealth([Fleet.service("a", last: Self.old)], now: Fleet.now).csvItems, columns: ExportPolicy.serviceHealth))
+        #expect(whole["a"]?["listRead"] == "read in full" && whole["a"]?["health"] == "quiet")
+    }
+
     @Test func aNonTextStatusIsShownAsSent() {
         let odd = MDMService(resource: Resource(type: "mdmServers", id: "o", attributes: ["serverName": .string("o"), "status": .number("4"), "lastConnectedDateTime": Self.recent]))
         let report = ServiceHealth([odd], now: Fleet.now)
@@ -125,7 +158,7 @@ struct ServiceHealthTests {
         let text = CSV.text(ServiceHealth([service], notSent: ["deviceCount"], now: Fleet.now).csvItems, columns: ExportPolicy.serviceHealth)
         #expect(!text.contains("192.0.2.1"))
         #expect(!text.contains("canary-token"))
-        #expect(text.components(separatedBy: "\r\n")[0] == "id,serverName,serverType,status,health,healthReason,lastConnectedDateTime,lastConnected,deviceCount,deviceCountIs,notSentByApple")
+        #expect(text.components(separatedBy: "\r\n")[0] == "id,listRead,serverName,serverType,status,health,healthReason,lastConnectedDateTime,lastConnected,deviceCount,deviceCountIs,notSentByApple")
         #expect(text.contains("deviceCount"))
     }
 

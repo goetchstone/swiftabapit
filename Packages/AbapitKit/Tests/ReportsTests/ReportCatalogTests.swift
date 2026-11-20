@@ -50,6 +50,22 @@ struct ReportCatalogTests {
         #expect(ReportCatalog.problems(.serviceHealth, tokens: ["days": "soon"]).count == 1)
     }
 
+    /// What the model reads says what each "other" token means, and the warranty summary carries the whole assumption.
+    @Test func theOtherTokensAndTheAssumptionAreDescribed() throws {
+        func summary(_ id: ReportCatalog.ID) throws -> String { try #require(ReportCatalog.entry(id).filters.first { $0.name == "group" }).summary }
+        #expect(try summary(.activationLock).contains("lock:other (a type this version doesn't know, or locked with no type sent)"))
+        #expect(try summary(.migration).contains("status:other (a status this version doesn't know)"))
+        #expect(ReportCatalog.entry(.outOfWarranty).summary.contains(WarrantyReport.assumption))
+    }
+
+    /// Two spellings of one filter name are a problem, never one silently dropped.
+    @Test func aFilterNameGivenTwiceIsRefused() {
+        let result = ReportCatalog.resolve(.activationLock, tokens: ["group": "unlocked", "Group": "lock:USER"])
+        #expect(result.problems.count == 1)
+        #expect(result.problems[0].contains("twice"))
+        #expect(ReportCatalog.resolve(.serviceHealth, tokens: ["group": "quiet", "days": "7"]).problems.isEmpty)
+    }
+
     /// The quiet question is answered by the service health report's `quiet` group, one rule.
     @Test func thereIsNoSecondQuietReport() {
         #expect(ReportCatalog.entries.map(\.id.rawValue).contains("quiet-services") == false)

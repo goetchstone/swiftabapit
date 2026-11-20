@@ -1291,7 +1291,7 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
 
 ### Phase 3: history, reports, scheduled snapshots
 
-**Status:** in progress. Merged: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28, `Tests/Fixtures/parity/history.json`). New reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI) are on branch `phase-3-new-reports`. Not started or not merged: the snapshot store, collectors, the diff in Swift, the Changes screen, abapit's history import and scheduled snapshots.
+**Status:** in progress. Built: the parity goldens for diff, coverage, fleet age and abapit's history store (PR #28), and the new reports (Activation Lock, migration, service health, out of warranty, the report catalog; `Reports/`, no UI; PR #29). Not started or not merged: the snapshot store, collectors, the diff in Swift, the Changes screen, abapit's history import and scheduled snapshots.
 
 **Owns:** `History/`, `Reports/{coverage,fleetAge,activationLock,migration,diff}`,
 `App/Screens/{Changes,Reports}`, `App/Scheduling/`.

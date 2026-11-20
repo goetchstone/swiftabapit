@@ -49,7 +49,7 @@ struct ActivationLockReportTests {
         let report = Self.make([("A", .read(status))])
         #expect(report.rows[0].kind == .otherLock("7"))
         let odd = ActivationLockStatus(resource: Resource(type: "activationLockStatus", id: "x", attributes: ["isLocked": .string("yes")]))
-        #expect(Self.make([("B", .read(odd))]).rows[0].kind == .unclear("yes"))
+        #expect(Self.make([("B", .read(odd))]).rows[0].kind == .unclear("\"yes\""))
     }
 
     /// A device whose status wasn't read is counted apart and never as unlocked (invariant 8).
@@ -93,23 +93,50 @@ struct ActivationLockReportTests {
         #expect(report.blockingRelease == 0)
     }
 
-    /// The blocksRelease cell is yes or no only where the lock was read and Apple's answer can be judged.
+    /// The blocksRelease cell is yes or no only where the lock was read and Apple's answer can be judged; every value Apple sent
+    /// (`isLocked`, `lockType`) is written as sent, whatever the row's state.
     @Test func theBlocksReleaseCellIsNeverNoForWhatWasNotRead() throws {
         let text = CSV.text(Self.report.csvItems, columns: ExportPolicy.activationLockReport)
-        let lines = text.components(separatedBy: "\r\n")
-        #expect(lines[0] == "id,serialNumber,deviceModel,productFamily,state,lockType,blocksRelease,note")
-        func cells(_ id: String) throws -> [String] { Fleet.fields(try #require(lines.first { $0.hasPrefix("\(id),") })) }
-        #expect(try cells("U1")[6] == "yes")
-        #expect(try cells("M1")[6] == "no")
-        #expect(try cells("L1")[6] == "no")
-        #expect(try cells("R1")[6] == "not read")
-        #expect(try cells("C1")[6] == "unknown")
-        #expect(try cells("F1")[6] == "unknown")
-        #expect(try cells("T1")[6] == "unknown")
-        let unread = try #require(lines.first { $0.hasPrefix("R1,") })
-        #expect(unread.contains("Not read: not counted as unlocked"))
-        #expect(unread.contains("your role can't read this"))
-        #expect(!unread.contains("Not locked"))
+        #expect(Fleet.header(text) == "id,listRead,serialNumber,deviceModel,productFamily,state,isLocked,lockType,blocksRelease,note")
+        let table = Fleet.table(text)
+        func cell(_ id: String, _ column: String) throws -> String { try #require(table[id])[column] ?? "<missing>" }
+        #expect(try cell("U1", "blocksRelease") == "yes")
+        #expect(try cell("M1", "blocksRelease") == "no")
+        #expect(try cell("L1", "blocksRelease") == "no")
+        #expect(try cell("R1", "blocksRelease") == "not read")
+        #expect(try cell("C1", "blocksRelease") == "unknown")
+        #expect(try cell("F1", "blocksRelease") == "unknown")
+        #expect(try cell("T1", "blocksRelease") == "unknown")
+        #expect(try cell("R1", "note") == "your role can't read this")
+        #expect(try cell("R1", "state").contains("Not read: not counted as unlocked"))
+        #expect(try cell("F1", "lockType") == "FUTURE_TYPE")
+        #expect(try cell("L1", "lockType") == "NONE")
+        #expect(try cell("L1", "isLocked") == "false")
+        #expect(try cell("T1", "lockType") == "")
+        #expect(try cell("R1", "lockType") == "")
+    }
+
+    /// A lock type sent with an unreadable `isLocked`, and one on an unlocked row, still reach the CSV.
+    @Test func aLockTypeSentOnAnUnclearOrUnlockedRowIsWritten() throws {
+        let unclear = ActivationLockStatus(resource: Resource(type: "activationLockStatus", id: "x", attributes: ["isLocked": .string("maybe"), "lockType": .string("USER")]))
+        let future = ActivationLockStatus(resource: Resource(type: "activationLockStatus", id: "x", attributes: ["isLocked": .bool(false), "lockType": .string("FUTURE_TYPE")]))
+        let report = Self.make([("A", .read(unclear)), ("B", .read(future))])
+        let table = Fleet.table(CSV.text(report.csvItems, columns: ExportPolicy.activationLockReport))
+        #expect(table["A"]?["lockType"] == "USER" && table["A"]?["isLocked"] == "\"maybe\"" && table["A"]?["blocksRelease"] == "unknown")
+        #expect(table["B"]?["lockType"] == "FUTURE_TYPE" && table["B"]?["blocksRelease"] == "no")
+    }
+
+    /// A list that wasn't read exports no judgment cells and says so in the first column; a partial one says that.
+    @Test func theCSVCarriesTheListsReadState() throws {
+        let read = Self.make([("U1", Self.read(true, "USER"))], list: .notRead("your role can't read this"))
+        let table = Fleet.table(CSV.text(read.csvItems, columns: ExportPolicy.activationLockReport))
+        let row = try #require(table["U1"])
+        #expect(row["listRead"] == "not read: your role can't read this")
+        #expect(row["blocksRelease"] == "not read" && row["state"] == "not read")
+        #expect(row["lockType"] == "" && row["isLocked"] == "")
+        let part = Self.make([("U1", Self.read(true, "USER"))], list: .partly("showing 1 of at least 5"))
+        #expect(Fleet.table(CSV.text(part.csvItems, columns: ExportPolicy.activationLockReport))["U1"]?["listRead"] == "read in part: showing 1 of at least 5")
+        #expect(Fleet.table(CSV.text(Self.report.csvItems, columns: ExportPolicy.activationLockReport))["U1"]?["listRead"] == "read in full")
     }
 
     /// A bypass code, a token and a key Apple adds never leave, nested or not (invariant 11).

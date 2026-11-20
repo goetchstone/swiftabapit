@@ -113,6 +113,29 @@ struct WarrantyReportTests {
         #expect(Self.make([("L", .read([]), "2024-02-29T00:00:00Z")], now: after).rows[0].estimate == .pastAssumedLimit(end))
     }
 
+    /// An order date that isn't a date: counted in the words as having no readable order date, and written as Apple sent it
+    /// (quoted, as every unreadable date is).
+    @Test func anUnreadableOrderDateIsCountedAndKeptInTheCSV() throws {
+        let report = Self.make([("A", .read([]), "last spring"), ("B", .read([]), nil), ("C", .read([]), "2020-01-01T00:00:00Z")])
+        let line = try #require(report.words.last)
+        #expect(line.contains("2 have no readable order date, so no estimate"))
+        #expect(report.rows.filter(\.lacksReadableOrderDate).count == 2)
+        let table = Fleet.table(CSV.text(report.csvItems, columns: ExportPolicy.warrantyReport))
+        #expect(table["A"]?["orderDateTime"] == "\"last spring\"")
+        #expect(table["A"]?["estimate"] == "estimate not possible: order date not readable")
+        #expect(table["B"]?["orderDateTime"] == "")
+    }
+
+    /// A list that wasn't read exports no judgment cells and says so; a partly read one says that.
+    @Test func theCSVCarriesTheListsReadState() throws {
+        let unread = Self.make([("A", .read([]), "2020-01-01T00:00:00Z")], list: .notRead("your role can't read this"))
+        let row = try #require(Fleet.table(CSV.text(unread.csvItems, columns: ExportPolicy.warrantyReport))["A"])
+        #expect(row["listRead"] == "not read: your role can't read this")
+        #expect(row["coverage"] == "not read" && row["estimate"] == "" && row["estimatedEnd"] == "")
+        let part = Self.make([("A", .read([]), nil)], list: .partly("2 of 5 read"))
+        #expect(Fleet.table(CSV.text(part.csvItems, columns: ExportPolicy.warrantyReport))["A"]?["listRead"] == "read in part: 2 of 5 read")
+    }
+
     /// A calendar year, not 365 days: an order on 1 March 2023 is still inside its year on 29 February 2024.
     @Test func aYearIsACalendarYearNotThreeHundredSixtyFiveDays() throws {
         let now = try #require(ISODate.parse("2024-02-29T12:00:00Z")).date
