@@ -20,6 +20,8 @@ import SQLite3
 /// version 0 that already holds tables (abapit's history, say), is refused and left as it is. abapit's history is
 /// imported, never changed in place.
 ///
+/// The same file keeps the small `attention` table "Needs attention" reads (`AttentionStore.swift`, version 2).
+///
 /// What it never holds: a secret, and a custom setting's profile (operator, 2026-10-31: what can be read again from Apple
 /// isn't kept; a collector stores `Configuration.resource`, the profile withheld). As a backstop to the collectors, an
 /// attribute whose name looks like a secret's (`ExportPolicy.isSensitive`), at any depth, is left out of what is stored,
@@ -56,6 +58,10 @@ public actor SnapshotStore {
         case noOrg
         /// No snapshot with that id for that org (there may be one for another org: it isn't said).
         case noSnapshot(Int64)
+        /// The finding isn't in the store: it is recorded by `seen` before it can be dismissed or snoozed.
+        case noFinding(rule: String, subject: String)
+        /// A rule or subject that is empty.
+        case emptyKey
         /// A row that doesn't read (JSON that isn't, text that isn't UTF-8, an escape of half a character): the file was
         /// changed outside this app.
         case corrupt(String)
@@ -74,6 +80,8 @@ public actor SnapshotStore {
                 "The snapshot history was written by a newer abapit (schema version \(version)); this one reads it and won't change it."
             case .noOrg: "The organization has no id, so its snapshots can't be kept apart from another's."
             case .noSnapshot(let id): "There's no snapshot \(id) for this organization."
+            case .noFinding: "That finding isn't in the list any more, so it can't be changed."
+            case .emptyKey: "A finding needs a rule and a subject."
             case .corrupt(let what): "The snapshot history holds a row this app can't read (\(what)); it was changed outside abapit."
             }
         }
@@ -135,7 +143,7 @@ public actor SnapshotStore {
     public static let activationLockResource = "activation_lock"
 
     public nonisolated let access: Access
-    private let database: SQLiteDatabase
+    let database: SQLiteDatabase
     private let writer: String
     private let hook: Hook?
 
@@ -255,7 +263,10 @@ public actor SnapshotStore {
         return try Self.guarded {
             try database.transaction {
                 try database.run("DELETE FROM snapshots WHERE org_id = ?", [.text(orgID)])
-                return database.changes
+                let removed = database.changes
+                // The org's findings are its history too: a new org with this id must not inherit a dismissal.
+                try database.run("DELETE FROM attention WHERE org_id = ?", [.text(orgID)])
+                return removed
             }
         }
     }
@@ -461,6 +472,15 @@ public actor SnapshotStore {
                 return .readOnly(version: found)
             }
             guard found < Schema.version else { return .readWrite }
+            if found == 1 {
+                // This app's own version-1 file: the attention table is added, the snapshots are not touched. Read again
+                // under the write lock, so two stores opening at once migrate it once.
+                try database.transaction {
+                    guard try database.userVersion() == 1 else { return }
+                    try database.execute(Schema.toVersion2)
+                }
+                return .readWrite
+            }
             func isEmpty() throws -> Bool { try database.rows("SELECT COUNT(*) FROM sqlite_master") { $0.integer(0) }.first == 0 }
             // Looked at before any write lock is taken on a file that may not be this app's.
             guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
@@ -469,7 +489,7 @@ public actor SnapshotStore {
                 // Read again under the write lock: another store may have made it meanwhile.
                 guard try database.userVersion() == 0 else { return }
                 guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
-                try database.execute(Schema.toVersion1)
+                try database.execute(Schema.newDatabase)
             }
             return .readWrite
         }
@@ -600,17 +620,17 @@ public actor SnapshotStore {
 
     // MARK: helpers
 
-    private func writable() throws(Failure) {
+    func writable() throws(Failure) {
         if case .readOnly(let version) = access { throw .readOnly(version: version) }
     }
 
-    private static func id(of org: OrgProfile) throws(Failure) -> String {
+    static func id(of org: OrgProfile) throws(Failure) -> String {
         guard !org.id.isEmpty else { throw .noOrg }
         return org.id
     }
 
     /// `body`'s errors as `Failure`s: SQLite's as `.database`, text that isn't UTF-8 as `.corrupt`, a hook's as thrown.
-    private static func guarded<T>(_ body: () throws -> T) throws(Failure) -> T {
+    static func guarded<T>(_ body: () throws -> T) throws(Failure) -> T {
         do {
             return try body()
         } catch let failure as Failure {
