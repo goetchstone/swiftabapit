@@ -745,15 +745,38 @@ Apple publishes no OpenAPI spec, but its DocC pages are machine-readable JSON
   - `DeviceFilter @Generable` for "Macs not checked in for 30 days that ABM says are assigned to
     Mosyle" becomes editable filter tokens;
   - `AssignmentDraft {action, targetServerName}` from pasted text;
-  - `LostDeviceDraft {personHint, deviceHint, action}` (iOS only).
+  - `LostDeviceDraft {personHint, deviceHint, action}` (iOS only);
+  - **a Wi-Fi blueprint draft** (operator, 2026-11-20: "I would like to be able to ask siri to create a blueprint for a
+    network config and then state the config and have it build it with the local model based on the rules, is that
+    possible?"). **Possible, within this section's rule; the design below is the coordinating session's proposal, not the
+    operator's.** It is the operator's D10 decision applied to a bigger draft: the frame does not change.
+    - Siri starts it with a write-shaped intent (`.foreground`) that opens only the preview.
+    - The operator states the network in words. The on-device model fills a **small typed form** (`WifiDraft`: network
+      name, security type picked from Apple's list, platforms picked, auto-join, and similar), never the profile itself.
+    - **Code** builds the custom-settings profile deterministically from the form, validates it against Apple's
+      device-management schema (Phase 5's profile validation) and against the **operator's own rules**, held in local
+      settings (examples of the kind: WPA3 only, no hidden networks, a naming pattern). No rule is written into the repo.
+    - The password is typed into a secure field in the app. It is never spoken to Siri, never shown to the model, and
+      never stored outside the Keychain flow the write uses (invariants 3, 11).
+    - The preview shows the blueprint, the configuration and their link exactly as they will be sent. Only the
+      operator's click (and Touch ID) confirms.
+    - Apple's API (Business 2.8): `POST /v1/configurations` (custom, `customSettingsValues`), `POST /v1/blueprints` and
+      `POST /v1/blueprints/{id}/relationships/configurations`.
+    - It depends on Phase 4 (the write path, which waits for the operator's answers to the write-path design) and
+      Phase 5 (configuration and blueprint writes, profile validation).
   - Tools are read-only lookups into in-memory caches, with no network.
   - Gate on `SystemLanguageModel.default.availability`; SwiftGamGui's spike saw `.modelNotReady`.
   - Every flow works with no model.
   - An `Evaluations` suite runs about 30 phrasings per draft type; it is recorded, not a gate.
 - **App Intents**:
   - read intents with `supportedModes = .background`: count unassigned; look up serial (returns a
-    `DeviceEntity` + `SnippetIntent`); stale Macs; coverage expiring in N days; Activation-locked
-    devices; export a resource as CSV (returns a file); take snapshot (`LongRunningIntent`, D5).
+    `DeviceEntity` + `SnippetIntent`); stale Macs; coverage expiring in N days; **out of warranty**;
+    Activation-locked devices; export a resource as CSV (returns a file); take snapshot (`LongRunningIntent`, D5).
+  - **Reports by voice** (operator, 2026-11-20: "or ask for a report of all out of warranty devices, or whatever you
+    get it"; the design is the coordinating session's proposal): "Siri, which devices are out of warranty?". The model
+    only maps the operator's words onto the **catalog of deterministic reports** (Phase 3) and their filter tokens; it
+    never decides who is out of warranty. The report's own code does, and the operator can edit the tokens before the
+    report runs.
   - Write-shaped intents use `.foreground` and only open the preview.
   - Org data needs `authenticationPolicy = .requiresLocalDeviceAuthentication`; verify what it does on
     a Mac.
@@ -987,8 +1010,10 @@ reads, and what they reveal, come before writes.
    and Settings; each Mosyle list reads when its tab first shows; reports and the reconciliation only over lists read
    whole. Live checks wait for the operator (docs/domains/mosyle.md, "Assumed, check live").
 4. **Phase 3, plus Needs attention** (below).
-5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering). D10 stands: Foundation Models only.
-6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9, and the webhook writes. Phase 4 still stops for the operator's
+5. **Apple's on-device model, read-only** (Phase 9's explaining and filtering, and the report intents: "which devices are
+   out of warranty?" maps onto Phase 3's reports; operator, 2026-11-20). D10 stands: Foundation Models only.
+6. **Writes**: Phases 4, 5, 6 and 8, the rest of Phase 9 (including the Wi-Fi blueprint draft, after Phases 4 and 5;
+   operator, 2026-11-20), and the webhook writes. Phase 4 still stops for the operator's
    answers in the write-path design.
 7. **Phase 10.**
 
@@ -1203,7 +1228,7 @@ scope rule in `AppModels/Navigation.swift`; the demo org's people, content, Appl
 name one another (`DemoTests`). Apple MDM reads up to 50 devices' `/details` as the page loads, one at a time and
 cancelled on a switch, a Refresh or leaving the screen (resumed on return), the rest on selection: a bounded deviation
 from §3.6's "never on page load". The screens' snapshots are CI's to render, and a `first` run that selects nothing fails.
-2b's adversarial review (9dca2ae: one medium, ten lows) is fixed on the branch (`fix(2b): …` commits; failure-log
+2b's adversarial review (9dca2ae: one medium, ten lows) is fixed before it merged in PR #12 (`fix(2b): …` commits; failure-log
 2026-10-31, "a whole-section lock outlived the per-list models"): a section locks only when every read it shows was
 refused; an id that can't go in a path is never sent and says so; a package's location and its nested attributes are
 masked by a real address parse; the Dashboard's recent events in Activity's words; one quiet-service rule on both screens;
@@ -1287,7 +1312,10 @@ list paged by cursor; the acceptance pass 28 Business-only lines, the webhooks' 
     and with the audit log refused, but with `[.auditEvents]` alone a School org keeps the section hidden
     (`SidebarItem.shown(for:)`) and a role refused the audit log has it locked (`isLocked(for:)`, Phase 2b review M1).
 - **Reports**:
-  - coverage (with the new AppleCare fields);
+  - coverage (with the new AppleCare fields). **Caution for "out of warranty"**: on the first live check a sampled
+    device had no AppleCare coverage records, so "no record" may mean "no AppleCare" rather than "expired". Whether
+    Apple lists the standard one-year limited warranty as a coverage is a live check; until it is made, the report says
+    so and may estimate from the order date, labelled as an estimate;
   - fleet age;
   - **Activation Lock** (locked devices by `lockType`; `USER` locks flagged "blocks redeploy and
     release");

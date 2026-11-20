@@ -321,8 +321,8 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
       first refusal named none of the columns asked for; whether both spellings of the console user are accepted (they
       are not: only `CurrentConsoleManagedUser`). The next healthy Test no longer asks for that column, so it won't
       exercise the refusal path. Still assumed: the contents of the body's `info` and `unknown_columns` (never logged,
-      never seen), and the rest of the list above. The stub now refuses `currentconsolemanageduser` by default as seen
-      (HTTP 400, `UNKNOWN_COLUMNS`, `unknown_columns` empty: `MosyleStub.refusedLive`) and takes the other undocumented
+      never seen), and the rest of the list above. The stub now refuses `currentconsolemanageduser` by default: status and HTTP code as seen
+      (HTTP 400, `UNKNOWN_COLUMNS`), body shape assumed (Mosyle's doc example), naming no column (`MosyleStub.refusedLive`) and takes the other undocumented
       columns unless a test says otherwise (`MosyleStub.undocumentedColumns`). The log has a line for each step.
     - `MosyleStub.deviceColumns` is the stub's guess at Mosyle's list. It adds `activation_bypass_mdm` (plan defect 1;
       the doc lists only `activation_bypass`) and `latitude`/`longitude` (plan §2.2).

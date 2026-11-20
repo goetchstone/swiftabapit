@@ -49,7 +49,7 @@ org editor's save).
   screen says alike).
 - `Sources/TestSupport/AppleStub.swift` — the strict stub (plan §6.3): `parameters` (every GET's query parameters and
   allowed values, written out from the contract) and `paged`; `add(_:)`, `relate(_:_:_:to:)`, `setDetails(_:_:)` for the
-  Business-only collections; `refuseIncludes(with:)` and `repeatCursors(on:)`. `DemoOrg.make()` loads the demo fleet,
+  Business-only collections; and `repeatCursors(on:)`. `DemoOrg.make()` loads the demo fleet,
   then `DemoPeople`, `DemoContent`, `DemoAppleMDM` and `DemoAudit` into the stub (`DemoOrg.load(into:)`; DEBUG only,
   invented data).
 

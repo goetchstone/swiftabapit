@@ -71,8 +71,8 @@ public final class MosyleStub: Transport, Sendable {
         "enrollment_type", "currentconsolemanageduser", "imei", "meid", "date_enroll", "date_checkin", "activation_bypass_mdm",
     ]
 
-    /// The one column the real Mosyle refused live (2026-11-19), whichever list asks for it: refused with the answer seen,
-    /// naming none (`unknown_columns` empty), as `lackColumns(_:named: false)` does. Written out here, not taken from the client.
+    /// The one column the real Mosyle refused live (2026-11-19), whichever list asks for it: refused with the status and HTTP code as
+    /// seen (the body shape is assumed: Mosyle's doc example), naming none, as `lackColumns(_:named: false)` does. Written out here, not taken from the client.
     public static let refusedLive = "currentconsolemanageduser"
 
     private struct Queued {

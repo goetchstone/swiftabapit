@@ -3,7 +3,7 @@
 - **Symptom:** the plan's Status lines and the README were behind `main`. Line 3 of the plan said "Phase 0 under way";
   Phase 1 said 1a was "on branch" and 1b "next"; Phase 2b was "on branch"; build-order step 2 and Phase 7 said "built on"
   a branch; step 1 said nothing had read a real tenant. The README said "Phase 0 — scaffold. Nothing talks to Apple or
-  Mosyle yet" and linked a repository that has since gone private. PRs #3 to #21 had merged the work between 2026-10-16
+  Mosyle yet" and linked a repository that has since gone private. By then, PRs #3 to #21 had merged the work between 2026-10-16
   and 2026-11-19. SECURITY.md said "tests guard them" of invariants whose write path, audit records and model rules are
   not built, and the README described the write path and the model rules in the present tense.
 - **Cause:** each Status text was written while its branch was open, and the README's sentence in Phase 0; nothing sent
