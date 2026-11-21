@@ -5,6 +5,7 @@ import Foundation
 import History
 import JSONAPI
 import Orgs
+import Synchronization
 import Testing
 import TestSupport
 
@@ -120,7 +121,8 @@ struct SweepTests {
                                                     "osVersion", "platform", "serialNumber", "storageFreeCapacity", "storageTotalCapacity"])
         #expect(detail.attributes["deviceName"] == .string("KEPTDEVICENAME"))
         #expect(Self.item(snapshot, "mdm_details", Self.serial(1)) == nil)
-        #expect(summary.notes["mdm_details"] == nil, "IMEI, MEID and MACs are known and left out unsaid")
+        // The 404 is said (review M3), and nothing else: IMEI, MEID and MACs are known and left out unsaid.
+        #expect(summary.notes["mdm_details"] == "1 answered 404, read as no details on record (Apple's meaning unconfirmed)")
         guard case .read(let copy)? = try await Self.latest(world, "mdm_details") else {
             Issue.record("a whole details sweep isn't read")
             return
@@ -380,14 +382,101 @@ struct SweepTests {
         #expect(snapshot.summary.notes["mdm_details"] == "1 of 2 devices not read: 1 failed twice (another serial)")
     }
 
-    /// Two records with one id (abapit's id rule: Apple's id): the store keeps one, so the sweep says so and is a part read.
-    @Test func aCoverageIdSeenTwiceIsAPartRead() async throws {
+    /// Apple's example keys AppleCare+ by its agreement number, which several devices can share (review M2): every
+    /// device's record is kept, as `serial:id`, and the sweep is a good copy; an id one device alone carries keeps Apple's.
+    /// The coordinating session's decision, pending the live check.
+    @Test func sixDevicesSharingACoverageIdKeepEveryRecord() async throws {
         let world = try await Self.world()
-        world.stubs["a"]!.setCoverage(Self.serial(2), [Self.coverage("0000000001", "AppleCare+", payment: "SUBSCRIPTION")])
+        for index in 1..<6 { world.stubs["a"]!.setCoverage(Self.serial(index), [Self.coverage("0000000001", "AppleCare+", payment: "SUBSCRIPTION")]) }
+        let snapshot = try await Self.recorded(world, [.appleCare])
+        #expect(snapshot.summary.errors["applecare"] == nil && snapshot.summary.counts["applecare"] == 7)
+        #expect(snapshot.summary.notes["applecare"] == "6 records shared an id with another device's: kept as serial:id")
+        for index in 0..<6 {
+            let record = Self.item(snapshot, "applecare", "\(Self.serial(index)):0000000001")
+            #expect(record?.attributes["serialNumber"] == .string(Self.serial(index)), "\(index)")
+        }
+        #expect(Self.item(snapshot, "applecare", Self.serial(0)) != nil && Self.item(snapshot, "applecare", "0000000001") == nil)
+        guard case .read? = try await Self.latest(world, "applecare") else {
+            Issue.record("a sweep that lost nothing isn't a good copy")
+            return
+        }
+    }
+
+    /// One device's list holding an id twice: the store would keep one, so the sweep says so and is a part read.
+    @Test func anIdTwiceInOneDevicesListIsAPartRead() async throws {
+        let world = try await Self.world()
+        let twice = Self.coverage("DUP1", "AppleCare+", payment: "SUBSCRIPTION")
+        world.stubs["a"]!.setCoverage(Self.serial(2), [twice, twice])
         let snapshot = try await Self.recorded(world, [.appleCare])
         #expect(snapshot.summary.errors["applecare"] == "duplicate id")
         #expect(snapshot.summary.notes["applecare"] == "1 record had the id of another read: the history keeps one of each")
-        #expect(Self.item(snapshot, "applecare", "0000000001")?.attributes["serialNumber"] == .string(Self.serial(2)), "the last, in the list's order")
+    }
+
+    /// abapit's fallback id when Apple's is empty, as Python's f-string wrote it, so an imported history's keys continue:
+    /// `serial:None` for a null description, `serial:` for a missing one, `serial:text` otherwise.
+    @Test func anEmptyCoverageIdIsAbapitsFallback() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.setCoverage(Self.serial(2), [
+            Resource(type: "appleCareCoverage", id: "", attributes: ["description": .null, "status": .string("ACTIVE")]),
+            Resource(type: "appleCareCoverage", id: "", attributes: ["status": .string("EXPIRED")]),
+            Resource(type: "appleCareCoverage", id: "", attributes: ["description": .string("AppleCare+"), "status": .string("ACTIVE")]),
+        ])
+        let snapshot = try await Self.recorded(world, [.appleCare])
+        #expect(snapshot.summary.errors["applecare"] == nil)
+        for id in ["None", "", "AppleCare+"] { #expect(Self.item(snapshot, "applecare", "\(Self.serial(2)):\(id)") != nil, "\(id)") }
+    }
+
+    /// Every details read answering 404 is a whole sweep of "no details on record", and the note says how many and that
+    /// Apple's meaning is unconfirmed (review M3), so a reader of the snapshot never takes it for a confirmed absence.
+    @Test func everyDetails404IsCountedInTheNote() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.queue(404, for: "/v1/mdmDevices/\(Self.serial(0))/details")
+        let snapshot = try await Self.recorded(world, [.mdmDetails])
+        #expect(snapshot.summary.errors["mdm_details"] == nil && snapshot.summary.counts["mdm_details"] == 0)
+        #expect(snapshot.summary.notes["mdm_details"] == "2 answered 404, read as no details on record (Apple's meaning unconfirmed)")
+        #expect(Self.asked(world, "/details").count == 2, "a 404 is an answer: not asked again")
+    }
+
+    /// A device's own coverage list cut at the page cap: what came is kept, the sweep is a part read and says so (review L3).
+    @Test func aDevicesCoverageCutAtThePageCapIsAPartRead() async throws {
+        let world = try await Self.world(pageCap: 1)
+        world.stubs["a"]!.setCoverage(Self.serial(0), (0...1000).map { Self.coverage(String(format: "CUT%05d", $0), "AppleCare+", payment: "SUBSCRIPTION") })
+        let snapshot = try await Self.recorded(world, [.appleCare])
+        #expect(snapshot.summary.counts["applecare"] == 1000 && snapshot.summary.errors["applecare"] == "page cap")
+        #expect(snapshot.summary.notes["applecare"] == "the page limit cut 1 device's records: the rest not read")
+    }
+
+    /// An Activation Lock status under another device's id is never kept as the device asked for (review L5).
+    @Test func aLockForAnotherSerialIsNotRead() async throws {
+        let world = try await Self.world()
+        let other = #"{"data": {"type": "activationLockStatus", "id": "ZDEV9999999", "attributes": {"isLocked": false, "lockType": "NONE"}}}"#
+        for _ in 0..<2 { world.stubs["a"]!.queue(200, for: Self.lock(2), body: other) }
+        let snapshot = try await Self.recorded(world, [.activationLock])
+        #expect(Self.item(snapshot, "activation_lock", Self.serial(2)) == nil && snapshot.summary.counts["activation_lock"] == 5)
+        #expect(snapshot.summary.errors["activation_lock"] == "another serial")
+    }
+
+    /// Offline mid-sweep (review L8): five transport failures in a row stop the sweep, recorded as `transport`, and the sends
+    /// are bounded: at most eight reads (five, and three in flight), each sent five times by the client; without the breaker,
+    /// twelve devices asked twice would be 120 sends.
+    @Test func offlineMidSweepStopsAtTheBreaker() async throws {
+        let world = try await Self.world(devices: 12)
+        let gate = world.gates["a"]!
+        gate.hold("locks") { $0.path().hasSuffix(Self.lockPath) }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("four reads held") { gate.held == 4 }
+        let before = gate.answered
+        world.stubs["a"]!.failTransport(10_000)
+        gate.release("locks")
+        guard case .recorded(let id) = await running.value else {
+            Issue.record("not recorded")
+            return
+        }
+        let sent = gate.answered - before
+        #expect(sent <= (Sweep.transportBreaker + Sweep.inFlight - 1) * 5, "\(sent) sends")
+        let summary = try await world.history!.load(id, org: world.orgs.active!).summary
+        #expect(summary.errors["activation_lock"] == "transport")
+        #expect(summary.notes["activation_lock"] == "12 of 12 devices not read: 12 left when the sweep stopped at transport")
     }
 
     /// A School org has no Apple MDM: its run tries AppleCare and Activation Lock only.
@@ -421,12 +510,144 @@ struct SweepTests {
         #expect(world.snapshots.sweepProgress == nil && world.snapshots.sweepEstimate == nil)
     }
 
+    /// Before any answer the progress is there, nothing done (review mutant M12): a sweep never looks idle while it starts.
+    @Test func progressShowsBeforeTheFirstAnswer() async throws {
+        let world = try await Self.world()
+        let gate = world.gates["a"]!
+        gate.hold("locks") { $0.path().hasSuffix(Self.lockPath) }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("four reads held") { gate.held == 4 }
+        #expect(world.snapshots.sweepProgress == Sweep.Progress(sweep: .activationLock, done: 0, total: 6))
+        gate.release("locks")
+        _ = await running.value
+    }
+
+    /// A device whose first read failed isn't done until its second answers (review mutant M9): while its retry waits, the
+    /// progress is five of six, never six, and never seven of six after.
+    @Test func progressThroughAFailureNeverClaimsMore() async throws {
+        let world = try await Self.world()
+        let gate = world.gates["a"]!
+        world.stubs["a"]!.queue(500, for: Self.lock(2))
+        let seen = Mutex(0), path = Self.lock(2)
+        // The device's second ask only: its first goes through and fails.
+        gate.hold("retry") { url in
+            guard url.path() == path else { return false }
+            return seen.withLock { count in
+                count += 1
+                return count > 1
+            }
+        }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("the retry held") { gate.held == 1 }
+        #expect(world.snapshots.sweepProgress == Sweep.Progress(sweep: .activationLock, done: 5, total: 6))
+        gate.release("retry")
+        guard case .recorded = await running.value else {
+            Issue.record("not recorded")
+            return
+        }
+    }
+
+    /// A cancel during the retry pass stops it (the review's P9): six devices fail once, the first retry is held, the
+    /// cancel comes; at most seven requests in all, never the other five retries.
+    @Test func aCancelDuringTheRetryPassStopsIt() async throws {
+        let world = try await Self.world()
+        let gate = world.gates["a"]!
+        for index in 0..<6 { world.stubs["a"]!.queue(500, for: Self.lock(index)) }
+        let seen = Mutex(0), path = Self.lock(0)
+        gate.hold("retry") { url in
+            guard url.path() == path else { return false }
+            return seen.withLock { count in
+                count += 1
+                return count > 1
+            }
+        }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("the first retry held") { gate.held == 1 }
+        world.snapshots.cancel()
+        gate.release("retry")
+        #expect(await running.value == .cancelled)
+        #expect(Self.asked(world, Self.lockPath).count <= 7, "\(Self.asked(world, Self.lockPath).count) asked")
+    }
+
+    /// An org switch clears what a run says while it goes (review L6): the stopping run's sweep, progress and estimate are
+    /// the old org's.
+    @Test func aSwitchClearsTheSweepsWords() async throws {
+        let world = try await Self.world()
+        let gate = world.gates["a"]!
+        gate.hold("locks") { $0.path().hasSuffix(Self.lockPath) }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("the sweep under way") { gate.held == 4 && world.snapshots.sweepProgress != nil }
+        #expect(world.snapshots.reading == "activation_lock" && world.snapshots.sweepEstimate != nil)
+        world.orgs.select("b")
+        #expect(world.snapshots.sweepProgress == nil && world.snapshots.sweepEstimate == nil && world.snapshots.reading == nil)
+        gate.release("locks")
+        #expect(await running.value == .cancelled)
+        #expect(world.snapshots.sweepProgress == nil && world.snapshots.sweepEstimate == nil && world.snapshots.reading == nil)
+    }
+
+    /// An estimate whose rate read outlived an org switch is the old org's: none (review L7).
+    @Test func anEstimateAcrossASwitchIsNone() async throws {
+        let world = try await Self.world()
+        let client = try #require(world.orgs.appleClient)
+        // Stall a's limiter behind another read, so the estimate's rate read waits there.
+        world.stall.hold(World.clientID("a"))
+        Task.detached { try? await client.ping() }
+        let clock = ContinuousClock(), end = clock.now + .seconds(20)
+        while !world.stall.entered, clock.now < end { usleep(500) }
+        #expect(world.stall.entered)
+        let answer = Task { await world.snapshots.estimate([.activationLock], devices: 6, appleManaged: 0) }
+        try await Task.sleep(for: .milliseconds(50))
+        world.orgs.select("b")
+        world.stall.release()
+        #expect(await answer.value == nil)
+        #expect(await world.snapshots.estimate([.activationLock], devices: 6, appleManaged: 0) != nil, "b's own is made")
+    }
+
+    /// Four reads refused at once are one throttle event (the review's P13, M1): the rate halves once, 600 to 300, and the
+    /// run records 300, never 600 halved four times (37.5).
+    @Test func fourReadsRefusedAtOnceHalveTheSavedRateOnce() async throws {
+        let world = try await Self.world()
+        let gate = world.gates["a"]!, a = world.stubs["a"]!
+        gate.hold("locks") { $0.path().hasSuffix(Self.lockPath) }
+        let running = Task { await world.snapshots.run(sweeps: [.activationLock]) }
+        await eventually("four reads held") { gate.held == 4 }
+        for index in 0..<4 { a.queue(429, for: Self.lock(index), headers: ["Retry-After": "7"]) }
+        // The four refusals reach the limiter together, as they would within Apple's window: its clock moves only when it
+        // sleeps, so hold it until all four are answered, then let them through.
+        world.stall.hold(World.clientID("a"))
+        let before = gate.answered
+        gate.release("locks")
+        let clock = ContinuousClock(), end = clock.now + .seconds(20)
+        while !(world.stall.entered && gate.answered >= before + 4), clock.now < end { usleep(500) }
+        usleep(100_000)
+        world.stall.release()
+        guard case .recorded = await running.value else {
+            Issue.record("not recorded")
+            return
+        }
+        #expect(Self.asked(world, Self.lockPath).count == 10)
+        #expect(world.orgs.store["a"]?.learnedReadsPerMinute == 300)
+    }
+
+    /// The estimate holds its rate to 1...600 a minute and says the rate it used (review M11 and nits): below one a minute,
+    /// or not a number, is one; no count traps; seconds under a minute say so.
+    @Test func theEstimateHoldsItsRateAndNeverTraps() {
+        let slow = Sweep.Estimate(reads: 60, readsPerMinute: 0.5)
+        #expect(slow.readsPerMinute == 1 && slow.seconds == 3600)
+        #expect(slow.words.hasPrefix("About 60 minutes: 60 reads at about 1 a minute"))
+        #expect(Sweep.Estimate(reads: 60, readsPerMinute: 0).seconds == 3600 && Sweep.Estimate(reads: 60, readsPerMinute: .nan).seconds == 3600)
+        #expect(Sweep.Estimate(reads: 600, readsPerMinute: 1e12).readsPerMinute == 600)
+        #expect(Sweep.Estimate(reads: 14, readsPerMinute: 600).words.hasPrefix("Under a minute: 14 reads"))
+        #expect(Sweep.Estimate(reads: Int.max, readsPerMinute: 1).words.hasPrefix("About 1000000 hours"))
+        #expect(Sweep.Estimate(reads: -3, readsPerMinute: 20).reads == 0)
+    }
+
     /// Before a run, from the counts a screen has, at the org's rate now; said as an estimate.
     @Test func theEstimateBeforeARunIsSaidAsOne() async throws {
         let world = try await Self.world()
         let estimate = try #require(await world.snapshots.estimate(Set(Sweep.allCases), devices: 100, appleManaged: 10))
         #expect(estimate == Sweep.Estimate(reads: 210, readsPerMinute: 600))
-        #expect(estimate.words == "About a minute: 210 reads at about 600 a minute, this organization's rate now. An estimate: "
+        #expect(estimate.words == "Under a minute: 210 reads at about 600 a minute, this organization's rate now. An estimate: "
                 + "Apple may slow the reads, and a device whose read fails is asked once more.")
         let slow = Sweep.Estimate(reads: 500, readsPerMinute: 20)
         #expect(slow.seconds == 1500 && slow.words.hasPrefix("About 25 minutes: 500 reads at about 20 a minute"))

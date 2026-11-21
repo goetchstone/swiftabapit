@@ -133,4 +133,34 @@ struct AppleClientTests {
         harness.stub.failNextToken(429)
         await #expect(throws: AppleAPIError.token(.rateLimited)) { _ = try await harness.allDevices() }
     }
+
+    /// A list read whose task is cancelled ends without throwing (its stream finishes), so a cancelled coverage read came
+    /// back as no coverage at all, and a cancelled blueprint as one with no members (review of PR #37, L4). Each throws
+    /// `CancellationError` now.
+    @Test func aCancelledListReadThrowsNeverNone() async throws {
+        let harness = try await Harness(devices: 1)
+        harness.stub.setCoverage("TESTD0000000", [Resource(type: "appleCareCoverage", id: "C1", attributes: ["status": .string("ACTIVE")])])
+        harness.stub.add([Resource(type: "blueprints", id: "BP1", attributes: ["name": .string("Field kit")])])
+        let client = harness.client
+        #expect(try await client.appleCare("TESTD0000000").count == 1)
+        let coverage = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await client.appleCare("TESTD0000000")
+        }.result
+        #expect(throws: CancellationError.self) { try coverage.get() }
+        let blueprint = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await client.blueprintWithMembers("BP1")
+        }.result
+        #expect(throws: CancellationError.self) { try blueprint.get() }
+    }
+
+    /// The screen models don't import HTTPCore: a transport failure the client throws as it came is `.http` to them.
+    @Test func aTransportFailureIsClassifiedForTheScreenModels() {
+        #expect(AppleAPIError.of(HTTPFailure.transport(code: URLError.notConnectedToInternet.rawValue)) == .http(.transport(code: -1009)))
+        #expect(AppleAPIError.of(HTTPFailure.transport(code: -1005))?.isTransport == true)
+        #expect(AppleAPIError.of(HTTPFailure.tooLarge(limit: 1))?.isTransport == false)
+        #expect(AppleAPIError.of(AppleAPIError.notFound) == .notFound && AppleAPIError.notFound.isTransport == false)
+        #expect(AppleAPIError.of(CancellationError()) == nil)
+    }
 }

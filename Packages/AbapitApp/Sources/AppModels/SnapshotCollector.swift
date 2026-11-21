@@ -116,13 +116,17 @@ public final class SnapshotCollector {
 
     /// The sweeps' time before a run, an estimate: `devices` in Apple's device list and `appleManaged` Apple-managed devices
     /// (what the screens have read), at the active org's rate now. nil without an org this version can read.
+    /// An org switch during its await makes it nil: the rate read was the old org's.
     public func estimate(_ sweeps: Set<Sweep>, devices: Int, appleManaged: Int) async -> Sweep.Estimate? {
         guard let profile = orgs.active, let client = orgs.appleClient else { return nil }
+        let generation = orgs.generation
         let reads = sweeps.reduce(0) { reads, sweep in
             guard !sweep.rule.businessOnly || profile.scope == .known(.business) else { return reads }
             return reads + max(0, sweep == .mdmDetails ? appleManaged : devices)
         }
-        return Sweep.Estimate(reads: reads, readsPerMinute: await client.learnedReadsPerMinute)
+        let rate = await client.learnedReadsPerMinute
+        guard orgs.generation == generation else { return nil }
+        return Sweep.Estimate(reads: reads, readsPerMinute: rate)
     }
 
     /// Stops the run going, if any: a run stopped before its write records nothing.
@@ -135,6 +139,10 @@ public final class SnapshotCollector {
     private func switched() {
         lastOutcome = nil
         refusal = nil
+        // What a run says while it goes is the old org's too: a stopping run never sets them again (it checks `current`).
+        reading = nil
+        sweepEstimate = nil
+        sweepProgress = nil
         cancel()
     }
 
@@ -394,13 +402,17 @@ public final class SnapshotCollector {
         guard current(run) else { return }
         let stop = swept.stop.map(Sweep.code)
         if let stop, let error = swept.stop, SnapshotPolicy.stopsTheRun(error) { collected.stopped = stop }
-        // Two records with one id: the store keeps the last, so a device's record could go unseen. Said, and a part read.
+        // A coverage id more than one device carries is kept as `serial:id` (`Sweep.keyedBySerialWhereShared`): nothing lost.
+        var items = swept.items, shared = 0
+        if sweep == .appleCare { (items, shared) = Sweep.keyedBySerialWhereShared(items) }
+        // Two records with one id left (one device's list holding it twice): the store keeps the last, so a record could go
+        // unseen. Said, and a part read.
         var ids: Set<[UInt8]> = [], duplicates = 0
-        for item in swept.items where !ids.insert(Array(item.id.utf8)).inserted { duplicates += 1 }
+        for item in items where !ids.insert(Array(item.id.utf8)).inserted { duplicates += 1 }
         let error = stop ?? swept.failed.first ?? (swept.unsendable > 0 ? "unsendable id" : nil) ?? (duplicates > 0 ? "duplicate id" : nil)
-            ?? (source.cut ? SnapshotPolicy.pageCap : nil)
+            ?? (source.cut || swept.cut > 0 ? SnapshotPolicy.pageCap : nil) ?? (swept.notAsked > 0 ? "not asked" : nil)
         // Read and found nothing is an answer (counted); nothing read and an error is the error alone.
-        if error == nil || swept.read > 0 { keep(swept.items, rule, &collected) }
+        if error == nil || swept.read > 0 { keep(items, rule, &collected) }
         var why: [String] = []
         if !swept.failed.isEmpty {
             var codes: [String] = []
@@ -408,10 +420,19 @@ public final class SnapshotCollector {
             why.append("\(swept.failed.count) failed twice (\(codes.joined(separator: ", ")))")
         }
         if swept.unsendable > 0 { why.append("\(swept.unsendable) \(swept.unsendable == 1 ? "has an id" : "have ids") Apple can't be asked for") }
-        if swept.notAsked > 0, let stop { why.append("\(swept.notAsked) left when the sweep stopped at \(stop)") }
+        if swept.notAsked > 0 { why.append(stop.map { "\(swept.notAsked) left when the sweep stopped at \($0)" } ?? "\(swept.notAsked) not asked") }
         let total = swept.read + swept.failed.count + swept.unsendable + swept.notAsked, missing = total - swept.read
         if missing > 0 { collected.note(rule, "\(missing) of \(Sweep.devices(total)) not read: \(why.joined(separator: "; "))") }
         if source.cut { collected.note(rule, "covers only the devices listed: \(list.name) stopped at the page limit") }
+        if swept.cut > 0 {
+            collected.note(rule, "the page limit cut \(swept.cut == 1 ? "1 device's" : "\(swept.cut) devices'") records: the rest not read")
+        }
+        if shared > 0 {
+            collected.note(rule, "\(shared) record\(shared == 1 ? "" : "s") shared an id with another device's: kept as serial:id")
+        }
+        if swept.notFound > 0 {
+            collected.note(rule, "\(swept.notFound) answered 404, read as no details on record (Apple's meaning unconfirmed)")
+        }
         if duplicates > 0 {
             collected.note(rule, "\(duplicates) record\(duplicates == 1 ? "" : "s") had the id of another read: the history keeps one of each")
         }

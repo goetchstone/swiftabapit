@@ -63,12 +63,17 @@ struct HTTPCoreTests {
     }
 
     @Test func theLimiterHalvesOnA429AndRecoversSlowly() async {
-        let limiter = RateLimiter(readsPerMinute: 60, sleep: { _ in })
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 60, now: { clock.now }, sleep: { clock.advance($0) })
         await limiter.throttled(.read)
         #expect(await limiter.readsPerMinute == 30)
         for _ in 0..<20 { await limiter.succeeded(.read) }
         #expect(abs(await limiter.readsPerMinute - 33) < 0.01)
-        for _ in 0..<20 { await limiter.throttled(.read) }
+        // Each 429 its own throttle event: after the last one's hold (one token's time, at most 30 s at the floor).
+        for _ in 0..<20 {
+            clock.advance(.seconds(31))
+            await limiter.throttled(.read)
+        }
         #expect(await limiter.readsPerMinute == RateLimiter.floor)
     }
 
@@ -108,6 +113,112 @@ struct HTTPCoreTests {
             #expect(response.status == 200)
             #expect((clock.now - start >= .seconds(29.999)) == held, "\(headers): \(clock.now - start)")
         }
+    }
+
+    /// One throttle event halves the rate once (review of PR #37, M1): four reads in flight refused at once halved it four
+    /// times, 600 to 37.5, and the run saved that. A 429 after the hold has passed is a new event.
+    @Test func fourReadsRefusedAtOnceHalveTheRateOnce() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let start = clock.now
+        for _ in 0..<4 { await limiter.throttled(.read, retryAfter: .seconds(30)) }
+        #expect(await limiter.readsPerMinute == 300)
+        try await limiter.acquire(.read)
+        #expect(clock.now - start >= .seconds(29.999) && clock.now - start < .seconds(30.001), "\(clock.now - start)")
+        await limiter.throttled(.read)
+        #expect(await limiter.readsPerMinute == 150, "after the hold, a new event")
+    }
+
+    /// A later 429 inside the hold, with a later `Retry-After`, extends it; one with none (another read's, or a token
+    /// exchange's) never shortens it (review L1).
+    @Test func aLater429ExtendsTheHoldAndNeverShortensIt() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let start = clock.now
+        await limiter.throttled(.read, retryAfter: .seconds(60))
+        await limiter.throttled(.read)
+        await limiter.throttled(.read, retryAfter: .seconds(5))
+        try await limiter.acquire(.read)
+        #expect(clock.now - start >= .seconds(59.999), "the 60 s hold was cut to \(clock.now - start)")
+        #expect(await limiter.readsPerMinute == 300)
+        let later = Clock()
+        let extended = RateLimiter(readsPerMinute: 600, now: { later.now }, sleep: { later.advance($0) })
+        let from = later.now
+        await extended.throttled(.read, retryAfter: .seconds(10))
+        later.advance(.seconds(5))
+        await extended.throttled(.read, retryAfter: .seconds(20))
+        try await extended.acquire(.read)
+        #expect(later.now - from >= .seconds(24.999) && later.now - from < .seconds(25.001), "\(later.now - from)")
+    }
+
+    /// The token exchange's 429 (`authenticate`, no `Retry-After` read) keeps a pending hold (review L1).
+    @Test func aTokenExchange429KeepsTheHold() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let client = HTTPClient(transport: Scripted([(429, [:])]), limiter: limiter, sleep: { _ in })
+        let start = clock.now
+        await limiter.throttled(.read, retryAfter: .seconds(60))
+        let token = AuthRequest(host: .appleAccount, path: "/auth/oauth2/token", contentType: "application/x-www-form-urlencoded", body: Data())
+        #expect(try await client.authenticate(token).status == 429)
+        try await limiter.acquire(.read)
+        #expect(clock.now - start >= .seconds(59.999), "the 60 s hold was cut to \(clock.now - start)")
+    }
+
+    /// The limiter caps a hold itself, whoever asks (review L2): a year's `Retry-After` holds a minute.
+    @Test func aHoldIsAtMostAMinute() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let start = clock.now
+        await limiter.throttled(.read, retryAfter: .seconds(86_400 * 365))
+        try await limiter.acquire(.read)
+        #expect(clock.now - start <= RateLimiter.longestHold + .milliseconds(1), "held \(clock.now - start)")
+        await limiter.throttled(.read, retryAfter: .seconds(-30))
+        #expect(await limiter.readsPerMinute == 150, "a negative wait is no wait")
+    }
+
+    /// Every `Retry-After` a server could send holds the lane between nothing and a minute (the review's probe).
+    @Test func everyRetryAfterHoldIsBounded() async throws {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        // `1e400` and `inf` read as infinity, which isn't a delay this reads (as `garbage` isn't): no hold past a token's time.
+        let cases: [(String, ClosedRange<Double>)] = [
+            ("1e400", 0...1), ("1000000000000000000000", 59.9...60.1), ("-5", 0...1), ("nan", 0...1), ("inf", 0...1),
+            ("Fri, 31 Dec 9999 23:59:59 GMT", 59.9...60.1), ("Thu, 01 Jan 1970 00:00:00 GMT", 0...1),
+            ("Wed, 15 Sep 2026 20:00:30 GMT", 0...60.1), ("garbage", 0...1), ("0", 0...1),
+        ]
+        for (value, range) in cases {
+            let clock = Clock()
+            let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+            let client = HTTPClient(transport: Scripted([(429, ["Retry-After": value])]), limiter: limiter, sleep: { _ in }, clock: { now })
+            let start = clock.now
+            _ = try await client.read(next: URL(string: "https://api-business.apple.com/v1/orgDevices")!, on: .appleBusiness,
+                                      template: "/v1/orgDevices", authorizer: NoAuth())
+            let held = clock.now - start
+            let seconds = Double(held.components.seconds) + Double(held.components.attoseconds) / 1e18
+            #expect(range.contains(seconds), "\(value): \(seconds)")
+        }
+    }
+
+    /// A read 429's hold is the read lane's: a write waits for nothing it holds.
+    @Test func theWriteLaneIsNotHeld() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let start = clock.now
+        await limiter.throttled(.read, retryAfter: .seconds(60))
+        try await limiter.acquire(.write)
+        #expect(clock.now - start == .zero)
+    }
+
+    /// A read waiting out a hold leaves at once when cancelled, without a token (a sweep stopped during a 429's wait).
+    @Test func aCancelledWaiterLeavesAtOnce() async throws {
+        let limiter = RateLimiter(readsPerMinute: 600)
+        await limiter.throttled(.read, retryAfter: .seconds(60))
+        let waiter = Task { try await limiter.acquire(.read) }
+        try await Task.sleep(for: .milliseconds(50))
+        let start = ContinuousClock.now
+        waiter.cancel()
+        let result = await waiter.result
+        #expect(ContinuousClock.now - start < .seconds(1))
+        if case .success = result { Issue.record("a cancelled waiter got a token") }
     }
 
     /// Answers each request with the next scripted status and headers, then 200 `{}`.

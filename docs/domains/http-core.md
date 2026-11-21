@@ -24,12 +24,20 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   any other status returned as is), credential exchanges (never retried), next-page links (same host, `/v1/`
   only). Logs method, host, path template, status and latency; never a header, body or identifier.
 - `Sources/HTTPCore/RateLimiter.swift` — token buckets per lane: reads 20/min burst 10 to start, floor 2/min,
-  ceiling 600/min; writes 10/hour burst 3. Halves on 429; +10% per 20 successes. `throttled(_:retryAfter:)` (Phase 3,
-  the sweeps): with the server's `Retry-After` (Apple's or Mosyle's), the bucket goes negative so that no token is given before it has passed, or
-  before one token's time at the halved rate, whichever is later. A sweep has four reads in flight; without the hold only
-  the refused read waited, and the other three went on at the halved rate inside the server's window
-  (`aRetryAfterHoldsTheLaneForEveryRead`, `the429sRetryAfterReachesTheLimiter`). The refused read's own wait refills
-  the bucket by the same amount, so it doesn't wait twice. A 429 on a credential exchange halves the rate as before.
+  ceiling 600/min; writes 10/hour burst 3. Halves once per throttle event; +10% per 20 successes. `throttled(_:retryAfter:)`
+  (Phase 3, the sweeps): with the server's `Retry-After` (Apple's or Mosyle's; at most `longestHold`, a minute, whoever asks),
+  the bucket goes negative so that no token is given before it has passed, or before one token's time at the halved rate,
+  whichever is later (`heldUntil`). A sweep has four reads in flight; without the hold only the refused read waited, and the
+  other three went on at the halved rate inside the server's window (`aRetryAfterHoldsTheLaneForEveryRead`,
+  `the429sRetryAfterReachesTheLimiter`). The refused read's own wait refills the bucket by the same amount, so it doesn't wait
+  twice. **One throttle event, one halving** (review of PR #37, M1): a 429 before `heldUntil` is the same event (the reads in
+  flight were sent before the first answer). It extends the hold to its own `Retry-After` if that ends later, never shortens
+  it, and doesn't halve again: four refused at once took 600 a minute to 37.5, and the sweep saved that. A credential
+  exchange's 429 (no `Retry-After` read) inside a hold leaves it as it is (L1); outside one it halves, as before
+  (`fourReadsRefusedAtOnceHalveTheRateOnce`, `aLater429ExtendsTheHoldAndNeverShortensIt`, `aTokenExchange429KeepsTheHold`,
+  `aHoldIsAtMostAMinute`, `everyRetryAfterHoldIsBounded`). `1e400` and `inf` read as infinity, not a delay this reads (as
+  `garbage` isn't): no hold past a token's time. A hold is the read lane's alone (`theWriteLaneIsNotHeld`), and a read waiting
+  it out leaves at once when cancelled (`aCancelledWaiterLeavesAtOnce`).
 
 ## Gotchas
 - **Foundation's `Host` and the ObjC runtime's `Method` shadow plain names**: the types are `APIHost` and

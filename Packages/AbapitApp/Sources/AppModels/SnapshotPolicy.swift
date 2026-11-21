@@ -171,7 +171,8 @@ public enum SnapshotPolicy {
     /// The HTTP status and Apple's error `code` when it has a code's shape (`appleCode`), or this app's word for a failure
     /// that has no status.
     public static func code(_ error: any Error) -> String {
-        switch error {
+        // The client throws a transport failure as it came (`HTTPFailure`): `.of` names it `.http`, so it is `transport`.
+        switch AppleAPIError.of(error) ?? error {
         case let error as AppleAPIError:
             switch error {
             case .unauthorized: "HTTP 401"

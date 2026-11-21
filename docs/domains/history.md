@@ -243,46 +243,71 @@ events in phase 2a; their notes are below.
   the lists, one after another: AppleCare coverage and Activation Lock over Apple's device list, then the details of each
   device in Apple MDM's list (Business only: a School org's run doesn't try them).
 - **Bounds** (invariant 7):
-  - At most `Sweep.inFlight` (4) reads at once, in a task group; each read waits on the org's rate limiter, the client's,
-    shared with the screens, which sets the pace (20 reads a minute to start). A 429 halves its rate, and Apple's
-    `Retry-After` now holds its read lane for every read waiting, not only the refused one (`RateLimiter.throttled(_:
-    retryAfter:)`, docs/domains/http-core.md); the client retries the refused read itself.
+  - At most `Sweep.inFlight` (4) reads at once per sweep (the sweeps run one after another, so 4 for the run; the screens'
+    reads share the org's limiter, not this bound), in a task group. Every send waits on the org's rate limiter, the
+    client's, which sets the pace (20 reads a minute to start). One throttle event halves its rate once: a 429 inside the
+    hold of the one before (the other reads in flight were sent before the first answer) extends the hold, never shortens it,
+    and doesn't halve again, so four reads refused at once take 600 a minute to 300, not 37.5, and that is the rate the run
+    records (review of PR #37, M1). The server's `Retry-After`, at most a minute, holds the lane for every read waiting
+    (`RateLimiter.throttled(_:retryAfter:)`, docs/domains/http-core.md); the client retries the refused read itself.
   - Then one pass over the devices whose read failed, a read at a time, in the list's order (abapit's "gentle, sequential
-    second chance"): the sweep asks a device at most twice, so its requests are at most twice the devices for a failure the
-    client doesn't retry (a 5xx, a 404, a malformed answer). A 429, a dropped connection and a 401 are retried inside the
-    client, within its own bounds (`HTTPClient.attempts`). An id repeated in the list is asked once.
+    second chance"): the sweep asks a device at most twice. An id repeated in the list is asked once. **The real request
+    bound** per device is 2 asks × (5 sends, the client's `HTTPClient.attempts` for a 429 or a dropped connection, + 1 after
+    a 401's fresh token) × the pages of its list (AppleCare's is paged; the others are one page); for a failure the client
+    doesn't retry (a 5xx, a 404, a malformed answer), 2 sends a device.
   - A 403 stops that sweep at the first refusal (the role can't read it, so every other device would be refused too); the
-    next sweep still runs. A failure of the key, the token or the account stops the run, as for the lists: the later sweeps
-    are "not asked after HTTP 401".
+    next sweep still runs. `Sweep.transportBreaker` (5) transport failures in a row stop it, recorded as `transport`: each of
+    those reads was already sent five times with backoff, so 25 sends unanswered means the network is down, not a device; at
+    most 8 reads and 40 sends, where twelve devices asked twice would be 120 (`offlineMidSweepStopsAtTheBreaker`). A failure
+    of the key, the token or the account stops the run, as for the lists: the later sweeps are "not asked after HTTP 401".
   - Cancellable: a switch or `cancel()` stops the sweep at once. No read starts after it, the reads in flight are cancelled
-    (one held at the gate never reaches Apple), and the run writes nothing (the collector's rule). Reads only through the
-    client the run captured. An answer that comes back after the stop is never taken (`going()` includes
-    `Task.isCancelled`): a cancelled list read ends without throwing, so AppleCare's would come back as "no records" (the
-    device detail's gotcha too; the mutant that ignored cancellation got no request through for AppleCare, only for
-    Activation Lock, which `cancelStopsFurtherReads` holds).
-- **Progress and the estimate**: `sweepProgress` is the sweep running and its devices answered (read, failed twice, or never
-  sendable) of the devices it covers (`Sweep.Progress.words`, "Activation Lock: 5 of 6 devices"). `sweepEstimate` is made
-  once the lists are read and before the first sweep's first read: every chosen sweep's devices at the client's rate then
-  (`Sweep.Estimate`: devices times 60 over the reads a minute). Before a run, `estimate(_:devices:appleManaged:)` makes one
-  from the counts a screen has. Its words say it is an estimate and what it leaves out (Apple's latency, a 429's wait, the
-  second asking). After the sweeps, the rate the limiter learned is recorded in the org's profile
-  (`OrgsModel.record(readsPerMinute:for:)`, as a screen's load records it), so the next estimate starts from it.
+    (one held at the gate never reaches Apple), the retry pass stops (`aCancelDuringTheRetryPassStopsIt`), and the run
+    writes nothing (the collector's rule). A switch clears `reading`, `sweepProgress` and `sweepEstimate` at once. Reads only
+    through the client the run captured. An answer that comes back after the stop is never taken (`going()` includes
+    `Task.isCancelled`). A cancelled list read now throws (`AppleClient.all`, `blueprintWithMembers`, and the sweep's own
+    page loop), where its stream used to end quietly with what it had: "no records". One overlap is left: AppleCare's pages
+    are walked in the client's own task, which a stop cancels when the sweep stops reading it, so a page already asked for may
+    still be answered after the stop; its answer isn't taken.
+- **Progress and the estimate**: `sweepProgress` is the sweep running and its devices settled (read, failed twice, or never
+  sendable) of the devices it covers, from before the first answer (0 of N) to the last; a device whose first read failed
+  isn't settled until its second answers, so it never says more than it knows (`Sweep.Progress.words`, "Activation Lock: 5
+  of 6 devices"). `sweepEstimate` is made once the lists are read and before the first sweep's first read: every chosen
+  sweep's devices at the client's rate then (`Sweep.Estimate`: devices times 60 over the reads a minute, the rate held to
+  1...600 and said as used; "Under a minute" for less). Before a run, `estimate(_:devices:appleManaged:)` makes one from the
+  counts a screen has, and none if an org switch came during its rate read. Its words say it is an estimate and what it
+  leaves out (Apple's latency, a 429's wait, the second asking). After the sweeps, the rate the limiter learned is recorded in
+  the org's profile (`OrgsModel.record(readsPerMinute:for:)`, as a screen's load records it), so the next estimate starts
+  from it.
 - **What is stored** (`SnapshotPolicy`, the operator's answers): `applecare` is every record, with `serialNumber` set to the
-  serial it was read for, under Apple's id, or `serial:description` when Apple's id is empty (abapit's
-  `fetch_applecare_bulk`; a description that isn't a string reads as empty there); `activation_lock` is one item per device,
-  keyed by serial (`activation_lock_view`), `isLocked` and `lockType`; `mdm_details` is keyed by the `mdmDevices` id (so it
-  joins `mdm_enrolled`), the posture and `deviceName`, never an IMEI, MEID or MAC address. Details that name another serial
-  than the device's are never kept as its own (`another serial`, the Apple MDM screen's rule).
+  serial it was read for, under Apple's id, or, when Apple's id is empty, `serial:description` as abapit's
+  `fetch_applecare_bulk` wrote it with Python's f-string (`serial:None` for a null description, `serial:` for a missing one),
+  so an imported abapit history's keys continue; `activation_lock` is one item per device, keyed by serial
+  (`activation_lock_view`), `isLocked` and `lockType`; `mdm_details` is keyed by the `mdmDevices` id (so it joins
+  `mdm_enrolled`), the posture and `deviceName`, never an IMEI, MEID or MAC address. An answer for another device than the
+  one asked for is never kept as its own (`another serial`): details naming another serial (the Apple MDM screen's rule), and
+  an Activation Lock status under another id (Apple's example keys it by the serial; review L5).
+- **A coverage id more than one device carries** (review M2; **the coordinating session's decision, 2026-11-21, for the
+  operator to overrule, pending the live check "do coverage ids repeat across devices"**): Apple's example keys AppleCare+ by
+  its agreement number, which may cover several devices, and the store keeps one item per id (`INSERT OR REPLACE`), so one
+  device's record would replace another's. Every record carrying an id that more than one serial's list carries is kept as
+  `serial:id`, nothing lost, and the note counts them ("6 records shared an id with another device's: kept as serial:id");
+  not a part read. An id one device alone carries keeps Apple's, as abapit kept it, so an id changes only when its sharing
+  really does (`Sweep.keyedBySerialWhereShared`). An id one device's own list holds twice is still lost to the store: said,
+  and a part read (`duplicate id`).
 - **Not read is never silent** (invariant 8): a device whose read failed twice, whose id can't go in a path (never sent),
-  left when the sweep stopped, or beyond a device list the page cap cut, makes the sweep a part read: its items with an
-  error, so `latest` never takes it for a good copy (it answers `.failed` with the last good one). The error is the stop's
-  code, else the first failure's, else `unsendable id`, `duplicate id` or `page cap`; the note counts the devices and why
-  ("1 of 6 devices not read: 1 failed twice (HTTP 500)", "12 of 12 devices not read: 12 left when the sweep stopped at HTTP
-  403", "covers only the devices listed: devices stopped at the page limit"). A sweep that read no device and failed is its
-  error alone; one over a list that failed is "not read: devices failed" (or `mdm_enrolled`) and asks nothing.
+  left when the sweep stopped, beyond a device list the page cap cut, or whose own coverage list the page cap cut (its
+  records read so far are kept), makes the sweep a part read: its items with an error, so `latest` never takes it for a
+  good copy (it answers `.failed` with the last good one). The error is the stop's code, else the first failure's, else
+  `unsendable id`, `duplicate id`, `page cap` or `not asked`; the note counts the devices and why ("1 of 6 devices not read: 1
+  failed twice (HTTP 500)", "12 of 12 devices not read: 12 left when the sweep stopped at HTTP 403", "covers only the devices
+  listed: devices stopped at the page limit", "the page limit cut 1 device's records: the rest not read"). A sweep that read
+  no device and failed is its error alone; one over a list that failed is "not read: devices failed" (or `mdm_enrolled`) and
+  asks nothing. A transport failure the client throws as it came (`HTTPFailure`) is `transport`, never `failed`
+  (`AppleAPIError.of`, so the screen models need no HTTPCore).
 - **How to read a stored sweep**: in a whole one (no error), a device with no item was read and had nothing on record (no
-  AppleCare record; Apple's "no details"). In a part read, a device with an item was read and one without is not read (it may
-  have had nothing on record: the snapshot can't say which), never "none".
+  AppleCare record; Apple's 404 for the details, read as "no details" and counted in the note). In a part read, a device with
+  an item was read and one without is not read (it may have had nothing on record: the snapshot can't say which), never
+  "none".
 - **Apple's 404**, decided per read:
   - AppleCare: **not read**. The read is a list (`AppleCareCoverageResponse`), and "nothing on record" is an empty list: the
     acceptance passes of 2026-11-19 and 2026-11-20 read one device's coverage as `ok, 0 items`. A 404 is the device Apple
@@ -291,23 +316,27 @@ events in phase 2a; their notes are below.
   - Activation Lock: **not read**, never "unlocked": Apple documents a status for a device. The stub's 404 for a device
     with no status set is the stub's assumption.
   - Apple MDM details: **"no details"**, read with nothing kept (the Apple MDM screen's "No details", and the
-    Needs-attention rules' `.read(nil)`); the stub's 404 for a device with none is an assumption to check live.
-- **Two records with one id**: the store keeps the last (`INSERT OR REPLACE`), so a device's record could go unseen; the
-  sweep says so ("1 record had the id of another read: the history keeps one of each") and is a part read, `duplicate id`.
-  Apple's example ids (the serial for the limited warranty, the agreement number for AppleCare+, `abe-` and the serial for
-  AppleCare for Business) aren't expected to repeat; whether they do is a live check.
+    Needs-attention rules' `.read(nil)`, which keep their meaning), and said: the note counts them, "2 answered 404, read as
+    no details on record (Apple's meaning unconfirmed)" (review M3). The stub's 404 for a device with none is an assumption
+    to check live.
 - **Decisions, and who made them.** The operator: what is kept ("Minimal", and "All three": the details keep `deviceName`).
   The coordinating session's design, from a planner's split: the three sweeps in `Sweep.swift`, opt-in per run; four in
   flight at the limiter's rate; one sequential retry pass; at most twice the devices; a 429 slowing the limiter, honouring
   `Retry-After`; cancellable; progress and an estimate; a device not read making the sweep a part read; an unsafe serial never
-  sent; the org captured; the details' 404 as "no details". The executor's, for review: AppleCare's and Activation Lock's 404
-  as not read; a 403 stopping that sweep; `Retry-After` holding the limiter's lane (an HTTPCore change); the sweeps one after
-  another, so four in flight in all; the retry pass in the list's order; a repeated id asked once; `duplicate id` as a part
-  read; `another serial`; the learned rate recorded after the sweeps; the estimate's words and arithmetic.
+  sent; the org captured; the details' 404 as "no details". The coordinating session, from the review of PR #37: one halving
+  per throttle event and a hold never shortened, capped at a minute in the limiter (M1, L1, L2); a shared coverage id kept as
+  `serial:id`, not a part read (M2); the details' 404 counted in the note (M3); a coverage list cut at the page cap a part
+  read (L3); cancelled list reads throwing (L4); an Activation Lock status for another device not read (L5); a switch
+  clearing the run's words (L6); an estimate across a switch none (L7); a transport breaker (L8); `serial:None` (nit). The
+  executor's, for review: AppleCare's and Activation Lock's 404 as not read; a 403 stopping that sweep; `Retry-After` holding
+  the limiter's lane (an HTTPCore change); the sweeps one after another; the retry pass in the list's order; a repeated id
+  asked once; `duplicate id` for an id one device's list holds twice; `another serial`; the learned rate recorded after the
+  sweeps; the breaker's 5 and its stopping the sweep, not the run; the estimate's words and arithmetic.
 - **Live checks** (for the operator, read-only, through `live-verify`): how long a sweep takes per 100 devices at the rate
   Apple allows; whether Apple sends 429 and `Retry-After` during a sweep; whether a device with only the standard limited
-  warranty has a coverage record (the out-of-warranty report's caution); whether coverage ids repeat across devices; and what
-  `mdmDevices/{id}/details` answers for a device with no details.
+  warranty has a coverage record (the out-of-warranty report's caution); whether coverage ids repeat across devices (the
+  `serial:id` rule rests on it); what `mdmDevices/{id}/details` answers for a device with no details (the meaning of its
+  404); and whether an Activation Lock status's id is always the device's serial.
 
 ### Needs attention: the store and the local settings (PR #33)
 
@@ -634,10 +663,16 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
 - The sweeps: `SweepTests` (each sweep kept as the policy says, the serial on every AppleCare record; opt-in per run; the
   details' identifiers in no byte of the folder's files, the device name kept; four in flight and never a fifth; a failed
   read asked once more and read; every device asked at most twice; a 429 slowing the limiter, the device still read and the
-  learned rate recorded; a cancel and an org switch stopping further reads and writing nothing; a part read never a good
-  copy, a failure never "no coverage" or "unlocked"; the three 404s; an unsendable serial never sent; a cut list; a failed
-  list; a 403 stopping that sweep only; a sign-in failure stopping the later sweeps; details for another serial; a repeated
-  coverage id; School; the progress and both estimates) and `HTTPCoreTests` (`Retry-After` holding the lane).
+  learned rate recorded; four reads refused at once halving the saved rate once; a cancel and an org switch stopping further
+  reads and writing nothing; a cancel during the retry pass; a part read never a good copy, a failure never "no coverage" or
+  "unlocked"; the three 404s, and every details 404 counted; an unsendable serial never sent; a cut device list and a device's
+  cut coverage list; a failed list; a 403 stopping that sweep only; the transport breaker; a sign-in failure stopping the
+  later sweeps; details and a lock status for another serial; a coverage id six devices share; an id twice in one device's
+  list; abapit's fallback id; School; the progress before the first answer and through a failure; a switch clearing the
+  run's words; the estimates, one across a switch, and the estimate's held rate) and `HTTPCoreTests` (`Retry-After` holding
+  the lane; one halving per throttle event; a hold extended, never shortened, by a later 429 or a token exchange's; capped at
+  a minute; every `Retry-After` bounded; the write lane free; a cancelled waiter leaving at once); `AppleClientTests` (a
+  cancelled list read throws; a transport failure classified for the screen models).
 - The store: `SnapshotStoreTests` (what reads back; the last duplicate; `latest` answering from the newest attempt, none
   and failed included; the bounded list; one org at a time; an org with no id; prune by id with its items, counting the
   org's own only; removing an org's history; `orgIDs`; a NUL kept; a secret-looking attribute left out and counted,
