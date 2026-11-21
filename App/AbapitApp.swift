@@ -42,7 +42,7 @@ struct AbapitApp: App {
         }
 
         Settings {
-            SettingsView(orgs: services.orgs, isDemo: services.isDemo)
+            SettingsView(orgs: services.orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)
                 .frame(minWidth: 760, minHeight: 480)
         }
     }
@@ -185,7 +185,7 @@ struct ContentView: View {
             case .activity: ActivityView(model: services.activity)
             case .mosyle: MosyleView(model: services.screens.mosyle)
             case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
-            case .settings: SettingsView(orgs: orgs, isDemo: services.isDemo)
+            case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)
             case .reports:
                 ContentUnavailableView {
                     Label(section.title, systemImage: section.symbol)

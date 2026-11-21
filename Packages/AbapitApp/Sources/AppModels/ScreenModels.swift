@@ -21,6 +21,8 @@ public final class ScreenModels {
     /// Takes the active Apple org's snapshots into `orgs.history`. No screen starts one yet (Phase 3's Changes screen and
     /// "Snapshot now" come later).
     public let snapshots: SnapshotCollector
+    /// Imports abapit's history into the snapshot store and exports a copy of it (Settings, "History").
+    public let historyTransfer: HistoryTransfer
 
     public init(orgs: OrgsModel) {
         let devices = DevicesModel(orgs: orgs), people = PeopleModel(orgs: orgs)
@@ -36,6 +38,7 @@ public final class ScreenModels {
         dashboard = DashboardModel(orgs: orgs, devices: devices)
         reconciliation = ReconciliationModel(orgs: orgs, devices: devices, mosyle: mosyle)
         snapshots = SnapshotCollector(orgs: orgs)
+        historyTransfer = HistoryTransfer(orgs: orgs)
     }
 
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices

@@ -11,6 +11,7 @@ import Vault
 /// Secrets go to the Keychain; `orgs.json` keeps the rest (plan §3.7).
 struct SettingsView: View {
     let orgs: OrgsModel
+    let transfer: HistoryTransfer
     let isDemo: Bool
     @State private var selected: String?
     @State private var editing: OrgEditor.Mode?
@@ -120,6 +121,7 @@ struct SettingsView: View {
                     ContentUnavailableView("No organization selected", systemImage: "building.2",
                                            description: Text("Add an Apple Business or Apple School Manager API account."))
                 }
+                historySection
             }
             .formStyle(.grouped)
             .frame(minWidth: 380)
@@ -163,6 +165,60 @@ struct SettingsView: View {
                  ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it."
                  : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
         }
+    }
+
+    /// The snapshot history's two file jobs: import abapit's `history.sqlite` (opened read-only, never changed) and export a
+    /// copy of this app's history for `sqlite3` or Datasette. Only files the operator picks in a panel.
+    private var historySection: some View {
+        Section("History") {
+            Text("Import abapit's history from the retired Python tool, or save a copy of this app's history to open in sqlite3 or Datasette.")
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Import abapit history…") { chooseHistoryToImport() }
+                    .disabled(transfer.isWorking)
+                    .accessibilityIdentifier("settings.history.import")
+                    .help("Choose abapit's history.sqlite. It is opened read-only and never changed; snapshots are matched to the organizations of this client by client ID.")
+                Button("Export a copy…") { chooseWhereToExport() }
+                    .disabled(transfer.isWorking)
+                    .accessibilityIdentifier("settings.history.export")
+                Spacer()
+                if transfer.isWorking { ProgressView().controlSize(.small) }
+            }
+            if let summary = transfer.summary {
+                Label(summary, systemImage: "checkmark.circle").textSelection(.enabled)
+                    .accessibilityIdentifier("settings.history.summary")
+            }
+            if let problem = transfer.problem {
+                Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled)
+                    .accessibilityIdentifier("settings.history.problem")
+            }
+        }
+    }
+
+    private func chooseHistoryToImport() {
+        let panel = NSOpenPanel()
+        panel.title = "Import abapit history"
+        panel.message = "Choose abapit's history.sqlite, usually in ~/.local/share/abapit. It is opened read-only and never changed."
+        panel.prompt = "Import"
+        panel.showsHiddenFiles = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "sqlite") ?? .data]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await transfer.importHistory(from: url) }
+    }
+
+    private func chooseWhereToExport() {
+        let panel = NSSavePanel()
+        panel.title = "Export a copy of the snapshot history"
+        panel.message = HistoryTransfer.exportWords
+        panel.prompt = "Save Copy"
+        panel.nameFieldStringValue = "history.sqlite"
+        panel.allowedContentTypes = [UTType(filenameExtension: "sqlite") ?? .data]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await transfer.exportCopy(to: url) }
     }
 
     /// A Mosyle Business org: its name, Test (a login and one page of Macs), its pair, Edit and Remove. Its credentials are
