@@ -87,8 +87,9 @@ struct NeedsAttentionTests {
         #expect(result.words.count == 1 && result.words[0].contains("skipped") && !result.words[0].contains("found"), sourceLocation: sourceLocation)
     }
 
-    /// A partial rule shows what it found in what was read, says how much wasn't read, marks every finding partial, and hands
-    /// the store nothing (the operator, 2026-11-20: "Show what it found, marked partial").
+    /// A partial rule shows what it found, says on its own line why it is partial (how much wasn't read, or which devices
+    /// couldn't be matched), marks every finding partial, and hands the store nothing (the operator, 2026-11-20: "Show what it
+    /// found, marked partial").
     static func expectPartial(_ result: NeedsAttention.RuleResult, containing text: String, found: [String],
                               sourceLocation: SourceLocation = #_sourceLocation) {
         guard case .partial(let why) = result.verdict else {
@@ -99,8 +100,8 @@ struct NeedsAttentionTests {
         #expect(result.findings.map(\.subject) == found, sourceLocation: sourceLocation)
         #expect(result.findings.allSatisfy(\.isPartial) && !result.isJudged, sourceLocation: sourceLocation)
         #expect(result.subjectsToRecord == nil, sourceLocation: sourceLocation)
-        #expect(result.words.first?.contains("read in part") == true && result.words.contains { $0.contains("isn't kept for later") },
-                sourceLocation: sourceLocation)
+        #expect(result.words.first?.hasSuffix("marked partial.") == true && result.words.dropFirst().first == "\(why)."
+                && result.words.contains { $0.contains("isn't kept for later") }, sourceLocation: sourceLocation)
     }
 
     // MARK: every rule
@@ -227,10 +228,13 @@ struct NeedsAttentionTests {
         input.appleMDM = .notRead("Apple answered 500")
         Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "Apple MDM's device list wasn't read (Apple answered 500)")
 
-        // An enrolled device with no serial could be the assigned one: never called missing.
+        // An enrolled device with no serial could be the assigned one: what no serial matches is shown, marked partial.
         input = Self.appleMDMInput()
         input.appleMDM.items.append(Self.mdm("m2", serial: nil))
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "came with no serial number")
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM),
+                           containing: "1 of Apple MDM's devices came with no serial number, so each device found here could be one of them", found: ["S2"])
+        #expect(Self.run(input).result(.missingFromAppleMDM).findings.first?.reason
+                == "Assigned in Apple to Service svc-apple; no Apple MDM device with a serial number matches it.")
     }
 
     static func mosyleInput() -> Input {
@@ -285,13 +289,15 @@ struct NeedsAttentionTests {
         input.devices = Self.whole([Fleet.device("S1")])
         input.appleMDM = Self.whole([Self.mdm("m1", serial: "S1"), Self.mdm("m9", serial: "S9"), Self.mdm("m0", serial: nil)])
         let result = Self.run(input).result(.appleMDMNotInApple)
-        #expect(result.findings.map(\.subject) == ["S9"])
-        #expect(result.notes == ["1 of Apple MDM's devices came with no serial number: not compared with Apple's device list."])
+        // A device with no serial is flagged under its Apple MDM id (the operator: "Flag them all").
+        #expect(result.findings.map(\.subject) == ["S9", "m0"] && result.notes.isEmpty)
+        #expect(result.findings.last?.reason == "Enrolled in Apple MDM with no serial number (listed by its Apple MDM id): can't be matched with Apple's device list.")
+        #expect(result.subjectsToRecord == ["S9", "m0"])
 
         // Apple MDM's list read in part: partial. Apple's list (the one searched) read in part: skipped, and says which.
         var part = input
         part.appleMDM.read = .partly("showing 3 of at least 4")
-        Self.expectPartial(Self.run(part).result(.appleMDMNotInApple), containing: "Apple MDM's device list was read in part", found: ["S9"])
+        Self.expectPartial(Self.run(part).result(.appleMDMNotInApple), containing: "Apple MDM's device list was read in part", found: ["S9", "m0"])
         input.devices.read = .partly("showing 1 of at least 2")
         Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple),
                            containing: "Apple's device list was read in part (showing 1 of at least 2), so a device can't be called absent from it")
@@ -698,7 +704,7 @@ struct NeedsAttentionTests {
     @Test func everyServiceWithoutATypeSkipsMissingFromAppleMDM() {
         var input = Self.appleMDMInput()
         input.services = Self.whole([Self.service("svc-a", type: nil), Self.service("svc-b", type: nil)])
-        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "No service came with a type Apple sent as text (2 services)")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "No service came with a type this version knows (2 services)")
     }
 
     /// Every Activation Lock status read is unclear or a type this version can't place: nothing judged, so skipped.
@@ -749,28 +755,103 @@ struct NeedsAttentionTests {
         Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "None of Mosyle's 2 devices came with a serial number")
     }
 
-    /// One Mosyle device listed by its UDID could be the assigned one: "missing from Mosyle" is skipped, as the Apple MDM half
-    /// is for a device with no serial; "in Mosyle, not in Apple" notes it and compares the rest.
+    /// One Mosyle device listed by its UDID could be the assigned one: "missing from Mosyle" shows what no serial matches,
+    /// marked partial, as the Apple MDM half does; "in Mosyle, not in Apple" flags it under its UDID (the operator: "Flag them all").
     @Test func aMosyleDeviceListedByUDIDCouldBeTheAssignedOne() {
         var input = Self.mosyleInput()
         input.devices = Self.whole(["S1", "S2", "S3"].map { Fleet.device($0) })
         input.mosyle = .devices(Self.whole([Self.mosyle("S1"), Self.mosyle("S3"), Self.mosyle("S9"), Self.mosyleWithoutSerial("UDID-2")]))
-        Self.expectSkipped(Self.run(input).result(.missingFromMosyle),
-                           containing: "1 of Mosyle's devices came with no serial number (listed by UDID or by nothing), so a device assigned to Service svc-mosyle can't be called missing from Mosyle: it could be one of them")
+        let missing = Self.run(input).result(.missingFromMosyle)
+        Self.expectPartial(missing, containing: "1 of Mosyle's devices came with no serial number (listed by UDID or by nothing), so each device found here could be one of them",
+                           found: ["S2"])
+        if case .partial(let why) = missing.verdict { #expect(!why.contains("at least") && !why.contains("read in part")) }
+        #expect(missing.findings.first?.reason == "Assigned in Apple to Service svc-mosyle, your Mosyle org's service; no Mosyle device with a serial number matches it.")
         let notInApple = Self.run(input).result(.mosyleNotInApple)
-        #expect(notInApple.isJudged && notInApple.findings.map(\.subject) == ["S9"])
-        #expect(notInApple.notes == ["1 of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."])
+        #expect(notInApple.isJudged && notInApple.findings.map(\.subject) == ["S9", "UDID-2"] && notInApple.notes.isEmpty)
+        #expect(notInApple.findings.last?.reason == "In Mosyle with no serial number (listed by its UDID): can't be matched with Apple's device list.")
+        #expect(notInApple.subjectsToRecord == ["S9", "UDID-2"])
     }
 
-    /// A Mosyle device with no serial and no UDID has an empty id: it is noted, never dropped silently.
-    @Test func aMosyleDeviceWithAnEmptyIdIsNoted() {
+    /// A Mosyle device with no serial and no UDID has an empty id, and one whose UDID isn't an identifier can't be named
+    /// either: each is counted in a note, never a finding and never dropped silently. With every assigned serial matched,
+    /// "missing from Mosyle" is judged: nothing is missing, whatever the device with no serial is.
+    @Test func aMosyleDeviceWithNoNameableIdIsNoted() {
         var input = Self.mosyleInput()
         input.devices = Self.whole(["S1", "S2", "S3"].map { Fleet.device($0) })
-        input.mosyle = .devices(Self.whole([Self.mosyle("S1"), Self.mosyle("S2"), Self.mosyle("S3"), Self.mosyleWithoutSerial("")]))
+        input.mosyle = .devices(Self.whole([Self.mosyle("S1"), Self.mosyle("S2"), Self.mosyle("S3"), Self.mosyleWithoutSerial(""),
+                                            Self.mosyleWithoutSerial("bad udid")]))
         let notInApple = Self.run(input).result(.mosyleNotInApple)
         #expect(notInApple.isJudged && notInApple.findings.isEmpty)
-        #expect(notInApple.notes == ["1 of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."])
-        Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "1 of Mosyle's devices came with no serial number")
+        #expect(notInApple.notes == ["2 of Mosyle's devices came with no serial number and no UDID this app can name: not listed here."])
+        let missing = Self.run(input).result(.missingFromMosyle)
+        #expect(missing.isJudged && missing.findings.isEmpty && missing.subjectsToRecord == [])
+        var mdm = Self.base()
+        mdm.devices = Self.whole([Fleet.device("S1")])
+        mdm.appleMDM = Self.whole([Self.mdm("m1", serial: "S1"), Self.mdm("bad id", serial: nil), Self.mdm("m2", serial: nil)])
+        let appleMDM = Self.run(mdm).result(.appleMDMNotInApple)
+        #expect(appleMDM.findings.map(\.subject) == ["m2"])
+        #expect(appleMDM.notes == ["1 of Apple MDM's devices came with no serial number and no id this app can name: not listed here."])
+    }
+
+    /// The reviewer's probe: 300 devices with serials, one listed without (User Enrollment reports none), and 3 assigned
+    /// devices really missing. The rule is never switched off by the one: the 3 are shown, marked partial, never recorded,
+    /// and it says at least 2 of them are really missing. Both halves alike.
+    @Test func oneDeviceWithNoSerialMakesMissingFromPartialNotSkipped() {
+        let serials = (1...300).map { String(format: "SER%04d", $0) }
+        var input = Self.mosyleInput()
+        input.serviceDevices["svc-mosyle"] = Self.whole(serials + ["MISS1", "MISS2", "MISS3"])
+        input.mosyle = .devices(Self.whole(serials.map { Self.mosyle($0) } + [Self.mosyleWithoutSerial("ENROLLMENT-1")]))
+        Self.expectPartial(Self.run(input).result(.missingFromMosyle),
+                           containing: "1 of Mosyle's devices came with no serial number (listed by UDID or by nothing), so each device found here could be one of them; at least 2 of the 3 found are really missing",
+                           found: ["MISS1", "MISS2", "MISS3"])
+        // As many devices with no serial as found: none is surely missing, and nothing says so.
+        input.mosyle = .devices(Self.whole(serials.map { Self.mosyle($0) } + (1...3).map { Self.mosyleWithoutSerial("E\($0)") }))
+        let even = Self.run(input).result(.missingFromMosyle)
+        if case .partial(let why) = even.verdict { #expect(why.hasPrefix("3 of Mosyle's devices") && !why.contains("at least")) } else { Issue.record("\(even.verdict)") }
+
+        var apple = Self.appleMDMInput()
+        apple.serviceDevices["svc-apple"] = Self.whole(serials + ["MISS1", "MISS2", "MISS3"])
+        apple.appleMDM = Self.whole(serials.enumerated().map { Self.mdm("m\($0.offset)", serial: $0.element) } + [Self.mdm("byod", serial: nil)])
+        Self.expectPartial(Self.run(apple).result(.missingFromAppleMDM),
+                           containing: "1 of Apple MDM's devices came with no serial number, so each device found here could be one of them; at least 2 of the 3 found are really missing",
+                           found: ["MISS1", "MISS2", "MISS3"])
+        // Nothing found: every assigned serial is matched, so nothing is missing and the run is judged and recorded.
+        apple.serviceDevices["svc-apple"] = Self.whole(serials)
+        #expect(Self.run(apple).result(.missingFromAppleMDM).subjectsToRecord == [])
+    }
+
+    /// A service of a type this version doesn't know could be an Apple MDM service (invariant 10): said, and the rule is
+    /// partial; with no other service, nothing can be compared and the rule is skipped.
+    @Test func aServiceOfAnUnknownTypeIsSaid() {
+        var input = Self.appleMDMInput()
+        input.services.items.append(Self.service("svc-new", type: "APPLE_MDM_NEXT"))
+        Self.expectPartial(Self.run(input).result(.missingFromAppleMDM),
+                           containing: "1 of 4 services came with a type this version doesn't know (APPLE_MDM_NEXT), so their devices weren't looked for", found: ["S2"])
+        input.services = Self.whole([Self.service("svc-new", type: "APPLE_MDM_NEXT")])
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "No service came with a type this version knows (1 service)")
+    }
+
+    /// One Apple MDM device, read, with no stamp: said in the singular.
+    @Test func oneAppleMDMDeviceWithNoStampIsSaidInTheSingular() {
+        var input = Self.base()
+        input.appleMDM = Self.whole([Self.mdm("m1", serial: "A")])
+        input.appleMDMDetails = .init(["m1": .read(nil)])
+        Self.expectSkipped(Self.run(input).result(.appleMDMCheckIn), containing: "The 1 Apple MDM device read has no last check-in in its details")
+    }
+
+    /// A coverage record under a key no listed device has (a device gone from the list) is beside the fleet, as
+    /// `CoverageReport` keeps it: an empty list read whole judges nothing missing, notes the unreadable end, and never says
+    /// "every device's coverage ends on a date this app can't read".
+    @Test func anUnreadableEndOfADeviceGoneFromTheListIsNotTheFleet() {
+        var input = Self.base()
+        input.devices = Self.whole([])
+        input.coverage = .init(["GONE": .read([Fleet.coverage("ACTIVE", end: "soon")])])
+        let result = Self.run(input).result(.appleCareExpiring)
+        #expect(result.isJudged && result.findings.isEmpty)
+        #expect(result.notes == ["1 ACTIVE coverage has an end date this app can't read: covered, but not judged."])
+        // A gone device whose coverage ends soon is found, as the report counts it toward `expiring`.
+        input.coverage = .init(["GONE": .read([Fleet.coverage("ACTIVE", end: Fleet.stamp(Self.day))])])
+        #expect(Self.run(input).result(.appleCareExpiring).findings.map(\.subject) == ["GONE"])
     }
 
     // MARK: subjects, age

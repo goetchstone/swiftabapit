@@ -181,9 +181,10 @@ public struct NeedsAttention: Sendable {
     public enum Verdict: Sendable, Equatable {
         /// Over a complete read: the findings are every one there is, and the store is told.
         case judged
-        /// Over what was read, which wasn't all of it (the operator, 2026-11-20: "Show what it found, marked partial"): the
-        /// findings are real, the text says how much wasn't read, and nothing is recorded, so dismissals and "first seen" stay
-        /// accurate. Only a per-device rule, or a comparison whose searched side was read whole, is ever partial.
+        /// Over what was read, which wasn't all of it, or over a list some of whose devices can't be matched because they came
+        /// with no serial number (the operator, 2026-11-20: "Show what it found, marked partial"): the findings are shown, the
+        /// text says what is uncertain, and nothing is recorded, so dismissals and "first seen" stay accurate. Only a per-device
+        /// rule, or a comparison whose searched side was read whole, is ever partial.
         case partial(String)
         /// Nothing could be judged: the text says why.
         case skipped(String)
@@ -226,15 +227,16 @@ public struct NeedsAttention: Sendable {
         /// Judged over a complete read (not partial, not skipped).
         public var isJudged: Bool { verdict == .judged }
 
-        /// The rule's line, then what it couldn't judge. A skipped rule says only why: never a count. A partial one says it was
-        /// read in part, how much wasn't, and that what it found isn't kept.
+        /// The rule's line, then what it couldn't judge. A skipped rule says only why: never a count. A partial one is marked
+        /// partial, then says why in its own line (how much wasn't read, or which devices couldn't be matched: never "read in
+        /// part" where all was read), and that what it found isn't kept.
         public var words: [String] {
             switch verdict {
             case .skipped(let why): return ["\(title): skipped. \(why)."]
             case .partial(let why):
-                let found = findings.isEmpty ? "none found in what was read." : "\(findings.count) found in what was read."
-                return ["\(title): read in part, \(found)", "\(why).",
-                        "What was read in part isn't kept for later (dismiss, snooze, first seen) until a complete read."] + notes
+                let found = findings.isEmpty ? "none found" : "\(findings.count) found"
+                return ["\(title): \(found), marked partial.", "\(why).",
+                        "What a partial run found isn't kept for later (dismiss, snooze, first seen) until the rule can be judged whole."] + notes
             case .judged:
                 var lines = ["\(title): " + (findings.isEmpty ? "none found." : "\(findings.count) found.")]
                 lines += notes
@@ -406,6 +408,15 @@ private struct Judge {
 
     // 1. Assigned in Apple to an MDM service, and missing from that MDM. The MDM's list is the one searched.
 
+    /// The words of a "missing from" run whose searched list holds devices with no serial number (`unnamed` of them): each
+    /// device found could be one of them, so the run is partial, and when more were found than there are such devices, at
+    /// least the difference are really missing.
+    static func unmatched(_ unnamed: Int, _ found: Int, _ whose: String, _ how: String) -> String {
+        var words = "\(unnamed) of \(whose) devices came with no serial number\(how), so each device found here could be one of them"
+        if found > unnamed { words += "; at least \(found - unnamed) of the \(found) found are really missing" }
+        return words
+    }
+
     func missingFromAppleMDM() -> Result {
         let services = input.services
         if let why = unread("The device management services list", services) { return skipped(why) }
@@ -413,12 +424,20 @@ private struct Judge {
             return skipped("Apple didn't send the services' type (read with default fields), so Apple MDM's service can't be told apart")
         }
         var partial = [part("The device management services list", services)].compactMap { $0 }
+        // A service with no type, or one this version doesn't know (invariant 10), could be an Apple MDM one: its devices
+        // aren't looked for, and that is said.
         let untyped = services.items.filter { $0.type == nil }
-        if !untyped.isEmpty, untyped.count == services.items.count {
-            return skipped("No service came with a type Apple sent as text (\(Self.count(services.items.count, "service", "services"))), so Apple MDM's service can't be told apart")
+        let unknownTypes = services.items.filter { if case .unknown = $0.type { true } else { false } }
+        if !untyped.isEmpty || !unknownTypes.isEmpty, untyped.count + unknownTypes.count == services.items.count {
+            return skipped("No service came with a type this version knows (\(Self.count(services.items.count, "service", "services"))), so Apple MDM's service can't be told apart")
         }
         if !untyped.isEmpty {
             partial.append("\(untyped.count) of \(Self.count(services.items.count, "service", "services")) came with no type Apple sent as text, so their devices weren't looked for")
+        }
+        if !unknownTypes.isEmpty {
+            var raw: [String] = []
+            for type in unknownTypes.compactMap({ $0.type?.rawValue }) where !raw.contains(where: { $0.utf8.elementsEqual(type.utf8) }) { raw.append(type) }
+            partial.append("\(unknownTypes.count) of \(Self.count(services.items.count, "service", "services")) came with a type this version doesn't know (\(raw.joined(separator: ", "))), so their devices weren't looked for")
         }
         let apple = services.items.filter { $0.type == .known(.appleMDM) }
         // No Apple MDM service among those read: nothing read can be assigned to it.
@@ -440,14 +459,19 @@ private struct Judge {
         let mdm = input.appleMDM
         if let why = searched("Apple MDM's device list", mdm) { return skipped(why) }
         if let why = Self.appleMDMSerials(mdm) { return skipped(why) }
-        let unnamed = mdm.items.filter { !Self.hasSerial($0) }
-        if !unnamed.isEmpty {
-            return skipped("\(unnamed.count) of Apple MDM's devices came with no serial number, so a device assigned to Apple MDM can't be called missing from it: it could be one of them")
+        let named = mdm.items.filter(Self.hasSerial)
+        if named.isEmpty, !mdm.items.isEmpty {
+            return skipped("None of Apple MDM's \(Self.count(mdm.items.count, "device", "devices")) came with a serial number, so a device assigned to Apple MDM can't be matched with any")
         }
         ages.append(mdm.takenAt)
-        let report = Reconciliation(apple: assigned, mosyle: mdm.items.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
+        // Devices with no serial (User Enrollment reports none) could be any assigned one: those no serial matches are shown,
+        // marked partial, never recorded.
+        let unnamed = mdm.items.count - named.count
+        let report = Reconciliation(apple: assigned, mosyle: named.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
+        if unnamed > 0, !report.appleOnly.isEmpty { partial.append(Self.unmatched(unnamed, report.appleOnly.count, "Apple MDM's", "")) }
+        let absent = unnamed > 0 ? "no Apple MDM device with a serial number matches it" : "Apple MDM doesn't list it"
         return judged(report.appleOnly.map { row in
-            (row.serial, "Assigned in Apple to \(serviceOf[Reconciliation.key(row.serial)] ?? "Apple MDM"); Apple MDM doesn't list it.")
+            (row.serial, "Assigned in Apple to \(serviceOf[Reconciliation.key(row.serial)] ?? "Apple MDM"); \(absent).")
         }, takenAt: ages, partial: partial)
     }
 
@@ -464,17 +488,33 @@ private struct Judge {
         if let why = unread("The device list of \(name)", listed) { return skipped(why) }
         if let why = searched("Mosyle's device list", mosyle) { return skipped(why) }
         if let why = Self.mosyleSerials(mosyle) { return skipped(why) }
-        // As the Apple MDM half: a Mosyle device listed by its UDID, or by nothing, could be the assigned one.
-        let unnamed = mosyle.items.filter { !Self.hasSerial(mosyle: $0) }
-        if !unnamed.isEmpty {
-            return skipped("\(unnamed.count) of Mosyle's devices came with no serial number (listed by UDID or by nothing), so a device assigned to \(name) can't be called missing from Mosyle: it could be one of them")
+        let named = mosyle.items.filter { Self.hasSerial(mosyle: $0) }
+        if named.isEmpty, !mosyle.items.isEmpty {
+            return skipped("None of Mosyle's \(Self.count(mosyle.items.count, "device", "devices")) came with a serial number, so a device assigned to \(name) can't be matched with any")
         }
-        let report = Reconciliation(apple: listed.items.map { Resource(type: OrgDevice.resourceType, id: $0) }, mosyle: mosyle.items)
-        return judged(report.appleOnly.map { ($0.serial, "Assigned in Apple to \(name), your Mosyle org's service; Mosyle doesn't list it.") },
-                      takenAt: [listed.takenAt, mosyle.takenAt], partial: [part("The device list of \(name)", listed)].compactMap { $0 })
+        // As the Apple MDM half: a device Mosyle lists by its UDID, or by nothing, could be any assigned one, so those no
+        // serial matches are shown, marked partial, never recorded.
+        var partial = [part("The device list of \(name)", listed)].compactMap { $0 }
+        let unnamed = mosyle.items.count - named.count
+        let report = Reconciliation(apple: listed.items.map { Resource(type: OrgDevice.resourceType, id: $0) }, mosyle: named)
+        if unnamed > 0, !report.appleOnly.isEmpty {
+            partial.append(Self.unmatched(unnamed, report.appleOnly.count, "Mosyle's", " (listed by UDID or by nothing)"))
+        }
+        let absent = unnamed > 0 ? "no Mosyle device with a serial number matches it" : "Mosyle doesn't list it"
+        return judged(report.appleOnly.map { ($0.serial, "Assigned in Apple to \(name), your Mosyle org's service; \(absent).") },
+                      takenAt: [listed.takenAt, mosyle.takenAt], partial: partial)
     }
 
-    // 2. In the MDM, and not in Apple. Apple's device list is the one searched.
+    // 2. In the MDM, and not in Apple. Apple's device list is the one searched. A device the MDM lists with no serial number
+    // (User Enrollment's personal devices report none) can't be matched with Apple's device list, so it is flagged too (the
+    // operator, 2026-11-20, of personal devices: "Flag them all"), under the id the MDM lists it by when that is an
+    // identifier; one with no such id can't be named, and is counted in a note.
+
+    /// The serial-less devices as findings, named by their MDM id where it is an identifier; and how many can't be named.
+    static func serialLess(_ ids: [String], _ reason: String) -> (found: [(subject: String, reason: String)], unnamed: Int) {
+        let nameable = ids.filter { NeedsAttention.isIdentifier($0, limit: NeedsAttention.subjectLimit) }
+        return (nameable.map { ($0, reason) }, ids.count - nameable.count)
+    }
 
     func appleMDMNotInApple() -> Result {
         let mdm = input.appleMDM
@@ -485,12 +525,14 @@ private struct Judge {
         if named.isEmpty, !mdm.items.isEmpty {
             return skipped("None of Apple MDM's \(Self.count(mdm.items.count, "device", "devices")) came with a serial number, so none could be compared with Apple's device list")
         }
-        let notes = named.count == mdm.items.count ? []
-            : ["\(mdm.items.count - named.count) of Apple MDM's devices came with no serial number: not compared with Apple's device list."]
+        let serialLess = Self.serialLess(mdm.items.filter { !Self.hasSerial($0) }.map(\.id),
+                                         "Enrolled in Apple MDM with no serial number (listed by its Apple MDM id): can't be matched with Apple's device list.")
+        let notes = serialLess.unnamed == 0 ? []
+            : ["\(serialLess.unnamed) of Apple MDM's devices came with no serial number and no id this app can name: not listed here."]
         let report = Reconciliation(apple: input.devices.items.map(\.resource),
                                     mosyle: named.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
-        return judged(report.mosyleOnly.map { ($0.serial, "Enrolled in Apple MDM; Apple's device list doesn't have it.") }, notes: notes,
-                      takenAt: [input.devices.takenAt, mdm.takenAt], partial: [part("Apple MDM's device list", mdm)].compactMap { $0 })
+        return judged(report.mosyleOnly.map { ($0.serial, "Enrolled in Apple MDM; Apple's device list doesn't have it.") } + serialLess.found,
+                      notes: notes, takenAt: [input.devices.takenAt, mdm.takenAt], partial: [part("Apple MDM's device list", mdm)].compactMap { $0 })
     }
 
     func mosyleNotInApple() -> Result {
@@ -498,17 +540,17 @@ private struct Judge {
         if let why = unread("Mosyle's device list", mosyle) { return skipped(why) }
         if let why = searched("Apple's device list", input.devices) { return skipped(why) }
         if let why = Self.mosyleSerials(mosyle) { return skipped(why) }
-        // A device Mosyle lists by its UDID, or by nothing, can't be matched with Apple's serials: noted, not compared, as
-        // Apple MDM's devices with no serial are.
         let named = mosyle.items.filter { Self.hasSerial(mosyle: $0) }
         if named.isEmpty, !mosyle.items.isEmpty {
             return skipped("None of Mosyle's \(Self.count(mosyle.items.count, "device", "devices")) came with a serial number, so none could be compared with Apple's device list")
         }
-        let notes = named.count == mosyle.items.count ? []
-            : ["\(mosyle.items.count - named.count) of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."]
+        let serialLess = Self.serialLess(mosyle.items.filter { !Self.hasSerial(mosyle: $0) }.map(\.id),
+                                         "In Mosyle with no serial number (listed by its UDID): can't be matched with Apple's device list.")
+        let notes = serialLess.unnamed == 0 ? []
+            : ["\(serialLess.unnamed) of Mosyle's devices came with no serial number and no UDID this app can name: not listed here."]
         let report = Reconciliation(apple: input.devices.items.map(\.resource), mosyle: named)
-        return judged(report.mosyleOnly.map { ($0.serial, "In Mosyle; Apple's device list doesn't have it.") }, notes: notes,
-                      takenAt: [input.devices.takenAt, mosyle.takenAt], partial: [part("Mosyle's device list", mosyle)].compactMap { $0 })
+        return judged(report.mosyleOnly.map { ($0.serial, "In Mosyle; Apple's device list doesn't have it.") } + serialLess.found,
+                      notes: notes, takenAt: [input.devices.takenAt, mosyle.takenAt], partial: [part("Mosyle's device list", mosyle)].compactMap { $0 })
     }
 
     // 3. AppleCare expiring.
@@ -531,10 +573,12 @@ private struct Judge {
         }
         let sweep = sweepGap("AppleCare coverage", whys: whys, of: devices.items.count, "device", "devices")
         if let sweep, whys.count == devices.items.count { return skipped(sweep) }
-        // A device read whose ACTIVE coverage ends on a date this app can't read, and that has nothing expiring, is unknown.
+        // A listed device read whose ACTIVE coverage ends on a date this app can't read, and that has nothing expiring, is
+        // unknown. Only listed devices count toward "judged nothing": a record under a key no listed device has (a device gone
+        // from the list) is what `CoverageReport` adds to `expiring` and `unreadableEnd` beside the fleet, never the fleet.
         let expiring = Set(report.expiring.map { Array($0.device.utf8) })
-        let unknown = Set(report.unreadableEndDevices.map { Array($0.utf8) }).subtracting(expiring)
         let readDevices = Set(devices.items.map { Array($0.id.utf8) }).subtracting(report.notRead.map { Array($0.id.utf8) })
+        let unknown = Set(report.unreadableEndDevices.map { Array($0.utf8) }).intersection(readDevices).subtracting(expiring)
         if !unknown.isEmpty, readDevices.subtracting(unknown).isEmpty {
             return skipped("Every device's ACTIVE coverage read ends on a date this app can't read (\(Self.count(unknown.count, "device", "devices"))), so none could be judged")
         }
@@ -589,7 +633,9 @@ private struct Judge {
         let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: mdm.items.count, "device", "devices")
         if let sweep, whys.count == mdm.items.count { return skipped(sweep) }
         if stamped.isEmpty, none > 0 {
-            return skipped("None of the \(Self.count(none, "Apple MDM device", "Apple MDM devices")) read has a last check-in in its details (Apple sent none, or no details), so none could be judged")
+            let which = none == 1 ? "The 1 Apple MDM device read has no last check-in in its details"
+                : "None of the \(none) Apple MDM devices read has a last check-in in its details"
+            return skipped("\(which) (Apple sent none, or no details), so none could be judged")
         }
         let report = StaleDevices(stamped, days: thresholds.checkInDays, now: now)
         let notes = none == 0 ? [] : ["\(none) of Apple MDM's devices \(none == 1 ? "has" : "have") no last check-in in \(none == 1 ? "its" : "their") details: unknown, not judged."]
