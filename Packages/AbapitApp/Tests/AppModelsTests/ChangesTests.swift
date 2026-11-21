@@ -384,6 +384,19 @@ struct ChangesTests {
         #expect(underB.isEmpty && underA.count == 1, "the stopped run wrote nothing under either org")
     }
 
+    /// How a run ended is org a's: a switch clears it, with the list and the sweeps chosen.
+    @Test func aSwitchClearsHowTheLastRunEnded() async throws {
+        let world = try await CollectorTests.world()
+        let model = world.screens.changes
+        await model.snapshotNow()
+        model.set(.appleCare, on: true)
+        #expect(model.result == "Snapshot taken." && model.rows.count == 1 && model.sweeps == [.appleCare])
+        world.orgs.select("b")
+        #expect(model.result == nil && model.rows.isEmpty && model.sweeps.isEmpty && model.estimates.isEmpty && model.estimateBasis == nil)
+        await eventually("org b's history read") { if case .loaded = model.state { true } else { false } }
+        #expect(model.result == nil && model.rows.isEmpty)
+    }
+
     /// The list and the comparison are the active org's, and a load that returns after a switch is dropped.
     @Test func anotherOrgsSnapshotsAreNeverShown() async throws {
         let world = try await World.make()
