@@ -465,11 +465,15 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     and the read is `.partly("the AppleCare coverage read was cut: HTTP 500 (<the snapshot's note>)")`, so the first summary line and the
     CSV's `listRead` column say it (with the device list's own cut first when both were cut). One device that keeps failing no longer blanks
     three reports for good.
-  - **A newest attempt that read none of it** (`errors` only) falls back to the last good copy with its own date and its own device list,
-    and the screen says "The newest snapshot that read AppleCare coverage (5 Oct 2026) failed with HTTP 500: <note>, so this is the last good copy,
-    from 21 Sep 2026" (a run-level code reads "didn't read it (not asked after HTTP 401)", never "failed with not asked…"). With none
-    the report judges nothing, names the code and the note, and says that once what they name is dealt with a snapshot can be taken; a
-    per-device failure isn't advised away with "take another snapshot".
+  - **A newest attempt that read none of it** (`errors` only) doesn't hide an older part read: the newest snapshot that read any of the sweep
+    is used (`SnapshotStore.newestRead`: `latest`'s second query without its `NOT EXISTS errors` clause), whole or part (marked part, with its own
+    code and note), over its own device list; the newer attempt's failure is said ("The newest snapshot that read AppleCare coverage (Oct 5, 2026)
+    failed with HTTP 500: <note>, so this is the last good copy, from Sep 21, 2026", or "… so the newest snapshot that read any of it is used, and that
+    read was only in part, from …"; a run-level code reads "didn't read it (not asked after HTTP 401)", never "failed with not asked…"). The report
+    judges nothing only when **no snapshot read any of the sweep**, and says "No snapshot has read AppleCare coverage". A newest part read beats an
+    older whole copy however little it read (the coordinating session's decision; the follow-up that has the collector record which devices a sweep
+    missed will revisit it). A per-device failure isn't advised away with "take another snapshot". If the part read's own device list wasn't read, the
+    source says nothing is judged, not "what it read is used".
   - **Devices without an entry.** In a **whole** AppleCare copy a device with no record was read and has none (`.read([])`, "no coverage
     record (may mean no AppleCare, not expired)"). In a **part** read a device with no record can't be told from one the sweep didn't
     reach, so it is left out of the map and the reports count it as not read; the screen and the CSV's `listRead` say so ("in a part read a
@@ -493,9 +497,11 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     `.partly("showing 1,000 of …: the list stopped at the page limit")`, a failed or refused read that left rows is `.partly`, one that
     left none is `.notRead`. Each service's device count is `DevicesModel.deviceCount`, which holds a count only for a service whose
     device list was read whole; the rest read "not read" (`ServiceHealth`'s fallback is Apple's own `deviceCount` attribute when Apple sent it).
-    The source line says when the list was read and how old it is, from the Devices model's own `.loaded(at:)` ("Read live from Apple on 21 Nov
-    2026 at 09:41 UTC, 3 days old: …"), "Not read from Apple yet" before it was, and the file's name stamps that day, not today's (the list may be days
-    old: `DevicesModel.load()` reads once per generation). No new kind of Apple read is made. Selecting a live report asks `DevicesModel.load()` for its lists (the reads the Devices screen makes);
+    The source line says when the list was read and how old it is, from the Devices model's own `.loaded(at:)` ("Read live from Apple on Nov 21, 2026 at
+    9:41 AM, 3 days old: …"), and the file's name stamps that day (UTC), not today's (the list may be days old: `DevicesModel.load()` reads once per
+    generation). "Not read from Apple yet" is only for idle and loading. A read that stopped with rows held says "Read live from Apple in part on …: the
+    read stopped: <why>" (`DevicesModel.devicesStoppedAt` and `servicesStoppedAt` keep when it stopped, for the age and the stamp); one with no rows says
+    "Not read from Apple: <why>" and the file name says "not read". No new kind of Apple read is made. Selecting a live report asks `DevicesModel.load()` for its lists (the reads the Devices screen makes);
     a sweep report asks Apple for nothing.
 - **Filters** are the catalog's `group` and `days` (service health's quiet days), coverage's `days` (1...1825) and fleet age's `years`
   (1...10): each is a token, resolved by `ReportsModel.build(_:tokens:)`, the one function a later Siri intent calls (plan §5; "build report
@@ -526,11 +532,14 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
   filters, the group; the Devices model clears its own lists) and reads the new org's history if the screen was showing. The history read
   checks its token and the org's generation before it writes (a switch doesn't bump the token, so each guard stands alone) (`afterRead`, stage `load`): a read that returns after a switch is dropped, and one that
   returns after a newer load is dropped (`aReadThatReturnsAfterASwitchOrANewerLoadIsDropped`, with a mutant for each guard in the PR).
+- **Dates** on screen are in the user's time zone and locale, as the Changes screen shows them (`ReportsModel.DateWords`: one cached
+  `Date.FormatStyle` per kind, `date: .abbreviated`, and with a time `.shortened`); the tests inject a zone and a locale. **File-name stamps are a fixed
+  format in UTC** (`20260921T141320Z`, `20261121`), so an evening snapshot in a US zone shows its local day on screen and the next UTC day in the name.
 - **CSV** (`ExportHistory.coverageExpiring`/`refreshCandidates`, `ExportPolicy.{activationLockReport,warrantyReport,migrationReport,serviceHealth}`):
   each report's own columns through the one writer, formula guard and denylist; every cell Apple sent goes through `masking`, and a
   bypass code or other secret never leaves (`theCSVMasksSecretsThroughTheExistingPolicy`, a canary per sweep report). The first column after
   `id` is `listRead`, so a part-read list says so in the file, and a part read with no rows is one sentinel row. The Save panel says what the file
-  holds: the report, the organization, where the data comes from (the snapshot's date and age), which rows (the whole report whatever
+  holds: the report, the organization, where the data comes from (the snapshot's date and age), how much of the list was read (the summary's first line), which rows (the whole report whatever
   group is shown; coverage: the expiring coverages only, with unreadable ends, devices with none and devices not read counted on screen), that a secret-named value
   is withheld, no key or token, and, with several clients, that it is that client's data only. The file name is led by the client's name only when the app shows clients
   (`ScreenWords.filename`): `coverage ending within 90 days (snapshot 20261121T080000Z).csv`; a live report's carries the day it was read

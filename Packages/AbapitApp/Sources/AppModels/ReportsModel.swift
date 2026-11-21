@@ -174,6 +174,23 @@ public final class ReportsModel {
         case unavailable(Failure?)
     }
 
+    /// Dates as the Changes screen shows them: the local time zone and the user's locale, through one cached format style each
+    /// (`Date.formatted(date: .abbreviated, …)`). The tests inject a zone and a locale. File names keep a fixed UTC stamp (`dayStamp`).
+    package struct DateWords: Sendable {
+        private let dayStyle: Date.FormatStyle
+        private let timeStyle: Date.FormatStyle
+
+        package init(timeZone: TimeZone, locale: Locale) {
+            dayStyle = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
+            timeStyle = Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale, timeZone: timeZone)
+        }
+
+        package func day(_ date: Date) -> String { date.formatted(dayStyle) }
+        package func dayTime(_ date: Date) -> String { date.formatted(timeStyle) }
+        /// A snapshot's `takenAt` as a day; text the store holds that isn't a date as it is.
+        package func day(takenAt: String) -> String { ISODate.parse(takenAt).map { day($0.date) } ?? takenAt }
+    }
+
     // MARK: state
 
     /// The snapshot history's read: the sweeps' latest snapshots.
@@ -204,6 +221,8 @@ public final class ReportsModel {
     @ObservationIgnored public var beforeFirstLoad: (@MainActor () async -> Void)?
     /// The clock, so a test holds "3 days old".
     @ObservationIgnored package var now: @MainActor () -> Date = { Date() }
+    /// The time zone and locale dates are worded in: the user's, as Changes shows them.
+    @ObservationIgnored package var dates = DateWords(timeZone: .autoupdatingCurrent, locale: .autoupdatingCurrent)
     @ObservationIgnored private var loadToken = 0
 
     private let orgs: OrgsModel
@@ -343,7 +362,8 @@ public final class ReportsModel {
     /// - The newest attempt read the whole sweep: it is used.
     /// - It read some of it (in `counts` and `errors` both): **it is used, marked part**, with its own device list, never another
     ///   snapshot's.
-    /// - It read none of it (`errors` only): the last good copy is used with its own date and list, if there is one, and the failure said.
+    /// - It read none of it (`errors` only): the newest snapshot that read any of it is used (`SnapshotStore.newestRead`: whole, or a part
+    ///   read, marked so) with its own date and device list, and the failure said; unavailable only when no snapshot read any of it.
     private static func read(_ store: SnapshotStore, org: OrgProfile) async throws(SnapshotStore.Failure) -> [Sweep: SweepSource] {
         var read: [Sweep: SweepSource] = [:]
         var held: [Int64: (devices: [Resource], list: ListRead, sweeps: [String: [Resource]])] = [:]
@@ -374,14 +394,18 @@ public final class ReportsModel {
                     read[sweep] = .used(Used(id: attempt.id, takenAt: attempt.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
                                              items: snapshot.sweeps[name] ?? [], failure: nil, part: SweepPart(code: error, note: attempt.notes[name])))
                 } else {
+                    // It read none of it: the newest snapshot that read any of it is used (whole, or part and marked so), with its own
+                    // device list, and the newer failure is kept to be said. Nothing is "unavailable" unless no snapshot read any.
                     let failure = Failure(takenAt: attempt.takenAt, code: error, note: attempt.notes[name])
-                    guard let copy = newest else {
+                    _ = newest
+                    guard let some = try await store.newestRead(name, org: org) else {
                         read[sweep] = .unavailable(failure)
                         continue
                     }
-                    let snapshot = try await load(copy.summary.id)
-                    read[sweep] = .used(Used(id: copy.summary.id, takenAt: copy.summary.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
-                                             items: copy.items, failure: failure, part: nil))
+                    let snapshot = try await load(some.summary.id)
+                    let part = some.summary.errors[name].map { SweepPart(code: $0, note: some.summary.notes[name]) }
+                    read[sweep] = .used(Used(id: some.summary.id, takenAt: some.summary.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
+                                             items: some.items, failure: failure, part: part))
                 }
             }
         }
@@ -419,7 +443,7 @@ public final class ReportsModel {
         guard let profile = orgs.active else { return nothing(ScreenWords.noOrganization) }
         if isMosyle { return nothing(Self.mosyleWords) }
         if let refusal = Self.refusal(report.reads, scope: profile.scope.known) { return nothing(refusal) }
-        let when = now()
+        let when = now(), dates = self.dates
         let days = resolved["days"].flatMap(Int.init), years = resolved["years"].flatMap(Int.init), key = resolved["group"]
         var filters: [String] = []
         if let key { filters.append("Group: \(key)") }
@@ -439,7 +463,7 @@ public final class ReportsModel {
                 lines.append(Line(id: "unreadable|\(index)|" + device + "|" + record.id, title: device,
                                   detail: "active coverage, end date not readable: \(Self.text(record.attributes["endDateTime"]))", group: "unreadable end date"))
             }
-            return finish(report, filters: ["Ending within \(built.days) days"], source: Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed),
+            return finish(report, filters: ["Ending within \(built.days) days"], source: Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed, dates: dates),
                           summary: built.words, groups: [], lines: lines, group: nil, built: .coverage(built),
                           note: "The file holds the active coverages ending within \(built.days) days. Active coverages with an end date this app can't read, devices with no coverage and devices whose coverage wasn't read are counted on screen, not in the file.",
                           base: "coverage ending within \(built.days) days (snapshot \(ChangesModel.stamp(used.takenAt)))")
@@ -452,7 +476,7 @@ public final class ReportsModel {
             case .used(let used):
                 let (map, unattributed) = Self.coverage(used)
                 built = FleetAgeReport(devices: used.devices, coverage: map, years: years, now: when, list: Self.listRead(used, sweep: .appleCare))
-                source = Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed)
+                source = Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed, dates: dates)
                 base = "fleet age \(built.years)+ years (snapshot \(ChangesModel.stamp(used.takenAt)))"
             case .unavailable(let failure):
                 if state == .idle || state.isLoading { return nothing("Reading the snapshot history…", filters: ["Candidates: \(years)+ years old"]) }
@@ -462,12 +486,12 @@ public final class ReportsModel {
                 if case .failed(let message) = state {
                     why = "The snapshot history couldn't be read (\(message))."
                 } else if let failure {
-                    why = "\(Self.failureWords(failure, sweep: .appleCare)). No earlier snapshot read AppleCare coverage."
+                    why = "\(Self.failureWords(failure, sweep: .appleCare, dates: dates)). No snapshot has read AppleCare coverage."
                 } else {
                     why = "No snapshot has read AppleCare coverage. This screen doesn't read it: take a snapshot with AppleCare coverage ticked (Activity › Changes › Snapshot now)."
                 }
-                source = [live.words(now: when), "The AppleCare column is empty. \(why)"]
-                base = "fleet age \(built.years)+ years (read live \(Self.dayStamp(live.readAt ?? when)))"
+                source = [live.words(now: when, dates: dates), "The AppleCare column is empty. \(why)"]
+                base = "fleet age \(built.years)+ years (\(live.stampWords))"
             }
             let lines = built.candidates.map { candidate in
                 Line(id: candidate.serial, title: candidate.serial,
@@ -495,7 +519,7 @@ public final class ReportsModel {
                      group: row.group)
             }
             let groups = ActivationLockReport.fixedGroups.map { GroupCount(key: $0, count: built.rows(group: $0).count) }
-            return finish(report, filters: filters, source: Self.sourceWords(used, sweep: .activationLock, now: when, unattributed: 0), summary: built.words,
+            return finish(report, filters: filters, source: Self.sourceWords(used, sweep: .activationLock, now: when, unattributed: 0, dates: dates), summary: built.words,
                           groups: groups, lines: lines, group: key, built: .activationLock(built),
                           note: "The file holds every device, whatever group is shown, with its lock and whether it blocks release.",
                           base: "activation lock (snapshot \(ChangesModel.stamp(used.takenAt)))")
@@ -512,10 +536,10 @@ public final class ReportsModel {
             let rows = key.map { built.rows(group: $0) } ?? built.rows
             let lines = rows.map { row in
                 Line(id: row.id, title: row.device.serialNumber,
-                     detail: Self.join([Self.text(row.device.attributes["deviceModel"]), Self.warrantyState(row), Self.warrantyEstimate(row)]), group: row.group)
+                     detail: Self.join([Self.text(row.device.attributes["deviceModel"]), Self.warrantyState(row), Self.warrantyEstimate(row, dates: dates)]), group: row.group)
             }
             let groups = (WarrantyReport.fixedGroups + [WarrantyReport.estimatedPastToken]).map { GroupCount(key: $0, count: built.rows(group: $0).count) }
-            return finish(report, filters: filters, source: Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed), summary: built.words,
+            return finish(report, filters: filters, source: Self.sourceWords(used, sweep: .appleCare, now: when, unattributed: unattributed, dates: dates), summary: built.words,
                           groups: groups, lines: lines, group: key, built: .outOfWarranty(built),
                           note: "The file holds every device, whatever group is shown. An estimate from the order date is labelled as one in its own column, with the assumption.",
                           base: "out of warranty (snapshot \(ChangesModel.stamp(used.takenAt)))")
@@ -530,8 +554,8 @@ public final class ReportsModel {
             }
             let groups = (MigrationReport.fixedGroups + [MigrationReport.pastDueToken, MigrationReport.pastDueStatusUnknownToken])
                 .map { GroupCount(key: $0, count: built.rows(group: $0).count) }
-            return finish(report, filters: filters, source: [live.words(now: when)], summary: built.words, groups: groups, lines: lines, group: key, built: .migration(built),
-                          note: "The file holds every device in the list read, whatever group is shown.", base: "mdm migration (read live \(Self.dayStamp(live.readAt ?? when)))")
+            return finish(report, filters: filters, source: [live.words(now: when, dates: dates)], summary: built.words, groups: groups, lines: lines, group: key, built: .migration(built),
+                          note: "The file holds every device in the list read, whatever group is shown.", base: "mdm migration (\(live.stampWords))")
         case .serviceHealth:
             let days = days ?? Self.defaultQuietDays
             let live = liveServices()
@@ -544,9 +568,9 @@ public final class ReportsModel {
                                         { if case .cannotJudge(let why) = row.health { return why } else { return "" } }()]), group: row.group)
             }
             let groups = ServiceHealth.fixedGroups.map { GroupCount(key: $0, count: built.rows(group: $0).count) }
-            return finish(report, filters: filters + ["Quiet after \(built.days) days"], source: [live.words(now: when)], summary: built.words, groups: groups, lines: lines,
+            return finish(report, filters: filters + ["Quiet after \(built.days) days"], source: [live.words(now: when, dates: dates)], summary: built.words, groups: groups, lines: lines,
                           group: key, built: .serviceHealth(built), note: "The file holds every service in the list read, whatever group is shown.",
-                          base: "service health, quiet after \(built.days) days (read live \(Self.dayStamp(live.readAt ?? when)))")
+                          base: "service health, quiet after \(built.days) days (\(live.stampWords))")
         }
     }
 
@@ -624,16 +648,16 @@ public final class ReportsModel {
         let name = sweep.title
         let next = "Take one in Activity › Changes › Snapshot now, with \(name) ticked."
         if case .unavailable(let failure?) = source {
-            return "\(Self.failureWords(failure, sweep: sweep)). No earlier snapshot read \(name), so this report judges nothing. Once what that says is dealt with, take one in Activity › Changes › Snapshot now, with \(name) ticked."
+            return "\(Self.failureWords(failure, sweep: sweep, dates: dates)). No snapshot has read \(name), so this report judges nothing. Once what that says is dealt with, take one in Activity › Changes › Snapshot now, with \(name) ticked."
         }
         return "No snapshot has read \(name), so this report judges nothing. It isn't zero: nothing was read. \(next)"
     }
 
     /// "The newest snapshot that read AppleCare coverage (20 Nov 2026) failed with HTTP 500", or "didn't read it (not asked after HTTP 401)",
     /// with the collector's note.
-    package nonisolated static func failureWords(_ failure: Failure, sweep: Sweep) -> String {
+    package nonisolated static func failureWords(_ failure: Failure, sweep: Sweep, dates: DateWords) -> String {
         let how = failure.code.hasPrefix("not asked") || failure.code.hasPrefix("not read") ? "didn't read it (\(failure.code))" : "failed with \(failure.code)"
-        return "The newest snapshot that read \(sweep.title) (\(dayText(failure.takenAt))) \(how)" + (failure.note.map { ": \($0)" } ?? "")
+        return "The newest snapshot that read \(sweep.title) (\(dates.day(takenAt: failure.takenAt))) \(how)" + (failure.note.map { ": \($0)" } ?? "")
     }
 
     /// "the AppleCare coverage read was cut: HTTP 500 (1 of 6 not read: 1 failed twice (HTTP 500))".
@@ -657,14 +681,19 @@ public final class ReportsModel {
     }
 
     /// Where a snapshot's data comes from, in words: the date and the age, a part read, then a newer attempt that read none.
-    nonisolated static func sourceWords(_ used: Used, sweep: Sweep, now: Date, unattributed: Int) -> [String] {
-        var lines = ["From the snapshot of \(dayText(used.takenAt)), \(age(of: used.takenAt, now: now)). Its own device list and its \(sweep.title) read are used together; nothing is read from Apple now."]
+    nonisolated static func sourceWords(_ used: Used, sweep: Sweep, now: Date, unattributed: Int, dates: DateWords) -> [String] {
+        var lines = ["From the snapshot of \(dates.day(takenAt: used.takenAt)), \(age(of: used.takenAt, now: now)). Its own device list and its \(sweep.title) read are used together; nothing is read from Apple now."]
         if let part = used.part {
-            lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). What it read is used; a device it didn't read counts as not read"
-                         + (sweep == .appleCare ? ", and so does a device with no record, since a part read can't tell the two apart." : "."))
+            if used.deviceList.isNotRead {
+                lines.append("That snapshot read \(sweep.title) only in part (\(cutWords(part, sweep: sweep))), and its own device list wasn't read, so nothing is judged.")
+            } else {
+                lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). What it read is used; a device it didn't read counts as not read"
+                             + (sweep == .appleCare ? ", and so does a device with no record, since a part read can't tell the two apart." : "."))
+            }
         }
         if let failure = used.failure {
-            lines.append("\(failureWords(failure, sweep: sweep)), so this is the last good copy, from \(dayText(used.takenAt)).")
+            let which = used.part == nil ? "this is the last good copy" : "the newest snapshot that read any of it is used, and that read was only in part"
+            lines.append("\(failureWords(failure, sweep: sweep, dates: dates)), so \(which), from \(dates.day(takenAt: used.takenAt)).")
         }
         if unattributed > 0 {
             lines.append("\(unattributed) coverage record\(unattributed == 1 ? " has" : "s have") no serial number and can't be matched to a device: counted here and left out of the report.")
@@ -672,31 +701,11 @@ public final class ReportsModel {
         return lines
     }
 
-    /// `2026-11-21T08:00:00Z` as `21 Nov 2026`; text the store holds that isn't a date as it is.
-    nonisolated static func dayText(_ takenAt: String) -> String {
-        guard let date = ISODate.parse(takenAt)?.date else { return takenAt }
-        return dayFormat(date)
-    }
-
     private nonisolated static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar
     }()
-    private nonisolated static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-    /// `21 Nov 2026`, UTC. By calendar components: a formatter made per row cost about a second at 10,000 devices.
-    nonisolated static func dayFormat(_ date: Date) -> String {
-        let c = utc.dateComponents([.year, .month, .day], from: date)
-        return "\(c.day ?? 0) \(months[(c.month ?? 1) - 1]) \(c.year ?? 0)"
-    }
-
-    /// `21 Nov 2026 at 09:41 UTC`.
-    package nonisolated static func dayTime(_ date: Date) -> String {
-        let c = utc.dateComponents([.hour, .minute], from: date)
-        return dayFormat(date) + " at " + String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0) + " UTC"
-    }
-
     package nonisolated static func dayStamp(_ date: Date) -> String {
         let c = utc.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
@@ -747,19 +756,41 @@ public final class ReportsModel {
 
     // MARK: the live lists
 
-    /// When a live list was read, in words: its date and age, or that it hasn't been read.
-    nonisolated static func liveWords(_ what: String, readAt: Date?, now: Date) -> String {
-        guard let readAt else { return "Not read from Apple yet: \(what) is empty or still being read. No snapshot is used." }
-        return "Read live from Apple on \(dayTime(readAt)), \(age(since: readAt, now: now)): \(what). No snapshot is used."
+    /// What a live list says of itself, from the Devices model's own state: when it was read and how old it is; "Not read from Apple yet"
+    /// only while nothing was asked or the read is going; a read that stopped says so and why (the list's own words), with the time it
+    /// stopped when the model kept it.
+    nonisolated static func liveWords(_ what: String, state: LoadState, list: ListRead, readAt: Date?, now: Date, dates: DateWords) -> String {
+        switch state {
+        case .idle, .loading:
+            return "Not read from Apple yet: \(what) is empty or still being read. No snapshot is used."
+        case .loaded:
+            guard let readAt else { return "Read live from Apple: \(what). No snapshot is used." }
+            return "Read live from Apple on \(dates.dayTime(readAt)), \(age(since: readAt, now: now)): \(what). No snapshot is used."
+        case .forbidden, .failed, .unusable, .notInScope:
+            switch list {
+            case .partly(let how):
+                let when = readAt.map { " on \(dates.dayTime($0)), \(age(since: $0, now: now))" } ?? ", at a time that isn't kept"
+                return "Read live from Apple in part\(when): \(what). The read stopped: \(how). No snapshot is used."
+            case .notRead(let why):
+                return "Not read from Apple: \(why). No snapshot is used."
+            case .whole:
+                return "Read live from Apple: \(what). No snapshot is used."
+            }
+        }
     }
 
     struct LiveDevices {
         let resources: [Resource]
         let devices: [OrgDevice]
         let list: ListRead
-        /// When the list's read finished, from the Devices model; nil unless it finished.
+        let state: LoadState
+        /// When the list's read finished, or stopped with rows held, from the Devices model; nil otherwise.
         let readAt: Date?
-        func words(now: Date) -> String { ReportsModel.liveWords("the device list the Devices screen holds", readAt: readAt, now: now) }
+        func words(now: Date, dates: DateWords) -> String {
+            ReportsModel.liveWords("the device list the Devices screen holds", state: state, list: list, readAt: readAt, now: now, dates: dates)
+        }
+        /// The file name's part: the day it was read (UTC), or that it wasn't.
+        var stampWords: String { readAt.map { "read live \(ReportsModel.dayStamp($0))" } ?? "not read" }
     }
 
     /// The device list the Devices model holds, as the reports take it: whole, cut at the page cap or by a failure, or not read.
@@ -778,8 +809,8 @@ public final class ReportsModel {
         case .unusable(let why), .notInScope(let why): list = .notRead(why)
         }
         var readAt: Date?
-        if case .loaded(let date) = devices.state { readAt = date }
-        return LiveDevices(resources: list.isNotRead ? [] : rows.map(\.resource), devices: rows, list: list, readAt: readAt)
+        if case .loaded(let date) = devices.state { readAt = date } else if !rows.isEmpty { readAt = devices.devicesStoppedAt }
+        return LiveDevices(resources: list.isNotRead ? [] : rows.map(\.resource), devices: rows, list: list, state: devices.state, readAt: readAt)
     }
 
     struct LiveServices {
@@ -787,8 +818,12 @@ public final class ReportsModel {
         let counts: [String: ServiceDeviceCount]
         let notSent: Set<String>
         let list: ListRead
+        let state: LoadState
         let readAt: Date?
-        func words(now: Date) -> String { ReportsModel.liveWords("the services list the Services screen holds", readAt: readAt, now: now) }
+        func words(now: Date, dates: DateWords) -> String {
+            ReportsModel.liveWords("the services list the Services screen holds", state: state, list: list, readAt: readAt, now: now, dates: dates)
+        }
+        var stampWords: String { readAt.map { "read live \(ReportsModel.dayStamp($0))" } ?? "not read" }
     }
 
     func liveServices() -> LiveServices {
@@ -809,8 +844,8 @@ public final class ReportsModel {
         var counts: [String: ServiceDeviceCount] = [:]
         for (id, count) in devices.deviceCount { counts[id] = .exactly(count) }
         var readAt: Date?
-        if case .loaded(let date) = devices.servicesState { readAt = date }
-        return LiveServices(services: services, counts: counts, notSent: devices.servicesAbsent, list: list, readAt: readAt)
+        if case .loaded(let date) = devices.servicesState { readAt = date } else if !services.isEmpty { readAt = devices.servicesStoppedAt }
+        return LiveServices(services: services, counts: counts, notSent: devices.servicesAbsent, list: list, state: devices.servicesState, readAt: readAt)
     }
 
     // MARK: words for rows
@@ -852,13 +887,13 @@ public final class ReportsModel {
     }
 
     /// An estimate is always called one.
-    nonisolated static func warrantyEstimate(_ row: WarrantyReport.Row) -> String {
+    nonisolated static func warrantyEstimate(_ row: WarrantyReport.Row, dates: DateWords) -> String {
         switch row.estimate {
         case .notMade: ""
         case .noOrderDate: "estimate not possible: no order date"
         case .unreadableOrderDate(let raw): "estimate not possible: order date not readable (\(raw))"
-        case .pastAssumedLimit(let end): "estimate: past the assumed one year (ended \(dayFormat(end)))"
-        case .withinAssumedLimit(let end): "estimate: within the assumed one year (until \(dayFormat(end)))"
+        case .pastAssumedLimit(let end): "estimate: past the assumed one year (ended \(dates.day(end)))"
+        case .withinAssumedLimit(let end): "estimate: within the assumed one year (until \(dates.day(end)))"
         }
     }
 
@@ -878,7 +913,8 @@ public final class ReportsModel {
         let who = orgs.active.map { "\"\($0.name.isEmpty ? $0.id : $0.name)\"" } ?? "this organization"
         let client = orgs.exportClient.map { " It is client \"\($0)\"'s data only." } ?? ""
         let from = output.source.first.map { " \($0)" } ?? ""
-        return "Saves the \(output.title) report for \(who).\(from) \(output.exportNote) The first column after the id says how much of the list was read. "
+        let read = output.summary.first.map { " \($0)" } ?? ""
+        return "Saves the \(output.title) report for \(who).\(from)\(read) \(output.exportNote) The first column after the id says how much of the list was read. "
             + "Serial numbers and the attributes each report names are in it. A value under a secret's name is withheld. No key or token is in it." + client
     }
 

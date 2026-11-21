@@ -43,12 +43,16 @@ struct ReportsTests {
         return Resource(type: "activation_lock", id: serial, attributes: attributes)
     }
 
+    /// The words' time zone and locale, held for the tests (the app's are the user's).
+    static let dates = ReportsModel.DateWords(timeZone: TimeZone(secondsFromGMT: 0)!, locale: Locale(identifier: "en_US"))
+
     static func iso(_ date: Date) -> String { date.formatted(Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!)) }
 
     /// A model over `world`, its clock held at `now`, its history loaded.
     static func model(_ world: World) async -> ReportsModel {
         let model = world.screens.reports
         model.now = { now }
+        model.dates = dates
         await model.load()
         return model
     }
@@ -75,7 +79,7 @@ struct ReportsTests {
         let model = await Self.model(world)
         let output = model.build(.coverage, tokens: ["days": "90"])
         #expect(output.judgesNothing == nil && Self.titles(output) == ["D1"], "\(Self.text(output))")
-        #expect(output.source[0].hasPrefix("From the snapshot of 21 Sep 2026, 20 days old."), "\(output.source)")
+        #expect(output.source[0].hasPrefix("From the snapshot of Sep 21, 2026, 20 days old."), "\(output.source)")
         // D3 is only in the newer snapshot, which didn't read AppleCare: it is nowhere in this report.
         #expect(!Self.text(output).contains("D3"))
         #expect(output.summary.contains { $0.contains("1 devices have ACTIVE coverage; 1 have none among the records read") }, "\(output.summary)")
@@ -100,7 +104,7 @@ struct ReportsTests {
             if report != .coverage { #expect(text.contains("SNAP"), "\(report): \(text)") }
         }
         let age = model.build(.fleetAge, tokens: ["years": "1"])
-        #expect(Self.titles(age).sorted() == ["SNAP1", "SNAP2"] && age.source[0].hasPrefix("From the snapshot of 21 Sep 2026"), "\(age.source)")
+        #expect(Self.titles(age).sorted() == ["SNAP1", "SNAP2"] && age.source[0].hasPrefix("From the snapshot of Sep 21, 2026"), "\(age.source)")
         #expect(age.lines.first { $0.title == "SNAP1" }?.detail.contains("AppleCare: active") == true && age.lines.first { $0.title == "SNAP2" }?.detail.contains("AppleCare: none active") == true)
         // The live reports use the live list.
         let live = model.build(.migration, tokens: [:])
@@ -117,9 +121,9 @@ struct ReportsTests {
         let model = await Self.model(world)
         for report in [ReportsModel.Report.coverage, .outOfWarranty] {
             let output = model.build(report, tokens: [:])
-            #expect(output.judgesNothing == nil && output.source[0].hasPrefix("From the snapshot of 21 Sep 2026, 20 days old."), "\(report): \(output.source)")
+            #expect(output.judgesNothing == nil && output.source[0].hasPrefix("From the snapshot of Sep 21, 2026, 20 days old."), "\(report): \(output.source)")
             #expect(!Self.text(output).contains("NEW"), "\(report) mixed in the failed attempt's devices: \(Self.text(output))")
-            #expect(output.source.contains { $0.contains("The newest snapshot that read AppleCare coverage (5 Oct 2026) failed with HTTP 500: 2 of 2 not read: 2 failed twice (HTTP 500), so this is the last good copy, from 21 Sep 2026") }, "\(output.source)")
+            #expect(output.source.contains { $0.contains("The newest snapshot that read AppleCare coverage (Oct 5, 2026) failed with HTTP 500: 2 of 2 not read: 2 failed twice (HTTP 500), so this is the last good copy, from Sep 21, 2026") }, "\(output.source)")
             #expect(output.summary[0] == "Read in full.", "the last good copy is a whole read: \(output.summary)")
         }
         #expect(Self.titles(model.build(.outOfWarranty, tokens: [:])) == ["OLD1"])
@@ -134,11 +138,11 @@ struct ReportsTests {
     /// The code is worded for what it is: a run's "not asked after HTTP 401" isn't "failed with" it.
     @Test func aFailureCodeIsWordedForWhatItIs() {
         func words(_ code: String, _ note: String? = nil) -> String {
-            ReportsModel.failureWords(ReportsModel.Failure(takenAt: "2026-10-05T14:13:20Z", code: code, note: note), sweep: .activationLock)
+            ReportsModel.failureWords(ReportsModel.Failure(takenAt: "2026-10-05T14:13:20Z", code: code, note: note), sweep: .activationLock, dates: Self.dates)
         }
-        #expect(words("not asked after HTTP 401") == "The newest snapshot that read Activation Lock (5 Oct 2026) didn't read it (not asked after HTTP 401)")
-        #expect(words("not read: devices failed") == "The newest snapshot that read Activation Lock (5 Oct 2026) didn't read it (not read: devices failed)")
-        #expect(words("HTTP 500", "1 of 6 not read") == "The newest snapshot that read Activation Lock (5 Oct 2026) failed with HTTP 500: 1 of 6 not read")
+        #expect(words("not asked after HTTP 401") == "The newest snapshot that read Activation Lock (Oct 5, 2026) didn't read it (not asked after HTTP 401)")
+        #expect(words("not read: devices failed") == "The newest snapshot that read Activation Lock (Oct 5, 2026) didn't read it (not read: devices failed)")
+        #expect(words("HTTP 500", "1 of 6 not read") == "The newest snapshot that read Activation Lock (Oct 5, 2026) failed with HTTP 500: 1 of 6 not read")
     }
 
     /// With no good copy the report judges nothing: said, with the code and the note, never a zero, and nothing to export.
@@ -150,7 +154,7 @@ struct ReportsTests {
         for report in [ReportsModel.Report.coverage, .outOfWarranty] {
             let output = model.build(report, tokens: [:])
             let why = try #require(output.judgesNothing, "\(report)")
-            #expect(why.contains("failed with HTTP 500: 1 of 1 not read: 1 failed twice (HTTP 500)") && why.contains("No earlier snapshot read AppleCare coverage") && why.contains("Snapshot now"), "\(why)")
+            #expect(why.contains("failed with HTTP 500: 1 of 1 not read: 1 failed twice (HTTP 500)") && why.contains("No snapshot has read AppleCare coverage") && why.contains("Snapshot now"), "\(why)")
             #expect(output.summary.isEmpty && output.lines.isEmpty && !output.canExport)
         }
         #expect(model.exportBlocked != nil)
@@ -169,7 +173,8 @@ struct ReportsTests {
         let model = await Self.model(world)
         let care = model.build(.coverage, tokens: ["days": "90"])
         #expect(care.judgesNothing == nil && !Self.text(care).contains("OLD1"), "the newest part read is used, not the older whole copy: \(Self.text(care))")
-        #expect(care.source[0].hasPrefix("From the snapshot of 5 Oct 2026, 6 days old."), "\(care.source)")
+        #expect(care.source[0].hasPrefix("From the snapshot of Oct 5, 2026, 6 days old."), "\(care.source)")
+        #expect(!care.source.contains { $0.contains("last good copy") || $0.contains("read any of it") }, "the newest attempt is the part read itself: no newer failure to say: \(care.source)")
         #expect(care.source.contains { $0.contains("read AppleCare coverage only in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500))") && $0.contains("a device with no record") }, "\(care.source)")
         #expect(care.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500)); in a part read a device with no record counts as not read"), "\(care.summary)")
         // P2 and P3 have no record: in a part read they count as not read, never as uncovered.
@@ -237,7 +242,7 @@ struct ReportsTests {
         #expect(Self.titles(model.build(.outOfWarranty, tokens: [:])).sorted() == ["A1", "A2"])
         let lock = model.build(.activationLock, tokens: [:])
         #expect(Self.titles(lock).sorted() == ["L1", "L2", "L3"] && !Self.text(lock).contains("A1"), "\(Self.text(lock))")
-        #expect(lock.source[0].hasPrefix("From the snapshot of 26 Sep 2026"), "\(lock.source)")
+        #expect(lock.source[0].hasPrefix("From the snapshot of Sep 26, 2026"), "\(lock.source)")
         #expect(Self.titles(model.build(.fleetAge, tokens: ["years": "1"])).sorted() == ["A1", "A2"])
     }
 
@@ -568,8 +573,9 @@ struct ReportsTests {
         let several = await Self.model(two)
         #expect(two.orgs.showsClients && several.exportFileName == "Org a - coverage ending within 90 days (snapshot 20260921T141320Z).csv", "\(several.exportFileName)")
         #expect(several.exportWords.contains("client \"Org a\"'s data only"), "\(several.exportWords)")
-        #expect(several.exportWords.hasPrefix("Saves the AppleCare coverage ending report for \"Org a\". From the snapshot of 21 Sep 2026, 20 days old."))
+        #expect(several.exportWords.hasPrefix("Saves the AppleCare coverage ending report for \"Org a\". From the snapshot of Sep 21, 2026, 20 days old."))
         #expect(several.exportWords.contains("A value under a secret's name is withheld. No key or token is in it."))
+        #expect(several.exportWords.contains(" Read in full. "), "the list-read words are in the panel: \(several.exportWords)")
         #expect(several.csv().hasPrefix("id,listRead,serialNumber,"), "\(several.csv().prefix(60))")
         two.orgs.selectClient(try #require(two.orgs.store.client(of: "b")).id)
         #expect(several.exportFileName.hasPrefix("Org b - "), "\(several.exportFileName)")
@@ -712,6 +718,10 @@ struct ReportsTests {
         let output = model.build(.migration, tokens: [:])
         #expect(output.summary[0] == "Read in part: your role can't read devices; 1,000 were read before the refusal. The counts below cover only what was read.", "\(output.summary)")
         #expect(output.matching == 1000 && model.csv(of: output).contains(",\"read in part: your role can't read devices"))
+        // The source line agrees with the summary: read in part, stopped and why, never "not read yet".
+        #expect(output.source[0].hasPrefix("Read live from Apple in part on ") && output.source[0].hasSuffix("The read stopped: your role can't read devices; 1,000 were read before the refusal. No snapshot is used."), "\(output.source)")
+        #expect(model.exportWords(for: output).contains("Read in part: your role can't read devices") && !model.exportWords(for: output).contains("yet"))
+        #expect(output.fileBase?.hasPrefix("mdm migration (read live ") == true, "stamped with when the read stopped: \(output.fileBase ?? "")")
     }
 
     /// A device list that failed part-way is a part read: the rows read, and why it stopped.
@@ -737,8 +747,87 @@ struct ReportsTests {
         guard case .loaded(let readAt) = world.devices.state else { Issue.record("\(world.devices.state)"); return }
         model.now = { readAt.addingTimeInterval(3 * 86_400 + 60) }
         let output = model.build(.migration, tokens: [:])
-        #expect(output.source[0] == "Read live from Apple on \(ReportsModel.dayTime(readAt)), 3 days old: the device list the Devices screen holds. No snapshot is used.", "\(output.source)")
-        #expect(output.fileBase == "mdm migration (read live \(ReportsModel.dayStamp(readAt)))" && ReportsModel.dayTime(readAt).hasSuffix(" UTC"))
+        #expect(output.source[0] == "Read live from Apple on \(Self.dates.dayTime(readAt)), 3 days old: the device list the Devices screen holds. No snapshot is used.", "\(output.source)")
+        #expect(output.fileBase == "mdm migration (read live \(ReportsModel.dayStamp(readAt)))")
+    }
+
+    /// A device list refused with no rows read: the reason, never "not read yet"; the file isn't stamped with a day it wasn't read.
+    @Test func aDeviceListRefusedWithNoRowsGivesTheReason() async throws {
+        let world = try await World.make()
+        world.stubs["a"]!.forbid("/v1/orgDevices")
+        let model = await Self.model(world)
+        model.select(.migration)
+        await eventually("the devices") { world.devices.state != .idle && !world.devices.state.isLoading }
+        let output = model.build(.migration, tokens: [:])
+        #expect(output.source == ["Not read from Apple: your role can't read devices. No snapshot is used."], "\(output.source)")
+        #expect(output.fileBase == "mdm migration (not read)" && output.summary.first == "Not read: your role can't read devices. Nothing below can be judged.", "\(output.summary)")
+    }
+
+    // MARK: a newer run that read nothing
+
+    /// S2 read part of the sweep and S3 read none (a run-level failure), with no whole copy: S2 is used, marked part, with its own device list, and S3's
+    /// failure is said; the report never says no earlier snapshot read the sweep.
+    @Test func aNewerRunThatReadNothingDoesNotHideAPartRead() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("P1"), Self.device("P2")], "activation_lock": [Self.lock("P1", locked: true, type: "USER")]],
+                              errors: ["activation_lock": "HTTP 404"], notes: ["activation_lock": "1 of 2 not read: 1 failed twice (HTTP 404)"])
+        try await Self.record(world, days: 14, ["devices": [Self.device("OTHER")]], errors: ["activation_lock": "not asked after HTTP 401"])
+        let model = await Self.model(world)
+        let output = model.build(.activationLock, tokens: [:])
+        #expect(output.judgesNothing == nil && Set(Self.titles(output)) == ["P1", "P2"] && !Self.text(output).contains("OTHER"), "\(Self.text(output))")
+        #expect(output.summary[0].hasPrefix("Read in part: the Activation Lock read was cut: HTTP 404 (1 of 2 not read"), "\(output.summary)")
+        #expect(output.source.contains { $0.contains("(Oct 5, 2026) didn't read it (not asked after HTTP 401), so the newest snapshot that read any of it is used, and that read was only in part, from Sep 21, 2026") }, "\(output.source)")
+        #expect(!Self.text(output).contains("No earlier snapshot"))
+        // The same for AppleCare, and with nothing else read: no snapshot read any of it is said as that.
+        let none = try await World.make()
+        try await Self.record(none, days: 0, ["devices": [Self.device("D1")]], errors: ["applecare": "not asked after HTTP 401"])
+        let why = try #require(await Self.model(none).build(.coverage, tokens: [:]).judgesNothing)
+        #expect(why.contains("didn't read it (not asked after HTTP 401). No snapshot has read AppleCare coverage, so this report judges nothing."), "\(why)")
+    }
+
+    /// S1 whole, S2 part, S3 a 403: S2 (the newest that read any) is used and said, not S1; S3's failure is said.
+    @Test func aWholeThenPartThenFailureUsesThePartRead() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("WHOLE1")], "applecare": [Self.care("WHOLE1")]])
+        try await Self.record(world, days: 7, ["devices": [Self.device("PART1"), Self.device("PART2")], "applecare": [Self.care("PART1")]], errors: ["applecare": "HTTP 500"],
+                              notes: ["applecare": "1 of 2 not read: 1 failed twice (HTTP 500)"])
+        try await Self.record(world, days: 14, ["devices": [Self.device("FAIL1")]], errors: ["applecare": "HTTP 403 FORBIDDEN_ERROR"])
+        let model = await Self.model(world)
+        for report in [ReportsModel.Report.coverage, .outOfWarranty] {
+            let output = model.build(report, tokens: [:])
+            #expect(!Self.text(output).contains("WHOLE1") && !Self.text(output).contains("FAIL1") && Self.text(output).contains("PART1"), "\(report): \(Self.text(output))")
+            #expect(output.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut: HTTP 500"), "\(output.summary)")
+            #expect(output.source.contains { $0.contains("failed with HTTP 403 FORBIDDEN_ERROR, so the newest snapshot that read any of it is used") }, "\(output.source)")
+        }
+    }
+
+    /// The part read's device list wasn't read: said, and nothing judged, not "what it read is used".
+    @Test func aPartReadWithNoDeviceListSaysNothingIsJudged() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["applecare": [Self.care("X")]], errors: ["applecare": "HTTP 500"])
+        let output = await Self.model(world).build(.coverage, tokens: [:])
+        #expect(output.summary == ["Not read: the snapshot has no device list. Nothing below can be judged."], "\(output.summary)")
+        #expect(output.source.contains { $0.hasSuffix("and its own device list wasn't read, so nothing is judged.") } && !output.source.contains { $0.contains("What it read is used") }, "\(output.source)")
+    }
+
+    // MARK: dates
+
+    /// Dates are in the user's time zone and locale, as Changes shows them: an evening snapshot in Los Angeles is that day there, and the next in UTC.
+    @Test func datesAreInTheUsersTimeZoneAndLocale() async throws {
+        let world = try await World.make()
+        // 2026-09-21T03:00:00Z is the evening of the 20th in Los Angeles.
+        _ = try await world.history!.record(org: world.orgs.store["a"]!, takenAt: Date(timeIntervalSince1970: 1_789_959_600),
+                                            resources: ["devices": [Self.device("D1")], "applecare": [Self.care("D1")]])
+        let model = await Self.model(world)
+        #expect(model.build(.coverage, tokens: [:]).source[0].hasPrefix("From the snapshot of Sep 21, 2026"))
+        model.dates = ReportsModel.DateWords(timeZone: TimeZone(identifier: "America/Los_Angeles")!, locale: Locale(identifier: "en_US"))
+        let la = model.build(.coverage, tokens: [:])
+        #expect(la.source[0].hasPrefix("From the snapshot of Sep 20, 2026"), "\(la.source)")
+        model.dates = ReportsModel.DateWords(timeZone: TimeZone(secondsFromGMT: 0)!, locale: Locale(identifier: "de_DE"))
+        let german = model.build(.coverage, tokens: [:]).source[0]
+        #expect(german.hasPrefix("From the snapshot of 21.") && german.contains("2026") && !german.contains("Sep 21"), "the locale's own format: \(german)")
+        // The file name's stamp is a fixed UTC format whatever the zone.
+        #expect(model.build(.coverage, tokens: [:]).fileBase == "coverage ending within 90 days (snapshot 20260921T030000Z)")
     }
 
     // MARK: building and redrawing
@@ -756,10 +845,17 @@ struct ReportsTests {
         #expect(model.exportBlocked(for: output) == nil && model.exportFileName(for: output).hasSuffix(".csv") && model.exportWords(for: output).hasPrefix("Saves the Activation Lock report"))
         #expect(model.builds == before + 1, "the export values come from the one output")
         #expect(output.matching == 10_000 && output.lines.count == 200)
-        // The date words are made by calendar, not a formatter per row: a coverage run over 10,000 devices stays quick.
+        // Out of warranty over 10,000 devices that all carry order dates and estimates formats a date per row: a formatter made per call
+        // would cost about a second here, a cached style a fraction of one.
+        let old = try await World.make()
+        try await Self.record(old, days: 0, ["devices": serials.map { Self.device($0) }, "applecare": []])
+        let warranty = await Self.model(old)
         let clock = ContinuousClock()
-        let took = clock.measure { _ = model.build(.activationLock, tokens: [:]) }
-        #expect(took < .seconds(5), "a build of 10,000 devices took \(took)")
+        var built: ReportsModel.Output?
+        let took = clock.measure { built = warranty.build(.outOfWarranty, tokens: [:]) }
+        #expect(built?.matching == 10_000 && built?.lines.first?.detail.contains("estimate: past the assumed one year (ended ") == true)
+        print("PERF out of warranty 10,000 devices:", took)
+        #expect(took < .milliseconds(800), "an out-of-warranty build of 10,000 devices with estimates took \(took)")
     }
 
     /// A missing token is the report's default, never the screen's stepper value (an intent has no stepper).
@@ -832,7 +928,9 @@ struct ReportsTests {
         await DemoHistory.seed(world.history!, org: world.orgs.store["a"]!, now: Self.now)
         let model = await Self.model(world)
         let coverage = model.build(.coverage, tokens: ["days": "90"])
-        #expect(Self.titles(coverage) == ["DEMOCHG0001"] && coverage.summary[0].hasPrefix("Read in part: the snapshot's device list was cut: page cap"), "\(Self.text(coverage))")
+        #expect(Self.titles(coverage) == ["DEMOCHG0001"], "\(Self.text(coverage))")
+        // The whole line names both the cut list and the sweep's part.
+        #expect(coverage.summary[0] == "Read in part: the snapshot's device list was cut: page cap (stopped at the page limit: 3 of 5 read, more not read); the AppleCare coverage read was cut: page cap (covers only the devices listed: devices stopped at the page limit); in a part read a device with no record counts as not read. The counts below cover only what was read.", "\(coverage.summary)")
         let warranty = model.build(.outOfWarranty, tokens: [:])
         #expect(Self.titles(warranty).sorted() == ["DEMOCHG0001", "DEMOCHG0002", "DEMOCHG0003"] && warranty.lines.contains { $0.detail.contains("estimate: past the assumed one year") })
         let lock = model.build(.activationLock, tokens: [:])
