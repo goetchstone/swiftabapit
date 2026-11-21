@@ -256,7 +256,10 @@ events in phase 2a; their notes are below.
     are "not asked after HTTP 401".
   - Cancellable: a switch or `cancel()` stops the sweep at once. No read starts after it, the reads in flight are cancelled
     (one held at the gate never reaches Apple), and the run writes nothing (the collector's rule). Reads only through the
-    client the run captured.
+    client the run captured. An answer that comes back after the stop is never taken (`going()` includes
+    `Task.isCancelled`): a cancelled list read ends without throwing, so AppleCare's would come back as "no records" (the
+    device detail's gotcha too; the mutant that ignored cancellation got no request through for AppleCare, only for
+    Activation Lock, which `cancelStopsFurtherReads` holds).
 - **Progress and the estimate**: `sweepProgress` is the sweep running and its devices answered (read, failed twice, or never
   sendable) of the devices it covers (`Sweep.Progress.words`, "Activation Lock: 5 of 6 devices"). `sweepEstimate` is made
   once the lists are read and before the first sweep's first read: every chosen sweep's devices at the client's rate then

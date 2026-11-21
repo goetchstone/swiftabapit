@@ -155,7 +155,8 @@ public enum Sweep: String, CaseIterable, Sendable {
     /// Reads each of `ids` (the order kept, a repeated id asked once) through `read`, at most `limit` at once, then once
     /// more, a read at a time, those that failed. An id that can't go in a path is never sent. A 403 or a failure of the key,
     /// the token or the account stops the asking. `going()` is asked after every answer: once it is false no read starts,
-    /// the reads in flight are cancelled, and what they bring isn't taken. `answered(done, total)` is called before the first
+    /// the reads in flight are cancelled, and what they bring isn't taken. That last part matters: a list read whose task is
+    /// cancelled ends without throwing (AppleCare's coverage is one), so a cancelled read can come back as "no records". `answered(done, total)` is called before the first
     /// read and after each device is settled (read, failed twice, or never sendable).
     @MainActor
     static func run(_ ids: [String], limit: Int = inFlight, read: @escaping @Sendable (String) async throws -> [Resource],
