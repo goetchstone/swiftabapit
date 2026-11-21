@@ -27,6 +27,8 @@ struct HistoryTransferTests {
         var version = "0.2.0"
         var errors = "{}"
         var items: [(resource: String, id: String, attributes: JSONObject)] = []
+        /// Items as stored text, for a row that isn't JSON.
+        var rawItems: [(resource: String, id: String, text: String)] = []
     }
 
     /// A file with abapit's own `SCHEMA` (the golden's text) and `rows`, in a new folder; its path.
@@ -43,6 +45,10 @@ struct HistoryTransferTests {
             let insert = "INSERT INTO snapshots (id, taken_at, org_client_id, org_name, org_scope, abapit_version, errors) VALUES "
                 + "(\(row.id), \(quote(row.takenAt)), \(quote(row.client)), \(quote(row.name)), \(quote(row.scope)), \(quote(row.version)), \(quote(row.errors)))"
             guard sqlite3_exec(db, insert, nil, nil, nil) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
+            for item in row.rawItems {
+                let sql = "INSERT INTO items VALUES (\(row.id), \(quote(item.resource)), \(quote(item.id)), \(quote(item.text)))"
+                guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
+            }
             for item in row.items {
                 let sql = "INSERT INTO items VALUES (\(row.id), \(quote(item.resource)), \(quote(item.id)), \(quote(JSONValue.object(item.attributes).jsonText)))"
                 guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
@@ -107,13 +113,14 @@ struct HistoryTransferTests {
         guard case .imported(let report) = outcome else { Issue.record("\(outcome)"); return }
         #expect(report.imported == 1 && report.orgs == 1 && report.skipped == 4 && report.skippedAccounts == 3 && report.alreadyHere == 0)
         let mine = try await stored(world)
-        #expect(mine.map(\.takenAt) == ["2026-09-01T08:00:00Z"] && mine.first?.clientID == Self.a && mine.first?.orgName == "Org a")
-        let snapshot = try await world.history!.load(mine[0].id, org: world.orgs.store["a"]!)
+        let first = try #require(mine.first)
+        #expect(mine.map(\.takenAt) == ["2026-09-01T08:00:00Z"] && first.clientID == Self.a && first.orgName == "Org a")
+        let snapshot = try await world.history!.load(first.id, org: world.orgs.store["a"]!)
         #expect(snapshot.resources["devices"]?.map(\.id) == ["MINE0001"], "only the matched snapshot's devices, never a stranger's")
         // Nothing is under the other client's org either, and the words never name an id.
         #expect(try await stored(world, org: "b").isEmpty)
         let words = world.screens.historyTransfer.summary ?? ""
-        #expect(words == "Imported 1 snapshot for 1 organization. 4 skipped because no organization here has that client ID (3 accounts). 0 attributes left out by the snapshot policy.", "\(words)")
+        #expect(words == "Imported 1 snapshot for 1 organization. 4 skipped because no organization of this client has that client ID (3 accounts); switch client to import another customer's. 0 attributes left out by the snapshot policy.", "\(words)")
         #expect(!words.contains("CANARYCLIENT") && !words.contains(Self.b))
         // The other client, once active, takes its own; the first import's snapshot isn't repeated.
         world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
@@ -279,7 +286,8 @@ struct HistoryTransferTests {
         guard case .imported(let again) = await world.screens.historyTransfer.importHistory(from: url) else { Issue.record("not imported"); return }
         #expect(again.imported == 0 && again.alreadyHere == 2 && again.orgs == 0)
         #expect(try await stored(world) == before)
-        #expect(world.screens.historyTransfer.summary?.contains("2 were already here.") == true)
+        #expect(world.screens.historyTransfer.summary?.contains("2 had the same time as a snapshot already here") == true)
+        #expect(world.screens.historyTransfer.summary?.contains("weren't imported again") == true)
     }
 
     /// A file that isn't abapit's is refused in words, and nothing is written.
@@ -310,33 +318,190 @@ struct HistoryTransferTests {
         await Task.yield()
         world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
         let outcome = await task.value
-        guard case .stopped(let report) = outcome else { Issue.record("\(outcome)"); return }
+        guard case .stopped(let report, _) = outcome else { Issue.record("\(outcome)"); return }
         #expect(report.imported == 0)
         #expect(world.screens.historyTransfer.summary == nil && world.screens.historyTransfer.problem == nil)
         #expect(try await stored(world).isEmpty)
         #expect(try await stored(world, org: "b").isEmpty)
     }
 
+    // MARK: the rest of the review (PR 36)
+
+    /// Two snapshots of one org in one second, in one file, are both written: the second is this run's own, not "already here".
+    /// The same file again finds both already there, and says it by time, not as a repeat of one.
+    @Test func twoSnapshotsOfOneSecondAreBothImported() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let world = try await Self.world()
+        let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")]),
+                    Row(id: 2, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D2")])]
+        let url = URL(filePath: try Self.abapitFile(rows, in: source))
+        guard case .imported(let first) = await world.screens.historyTransfer.importHistory(from: url) else { Issue.record("not imported"); return }
+        #expect(first.imported == 2 && first.alreadyHere == 0 && !first.words.contains("same time"))
+        #expect(try await stored(world).count == 2)
+        guard case .imported(let again) = await world.screens.historyTransfer.importHistory(from: url) else { Issue.record("not imported"); return }
+        #expect(again.imported == 0 && again.alreadyHere == 2)
+        #expect(try await stored(world).count == 2)
+    }
+
+    /// A row that doesn't read, or a time that doesn't parse, is counted and skipped; the snapshots around it are imported.
+    @Test func aCorruptRowAndAnUnparseableTimeAreSkippedAndCounted() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let world = try await Self.world()
+        var corrupt = Row(id: 2, takenAt: "2026-09-02T08:00:00Z", client: Self.a, items: [Self.device("D2")])
+        corrupt.rawItems = [("devices", "BAD", "[1, 2] not an object CANARYBAD")]
+        let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")]), corrupt,
+                    Row(id: 3, takenAt: "2026-09-03T08:00:00Z", client: Self.a, items: [Self.device("D3")])]
+        guard case .imported(let report) = await world.screens.historyTransfer.importHistory(from: URL(filePath: try Self.abapitFile(rows, in: source))) else {
+            Issue.record("a corrupt row must not abort the import"); return
+        }
+        #expect(report.imported == 2 && report.unreadable == 1)
+        #expect(world.screens.historyTransfer.summary?.contains("1 couldn't be read.") == true && world.screens.historyTransfer.summary?.contains("CANARYBAD") == false)
+        #expect(try await stored(world).map(\.takenAt) == ["2026-09-03T08:00:00Z", "2026-09-01T08:00:00Z"])
+        // An unparseable time: skipped the same way.
+        let other = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: other) }
+        let world2 = try await Self.world()
+        let timed = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a), Row(id: 2, takenAt: "yesterday-ish CANARYTIME", client: Self.a),
+                     Row(id: 3, takenAt: "2026-09-03T08:00:00Z", client: Self.a)]
+        guard case .imported(let report2) = await world2.screens.historyTransfer.importHistory(from: URL(filePath: try Self.abapitFile(timed, in: other))) else {
+            Issue.record("an unparseable time must not abort the import"); return
+        }
+        #expect(report2.imported == 2 && report2.unreadable == 1)
+        #expect(world2.screens.historyTransfer.summary?.contains("1 couldn't be read.") == true && world2.screens.historyTransfer.summary?.contains("CANARYTIME") == false)
+    }
+
+    /// Before each write the org is looked up again: removed (or on another client ID) since the import started, nothing more is
+    /// written under it, and the import says why. Here the Apple org is removed while the client's Mosyle org is the active one,
+    /// the one change that doesn't bump the generation.
+    @Test func anOrgRemovedDuringTheImportIsNotWrittenUnder() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let world = try await World.make(mosyle: true)
+        world.orgs.select("m")
+        let transfer = world.screens.historyTransfer
+        let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")]),
+                    Row(id: 2, takenAt: "2026-09-02T08:00:00Z", client: Self.a, items: [Self.device("D2")])]
+        let generation = world.orgs.generation
+        transfer.beforeWrite = { try? await world.orgs.remove("a", deleteSecrets: false) }
+        let outcome = await transfer.importHistory(from: URL(filePath: try Self.abapitFile(rows, in: source)))
+        #expect(world.orgs.generation == generation, "the removal didn't bump the generation: only the lookup can catch it")
+        guard case .stopped(let report, let why?) = outcome else { Issue.record("\(outcome)"); return }
+        #expect(report.imported == 0 && why.contains("Org a was removed or its client ID changed"))
+        #expect(transfer.problem?.hasPrefix("Stopped: Org a was removed") == true)
+        #expect(try await world.history!.snapshots(org: World.profile("a")).isEmpty, "nothing under the removed org's id")
+    }
+
+    @Test func anOrgIsTheSameOnlyUnderItsClientID() async throws {
+        let world = try await World.make()
+        let org = try #require(world.orgs.store["a"])
+        #expect(HistoryTransfer.isStill(org, in: world.orgs))
+        var other = org
+        other.clientID = "SOMEONE-ELSE"
+        #expect(!HistoryTransfer.isStill(other, in: world.orgs))
+        #expect(!HistoryTransfer.isStill(World.profile("zzz"), in: world.orgs))
+        var padded = org
+        padded.clientID = "  " + org.clientID.lowercased() + " "
+        #expect(HistoryTransfer.isStill(padded, in: world.orgs), "the same key as the store's compare it")
+    }
+
+    // MARK: the policy's shape rule (items 5 and 6)
+
+    /// A kept attribute keeps a scalar or a list of scalars; an object (or a list with one) under a kept name, which Apple never
+    /// sends there, is left out and counted, whoever sent it.
+    @Test func aKeptAttributeNeverHoldsANestedObject() async throws {
+        let device = Resource(type: "devices", id: "D1", attributes: [
+            "serialNumber": .string("D1"), "deviceModel": .object(["imei": .string("CANARYNESTEDIMEI"), "wifiMacAddress": .string("CANARYNESTEDMAC")]),
+            "status": .string("ASSIGNED"), "color": .array([.string("blue"), .object(["email": .string("CANARYNESTEDLISTMAIL")])]),
+            "productFamily": .array([.string("Mac"), .string("iPad")]), "orderNumber": .null,
+        ])
+        let kept = SnapshotPolicy.keep(device, SnapshotPolicy.devices)
+        #expect(kept.item.attributes.keys.sorted() == ["orderNumber", "productFamily", "serialNumber", "status"])
+        #expect(kept.unknown == [Array("deviceModel".utf8), Array("color".utf8)])
+        let user = Resource(type: "users", id: "U1", attributes: [
+            "managedAppleAccount": .string("u1@appleid.example.com"), "status": .object(["email": .string("CANARYNESTEDMAIL"), "firstName": .string("CANARYNESTEDNAME")]),
+        ])
+        let keptUser = SnapshotPolicy.keep(user, SnapshotPolicy.users)
+        #expect(keptUser.item.attributes.keys == ["managedAppleAccount"])
+        for item in [kept.item, keptUser.item] { #expect(!JSONValue.object(item.attributes).jsonText.contains("CANARYNESTED")) }
+    }
+
+    /// The one object Apple sends under a kept name, `customSettingsValues`, keeps its two inner keys and nothing else, and its
+    /// profile is withheld by `keep` itself, for the collector's reads and an import alike.
+    @Test func keepWithholdsAProfileAndAllowlistsItsInnerKeys() async throws {
+        let configuration = Resource(type: "configurations", id: "C1", attributes: [
+            "name": .string("Wi-Fi"), "customSettingsValues": .object([
+                "configurationProfile": .string("<plist>CANARYKEEPWIFIPW</plist>"), "filename": .string("wifi.mobileconfig"), "extra": .string("CANARYKEEPEXTRA"),
+            ]),
+        ])
+        let kept = SnapshotPolicy.keep(configuration, SnapshotPolicy.configurations)
+        let text = JSONValue.object(kept.item.attributes).jsonText
+        #expect(!text.contains("CANARYKEEP") && text.contains("wifi.mobileconfig"), "\(text)")
+        let inner = try #require(kept.item.attributes["customSettingsValues"]?.object)
+        #expect(inner.keys.sorted() == ["configurationProfile", "filename"] && inner["configurationProfile"]?.string?.contains("withheld") == true)
+        // A string where an object is expected is withheld too, and a nested object inside an inner key is left out.
+        let odd = Resource(type: "configurations", id: "C2", attributes: ["customSettingsValues": .string("CANARYKEEPSTRING")])
+        #expect(!JSONValue.object(SnapshotPolicy.keep(odd, SnapshotPolicy.configurations).item.attributes).jsonText.contains("CANARYKEEP"))
+        let deep = Resource(type: "configurations", id: "C3", attributes: ["customSettingsValues": .object(["filename": .object(["x": .string("CANARYKEEPDEEP")])])])
+        let keptDeep = SnapshotPolicy.keep(deep, SnapshotPolicy.configurations)
+        #expect(!JSONValue.object(keptDeep.item.attributes).jsonText.contains("CANARYKEEP"))
+    }
+
+    /// Through an import, nested canaries under kept names never reach the history.
+    @Test func nestedValuesUnderKeptNamesNeverReachTheHistory() async throws {
+        let source = try Self.folder(), history = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: history) }
+        let world = try await Self.world(store: history)
+        let items: [(resource: String, id: String, attributes: JSONObject)] = [
+            Self.device("D1", ["deviceModel": .object(["imei": .string("CANARYIMPNESTED")])]),
+            ("users", "U1", ["managedAppleAccount": .string("u1@appleid.example.com"), "status": .object(["email": .string("CANARYIMPMAIL"), "firstName": .string("CANARYIMPNAME")])]),
+        ]
+        let path = try Self.abapitFile([Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: items)], in: source)
+        guard case .imported(let report) = await world.screens.historyTransfer.importHistory(from: URL(filePath: path)) else { Issue.record("not imported"); return }
+        #expect(report.attributesLeftOut == 2)
+        let stored = try Self.bytes(in: history)
+        for canary in ["CANARYIMPNESTED", "CANARYIMPMAIL", "CANARYIMPNAME"] { #expect(stored.range(of: Data(canary.utf8)) == nil, "\(canary)") }
+    }
+
     // MARK: export
 
-    /// The copy the operator saves: what the panel says it holds, a private database of the history, never over a file.
-    @Test func exportingACopyWritesAPrivateDatabaseAndNeverReplacesAFile() async throws {
+    /// The copy is the active client's only (the clients rule): another client's snapshots and findings, and an removed org's
+    /// history, are not in its bytes; the file is named for the client and the panel says so.
+    @Test func aCopyHoldsTheActiveClientsHistoryOnly() async throws {
         let folder = try Self.folder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let world = try await Self.world()
-        try await world.history!.record(org: try #require(world.orgs.store["a"]), takenAt: Date(timeIntervalSince1970: 1_795_000_000), resources: ["devices": [Resource(type: "devices", id: "D1", attributes: Self.device("D1").attributes)]])
+        let a = try #require(world.orgs.store["a"]), b = try #require(world.orgs.store["b"])
+        let history = try #require(world.history)
+        func device(_ serial: String) -> Resource { Resource(type: "devices", id: serial, attributes: Self.device(serial).attributes) }
+        try await history.record(org: a, takenAt: Date(timeIntervalSince1970: 1_795_000_000), resources: ["devices": [device("CANARYCLIENTAONE")]])
+        try await history.record(org: b, takenAt: Date(timeIntervalSince1970: 1_795_000_100), resources: ["devices": [device("CANARYCLIENTBONE")]])
+        try await history.seen(org: a, rule: "rulea", subjects: ["CANARYSUBJECTA"], at: Date(timeIntervalSince1970: 1_795_000_000))
+        try await history.seen(org: b, rule: "ruleb", subjects: ["CANARYSUBJECTB"], at: Date(timeIntervalSince1970: 1_795_000_000))
         let transfer = world.screens.historyTransfer
+        #expect(transfer.exportFileName == "Org a - history.sqlite" && transfer.exportWords.contains("Org a's snapshots only"))
+        for word in ["serial numbers", "Managed Apple Accounts", "Needs-attention", "no other client's", "no key or token", "Only you can read"] {
+            #expect(transfer.exportWords.contains(word), "the panel says: \(word)")
+        }
         let copy = folder.appending(path: "copy.sqlite")
         await transfer.exportCopy(to: copy)
-        #expect(transfer.problem == nil && transfer.summary == "Saved a copy of the snapshot history as copy.sqlite.")
+        #expect(transfer.problem == nil && transfer.summary == "Saved a copy of this client's snapshot history as copy.sqlite.")
+        let bytes = try Data(contentsOf: copy)
+        #expect(bytes.range(of: Data("CANARYCLIENTAONE".utf8)) != nil && bytes.range(of: Data("CANARYSUBJECTA".utf8)) != nil, "this client's is in it")
+        for canary in ["CANARYCLIENTBONE", "CANARYSUBJECTB"] { #expect(bytes.range(of: Data(canary.utf8)) == nil, "\(canary): another client's") }
         var info = stat()
         #expect(stat(copy.path(percentEncoded: false), &info) == 0 && info.st_mode & 0o777 == 0o600)
-        #expect(try Data(contentsOf: copy).starts(with: Data("SQLite format 3".utf8)))
+        // Never over a file.
         await transfer.exportCopy(to: copy)
         #expect(transfer.summary == nil && transfer.problem?.contains("already exists") == true, "\(transfer.problem ?? "")")
-        for word in ["serial numbers", "Managed Apple Accounts", "Needs-attention", "no key or token", "Only you can read"] {
-            #expect(HistoryTransfer.exportWords.contains(word), "the panel says: \(word)")
-        }
+        // The other client, once active, gets its own and none of the first's.
+        world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
+        let second = folder.appending(path: "second.sqlite")
+        await transfer.exportCopy(to: second)
+        let secondBytes = try Data(contentsOf: second)
+        #expect(secondBytes.range(of: Data("CANARYCLIENTBONE".utf8)) != nil && secondBytes.range(of: Data("CANARYCLIENTAONE".utf8)) == nil)
+        #expect(secondBytes.range(of: Data("CANARYSUBJECTA".utf8)) == nil)
     }
 }
 

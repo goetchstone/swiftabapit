@@ -6,8 +6,9 @@ import SQLite3
 /// abapit's `history.sqlite`, opened to be copied from (plan Phase 3, "Import abapit history"): read-only, never changed.
 ///
 /// - **Read-only, three ways.** SQLite opens it with `SQLITE_OPEN_READONLY` and the URI `mode=ro&immutable=1`: `immutable`
-///   means no lock file, no journal and no WAL is ever made beside it (a hot journal left by a crashed abapit is ignored,
-///   not rolled back, which would write), and `PRAGMA query_only` is on. The connection reports itself read-only
+///   means no lock file, no journal and no WAL is ever made beside it, and `PRAGMA query_only` is on. Because `immutable` also
+///   ignores a hot journal (rolling it back would write), a non-empty `-journal` or `-wal` beside the file is **refused**
+///   first: reading around it would import the pages of a transaction abapit never committed. The connection reports itself read-only
 ///   (`isReadOnly`), which the tests hold it to. Nothing in this type has a statement that changes data.
 /// - **No link.** The file is opened `O_NOFOLLOW` first and held to a regular file, and SQLite opens it with
 ///   `SQLITE_OPEN_NOFOLLOW`, which refuses a link anywhere on the path.
@@ -26,6 +27,12 @@ public actor AbapitHistory {
         case unopenable(path: String, errno: Int32)
         /// Not abapit's history; `why` says what it is instead, in words.
         case notAbapits(why: String)
+        /// A non-empty `-journal` or `-wal` beside the file: abapit stopped part way through a write. Reading it as it stands would
+        /// import pages of a transaction that never committed (a snapshot of 13 of 2000 devices, with `integrity_check` saying ok).
+        case unfinishedWrite(path: String)
+        /// The files beside it couldn't be looked at (the sandbox, or the system's error), so whether a write was left unfinished
+        /// isn't known.
+        case unchecked(path: String, errno: Int32)
         /// SQLite's result code (its message can quote the file's own text, so it isn't carried).
         case database(code: Int32)
         /// A row that doesn't read, in words that quote nothing from it.
@@ -37,6 +44,11 @@ public actor AbapitHistory {
             case .notAFile(let path): "\(path) isn't a file."
             case .unopenable(let path, let code): "\(path) couldn't be opened (\(String(cString: strerror(code))))."
             case .notAbapits(let why): "That isn't abapit's history: \(why) Nothing was read from it and it was not changed."
+            case .unfinishedWrite(let path):
+                "abapit stopped part way through writing \((path as NSString).lastPathComponent): an unfinished write was left beside it. Open the file once "
+                    + "in sqlite3 (for example: sqlite3 <the file> \"select 1\") so SQLite finishes the rollback, then import again. Nothing was read from it and it was not changed."
+            case .unchecked(let path, let code):
+                "Whether abapit left an unfinished write beside \((path as NSString).lastPathComponent) couldn't be checked (\(String(cString: strerror(code)))), so it wasn't imported."
             case .database(let code): "abapit's history couldn't be read (SQLite error \(code)). It was not changed."
             case .corrupt(let what): "abapit's history holds a row this app can't read (\(what))."
             }
@@ -78,32 +90,71 @@ public actor AbapitHistory {
     static let itemColumns = ["snapshot_id INTEGER", "resource TEXT", "item_id TEXT", "attributes TEXT"]
 
     let database: SQLiteDatabase
+    /// The file as checked, held open so SQLite reads that file (`/dev/fd/N`) and not whatever the path leads to later (a FIFO swapped in
+    /// would hang the open). Closed with the actor.
+    private let descriptor: Int32
+    /// Whether SQLite reads the checked descriptor (`/dev/fd/N`) rather than the path (the fallback where the system won't open that name).
+    nonisolated let readsByDescriptor: Bool
 
     /// Opens `file` read-only and checks it is abapit's.
     public init(file: URL) throws(Failure) {
         let given = file.path(percentEncoded: false)
         guard file.isFileURL, given.hasPrefix("/") else { throw .notAFile(path: given) }
+        // No link on the way: `O_NOFOLLOW` looks at the last name only, and SQLite, handed the descriptor, looks at no path.
+        var prefix = ""
+        for name in given.split(separator: "/").dropLast() {
+            prefix += "/" + name
+            var above = stat()
+            if lstat(prefix, &above) == 0, above.st_mode & S_IFMT == S_IFLNK { throw .link(path: given) }
+        }
         let fd = open(given, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { throw errno == ELOOP ? .link(path: given) : .unopenable(path: given, errno: errno) }
-        defer { close(fd) }
+        var keep = false
+        defer { if !keep { close(fd) } }
         var info = stat()
         guard fstat(fd, &info) == 0 else { throw .unopenable(path: given, errno: errno) }
         guard info.st_mode & S_IFMT == S_IFREG else { throw .notAFile(path: given) }
+        // A journal or WAL beside it holds a write abapit didn't finish; `immutable` would read the file without it applied.
+        for suffix in ["-journal", "-wal"] {
+            var side = stat()
+            if lstat(given + suffix, &side) == 0 {
+                if side.st_size != 0 || side.st_mode & S_IFMT != S_IFREG { throw .unfinishedWrite(path: given) }
+            } else if errno != ENOENT {
+                throw .unchecked(path: given, errno: errno)
+            }
+        }
         // `?` and `#` and `%` in a name are escaped, so the name can't carry a parameter of its own.
         let name = given.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? given
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW
         let opened: SQLiteDatabase
+        var byDescriptor = false
         do throws(SQLiteDatabase.Failure) {
-            opened = try SQLiteDatabase(path: "file:\(name)?mode=ro&immutable=1", flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW)
+            // The descriptor first; the path only if this system won't open the descriptor's name (the path was checked above).
+            // SQLite opens lazily: the first read is what tells whether the descriptor's name works here.
+            if let viaDescriptor = try? SQLiteDatabase(path: "file:/dev/fd/\(fd)?mode=ro&immutable=1", flags: flags),
+               (try? viaDescriptor.userVersion()) != nil {
+                opened = viaDescriptor
+                byDescriptor = true
+            } else {
+                opened = try SQLiteDatabase(path: "file:\(name)?mode=ro&immutable=1", flags: flags)
+            }
         } catch {
             if error.code == SQLiteDatabase.cantOpenSymlink { throw .link(path: given) }
             throw Self.refusal(error.code)
         }
         database = opened
+        readsByDescriptor = byDescriptor
+        descriptor = fd
         try Self.guarded {
             try opened.execute("PRAGMA query_only = ON")
             guard opened.isReadOnly else { throw Failure.notAbapits(why: "it couldn't be opened read-only.") }
             try Self.verify(opened)
         }
+        keep = true
+    }
+
+    deinit {
+        close(descriptor)
     }
 
     /// Whether the connection reports itself read-only and a write through it fails: what the tests hold the open to. (On a

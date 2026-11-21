@@ -9,8 +9,9 @@ the Needs-attention store and `settings.json` are built (PR #33; below); the fle
 service health, out of warranty, the catalog) are built (PR #29); the parity goldens for the store, diff and coverage are
 merged (PR #28); the diff, coverage and fleet-age ports are built (PR #31), and read devices as the fleet reports do
 (PR #32). The Apple collector is built on branch
-`phase-3-apple-collector` (below, "The Apple collector"), without its per-device sweeps. The sweeps, the Mosyle collector,
-the abapit import, the Changes screen and scheduled snapshots are still to do. The Reports module (CSV, the export policy,
+`phase-3-apple-collector` (below, "The Apple collector"), without its per-device sweeps. The abapit import and the export of a
+copy are built (PR #36; "Import and export", below). The sweeps, the Mosyle collector, the Changes screen and scheduled snapshots
+are still to do. The Reports module (CSV, the export policy,
 Find, the dashboard's stats) shipped in phase 1b, and the audit digests and the dashboard's quiet services and recent
 events in phase 2a; their notes are below.
 
@@ -98,7 +99,7 @@ events in phase 2a; their notes are below.
     original one. `org_scope` is the Apple scope, or the provider's name (`mosyle`) for another org; `org_client_id` is
     empty for a Mosyle org; `abapit_version` is `swiftabapit <version>`, so a row this app wrote is never taken for
     abapit's. Text is bound by its bytes: a NUL inside a name or an id is kept.
-  - `snapshots(org:limit:)` newest first by id, at most 100 by default, with abapit's `device_count` and `counts`;
+  - `snapshots(org:limit:)` newest first by `taken_at`, then id (PR 36; "Import and export"), at most 100 by default, with abapit's `device_count` and `counts`;
     `load(_:org:)` every item, each resource's items by id.
   - `latest(_:org:)` (coordinating session's proposal, 2026-11-20, for the operator): the newest snapshot that tried to
     read the resource (it is in that snapshot's `counts` or `errors`) answers. If it read it, `.read` with what it found,
@@ -108,8 +109,8 @@ events in phase 2a; their notes are below.
     none", plan §2.3 defect 13). A read that recorded part and then failed (in `counts` and `errors` both) is never a good
     copy. A snapshot that didn't try is passed over; nil when none tried. Each answer carries its snapshot's `takenAt`, so
     its age always shows (invariant 8).
-  - `prune(org:keep:)` keeps the org's newest `keep` **by id** (an import records old snapshots after new ones, so
-    `taken_at` would keep the wrong ones), and the items go too; a negative `keep` removes nothing. `removeAll(org:)`
+  - `prune(org:keep:)` keeps the org's newest `keep` **by `taken_at`, then id** (an import records old snapshots after
+    new ones, which the id would keep; changed in PR 36), and the items go too; a negative `keep` removes nothing. `removeAll(org:)`
     for an org the operator removed with its history.
   - `orgIDs()`: every org id with any snapshot or Needs-attention finding (PR #33).
 - **One org at a time**: every query filters by `org_id`, the org's `OrgProfile.id` (never the client ID: a Mosyle org
@@ -298,12 +299,22 @@ Settings has a History group: **Import abapit history…** and **Export a copy�
 `History/AbapitImport.swift`, the copy is `History/ExportCopy.swift`). Both take a file the operator picks in a panel (the
 sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/share/abapit` by any other route.
 
-- **The file is opened read-only, and nothing is written beside it.** `AbapitHistory` opens it `O_NOFOLLOW` first (a regular
-  file) and then with SQLite as `SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW`, URI `mode=ro&immutable=1`,
-  `PRAGMA query_only` on. `immutable` means SQLite makes no lock file, journal or WAL, and ignores a hot journal a crashed
-  abapit left (it would roll one back, which writes). `AbapitImportTests` hold it: bytes, mode, modification time and the
-  folder's names unchanged after every read; a read-only file in a read-only folder still reads; a hot journal is left
-  byte for byte; and the connection reports itself read-only and refuses a write (`refusesWrites`).
+- **The file is opened read-only, and nothing is written beside it.** `AbapitHistory` opens it `O_NOFOLLOW` first (a regular file; a
+  FIFO is refused without opening), looks at each name above it for a link, and holds that descriptor: SQLite is given
+  `/dev/fd/N` (`SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW`, URI `mode=ro&immutable=1`, `PRAGMA query_only`), so
+  it reads the file that was checked, never what the path leads to a moment later (a FIFO swapped in would hang the open). Where
+  the system won't open that name (the first read tells), it falls back to the checked path with the same flags
+  (`readsByDescriptor` says which). `immutable` means SQLite makes no lock file, journal or WAL. `AbapitImportTests` hold it: bytes, mode,
+  modification time and the folder's names unchanged after every read; a read-only file in a read-only folder still reads; the
+  connection reports itself read-only and refuses a write (`refusesWrites`).
+- **An unfinished write is refused, never read around** (the review of PR 36, invariant 8). `immutable` ignores a hot journal,
+  so a crashed abapit's uncommitted pages would be imported as a real snapshot (the reviewer's probe: 13 of 2000 devices, with
+  `integrity_check` saying ok). Before opening, `lstat` of `<file>-journal` and `<file>-wal`: either one non-empty (or not a
+  regular file) refuses the import in words that say to open the file once in `sqlite3` so SQLite finishes the rollback, then
+  import again; an empty one is a leftover, not a write. If a sibling can't be looked at (the sandbox, the system) the import is
+  refused and says so, since whether a write was left isn't known. `aHotJournalIsRefusedNotReadAround` builds the crash the way
+  the probe did (pages spilled to the file before commit, file and journal copied mid-transaction) and then lets SQLite recover
+  it and imports only what was committed.
 - **abapit's schema or a refusal in words**: `user_version` 0, and a `snapshots` and an `items` table with exactly abapit's
   columns and types. A file this app wrote (version 1 or more), a newer one, another program's database, a table with
   other columns, a file that isn't SQLite, a folder and a link (as the file or on its path) are each refused, and the file is
@@ -314,11 +325,15 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   nothing of the row.
 - **Mapped by client ID, never by name.** A snapshot goes to the Apple org of the *active client* whose client ID is the
   snapshot's `org_client_id` (trimmed and lower-cased as `OrgsModel.clientKey` compares them). One no org here has is skipped
-  and counted (snapshots, and how many accounts), never put under the active org, and the result line never names an id. A
+  and counted (snapshots, and how many accounts), never put under the active org, and the result line never names an id; it says
+  "no organization of this client has that client ID" and to switch client to import another customer's (the id may well belong to
+  an org of another client). A
   client ID two orgs hold maps to neither; a Mosyle org (no client ID) is never a target. A client holds one Apple org, so
   importing for another customer means switching client and importing again; the same file is safe to import twice (below).
   The orgs and the generation are captured when the import starts: a switch of org or client stops it (`.stopped`), and its
-  result is never shown under the new client (the clients rule).
+  result is never shown under the new client (the clients rule). Before each write the org is looked up again: removed, or on
+  another client ID, since the import started (a change that doesn't bump the generation: the Apple org removed while the
+  client's Mosyle org is active), the import stops and says so, and nothing more is written under it.
 - **Through the snapshot policy** (the operator's "Minimal" decision and its three later answers: `SnapshotPolicy`): each
   item goes through `SnapshotPolicy.keep` for its resource, compared by bytes. A resource the policy doesn't list is dropped
   whole, a Business-only one is dropped for a School org, and an attribute off the allowlist is dropped and counted ("N
@@ -327,7 +342,13 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   decision): abapit stored the single read's profile, with its Wi-Fi and VPN passwords, and the policy keeps
   `customSettingsValues` for the collector's list read, which sends null. The first version of the import kept the password
   (found by the canary test); `record`'s own backstop doesn't catch it, since a profile's name isn't a secret's name.
-  `record` still leaves out attributes whose names look like a secret's.
+  `record` still leaves out attributes whose names look like a secret's. That withholding now lives in `SnapshotPolicy.keep` itself, for
+  every rule and every caller (the collector's reads too), the single home of "a snapshot keeps no custom setting's profile". `keep`
+  also holds the *shape* of a kept attribute: only a scalar or a list of scalars is kept, so a nested object under a kept name
+  (a `deviceModel` of `{imei: …}`, a `status` of `{email: …}`, which reached the store in the first version) is left out and counted.
+  The checked exception, from `Contracts/apple/` (every kept attribute of every rule, `applecare`, `activation_lock` and
+  `mdm_details` included, is a string, a date, an enum, a boolean, a number or a list of enum strings): `customSettingsValues`, an
+  object (`CustomSettingsValues`), keeps its two inner keys, `configurationProfile` (the withheld marker) and `filename`, and no other.
 - **Errors are codes.** abapit's `errors` hold Python's exception text, URLs included. Only the *key* is read: a resource the
   policy keeps becomes `abapit error`, and `applecare_partial` becomes `abapit partial` for `applecare` (its items are kept,
   and the code makes it never a good copy for `latest`). A key for a resource the policy doesn't list is dropped and counted.
@@ -339,34 +360,49 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   `abapit`: text from the file is never copied as it stands). The check and the write are one transaction. That key is
   org + `taken_at` + provenance, not a content hash and not abapit's snapshot id (a second abapit file with other ids would
   otherwise import twice, and a hash would need storing). A native snapshot is `swiftabapit <version>`, so never mistaken
-  for one. Note for the reviewer: moving `history.sqlite` aside (the Add refusal's advice) loses the id protection of
+  for one. A snapshot at a time this run has itself written for the org (two taken in one second) is written, not skipped; the
+  result says the others "had the same time as a snapshot already here", never that they were imported before. Note for the reviewer: moving `history.sqlite` aside (the Add refusal's advice) loses the id protection of
   `takenIDs`, so a moved-back file, or a new org whose slug matches an old one's, could collide; the import doesn't know a
   moved-aside file's ids.
-- **Order hazard, not changed here**: `latest` and `prune` go by the store's id, and an import records old snapshots *after*
-  any the org already has, so an imported old snapshot would answer `latest` ahead of a newer native one. Import before the
-  first native snapshot of an org (the live check says so); a later PR can order by `taken_at`.
-- **Export a copy** (`SnapshotStore.exportCopy(to:)`): `VACUUM INTO` a file at a path from a Save panel whose message says what
-  the copy holds (`exportCopyWords`: serial numbers, device models, services, the Managed Apple Accounts the policy keeps, and
-  the Needs-attention choices; no key or token; only you can read it). `0600` from the instant it exists
-  (`umask(077)` around the call: SQLite makes the file itself); a destination that exists and isn't empty is refused, never
-  replaced; SQLite refuses to write into *any* existing file, so an existing empty one (a panel's placeholder) is removed
-  first; no link on the path or as the file (each name `lstat`ed, the file `O_NOFOLLOW`-created by SQLite on a file store),
-  a hard-linked empty file refused, and what the path leads to afterwards checked (regular, one name, `0600`, not empty). A
-  newer file the store only reads can be copied (`query_only` lifted for that one statement). The copy has this app's schema
-  (version 2), so importing it again is refused ("written by this app").
+- **Order is by time** (the review of PR 36): `snapshots`, both `latest` queries and `prune` order by `taken_at DESC, id DESC`
+  (the id only breaks a tie), so an import, which records old snapshots after new ones, never outranks a newer native snapshot and
+  `prune(keep:)` keeps the newest by time. `Schema.takenAt` is fixed-width UTC (`YYYY-MM-DDTHH:MM:SSZ`, 20 bytes), so text order is
+  time order, and every writer writes it: `record` and `recordImported` both go through one `insert`, whatever time the caller
+  passed (`everyWriterWritesFixedWidthTimes`). `anOlderImportNeverOutranksANewerNativeSnapshot` and
+  `twoFilesImportedNewerFirstAreStillOrderedByTime` hold it; `history.json`'s reads and prunes are unchanged by it. The old advice to
+  import before an org's first native snapshot is gone.
+- **Export a copy** (`SnapshotStore.exportCopy(to:orgs:)`) is **the active client's only** (the plan's clients rule: no export mixes
+  clients; the coordinating session's decision): `VACUUM INTO` a private working file in the store's own `0700` folder (a new
+  `0700` folder under the temporary folder for an in-memory store), every other org's snapshots (items go with them) and
+  Needs-attention rows deleted, `VACUUM`ed again so no page of theirs survives, and only then written out; a removed org's history
+  isn't in it either. The default file name is `ScreenWords.filename("history.sqlite", client: orgs.exportClient)` and the Save
+  panel says it holds this client's snapshots (serial numbers, device models, services, the Managed Apple Accounts the policy
+  keeps) and Needs-attention choices only, no key or token, and that only the owner can read it. The destination is made by this
+  call, by descriptor, and SQLite never opens it: `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)`, the bytes copied in and
+  `fsync`ed, then what the path leads to is checked (regular, one name, `0600`, not empty, the same inode). No process-wide `umask`.
+  **An existing destination**: non-empty, a link, a folder or a second name is refused, never replaced; an existing *empty* regular
+  file (a Save panel's placeholder) is written into through its descriptor (checked again on the descriptor, narrowed to `0600`
+  before a byte is written), not unlinked or replaced (my choice: no rename to get wrong). A failure removes a file this call made
+  (only while the path still leads to it) or empties the placeholder again. No link on the path (each name `lstat`ed). A newer
+  file the store only reads can be copied (`query_only` lifted for the one statement). The copy has this app's schema (version 2), so importing it
+  is refused ("written by this app"). `aDestinationWidenedAfterTheCopyIsRefusedAndRemoved` drives the post-copy check through a test hook
+  (the disk changing under the call).
 - **Parity** (`HistoryImportParityTests`): a fake abapit database is made from `history.json`'s own schema and seed and
   imported (A, then B as the active client); abapit's `list_snapshots`, `latest_resource` and `snapshot_resource` answers are
   compared with the store's. The listed differences: store ids differ (found by `taken_at`); attributes off the allowlist
   (the seed's `flag`, `tags`, `note` and a user's `name`) are cut from the expected items; error values are the code, not
   abapit's text; `org_name` is the org's name here and `abapit_version` is `abapit 0.2.0`; `limit` -1 is not wired (abapit
   reads it as no limit, the store clamps it to none, PR #30); a client ID no org has, and snapshot ids that don't exist,
-  have no call to make. **Plan defect 13** shows in none of the golden's `latest_resource` cases (an imported snapshot's
+  have no call to make; `latest_applecare` and the `prunes` run in order over the imported store (the store's `prune` keeps the newest
+  by time; the seed's times rise with its ids, so abapit's answers hold). **Plan defect 13** shows in none of the golden's `latest_resource` cases (an imported snapshot's
   `counts` hold only resources with items, so nothing newer shadows an older copy); `aFailureAtTheNewestSnapshotIsNotHidden
   ByAnOlderCopy` holds the deviation itself: abapit shows the older copy as current, this store says it failed.
 - **Live check (the operator's)**: in Settings, Import abapit history…, choose `~/.local/share/abapit/history.sqlite` (the panel
   shows hidden files); read the result line (imported, already here, skipped for no matching client ID, left out by the policy);
   then Export a copy…, and open it in `sqlite3` to see `snapshots`, `items` and `devices_view`. Never done by a session.
-  Import before the first native snapshot of the org (the order hazard above).
+  Also confirm the sandbox lets the app look at the files beside the one you pick (the import refuses, and says why, if it can't
+  check for abapit's `-journal` or `-wal`) and open the file through `/dev/fd` (it falls back to the path if not; `readsByDescriptor`).
+  If the import says an unfinished write was left beside the file, run `sqlite3 <the file> "select 1"` once and import again.
 
 ### Reports
 
@@ -641,7 +677,7 @@ Files: `ReportRead.swift` (`ListRead`, `DeviceRead`, `sent`), `ActivationLockRep
   the write; a refused second run and its words after a switch; School; no org or no history; the history opened again at
   an Add; a new org's id avoiding the history's; the allowlist written out).
 - The store: `SnapshotStoreTests` (what reads back; the last duplicate; `latest` answering from the newest attempt, none
-  and failed included; the bounded list; one org at a time; an org with no id; prune by id with its items, counting the
+  and failed included; the bounded list; one org at a time; an org with no id; prune by time with its items, counting the
   org's own only; removing an org's history; `orgIDs`; a NUL kept; a secret-looking attribute left out and counted,
   canary and all; the last good copy, empty included, never a part read that failed; an escape of half a character; a fault
   part way through a record; the folder, file and journal modes; the mode the moment the file exists; a wider folder and

@@ -171,7 +171,7 @@ struct SettingsView: View {
     /// copy of this app's history for `sqlite3` or Datasette. Only files the operator picks in a panel.
     private var historySection: some View {
         Section("History") {
-            Text("Import abapit's history from the retired Python tool, or save a copy of this app's history to open in sqlite3 or Datasette.")
+            Text("Import abapit's history from the retired Python tool, or save a copy of this client's history to open in sqlite3 or Datasette.")
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Import abapit history…") { chooseHistoryToImport() }
@@ -212,9 +212,9 @@ struct SettingsView: View {
     private func chooseWhereToExport() {
         let panel = NSSavePanel()
         panel.title = "Export a copy of the snapshot history"
-        panel.message = HistoryTransfer.exportWords
+        panel.message = transfer.exportWords
         panel.prompt = "Save Copy"
-        panel.nameFieldStringValue = "history.sqlite"
+        panel.nameFieldStringValue = transfer.exportFileName
         panel.allowedContentTypes = [UTType(filenameExtension: "sqlite") ?? .data]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }

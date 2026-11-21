@@ -68,6 +68,7 @@ struct AbapitImportTests {
         let before = try Footprint(path)
         let source = try AbapitHistory(file: URL(filePath: path))
         #expect(await source.refusesWrites())
+        #expect(source.readsByDescriptor, "SQLite reads the descriptor that was checked, not the path again (where the system allows it)")
         for header in try await source.headers() { _ = try await source.load(header) }
         #expect(try Footprint(path) == before)
         #expect(before.names == ["history.sqlite"])
@@ -85,19 +86,82 @@ struct AbapitImportTests {
         #expect(try Footprint(path) == before)
     }
 
-    /// A journal abapit left behind (a crash) is not rolled back, which would write: `immutable` ignores it, and it is still
-    /// there, byte for byte, afterwards.
-    @Test func aHotJournalIsIgnoredNotReplayed() async throws {
+    /// A crashed abapit's file with its hot journal, built as a crash leaves it: a transaction whose pages spilled to the database
+    /// file before commit, the file and its journal copied while it is open, then the transaction rolled back. Read as it
+    /// stands (`immutable`) the file holds a half-written snapshot that `integrity_check` calls ok.
+    static func crashed(in folder: URL) throws -> (file: String, committed: Int, torn: Int) {
+        let work = Scratch.path(folder) + "/work", crash = Scratch.path(folder) + "/crash"
+        mkdir(work, 0o700)
+        mkdir(crash, 0o700)
+        let path = work + "/history.sqlite"
+        let database = try SQLiteDatabase(path: path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+        try database.execute(Schema.abapit)
+        try database.run("INSERT INTO snapshots (id, taken_at, org_client_id, org_name, org_scope, abapit_version, errors) VALUES (1, '2026-09-01T08:00:00Z', 'CLIENT-TORN', 'Org', 'business', '0.2.0', '{}')")
+        for i in 0..<50 { try database.run("INSERT INTO items VALUES (1, 'devices', ?, ?)", [.text("COMMITTED\(i)"), .text(#"{"deviceModel": "A"}"#)]) }
+        try database.execute("PRAGMA cache_size = 2")
+        try database.execute("PRAGMA cache_spill = ON")
+        try database.execute("BEGIN")
+        try database.run("INSERT INTO snapshots (id, taken_at, org_client_id, org_name, org_scope, abapit_version, errors) VALUES (2, '2026-09-02T08:00:00Z', 'CLIENT-TORN', 'Org', 'business', '0.2.0', '{}')")
+        for i in 0..<2000 {
+            try database.run("INSERT INTO items VALUES (2, 'devices', ?, ?)", [.text("UNCOMMITTED\(i)"), .text("{\"deviceModel\": \"" + String(repeating: "B", count: 200) + "\"}")])
+        }
+        try database.run("DELETE FROM items WHERE snapshot_id = 1 AND item_id >= 'COMMITTED25'")
+        try FileManager.default.copyItem(atPath: path, toPath: crash + "/history.sqlite")
+        try FileManager.default.copyItem(atPath: path + "-journal", toPath: crash + "/history.sqlite-journal")
+        try database.execute("ROLLBACK")
+        return (crash + "/history.sqlite", 50, 2000)
+    }
+
+    /// The torn read (the review of PR 36): with `immutable` an unfinished write's pages are imported as a real snapshot. A
+    /// non-empty journal beside the file is refused in words (how to finish the rollback), and nothing is read or changed.
+    @Test func aHotJournalIsRefusedNotReadAround() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let (path, _, _) = try Self.crashed(in: folder)
+        let journal = path + "-journal"
+        #expect(try Data(contentsOf: URL(filePath: journal)).count > 0, "the crash left a hot journal")
+        let before = try Footprint(path), journalBefore = try Data(contentsOf: URL(filePath: journal))
+        #expect(throws: Failure.unfinishedWrite(path: path)) { try AbapitHistory(file: URL(filePath: path)) }
+        #expect(Failure.unfinishedWrite(path: path).message.contains("sqlite3") && Failure.unfinishedWrite(path: path).message.contains("unfinished write"))
+        #expect(try Footprint(path) == before)
+        #expect(try Data(contentsOf: URL(filePath: journal)) == journalBefore)
+        // After the operator lets SQLite finish the rollback (any normal open does), the file imports, and holds only what was committed.
+        let recovered = try Scratch.open(path)
+        #expect(try Scratch.count(recovered, "SELECT COUNT(*) FROM snapshots") == 1)
+        let source = try AbapitHistory(file: URL(filePath: path))
+        let headers = try await source.headers()
+        #expect(headers.count == 1)
+        #expect(try await source.load(headers[0]).resources["devices"]?.count == 50)
+    }
+
+    /// The same for a WAL left beside the file; an empty journal or WAL is nothing; a journal that is a link is refused too.
+    @Test func aWalOrALinkedJournalIsRefusedAndAnEmptyJournalIsNot() async throws {
         let folder = try Scratch.folder()
         defer { Scratch.remove(folder) }
         let path = try Self.makeFile(in: folder, snapshots: Self.rows.snapshots, items: Self.rows.items)
-        let journal = path + "-journal"
-        try Data(repeating: 0xA5, count: 2048).write(to: URL(filePath: journal))
-        let before = try Footprint(path), journalBefore = try Data(contentsOf: URL(filePath: journal))
-        let source = try AbapitHistory(file: URL(filePath: path))
-        #expect(try await source.headers().count == 2)
-        #expect(try Footprint(path) == before)
-        #expect(try Data(contentsOf: URL(filePath: journal)) == journalBefore)
+        FileManager.default.createFile(atPath: path + "-journal", contents: nil)
+        FileManager.default.createFile(atPath: path + "-wal", contents: nil)
+        #expect(try await AbapitHistory(file: URL(filePath: path)).headers().count == 2, "empty ones are leftovers, not unfinished writes")
+        try Data(repeating: 1, count: 32).write(to: URL(filePath: path + "-wal"))
+        #expect(throws: Failure.unfinishedWrite(path: path)) { try AbapitHistory(file: URL(filePath: path)) }
+        try FileManager.default.removeItem(atPath: path + "-wal")
+        try FileManager.default.removeItem(atPath: path + "-journal")
+        symlink("/nonexistent", path + "-journal")
+        #expect(throws: Failure.unfinishedWrite(path: path)) { try AbapitHistory(file: URL(filePath: path)) }
+    }
+
+    /// Whether the files beside it can be looked at is part of the answer: if they can't, nothing is imported.
+    @Test func aSiblingThatCannotBeLookedAtRefusesTheImport() async throws {
+        let folder = try Scratch.folder()
+        defer { chmod(Scratch.path(folder), 0o700); Scratch.remove(folder) }
+        let inner = Scratch.path(folder) + "/inner"
+        mkdir(inner, 0o700)
+        let path = try Self.makeFile(in: URL(filePath: inner, directoryHint: .isDirectory), snapshots: Self.rows.snapshots, items: Self.rows.items)
+        // A folder that can't be searched: the file can't be opened either, so the refusal is the system's; both are refusals.
+        chmod(inner, 0o000)
+        defer { chmod(inner, 0o700) }
+        #expect(throws: Failure.self) { try AbapitHistory(file: URL(filePath: path)) }
+        #expect(Failure.unchecked(path: path, errno: EPERM).message.contains("couldn't be checked"))
     }
 
     // MARK: refusing what isn't abapit's
@@ -156,6 +220,15 @@ struct AbapitImportTests {
         defer { Scratch.remove(folder) }
         #expect(throws: Failure.notAFile(path: Scratch.path(folder))) { try AbapitHistory(file: folder) }
         #expect(throws: Failure.self) { try AbapitHistory(file: folder.appending(path: "missing.sqlite")) }
+    }
+
+    /// A FIFO where the file should be is refused without opening it (no hang), and the file SQLite reads is the one checked.
+    @Test func aFIFOIsRefusedWithoutHanging() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let path = Scratch.path(folder) + "/fifo.sqlite"
+        #expect(mkfifo(path, 0o600) == 0)
+        #expect(throws: Failure.notAFile(path: path)) { try AbapitHistory(file: URL(filePath: path)) }
     }
 
     /// A link as the file, or a folder on its way, is refused and nothing behind it is opened.
@@ -262,6 +335,56 @@ struct ImportedRecordTests {
         #expect(try await store.recordImported(org: org, takenAt: taken.addingTimeInterval(120), writtenBy: "abapit 0.2.0", resources: [:]) != nil)
     }
 
+    // MARK: order
+
+    /// A snapshot this app took, then an older one imported afterwards (it gets the higher id): the native one is still the
+    /// newest, for the listing, for `latest` and for `prune`, which keeps it. The id only breaks a tie.
+    @Test func anOlderImportNeverOutranksANewerNativeSnapshot() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        let native = try await store.record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("NATIVE1")]])
+        let old = Scratch.noon.addingTimeInterval(-30 * 86_400)
+        let imported = try #require(try await store.recordImported(org: org, takenAt: old, writtenBy: "abapit 0.2.0", resources: ["devices": [Scratch.device("OLDER1")]],
+                                                                   errors: ["applecare": "abapit error"]))
+        #expect(imported > native, "the import has the higher id")
+        #expect(try await store.snapshots(org: org).map(\.id) == [native, imported])
+        guard case .read(let copy)? = try await store.latest("devices", org: org) else { Issue.record("latest should read the native snapshot"); return }
+        #expect(copy.summary.id == native && copy.items.map(\.id) == ["NATIVE1"])
+        #expect(try await store.prune(org: org, keep: 1) == 1)
+        #expect(try await store.snapshots(org: org).map(\.id) == [native])
+    }
+
+    /// Two abapit files imported newer first: the order is by time, and `latest` answers from the newer snapshot, with the older
+    /// file's failure never the newest attempt. The good copy behind a failure is the newest good one by time.
+    @Test func twoFilesImportedNewerFirstAreStillOrderedByTime() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        let t1 = Scratch.noon, t0 = t1.addingTimeInterval(-86_400), tm1 = t1.addingTimeInterval(-2 * 86_400)
+        // File two (newer): a failure at t1 and a good read at t0. File one (older): a good read at tm1. Imported: two, then one.
+        _ = try await store.recordImported(org: org, takenAt: t0, writtenBy: "abapit 0.2.0", resources: ["devices": [Scratch.device("T0")]])
+        _ = try await store.recordImported(org: org, takenAt: t1, writtenBy: "abapit 0.2.0", resources: [:], errors: ["devices": "abapit error"])
+        _ = try await store.recordImported(org: org, takenAt: tm1, writtenBy: "abapit 0.2.0", resources: ["devices": [Scratch.device("TM1")]])
+        #expect(try await store.snapshots(org: org).map(\.takenAt) == [Schema.takenAt(t1), Schema.takenAt(t0), Schema.takenAt(tm1)])
+        guard case .failed(let tried, "abapit error", let newest)? = try await store.latest("devices", org: org) else { Issue.record("latest"); return }
+        #expect(tried.takenAt == Schema.takenAt(t1) && newest?.summary.takenAt == Schema.takenAt(t0) && newest?.items.map(\.id) == ["T0"], "the newest good copy by time, not the last recorded")
+    }
+
+    /// Text order is time order only because every writer writes `Schema.takenAt`: fixed width, UTC, zero-padded. Every write goes
+    /// through `insert` (`record` and `recordImported`), which renders the time that way, whatever the caller passed.
+    @Test func everyWriterWritesFixedWidthTimes() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        for seconds in [-2_000_000_000.0, 0, 951_782_400.5, 1_795_000_000.999, 4_102_444_800] {
+            let date = Date(timeIntervalSince1970: seconds)
+            #expect(Schema.takenAt(date).utf8.count == 20 && Schema.takenAt(date).hasSuffix("Z"), "\(Schema.takenAt(date))")
+            let id = try await store.record(org: org, takenAt: date, resources: [:])
+            let other = try #require(try await store.recordImported(org: org, takenAt: date, writtenBy: "abapit 1", resources: [:]))
+            for found in [id, other] { #expect(try await store.load(found, org: org).summary.takenAt == Schema.takenAt(date)) }
+        }
+        let order = try await store.snapshots(org: org).map(\.takenAt)
+        #expect(order == order.sorted(by: >), "text order is time order")
+    }
+
     // MARK: export
 
     private func filled() async throws -> (store: SnapshotStore, folder: URL) {
@@ -338,6 +461,72 @@ struct ImportedRecordTests {
         let store = try SnapshotStore(storage: .memory, appVersion: "1")
         await #expect(throws: Failure.self) { try await store.exportCopy(to: try #require(URL(string: "relative.sqlite"))) }
         await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: "/tmp/../tmp/x.sqlite")) }
+    }
+
+    /// With an org list, only those orgs' snapshots, items and findings are in the copy, free pages included (the working copy is
+    /// `VACUUM`ed after the delete): another org's canaries are in no byte of it. No working file is left in the store's folder.
+    @Test func aCopyForSomeOrgsHoldsNoOtherOrgsBytes() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let storeFolder = root.appending(path: "store")
+        let store = try SnapshotStore(storage: .folder(storeFolder), appVersion: "1")
+        let (a, b) = (Scratch.apple("a", clientID: "CLIENT-A"), Scratch.apple("b", clientID: "CLIENT-B"))
+        try await store.record(org: a, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("CANARYAAAA")]])
+        for day in 0..<20 {
+            try await store.record(org: b, takenAt: Scratch.noon.addingTimeInterval(Double(day)), resources: ["devices": (0..<30).map { Scratch.device("CANARYBBBB\(day)-\($0)") }])
+        }
+        try await store.seen(org: a, rule: "rulea", subjects: ["CANARYSUBJA"], at: Scratch.noon)
+        try await store.seen(org: b, rule: "ruleb", subjects: ["CANARYSUBJB"], at: Scratch.noon)
+        let copy = Scratch.path(root) + "/copy.sqlite"
+        try await store.exportCopy(to: URL(filePath: copy), orgs: ["a"])
+        let bytes = try Data(contentsOf: URL(filePath: copy))
+        #expect(bytes.range(of: Data("CANARYAAAA".utf8)) != nil && bytes.range(of: Data("CANARYSUBJA".utf8)) != nil)
+        for canary in ["CANARYBBBB", "CANARYSUBJB", "CLIENT-B", "ruleb"] { #expect(bytes.range(of: Data(canary.utf8)) == nil, "\(canary)") }
+        let database = try SQLiteDatabase(path: copy, flags: SQLITE_OPEN_READONLY)
+        #expect(try Scratch.count(database, "SELECT COUNT(*) FROM snapshots") == 1 && Scratch.count(database, "SELECT COUNT(*) FROM items") == 1)
+        #expect(try Scratch.count(database, "SELECT COUNT(*) FROM attention") == 1)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: Scratch.path(storeFolder)) == ["history.sqlite"], "the working copy is gone")
+        #expect(Scratch.mode(copy) == 0o600)
+        // No list: everything, as before.
+        let all = Scratch.path(root) + "/all.sqlite"
+        try await store.exportCopy(to: URL(filePath: all))
+        #expect(try Scratch.count(try SQLiteDatabase(path: all, flags: SQLITE_OPEN_READONLY), "SELECT COUNT(*) FROM snapshots") == 21)
+    }
+
+    /// The post-copy check is a check: a destination whose mode was widened after the bytes were written (by another process)
+    /// is refused, and a file this call made is removed, not left readable. The hook is where the disk changes under the call.
+    @Test func aDestinationWidenedAfterTheCopyIsRefusedAndRemoved() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let widen = Shared("")
+        let store = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
+            if case .copied(let path) = step { chmod(path, 0o644); widen.set(path) }
+        })
+        try await store.record(org: Scratch.apple("acme"), takenAt: Scratch.noon, resources: ["devices": [Scratch.device("S1")]])
+        let made = Scratch.path(folder) + "/made.sqlite"
+        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: made)) }
+        do { try await store.exportCopy(to: URL(filePath: made)) } catch { #expect(error.message.contains("isn't the private file")) }
+        #expect(widen.value.hasSuffix("/made.sqlite") && !Scratch.exists(made), "a file this call made is removed")
+        // A placeholder (not made by this call) is emptied again, and left where it was.
+        let placeholder = Scratch.path(folder) + "/placeholder.sqlite"
+        FileManager.default.createFile(atPath: placeholder, contents: nil, attributes: [.posixPermissions: 0o600])
+        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: placeholder)) }
+        #expect(try Data(contentsOf: URL(filePath: placeholder)).isEmpty)
+    }
+
+    /// The destination is never opened by SQLite and never unlinked: an empty placeholder keeps its inode, and the working
+    /// copy is the only file SQLite makes (in a private folder), so a swapped-in link receives nothing.
+    @Test func anEmptyPlaceholderIsWrittenIntoNotReplaced() async throws {
+        let (store, folder) = try await filled()
+        defer { Scratch.remove(folder) }
+        let placeholder = Scratch.path(folder) + "/placeholder.sqlite"
+        FileManager.default.createFile(atPath: placeholder, contents: nil, attributes: [.posixPermissions: 0o644])
+        var before = stat()
+        stat(placeholder, &before)
+        try await store.exportCopy(to: URL(filePath: placeholder))
+        var after = stat()
+        stat(placeholder, &after)
+        #expect(before.st_ino == after.st_ino && after.st_size > 0 && after.st_mode & 0o777 == 0o600)
     }
 
     /// A newer file the store only reads can be copied too: the copy changes nothing in it.

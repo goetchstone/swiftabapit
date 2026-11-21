@@ -23,6 +23,10 @@ import TestSupport
 /// 6. **A client ID no org has** (`DEMO-ORG-NONE`, empty): this app asks by org, so there is no call to make; the golden's answer
 ///    (nothing) is checked to be what no org here has.
 /// 7. **Snapshot ids that don't exist** (4 and 7): no snapshot to ask; abapit's answer (nothing) is checked against the seed.
+/// 8. **`latest_applecare`** is `latest_resource` of `applecare` less the id, and **`prunes`** run in the golden's order over the
+///    imported store, each step's removed count and what is left (snapshots, by abapit's ids found by `taken_at`, and the items
+///    behind each) compared. The store's `prune` keeps the newest by `taken_at` then id (abapit: by id); the seed's times rise with
+///    its ids, so the answers are the same. A client ID no org has removes nothing, as abapit's.
 ///
 /// Plan defect 13 (`latest_resource` showing an older copy as current when the newest snapshot failed) shows in none of the
 /// golden's cases, since an imported snapshot's `counts` hold only resources with items; `HistoryTransferTests.
@@ -190,6 +194,55 @@ struct HistoryImportParityTests {
             _ = try kept(try req(item["resource"]?.string), try req(item["attributes"]?.object), dropped: &dropped)
         }
         #expect(dropped == Self.leftOutBySeed)
+    }
+
+    @Test func latestApplecareMatchesAbapit() async throws {
+        var dropped: Set<String> = []
+        var wired = 0
+        for item in try cases("latest_applecare") {
+            let client = try req(item["args"]?["org_client_id"]?.string)
+            let parts = try req(item["expected"]?["ok"]?.array)
+            guard case .read(let copy)? = try await world.history!.latest("applecare", org: try req(org(client))) else { Issue.record("\(client)"); continue }
+            #expect(copy.summary.takenAt == parts[0].string, "\(client)")
+            #expect(actualItems(copy.items) == (try expectedItems(parts[1], dropped: &dropped)), "\(client)")
+            wired += 1
+        }
+        #expect(wired == 2 && dropped.isEmpty, "applecare keeps every seeded attribute")
+    }
+
+    /// The golden's `prunes`, in order, over the imported store.
+    @Test func prunesMatchAbapit() async throws {
+        let history = try req(world.history)
+        var abapitID: [Int64: Int] = [:]
+        for id in [1, 2, 3, 5, 6, 9] { abapitID[try await imported(id).id] = id }
+        func left() async throws -> (snapshots: [Int], items: [Int: Int]) {
+            var found: [Int] = [], items: [Int: Int] = [:]
+            for name in ["a", "b"] {
+                let profile = try req(world.orgs.store[name])
+                for summary in try await history.snapshots(org: profile, limit: 1000) {
+                    let id = try req(abapitID[summary.id])
+                    found.append(id)
+                    items[id] = try await history.load(summary.id, org: profile).resources.values.reduce(0) { $0 + $1.count }
+                }
+            }
+            return (found.sorted(), items)
+        }
+        var steps = 0
+        for step in try req(golden["prunes"]?.array).compactMap(\.object) {
+            let client = try req(step["org_client_id"]?.string), keep = try req(step["keep"]?.int)
+            let expected = try req(step["expected"]?["ok"]?.int)
+            if let profile = org(client) {
+                #expect(try await history.prune(org: profile, keep: keep) == expected, "\(client) keep \(keep)")
+            } else {
+                #expect(expected == 0, "difference 6: no org here has \(client)")
+            }
+            let after = try req(step["after"]?.object)
+            let state = try await left()
+            #expect(state.snapshots == (try req(after["snapshots"]?.array).compactMap(\.int)), "\(client) keep \(keep)")
+            #expect(state.items == Dictionary(uniqueKeysWithValues: try req(after["items"]?.object).members.map { (Int($0.key)!, $0.value.int!) }), "\(client) keep \(keep)")
+            steps += 1
+        }
+        #expect(steps == 8)
     }
 }
 

@@ -34,7 +34,8 @@ public final class HistoryTransfer {
         public var imported = 0
         /// Organizations they were written for.
         public var orgs = 0
-        /// Snapshots of an org already in the store (an earlier import of the same file).
+        /// Snapshots whose org already has one at the same time in the store: an earlier import of the same file, or another
+        /// snapshot taken in that second (never a snapshot this run wrote itself).
         public var alreadyHere = 0
         /// Snapshots no org here has the client ID of, and how many accounts they belong to (never their ids).
         public var skipped = 0
@@ -49,9 +50,12 @@ public final class HistoryTransfer {
         /// The line Settings shows.
         public var words: String {
             var parts = ["Imported \(imported) snapshot\(imported == 1 ? "" : "s") for \(orgs) organization\(orgs == 1 ? "" : "s")."]
-            if alreadyHere > 0 { parts.append("\(alreadyHere) \(alreadyHere == 1 ? "was" : "were") already here.") }
-            parts.append("\(skipped) skipped because no organization here has that client ID"
-                         + (skippedAccounts > 0 ? " (\(skippedAccounts) account\(skippedAccounts == 1 ? "" : "s"))." : "."))
+            if alreadyHere > 0 {
+                parts.append("\(alreadyHere) had the same time as a snapshot already here (an earlier import of this file, or another taken in that second) "
+                             + "and \(alreadyHere == 1 ? "wasn't" : "weren't") imported again.")
+            }
+            parts.append("\(skipped) skipped because no organization of this client has that client ID"
+                         + (skippedAccounts > 0 ? " (\(skippedAccounts) account\(skippedAccounts == 1 ? "" : "s")); switch client to import another customer's." : "."))
             if unreadable > 0 { parts.append("\(unreadable) couldn't be read.") }
             parts.append("\(attributesLeftOut) attribute\(attributesLeftOut == 1 ? "" : "s") left out by the snapshot policy"
                          + (resourcesLeftOut > 0 ? ", and \(resourcesLeftOut) resource\(resourcesLeftOut == 1 ? "" : "s") it doesn't keep." : "."))
@@ -62,8 +66,9 @@ public final class HistoryTransfer {
     public enum Outcome: Equatable, Sendable {
         case imported(Report)
         /// An org or client switch stopped it part way: what was written stays (and isn't repeated by importing again). Never
-        /// shown, since the switch clears what was on screen.
-        case stopped(Report)
+        /// shown, since the switch clears what was on screen. `why` says it when it wasn't a switch: an org removed or its client ID
+        /// changed under the import.
+        case stopped(Report, why: String?)
         /// Nothing was read or written, and why.
         case refused(String)
     }
@@ -75,6 +80,9 @@ public final class HistoryTransfer {
     public private(set) var problem: String?
 
     private let orgs: OrgsModel
+    /// Run before each snapshot is written, when set: the tests change an org there, as the operator could in another window.
+    /// `package`: the app never sets it.
+    @ObservationIgnored package var beforeWrite: (@MainActor () async -> Void)?
 
     static let busy = "An import or export is already running."
 
@@ -102,7 +110,9 @@ public final class HistoryTransfer {
         guard orgs.generation == generation else { return outcome }
         switch outcome {
         case .imported(let report): summary = report.words
-        case .stopped(let report): summary = report.words
+        case .stopped(let report, let why):
+            problem = (why ?? "Stopped.") + " " + report.words
+            summary = nil
         case .refused(let words): problem = words
         }
         return outcome
@@ -126,9 +136,9 @@ public final class HistoryTransfer {
             return .refused(error.message)
         }
         var report = Report()
-        var skippedAccounts: Set<String> = [], written: Set<String> = []
+        var skippedAccounts: Set<String> = [], written: Set<String> = [], times: Set<String> = []
         for header in headers {
-            guard orgs.generation == generation else { return .stopped(finish(report, skippedAccounts, written)) }
+            guard orgs.generation == generation else { return .stopped(finish(report, skippedAccounts, written), why: nil) }
             guard let org = targets[OrgsModel.clientKey(header.clientID)] else {
                 report.skipped += 1
                 skippedAccounts.insert(OrgsModel.clientKey(header.clientID))
@@ -143,8 +153,18 @@ public final class HistoryTransfer {
                 let kept = AbapitMapping.keep(snapshot, for: org)
                 report.attributesLeftOut += kept.attributesLeftOut
                 report.resourcesLeftOut += kept.resourcesLeftOut
+                if let beforeWrite { await beforeWrite() }
+                // The org as it is now: removed, or on another client ID, since the import started, nothing is written under it.
+                guard orgs.generation == generation else { return .stopped(finish(report, skippedAccounts, written), why: nil) }
+                guard Self.isStill(org, in: orgs) else {
+                    return .stopped(finish(report, skippedAccounts, written),
+                                    why: "Stopped: \(org.name) was removed or its client ID changed while the import ran, so nothing more was written under it.")
+                }
+                // A snapshot at a time this run already wrote is this file's own, not an earlier import: written, not skipped.
+                let time = "\(org.id)\u{0}\(Int64(taken.timeIntervalSince1970.rounded(.down)))"
                 let id = try await store.recordImported(org: org, takenAt: taken, writtenBy: header.writtenBy, resources: kept.resources,
-                                                        errors: kept.errors, notes: kept.notes)
+                                                        errors: kept.errors, notes: kept.notes, skippingDuplicate: !times.contains(time))
+                if id != nil { times.insert(time) }
                 if id == nil {
                     report.alreadyHere += 1
                 } else {
@@ -171,6 +191,12 @@ public final class HistoryTransfer {
         return report
     }
 
+    /// Whether `org` is still in the store under the client ID it was mapped by.
+    package static func isStill(_ org: OrgProfile, in orgs: OrgsModel) -> Bool {
+        guard let now = orgs.store[org.id] else { return false }
+        return OrgsModel.clientKey(now.clientID) == OrgsModel.clientKey(org.clientID)
+    }
+
     /// The Apple orgs by client ID key. A client ID two orgs hold (`OrgStore` refuses it, but a hand-edited file could) maps to
     /// neither, and an empty one (a Mosyle org's) never matches.
     package static func targets(_ orgs: [OrgProfile]) -> [String: OrgProfile] {
@@ -187,7 +213,15 @@ public final class HistoryTransfer {
 
     // MARK: export
 
-    /// Writes a copy of the snapshot store at `destination` (see `SnapshotStore.exportCopy`); says how it went.
+    /// The copy's default file name: `history.sqlite`, named for the client when the operator has more than one (as every export
+    /// is: `ScreenWords.filename`).
+    public var exportFileName: String { ScreenWords.filename("history.sqlite", client: orgs.exportClient) }
+
+    /// What the Save panel says the copy holds: the active client's only.
+    public var exportWords: String { SnapshotStore.exportCopyWords(client: orgs.exportClient) }
+
+    /// Writes a copy of the active client's snapshots and Needs-attention state at `destination` (see `SnapshotStore.exportCopy`):
+    /// no other client's rows are in it (the clients rule); says how it went.
     public func exportCopy(to destination: URL) async {
         guard !isWorking else {
             problem = Self.busy
@@ -197,20 +231,23 @@ public final class HistoryTransfer {
         defer { isWorking = false }
         summary = nil
         problem = nil
+        let generation = orgs.generation
+        let ids = Set(orgs.clientOrgs.map(\.id))
+        let result: String
         switch orgs.openHistory() {
-        case .failure(let failure): problem = failure.message
+        case .failure(let failure): result = failure.message
         case .success(let store):
             do {
-                try await store.exportCopy(to: destination)
-                summary = "Saved a copy of the snapshot history as \(destination.lastPathComponent)."
+                try await store.exportCopy(to: destination, orgs: ids)
+                guard orgs.generation == generation else { return }
+                summary = "Saved a copy of this client's snapshot history as \(destination.lastPathComponent)."
+                return
             } catch {
-                problem = error.message
+                result = error.message
             }
         }
+        if orgs.generation == generation { problem = result }
     }
-
-    /// What the Save panel says the copy holds.
-    public static let exportWords = SnapshotStore.exportCopyWords
 }
 
 /// What an imported snapshot keeps: the snapshot policy applied to abapit's rows.
@@ -244,9 +281,7 @@ enum AbapitMapping {
             }
             var masked = 0, left = 0
             kept.resources[rule.name] = items.map { item in
-                // A custom setting's profile is withheld first (operator, 2026-10-31): abapit stored the single read's profile, which
-            // holds Wi-Fi and VPN passwords, and the policy's `customSettingsValues` is kept for the list read, which sends null.
-            let one = SnapshotPolicy.keep(rule.name == SnapshotPolicy.configurations.name ? Configuration(resource: item).resource : item, rule)
+                let one = SnapshotPolicy.keep(item, rule)
                 left += item.attributes.count - one.item.attributes.count
                 if one.masked { masked += 1 }
                 return one.item
