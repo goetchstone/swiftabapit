@@ -29,14 +29,14 @@ struct ReportsView: View {
         .toolbar {
             ToolbarItem {
                 Button("Export CSV…", systemImage: "square.and.arrow.up") { exporting = true }
-                    .disabled(model.exportBlocked != nil)
-                    .help(model.exportBlocked ?? "Saves the report shown")
+                    .disabled(model.exportBlocked(for: output) != nil)
+                    .help(model.exportBlocked(for: output) ?? "Saves the report shown")
                     .accessibilityIdentifier("reports.export")
             }
         }
-        .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv()) : nil, contentType: .commaSeparatedText,
-                      defaultFilename: model.exportFileName) { _ in }
-        .fileDialogMessage(model.exportWords)
+        .fileExporter(isPresented: $exporting, document: exporting ? CSVDocument(text: model.csv(of: output)) : nil, contentType: .commaSeparatedText,
+                      defaultFilename: model.exportFileName(for: output)) { _ in }
+        .fileDialogMessage(model.exportWords(for: output))
         .task { await model.load() }
     }
 
@@ -44,10 +44,9 @@ struct ReportsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(output.title).font(.title2).fontWeight(.semibold).accessibilityIdentifier("reports.title")
+                // A history that couldn't be read is said once, by the report that needs it (its "judges nothing" or its source line).
                 if case .loading = model.state {
                     Label("Reading the snapshot history…", systemImage: "hourglass")
-                } else if case .failed(let why) = model.state {
-                    Label(why, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
                 }
                 filters(output)
                 ForEach(output.problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }

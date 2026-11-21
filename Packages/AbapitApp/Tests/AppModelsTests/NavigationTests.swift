@@ -270,7 +270,9 @@ struct ScaffoldTests {
             case .activity: ["activity"]
             case .mosyle: ["mosyle"]
             case .reconciliation: ["devices", "mosyle"]
-            case .devices, .services, .reports, .settings: ["devices"]
+            case .devices, .services, .settings: ["devices"]
+            // Reports on its first report (a sweep report) reads no live list; the history is local.
+            case .reports: []
             }
             #expect(Set(loading.filter(\.value).keys) == expected, "\(section)")
         }
@@ -307,7 +309,7 @@ struct ScaffoldTests {
             world.screens.refresh(section)
             let loading = [world.devices.state, world.dashboard.auditState, world.people.users.state, world.content.apps.state,
                            world.appleMDM.state, world.activity.state, world.mosyle.devices.state].filter(\.isLoading).count
-            #expect(loading == ([.overview, .reconciliation].contains(section) ? 2 : 1), "\(section)")
+            #expect(loading == ([.overview, .reconciliation].contains(section) ? 2 : section == .reports ? 0 : 1), "\(section)")
         }
     }
 

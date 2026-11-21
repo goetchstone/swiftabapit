@@ -458,16 +458,26 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     list is never mixed with a snapshot's sweep. The screen's first source line is "From the snapshot of 21 Nov 2026, 3 days old. Its
     own device list and its AppleCare coverage read are used together; nothing is read from Apple now." The file name carries the
     snapshot's stamp.
-  - **`latest` answers `.failed` for a newest attempt that read only part of the sweep too** (an error and a count both), so a part-read
-    sweep is never used, whole or in part: the last good copy is (`newest`, with its own date), and the screen says "The newest snapshot
-    that read AppleCare coverage (5 Oct 2026) failed with HTTP 500, after reading only part of it, and that part isn't used … so this is
-    the last good copy, from 21 Sep 2026." With no good copy the report judges nothing and says the code. The coordinating session's
-    rule said a part-read sweep makes its unreached devices `DeviceRead.notRead`; since the store never hands a part read over as a
-    copy, that path has nothing to read, and it isn't built.
-  - **Devices without an entry.** In a whole AppleCare copy a device with no record was read and has none (`.read([])`, "no coverage
-    record (may mean no AppleCare, not expired)"); in an Activation Lock copy (one item per device) a device with no item has no entry, which
-    `ActivationLockReport` reads as "the sweep didn't reach this device": not read, never unlocked. An AppleCare record with no
-    serial number can't be given to a device: counted and said, never dropped.
+  - **A newest attempt that read part of the sweep is used, marked part** (the coordinating session's decision, review round 1; the first
+    version threw it away). `SnapshotStore.latest` answers `.failed` for any newest attempt with an error, so `ReportsModel.read` tells
+    the two apart by `attempt.counts[sweep]`: present (some of it was read: a device failed twice, couldn't be sent, wasn't asked, or its
+    list was cut) means **that attempt's own snapshot is loaded and used**, its items with its own device list, never another snapshot's,
+    and the read is `.partly("the AppleCare coverage read was cut: HTTP 500 (<the snapshot's note>)")`, so the first summary line and the
+    CSV's `listRead` column say it (with the device list's own cut first when both were cut). One device that keeps failing no longer blanks
+    three reports for good.
+  - **A newest attempt that read none of it** (`errors` only) falls back to the last good copy with its own date and its own device list,
+    and the screen says "The newest snapshot that read AppleCare coverage (5 Oct 2026) failed with HTTP 500: <note>, so this is the last good copy,
+    from 21 Sep 2026" (a run-level code reads "didn't read it (not asked after HTTP 401)", never "failed with not asked…"). With none
+    the report judges nothing, names the code and the note, and says that once what they name is dealt with a snapshot can be taken; a
+    per-device failure isn't advised away with "take another snapshot".
+  - **Devices without an entry.** In a **whole** AppleCare copy a device with no record was read and has none (`.read([])`, "no coverage
+    record (may mean no AppleCare, not expired)"). In a **part** read a device with no record can't be told from one the sweep didn't
+    reach, so it is left out of the map and the reports count it as not read; the screen and the CSV's `listRead` say so ("in a part read a
+    device with no record counts as not read"). When the collector records which devices a sweep didn't read (a later change),
+    `ReportsModel.coverage(_:notReached:)` is the seam: those get `.notRead`, the rest `.read([])`. In an Activation Lock copy (one item per
+    device) a device with no item is not read in either case (`ActivationLockReport`'s "the sweep didn't reach this device"), never
+    unlocked. An AppleCare record with no serial number can't be given to a device: counted and said on screen ("N coverage records have no
+    serial number … counted here and left out of the report"), left out of the report.
   - **The snapshot's device list** is `.whole`, `.partly` when its `counts` and `errors` both have `devices` ("the snapshot's device list
     was cut: page cap (stopped at the page limit: 3 of 5 read, more not read)"), or `.notRead` (not in `counts`). The report's first
     line and the CSV's `listRead` column say it.
@@ -483,14 +493,19 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     `.partly("showing 1,000 of …: the list stopped at the page limit")`, a failed or refused read that left rows is `.partly`, one that
     left none is `.notRead`. Each service's device count is `DevicesModel.deviceCount`, which holds a count only for a service whose
     device list was read whole; the rest read "not read" (`ServiceHealth`'s fallback is Apple's own `deviceCount` attribute when Apple sent it).
-    No new kind of Apple read is made. Selecting a live report asks `DevicesModel.load()` for its lists (the reads the Devices screen makes);
+    The source line says when the list was read and how old it is, from the Devices model's own `.loaded(at:)` ("Read live from Apple on 21 Nov
+    2026 at 09:41 UTC, 3 days old: …"), "Not read from Apple yet" before it was, and the file's name stamps that day, not today's (the list may be days
+    old: `DevicesModel.load()` reads once per generation). No new kind of Apple read is made. Selecting a live report asks `DevicesModel.load()` for its lists (the reads the Devices screen makes);
     a sweep report asks Apple for nothing.
 - **Filters** are the catalog's `group` and `days` (service health's quiet days), coverage's `days` (1...1825) and fleet age's `years`
   (1...10): each is a token, resolved by `ReportsModel.build(_:tokens:)`, the one function a later Siri intent calls (plan §5; "build report
   X with tokens T from the active org's data"; intents are not built). `ReportCatalog.resolve` normalizes the catalog's values and its
   `problems` are shown in words; a number out of bounds (service health's days too: 1...1825, the executor's bound) is a problem, never
   clamped, and **a report with a problem isn't run** ("The filters weren't understood, so the report wasn't run."). The screen's controls
-  (steppers, a group picker) are tokens through the same function.
+  (steppers, a group picker) are tokens through the same function. **A missing token takes the report's default** (coverage 90 days, fleet age 4
+  years, service days 30: `defaultCoverageDays` and the others), never the screen's stepper value; the screen passes its values explicitly.
+  **An intent will need a way to await the live read** (a live report built before the Devices model has read says "Not read from Apple yet");
+  `build` is synchronous over what is held and starts no read. Not built.
 - **Rows and caps** (invariant 7, 8). At most 200 rows are listed (`displayLimit`), and the screen says "Showing 200 of 1,000: the rest are
   in the CSV export." The group picker lists each group with its count over the whole report; the report's own summary lines count every group,
   and the groups this version doesn't know are shown and named, never dropped (`lock:BOGUS` under the filter `lock:other`, `status:other`, `no-status`,
@@ -505,10 +520,11 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
   `businessOnly` read, in words, with nothing sent, and the test drives it with one that does. **`SidebarItem.reports.reads` stays
   `[]`**, as Activity's: four reports read local snapshots, so a role refused the devices or the services keeps them, and the two live
   reports say "your role can't read this" themselves; listing `[.devices, .mdmServers]` would lock the whole screen when a role is
-  refused both. Refresh (⌘R) on Reports reads the devices again and the history again; never a sweep.
+  refused both. Refresh (⌘R) on Reports reads the history again, and the devices again only when the report on screen reads them live
+  (`ReportsModel.usesLiveList`); never a sweep, and no forced Apple read for a sweep report.
 - **One org at a time, nothing of the old one on screen.** An org or client switch clears at once (the history read, the chosen report and
   filters, the group; the Devices model clears its own lists) and reads the new org's history if the screen was showing. The history read
-  checks its token and the org's generation before it writes (`afterRead`, stage `load`): a read that returns after a switch is dropped, and one that
+  checks its token and the org's generation before it writes (a switch doesn't bump the token, so each guard stands alone) (`afterRead`, stage `load`): a read that returns after a switch is dropped, and one that
   returns after a newer load is dropped (`aReadThatReturnsAfterASwitchOrANewerLoadIsDropped`, with a mutant for each guard in the PR).
 - **CSV** (`ExportHistory.coverageExpiring`/`refreshCandidates`, `ExportPolicy.{activationLockReport,warrantyReport,migrationReport,serviceHealth}`):
   each report's own columns through the one writer, formula guard and denylist; every cell Apple sent goes through `masking`, and a
@@ -519,16 +535,19 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
   is withheld, no key or token, and, with several clients, that it is that client's data only. The file name is led by the client's name only when the app shows clients
   (`ScreenWords.filename`): `coverage ending within 90 days (snapshot 20261121T080000Z).csv`; a live report's carries the day it was read
   (`mdm migration (read live 20261121).csv`).
-- **The demo** (`DemoHistory`, DEBUG only): the newest of its three fake snapshots now has an AppleCare read (three records, one ending in twelve
-  days from the demo's start, one in two hundred, one ended) and an Activation Lock read (USER, none, MDM), and the devices an order date, so the screen
-  draws Coverage over the snapshot's part-read device list. The migration and service reports draw over the demo fleet. `DEMOCHG…` serials and
-  `example.com` only. Changes' diff of the last two is unchanged but for "Activation Lock" joining the resources the older didn't read.
+- **The demo** (`DemoHistory`, DEBUG only): the newest of its three fake snapshots has an AppleCare read (three records, ending in twelve and in two hundred days
+  from the demo's start, and one ended; device 3 has none) and an Activation Lock read (USER, none, MDM), and the devices an order date. Its device list was
+  cut at the page limit, so, as the collector marks them, both sweeps are part reads over that list (`errors` "page cap", the collector's note): the screen
+  draws Coverage over a part-read list and a part-read sweep, where device 3 counts as not read. The migration and service reports draw over the demo fleet. `DEMOCHG…` serials and
+  `example.com` only. Changes' diff of the last two is unchanged but for "Activation Lock" joining the resources the older didn't read, and the newest
+  snapshot's marks naming the two part-read sweeps.
 - **Screenshot**: `docs/screenshots/reports.png` (CI's `reports` run).
 - **Decisions, and who made them.** The coordinating session: the source rule for each report (snapshot or live; the same snapshot's own
   device list; the failed attempt's words and the last good copy; no snapshot judges nothing; the screen never starts a sweep), fleet age's
   fallback, migration and service health live and no new Apple read, School and Mosyle handling, switch guards and mutants, the CSV
-  rules, `build(_:tokens:)` for Phase 9, the demo. The executor: `reads` stays `[]`; a part-read newest attempt is never used (the store's
-  `.failed`); a device with no AppleCare record in a whole copy has none, and one with no lock item is not read; the group filter limits the rows
+  rules, `build(_:tokens:)` for Phase 9, the demo. Changed by the coordinating session after review: **a part-read newest sweep is used**, marked part, over its
+  own snapshot's device list (the executor had thrown it away). The executor: `reads` stays `[]`; a device with no AppleCare record in a whole copy has
+  none, in a part read is not read, and one with no lock item is not read; the group filter limits the rows
   shown while the CSV holds the whole report; coverage lists expiring and unreadable-end rows only; 200 rows; days 1...1825 for service
   health too; filters and the chosen report reset on a switch; a live report asks the Devices model for its lists only when chosen; file names.
 - **Live checks** (for the operator, read-only, through `live-verify`): Reports over a real snapshot taken with the AppleCare and Activation

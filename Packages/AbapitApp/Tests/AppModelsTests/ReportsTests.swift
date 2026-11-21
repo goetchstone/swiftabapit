@@ -104,42 +104,141 @@ struct ReportsTests {
         #expect(age.lines.first { $0.title == "SNAP1" }?.detail.contains("AppleCare: active") == true && age.lines.first { $0.title == "SNAP2" }?.detail.contains("AppleCare: none active") == true)
         // The live reports use the live list.
         let live = model.build(.migration, tokens: [:])
-        #expect(Self.titles(live).allSatisfy { $0.hasPrefix("ADEV") } && live.source[0].hasPrefix("Read live from Apple"), "\(live.source)")
+        #expect(Self.titles(live).allSatisfy { $0.hasPrefix("ADEV") } && live.source[0].hasPrefix("Read live from Apple on "), "\(live.source)")
     }
 
-    /// The newest attempt failed: its code is said, and the last good copy is used with its own date and its own device list.
-    @Test func aFailedNewestAttemptIsSaidAndTheLastGoodCopyUsed() async throws {
+    /// The newest attempt read none of the sweep: its code and the collector's note are said, and the last good copy is used with its
+    /// own date and its own device list: no other snapshot's list is mixed in, in any report.
+    @Test func aNewestAttemptThatReadNothingIsSaidAndTheLastGoodCopyUsed() async throws {
         let world = try await World.make()
         try await Self.record(world, days: 0, ["devices": [Self.device("OLD1")], "applecare": [Self.care("OLD1")]])
-        // The newer attempt read some of the sweep and failed: that part is not a good copy.
-        try await Self.record(world, days: 14, ["devices": [Self.device("NEW1"), Self.device("NEW2")], "applecare": [Self.care("NEW1")]],
-                              errors: ["applecare": "HTTP 500"])
+        try await Self.record(world, days: 14, ["devices": [Self.device("NEW1"), Self.device("NEW2")]], errors: ["applecare": "HTTP 500"],
+                              notes: ["applecare": "2 of 2 not read: 2 failed twice (HTTP 500)"])
         let model = await Self.model(world)
-        let output = model.build(.coverage, tokens: ["days": "90"])
-        #expect(output.judgesNothing == nil && Self.titles(output) == ["OLD1"], "\(Self.text(output))")
-        #expect(output.source[0].hasPrefix("From the snapshot of 21 Sep 2026, 20 days old."))
-        #expect(output.source.contains { $0.contains("The newest snapshot that read AppleCare coverage (5 Oct 2026) failed with HTTP 500, after reading only part of it, and that part isn't used") && $0.contains("last good copy, from 21 Sep 2026") }, "\(output.source)")
-        #expect(!Self.text(output).contains("NEW"))
-        // A newest attempt that failed before any item says so without the part.
+        for report in [ReportsModel.Report.coverage, .outOfWarranty] {
+            let output = model.build(report, tokens: [:])
+            #expect(output.judgesNothing == nil && output.source[0].hasPrefix("From the snapshot of 21 Sep 2026, 20 days old."), "\(report): \(output.source)")
+            #expect(!Self.text(output).contains("NEW"), "\(report) mixed in the failed attempt's devices: \(Self.text(output))")
+            #expect(output.source.contains { $0.contains("The newest snapshot that read AppleCare coverage (5 Oct 2026) failed with HTTP 500: 2 of 2 not read: 2 failed twice (HTTP 500), so this is the last good copy, from 21 Sep 2026") }, "\(output.source)")
+            #expect(output.summary[0] == "Read in full.", "the last good copy is a whole read: \(output.summary)")
+        }
+        #expect(Self.titles(model.build(.outOfWarranty, tokens: [:])) == ["OLD1"])
+        // A newest attempt that failed before any item says so the same way.
         let second = try await World.make()
         try await Self.record(second, days: 0, ["devices": [Self.device("OLD1")], "activation_lock": [Self.lock("OLD1", locked: false, type: nil)]])
         try await Self.record(second, days: 14, ["devices": [Self.device("OLD1")]], errors: ["activation_lock": "HTTP 403 FORBIDDEN_ERROR"])
         let lock = await Self.model(second).build(.activationLock, tokens: [:])
-        #expect(lock.source.contains { $0.contains("failed with HTTP 403 FORBIDDEN_ERROR, so this is the last good copy") && !$0.contains("only part") }, "\(lock.source)")
+        #expect(lock.source.contains { $0.contains("failed with HTTP 403 FORBIDDEN_ERROR, so this is the last good copy") }, "\(lock.source)")
     }
 
-    /// With no good copy the report judges nothing: said, with the code, never a zero, and nothing to export.
+    /// The code is worded for what it is: a run's "not asked after HTTP 401" isn't "failed with" it.
+    @Test func aFailureCodeIsWordedForWhatItIs() {
+        func words(_ code: String, _ note: String? = nil) -> String {
+            ReportsModel.failureWords(ReportsModel.Failure(takenAt: "2026-10-05T14:13:20Z", code: code, note: note), sweep: .activationLock)
+        }
+        #expect(words("not asked after HTTP 401") == "The newest snapshot that read Activation Lock (5 Oct 2026) didn't read it (not asked after HTTP 401)")
+        #expect(words("not read: devices failed") == "The newest snapshot that read Activation Lock (5 Oct 2026) didn't read it (not read: devices failed)")
+        #expect(words("HTTP 500", "1 of 6 not read") == "The newest snapshot that read Activation Lock (5 Oct 2026) failed with HTTP 500: 1 of 6 not read")
+    }
+
+    /// With no good copy the report judges nothing: said, with the code and the note, never a zero, and nothing to export.
     @Test func aFailedAttemptWithNoGoodCopyJudgesNothing() async throws {
         let world = try await World.make()
-        try await Self.record(world, days: 0, ["devices": [Self.device("D1")]], errors: ["applecare": "HTTP 500"])
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")]], errors: ["applecare": "HTTP 500"],
+                              notes: ["applecare": "1 of 1 not read: 1 failed twice (HTTP 500)"])
         let model = await Self.model(world)
         for report in [ReportsModel.Report.coverage, .outOfWarranty] {
             let output = model.build(report, tokens: [:])
             let why = try #require(output.judgesNothing, "\(report)")
-            #expect(why.contains("failed with HTTP 500") && why.contains("no earlier snapshot read AppleCare coverage in full") && why.contains("Snapshot now"), "\(why)")
+            #expect(why.contains("failed with HTTP 500: 1 of 1 not read: 1 failed twice (HTTP 500)") && why.contains("No earlier snapshot read AppleCare coverage") && why.contains("Snapshot now"), "\(why)")
             #expect(output.summary.isEmpty && output.lines.isEmpty && !output.canExport)
         }
         #expect(model.exportBlocked != nil)
+    }
+
+    /// A part-read newest sweep is used (the coordinating session's decision), over its own device list, and said, on screen and in
+    /// the CSV's `listRead`: with no earlier copy, and with an older whole one it is the newest part read that is used.
+    @Test func aPartReadSweepIsUsedAndSaidWithItsOwnDeviceList() async throws {
+        let world = try await World.make()
+        // An older whole copy over other devices; then a newer part read (the collector's `counts` and `errors` both).
+        try await Self.record(world, days: 0, ["devices": [Self.device("OLD1")], "applecare": [Self.care("OLD1")], "activation_lock": [Self.lock("OLD1", locked: false, type: nil)]])
+        try await Self.record(world, days: 14, ["devices": [Self.device("P1"), Self.device("P2"), Self.device("P3")],
+                                                "applecare": [Self.care("P1")], "activation_lock": [Self.lock("P1", locked: true, type: "USER"), Self.lock("P2", locked: false, type: nil)]],
+                              errors: ["applecare": "HTTP 500", "activation_lock": "HTTP 404"],
+                              notes: ["applecare": "1 of 3 not read: 1 failed twice (HTTP 500)", "activation_lock": "1 of 3 not read: 1 failed twice (HTTP 404)"])
+        let model = await Self.model(world)
+        let care = model.build(.coverage, tokens: ["days": "90"])
+        #expect(care.judgesNothing == nil && !Self.text(care).contains("OLD1"), "the newest part read is used, not the older whole copy: \(Self.text(care))")
+        #expect(care.source[0].hasPrefix("From the snapshot of 5 Oct 2026, 6 days old."), "\(care.source)")
+        #expect(care.source.contains { $0.contains("read AppleCare coverage only in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500))") && $0.contains("a device with no record") }, "\(care.source)")
+        #expect(care.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500)); in a part read a device with no record counts as not read"), "\(care.summary)")
+        // P2 and P3 have no record: in a part read they count as not read, never as uncovered.
+        #expect(care.summary.contains { $0.contains("1 devices have ACTIVE coverage; 0 have none among the records read; 2 had their coverage unread") }, "\(care.summary)")
+        #expect(Self.titles(care) == ["P1"])
+        let csv = model.csv(of: care)
+        #expect(csv.contains(",read in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500)); in a part read a device with no record counts as not read,"), "\(csv)")
+        let warranty = model.build(.outOfWarranty, tokens: [:])
+        let by = Dictionary(uniqueKeysWithValues: warranty.lines.map { ($0.title, $0) })
+        #expect(by["P1"]?.group == "active" && by["P2"]?.group == "not-read" && by["P3"]?.group == "not-read" && by["OLD1"] == nil, "\(warranty.lines)")
+        #expect(by["P2"]?.detail.contains("the sweep didn't reach this device") == true)
+        #expect(warranty.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut"))
+        let age = model.build(.fleetAge, tokens: ["years": "1"])
+        #expect(age.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut") && Set(Self.titles(age)) == ["P1", "P2", "P3"])
+        #expect(age.lines.first { $0.title == "P2" }?.detail.contains("AppleCare: not read") == true && age.lines.first { $0.title == "P1" }?.detail.contains("AppleCare: active") == true)
+        // Activation Lock: a device with no item is not read; the rest are judged.
+        let lock = model.build(.activationLock, tokens: [:])
+        #expect(lock.summary[0].hasPrefix("Read in part: the Activation Lock read was cut: HTTP 404 (1 of 3 not read"), "\(lock.summary)")
+        #expect(lock.lines.filter { $0.group == "not-read" }.map(\.title) == ["P3"] && lock.lines.filter { $0.group != "not-read" }.count == 2 && !Self.text(lock).contains("OLD1"))
+        // The same with no earlier copy.
+        let alone = try await World.make()
+        try await Self.record(alone, days: 3, ["devices": [Self.device("P1"), Self.device("P2")], "applecare": [Self.care("P1")]], errors: ["applecare": "HTTP 500"])
+        let only = await Self.model(alone).build(.coverage, tokens: [:])
+        #expect(only.judgesNothing == nil && Self.titles(only) == ["P1"] && only.summary[0].hasPrefix("Read in part: the AppleCare coverage read was cut: HTTP 500;"), "\(only.summary)")
+    }
+
+    /// Through the real collector and the strict stub (as the review did): Activation Lock with one device answering 404 of 6 is
+    /// used, marked part, five judged and one not read; AppleCare with one device failing twice is used by Coverage, Out of warranty
+    /// and Fleet age, marked part, devices with no record not read; and a newer part read beats an older whole copy.
+    @Test func aRealCollectorsPartReadSweepIsUsed() async throws {
+        let world = try await SweepTests.world(devices: 6)
+        let a = world.stubs["a"]!
+        for _ in 0..<2 { a.queue(404, for: SweepTests.lock(3)) }
+        let whole = try await SweepTests.recorded(world, [.appleCare])
+        #expect(whole.summary.errors["applecare"] == nil)
+        let part = try await SweepTests.recorded(world, [.activationLock])
+        #expect(part.summary.errors["activation_lock"] == "HTTP 404" && part.summary.counts["activation_lock"] == 5)
+        for _ in 0..<2 { a.queue(500, for: SweepTests.care(3)) }
+        let care = try await SweepTests.recorded(world, [.appleCare])
+        #expect(care.summary.errors["applecare"] == "HTTP 500")
+        let model = world.screens.reports
+        await model.load()
+        let lock = model.build(.activationLock, tokens: [:])
+        #expect(lock.judgesNothing == nil && lock.lines.count == 6 && lock.lines.filter { $0.group == "not-read" }.map(\.title) == [SweepTests.serial(3)], "\(lock.lines)")
+        #expect(lock.lines.filter { $0.group != "not-read" }.count == 5 && lock.summary[0].hasPrefix("Read in part: the Activation Lock read was cut: HTTP 404"), "\(lock.summary)")
+        #expect(!lock.source.contains { $0.localizedCaseInsensitiveContains("take another") })
+        #expect(model.csv(of: lock).contains("read in part: the Activation Lock read was cut"))
+        // AppleCare: the newest attempt (part) is used over the older whole copy; device 0 has records, the rest none on record or not reached.
+        for report in [ReportsModel.Report.coverage, .outOfWarranty, .fleetAge] {
+            let output = model.build(report, tokens: report == .fleetAge ? ["years": "1"] : report == .coverage ? ["days": "90"] : [:])
+            #expect(output.judgesNothing == nil && output.summary.first?.hasPrefix("Read in part: the AppleCare coverage read was cut: HTTP 500") == true, "\(report): \(output.summary) \(output.judgesNothing ?? "") \(output.problems)")
+            #expect(output.source.first?.hasPrefix("From the snapshot of ") == true, "\(output.source)")
+        }
+        let warranty = model.build(.outOfWarranty, tokens: [:])
+        #expect(warranty.lines.filter { $0.group == "not-read" }.count == 5 && warranty.lines.first { $0.group == "active" }?.title == SweepTests.serial(0), "\(warranty.lines)")
+    }
+
+    /// Different snapshots hold different devices: each sweep's report uses its own snapshot's list, never the other's.
+    @Test func eachSweepUsesItsOwnSnapshotsDeviceList() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("A1"), Self.device("A2")], "applecare": [Self.care("A1")]])
+        try await Self.record(world, days: 5, ["devices": [Self.device("L1"), Self.device("L2"), Self.device("L3")],
+                                               "activation_lock": [Self.lock("L1", locked: true, type: "USER"), Self.lock("L2", locked: false, type: nil), Self.lock("L3", locked: false, type: nil)]])
+        let model = await Self.model(world)
+        #expect(Self.titles(model.build(.outOfWarranty, tokens: [:])).sorted() == ["A1", "A2"])
+        let lock = model.build(.activationLock, tokens: [:])
+        #expect(Self.titles(lock).sorted() == ["L1", "L2", "L3"] && !Self.text(lock).contains("A1"), "\(Self.text(lock))")
+        #expect(lock.source[0].hasPrefix("From the snapshot of 26 Sep 2026"), "\(lock.source)")
+        #expect(Self.titles(model.build(.fleetAge, tokens: ["years": "1"])).sorted() == ["A1", "A2"])
     }
 
     /// No snapshot has read the sweep: the report says it judges nothing and where to take one, never "0".
@@ -170,7 +269,7 @@ struct ReportsTests {
         await eventually("the live devices") { world.devices.state != .idle && !world.devices.state.isLoading }
         let output = model.build(.fleetAge, tokens: ["years": "1"])
         #expect(Self.titles(output).sorted() == ["ADEV0000000", "ADEV0000001", "ADEV0000002"], "\(Self.text(output))")
-        #expect(output.source.contains { $0.contains("The AppleCare column is empty because no snapshot has read AppleCare coverage") }, "\(output.source)")
+        #expect(output.source.contains { $0.hasPrefix("The AppleCare column is empty. No snapshot has read AppleCare coverage. This screen doesn't read it") }, "\(output.source)")
         #expect(output.lines.allSatisfy { $0.detail.contains("AppleCare: not read by this screen") } && !Self.text(output).contains("SNAP1"))
         #expect(output.summary.contains("No coverage data was read: nothing is said about coverage."))
         // Selecting it asked the Devices model for the list: reads only.
@@ -259,7 +358,7 @@ struct ReportsTests {
         model.select(.migration)
         await eventually("the live devices") { world.devices.state != .idle && !world.devices.state.isLoading }
         let output = model.build(.migration, tokens: [:])
-        #expect(output.source[0].hasPrefix("Read live from Apple: the device list the Devices screen holds"))
+        #expect(output.source[0].hasPrefix("Read live from Apple on ") && output.source[0].contains(": the device list the Devices screen holds."), "\(output.source)")
         #expect(output.summary[0].hasPrefix("Read in part: showing 1,000 of ") && output.summary[0].contains("the list stopped at the page limit"), "\(output.summary)")
         #expect(output.matching == 1000 && output.lines.count == 200 && output.capNote == "Showing 200 of 1,000: the rest are in the CSV export.")
         #expect(model.csv(of: output).split(separator: "\r\n")[1].contains(",\"read in part: showing 1,000 of "))
@@ -283,7 +382,7 @@ struct ReportsTests {
         model.select(.serviceHealth)
         await eventually("the live services") { world.devices.servicesState != .idle && !world.devices.servicesState.isLoading }
         let output = model.build(.serviceHealth, tokens: ["days": "30"])
-        #expect(output.source[0].hasPrefix("Read live from Apple: the services list"), "\(output.source)")
+        #expect(output.source[0].hasPrefix("Read live from Apple on ") && output.source[0].contains(": the services list the Services screen holds."), "\(output.source)")
         let by = Dictionary(uniqueKeysWithValues: output.lines.map { ($0.title, $0) })
         #expect(by["Main MDM"]?.detail.contains("devices: 1") == true, "\(by)")
         #expect(by["Lab"]?.detail.contains("devices: not read") == true, "\(by)")
@@ -476,7 +575,9 @@ struct ReportsTests {
         #expect(several.exportFileName.hasPrefix("Org b - "), "\(several.exportFileName)")
         // A live report's file is named for the day it was read.
         several.select(.migration)
-        #expect(several.exportFileName == "Org b - mdm migration (read live \(ReportsModel.dayStamp(Self.now))).csv", "\(several.exportFileName)")
+        await eventually("the devices") { two.devices.state != .idle && !two.devices.state.isLoading }
+        guard case .loaded(let readAt) = two.devices.state else { Issue.record("the devices weren't read"); return }
+        #expect(several.exportFileName == "Org b - mdm migration (read live \(ReportsModel.dayStamp(readAt))).csv", "the day the list was read: \(several.exportFileName)")
     }
 
     /// The CSV is each report's own columns: a secret-named attribute on a record or a status never leaves, and a lock's bypass code
@@ -584,6 +685,142 @@ struct ReportsTests {
             #expect(output.problems.isEmpty && output.title == report.title, "\(report)")
         }
         #expect(world.stubs["a"]!.requests.isEmpty)
+    }
+
+    // MARK: live part reads
+
+    /// The services list cut at the page cap is a part read, said; never a whole one.
+    @Test func aServicesListCutAtThePageCapIsSaidAsPartial() async throws {
+        let world = try await World.make(pageCap: 1)
+        world.stubs["a"]!.add(services: (0..<1001).map { World.service(String(format: "S%04d", $0), name: "Service \($0)") })
+        let model = await Self.model(world)
+        model.select(.serviceHealth)
+        await eventually("the services") { world.devices.servicesState != .idle && !world.devices.servicesState.isLoading }
+        let output = model.build(.serviceHealth, tokens: [:])
+        #expect(output.summary[0] == "Read in part: showing 1,000 services: the list stopped at the page limit. The counts below cover only what was read.", "\(output.summary)")
+        #expect(model.csv(of: output).contains(",\"read in part: showing 1,000 services"))
+    }
+
+    /// A device list refused part-way (the first page read, the next 403) is a part read, with the rows read, said.
+    @Test func aDeviceListRefusedPartWayIsSaidAsPartial() async throws {
+        let world = try await World.make(devices: ["a": 1001, "b": 1])
+        world.stubs["a"]!.queue(403, for: "/v1/orgDevices?limit=1000&cursor=")
+        let model = await Self.model(world)
+        model.select(.migration)
+        await eventually("the devices") { world.devices.state != .idle && !world.devices.state.isLoading }
+        #expect(world.devices.state == .forbidden && world.devices.rows.count == 1000)
+        let output = model.build(.migration, tokens: [:])
+        #expect(output.summary[0] == "Read in part: your role can't read devices; 1,000 were read before the refusal. The counts below cover only what was read.", "\(output.summary)")
+        #expect(output.matching == 1000 && model.csv(of: output).contains(",\"read in part: your role can't read devices"))
+    }
+
+    /// A device list that failed part-way is a part read: the rows read, and why it stopped.
+    @Test func aDeviceListThatFailedPartWayIsSaidAsPartial() async throws {
+        let world = try await World.make(devices: ["a": 1001, "b": 1])
+        for _ in 0..<6 { world.stubs["a"]!.queue(500, for: "/v1/orgDevices?limit=1000&cursor=") }
+        let model = await Self.model(world)
+        model.select(.migration)
+        await eventually("the devices") { world.devices.state != .idle && !world.devices.state.isLoading }
+        guard case .failed = world.devices.state else { Issue.record("\(world.devices.state)"); return }
+        let output = model.build(.migration, tokens: [:])
+        #expect(output.summary[0].hasPrefix("Read in part: the read failed after 1,000 devices: ") && output.matching == 1000, "\(output.summary)")
+    }
+
+    /// A live list says when it was read and how old it is, from the Devices model's own read; the file's stamp is that day, not today.
+    @Test func aLiveReportSaysWhenItsListWasRead() async throws {
+        let world = try await World.make()
+        let model = await Self.model(world)
+        model.select(.migration)
+        // Before anything was read: said, no date made up.
+        #expect(model.build(.migration, tokens: [:]).source.first?.hasPrefix("Not read from Apple yet") == true)
+        await eventually("the devices") { world.devices.state != .idle && !world.devices.state.isLoading }
+        guard case .loaded(let readAt) = world.devices.state else { Issue.record("\(world.devices.state)"); return }
+        model.now = { readAt.addingTimeInterval(3 * 86_400 + 60) }
+        let output = model.build(.migration, tokens: [:])
+        #expect(output.source[0] == "Read live from Apple on \(ReportsModel.dayTime(readAt)), 3 days old: the device list the Devices screen holds. No snapshot is used.", "\(output.source)")
+        #expect(output.fileBase == "mdm migration (read live \(ReportsModel.dayStamp(readAt)))" && ReportsModel.dayTime(readAt).hasSuffix(" UTC"))
+    }
+
+    // MARK: building and redrawing
+
+    /// One build per redraw: the view builds the report once and asks the same output for the Export button, the file name and the panel's
+    /// words. At 10,000 devices a build is real work.
+    @Test func aRedrawBuildsTheReportOnce() async throws {
+        let world = try await World.make()
+        let serials = (0..<10_000).map { String(format: "BIG%05d", $0) }
+        try await Self.record(world, days: 0, ["devices": serials.map { Self.device($0) }, "activation_lock": serials.map { Self.lock($0, locked: false, type: nil) }])
+        let model = await Self.model(world)
+        model.select(.activationLock)
+        let before = model.builds
+        let output = model.current
+        #expect(model.exportBlocked(for: output) == nil && model.exportFileName(for: output).hasSuffix(".csv") && model.exportWords(for: output).hasPrefix("Saves the Activation Lock report"))
+        #expect(model.builds == before + 1, "the export values come from the one output")
+        #expect(output.matching == 10_000 && output.lines.count == 200)
+        // The date words are made by calendar, not a formatter per row: a coverage run over 10,000 devices stays quick.
+        let clock = ContinuousClock()
+        let took = clock.measure { _ = model.build(.activationLock, tokens: [:]) }
+        #expect(took < .seconds(5), "a build of 10,000 devices took \(took)")
+    }
+
+    /// A missing token is the report's default, never the screen's stepper value (an intent has no stepper).
+    @Test func aMissingTokenTakesTheReportsDefault() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")], "applecare": [Self.care("D1", endsInDays: 40)]])
+        let model = await Self.model(world)
+        model.coverageDays = 5
+        model.fleetYears = 9
+        model.quietDays = 400
+        #expect(model.build(.coverage, tokens: [:]).filters == ["Ending within 90 days"] && Self.titles(model.build(.coverage, tokens: [:])) == ["D1"])
+        #expect(model.build(.fleetAge, tokens: [:]).filters == ["Candidates: 4+ years old"])
+        #expect(model.build(.serviceHealth, tokens: [:]).filters.contains("Quiet after 30 days"))
+        // The screen passes its values explicitly.
+        #expect(model.current.filters == ["Ending within 5 days"] && model.current.lines.isEmpty)
+    }
+
+    /// A record with no serial number is counted and said, and left out of the report; two expiring records of one device have two ids.
+    @Test func aRecordWithNoSerialIsCountedAndRowsHaveUniqueIDs() async throws {
+        let world = try await World.make()
+        var attributes = Self.care("X", endsInDays: 10).attributes
+        attributes["serialNumber"] = nil
+        let orphan = Resource(type: "applecare", id: "orphan", attributes: attributes)
+        let twin = Resource(type: "applecare", id: "D1:1", attributes: Self.care("D1", endsInDays: 20).attributes)
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")], "applecare": [Self.care("D1", endsInDays: 30), twin, orphan]])
+        let model = await Self.model(world)
+        let output = model.build(.coverage, tokens: ["days": "90"])
+        #expect(output.source.contains("1 coverage record has no serial number and can't be matched to a device: counted here and left out of the report."), "\(output.source)")
+        #expect(output.lines.count == 2 && Set(output.lines.map(\.id)).count == 2, "\(output.lines)")
+    }
+
+    // MARK: refresh
+
+    /// ⌘R on Reports re-reads the history either way, and reads the live lists again only for a live report.
+    @Test func refreshReadsTheHistoryAndTheLiveListsOnlyForALiveReport() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")], "applecare": [Self.care("D1")]])
+        let model = await Self.model(world)
+        var before = model.loadsFinished
+        world.screens.refresh(.reports)
+        await eventually("the history again") { model.loadsFinished > before }
+        #expect(world.devices.state == .idle && world.stubs["a"]!.requests.isEmpty, "a sweep report forces no Apple read")
+        model.select(.migration)
+        await eventually("the devices") { world.devices.state != .idle && !world.devices.state.isLoading }
+        before = model.loadsFinished
+        let reads = world.devices.readsFinished
+        world.screens.refresh(.reports)
+        #expect(world.devices.state.isLoading, "a live report reads its lists again")
+        await eventually("the history and the lists again") { model.loadsFinished > before && world.devices.readsFinished >= reads + 2 }
+    }
+
+    /// Fleet age on screen with no AppleCare snapshot asks the Devices model for its list when the history load finishes.
+    @Test func fleetAgeReadsTheLiveListWhenTheHistoryLoadFinishesWithNoSnapshot() async throws {
+        let world = try await World.make()
+        let model = world.screens.reports
+        model.now = { Self.now }
+        model.select(.fleetAge)
+        #expect(world.devices.state == .idle, "nothing is read while the history is unknown")
+        await model.load()
+        #expect(world.devices.state != .idle, "the live list is read once it is known there is no snapshot")
+        await eventually("the devices") { !world.devices.state.isLoading }
     }
 
     // MARK: the demo

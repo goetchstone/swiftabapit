@@ -54,8 +54,8 @@ public final class ScreenModels {
 
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices
     /// and its audit log; services are part of the Devices read; Settings has no read of its own and refreshes the devices, as
-    /// every section did in Phase 1. Reports reads the devices again (its migration and service reports are live) and its
-    /// snapshots from the local history, which asks Apple for nothing and never starts a sweep.
+    /// every section did in Phase 1. Reports reads the devices again when the report on screen is a live one (migration, service health, fleet age with no AppleCare
+    /// snapshot) and its snapshots from the local history, which asks Apple for nothing and never starts a sweep.
     public func refresh(_ section: SidebarItem) {
         switch section {
         case .overview: dashboard.load(force: true)
@@ -69,7 +69,9 @@ public final class ScreenModels {
         case .mosyle: mosyle.load(force: true)
         case .reconciliation: reconciliation.load(force: true)
         case .reports:
-            devices.load(force: true)
+            // The live lists again only for a report that reads them; the history again either way. A sweep report uses neither a
+            // forced Apple read nor starts a sweep.
+            if reports.usesLiveList(reports.report) { devices.load(force: true) }
             reports.refresh()
         case .devices, .services, .settings: devices.load(force: true)
         }
