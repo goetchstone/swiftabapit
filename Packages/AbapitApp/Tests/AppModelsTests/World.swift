@@ -2,6 +2,7 @@ import AppleBusiness
 import AppModels
 import CryptoKit
 import Foundation
+import History
 import HTTPCore
 import JSONAPI
 import Mosyle
@@ -39,6 +40,10 @@ struct World {
     let vault: Vault
     let keys: [String: P256.Signing.PrivateKey]
     let stall: Stall
+    /// The snapshot history the orgs and the collector share, as the orgs hold it now: in memory unless `make(history:)`
+    /// gave another opener; nil while it doesn't open.
+    var history: SnapshotStore? { try? orgs.history.get() }
+    var snapshots: SnapshotCollector { screens.snapshots }
 
     static func clientID(_ org: String) -> String { "BUSINESSAPI.00000000-0000-4000-8000-0000000000\(org == "a" ? "a1" : org == "b" ? "b1" : "c1")" }
     static func keyID(_ org: String) -> String { "00000000-0000-4000-8000-0000000000\(org == "a" ? "a2" : org == "b" ? "b2" : "c2")" }
@@ -53,7 +58,11 @@ struct World {
 
     /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, moved into the client of the first org (`a`).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
-                     profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap) async throws -> World {
+                     profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap,
+                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil) async throws -> World {
+        // One store, opened once: the orgs ask again only after a failure.
+        let opened = Self.history()
+        let history = history ?? { opened }
         let keychain = MemoryStore()
         let vault = Vault(store: keychain)
         let mosyleStub = MosyleStub()
@@ -85,7 +94,7 @@ struct World {
         let routes = gates, stall = Stall()
         // The limiter's sleeps move its own clock, and the client's retry sleeps return at once: nothing here
         // waits on real time but the gates and the stall.
-        let orgs = OrgsModel(storage: .memory, vault: vault, store: orgStore) { account, rate in
+        let orgs = OrgsModel(storage: .memory, vault: vault, store: orgStore, history: history) { account, rate in
             let clock = ManualClock(), clientID = account.clientID
             // An org a test adds is served by org a's stub, where the test registers its account.
             return AppleClient(account: account, vault: vault, transport: routes[account.org] ?? routes["a"]!,
@@ -103,6 +112,11 @@ struct World {
         return World(orgs: orgs, screens: screens, devices: screens.devices, detail: screens.detail, people: screens.people,
                      content: screens.content, appleMDM: screens.appleMDM, activity: screens.activity, dashboard: screens.dashboard,
                      mosyle: screens.mosyle, reconciliation: screens.reconciliation, mosyleStub: mosyleStub, stubs: stubs, gates: gates, store: keychain, keychain: keychain, vault: vault, keys: keys, stall: stall)
+    }
+
+    /// A snapshot history in memory, as the demo's.
+    static func history() -> Result<SnapshotStore, SnapshotStore.Failure> {
+        Result { () throws(SnapshotStore.Failure) in try SnapshotStore(storage: .memory, appVersion: "test") }
     }
 
     /// Org `org`'s profile as the world makes it: Apple Business unless `scope` says School, its own client and key IDs.

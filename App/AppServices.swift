@@ -1,6 +1,7 @@
 import AppleBusiness
 import AppModels
 import Foundation
+import History
 import Mosyle
 import Orgs
 import Vault
@@ -36,6 +37,16 @@ final class AppServices {
     /// from a global by the package (SwiftGamGui failure-log 2026-09-25).
     static var storageRoot: URL { URL.applicationSupportDirectory.appending(path: "abapit") }
 
+    /// The snapshot history: `history.sqlite` beside `orgs.json` (plan §3.7), or in memory for the demo, which never touches
+    /// the real files. Opened at launch, and again at an Add or a snapshot while it fails; a file that can't be opened is said,
+    /// never replaced (docs/domains/history.md).
+    static func history(in folder: URL?) -> Result<SnapshotStore, SnapshotStore.Failure> {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        return Result { () throws(SnapshotStore.Failure) in
+            try SnapshotStore(storage: folder.map { .folder($0) } ?? .memory, appVersion: version)
+        }
+    }
+
     static func make() -> AppServices {
         #if DEBUG
         // `1`: the demo, one client; `clients`: the same with a second client, for the snapshots of the client switcher;
@@ -48,7 +59,7 @@ final class AppServices {
         }
         #endif
         let vault = Vault(store: KeychainStore())
-        let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault) { account, rate in
+        let orgs = OrgsModel(storage: .folder(storageRoot), vault: vault, history: { history(in: storageRoot) }) { account, rate in
             AppleClient(account: account, vault: vault, readsPerMinute: rate)
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault)
@@ -79,7 +90,7 @@ final class AppServices {
         // A second client: a Mosyle org with no Apple org (the active client has one), read from the same stub.
         if clients { try? orgs.add(OrgProfile(id: DemoMosyle.secondOrgID, name: DemoMosyle.secondName, provider: .mosyle)) }
         orgs.activeID = DemoOrg.orgID
-        let model = OrgsModel(storage: .memory, vault: vault, store: orgs) { account, _ in
+        let model = OrgsModel(storage: .memory, vault: vault, store: orgs, history: { history(in: nil) }) { account, _ in
             AppleClient(account: account, vault: vault, transport: stub)
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault, transport: mosyleStub)
