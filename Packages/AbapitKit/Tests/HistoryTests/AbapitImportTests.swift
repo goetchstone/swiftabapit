@@ -558,8 +558,32 @@ struct ImportedRecordTests {
         #expect(try Data(contentsOf: URL(filePath: made)) == Data("someone else's".utf8), "the swapped-in file is untouched")
     }
 
-    /// An ACL (a folder's inheritable `everyone allow read`, which makes a `0600` file readable by others) is stripped from the new
-    /// file at once, and one added after the bytes are written is refused with the file removed.
+    /// `O_EXCL` has a test of its own (the early look and `O_EXCL` each covered the other): another program makes the destination, with
+    /// its own bytes, after the early look and before this call creates it. The export is refused and the bytes are intact.
+    @Test func aDestinationMadeAfterTheEarlyLookIsRefusedByOEXCL() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let store = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
+            if case .beforeCreate(let path) = step {
+                try? Data("another program's bytes".utf8).write(to: URL(filePath: path))
+            }
+        })
+        try await store.record(org: Scratch.apple("acme"), takenAt: Scratch.noon, resources: ["devices": [Scratch.device("S1")]])
+        let made = Scratch.path(folder) + "/made.sqlite"
+        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: made)) }
+        #expect(try Data(contentsOf: URL(filePath: made)) == Data("another program's bytes".utf8))
+        // And a dangling link put there is refused too, and receives nothing.
+        let link = Scratch.path(folder) + "/link.sqlite", target = Scratch.path(folder) + "/target.sqlite"
+        let linking = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
+            if case .beforeCreate(let path) = step { symlink(target, path) }
+        })
+        try await linking.record(org: Scratch.apple("acme"), takenAt: Scratch.noon, resources: [:])
+        await #expect(throws: Failure.self) { try await linking.exportCopy(to: URL(filePath: link)) }
+        #expect(!Scratch.exists(target), "nothing was made behind the link")
+    }
+
+    /// An ACL (a folder's inheritable `everyone allow read`, which makes a `0600` file readable by others) refuses the export and
+    /// removes the new file, and one added after the bytes are written is refused with the file removed.
     @Test func aCopyHasNoACL() async throws {
         let (store, folder) = try await filled()
         defer { Scratch.remove(folder) }
@@ -571,24 +595,14 @@ struct ImportedRecordTests {
             process.waitUntilExit()
             #expect(process.terminationStatus == 0, "chmod +a works here")
         }
-        func listing(_ path: String) throws -> String {
-            let process = Process(), pipe = Pipe()
-            process.executableURL = URL(filePath: "/bin/ls")
-            process.arguments = ["-led", path]
-            process.standardOutput = pipe
-            try process.run()
-            let out = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return String(decoding: out, as: UTF8.self)
-        }
         let inheriting = Scratch.path(folder) + "/inheriting"
         mkdir(inheriting, 0o700)
         try chmodACL(inheriting, "everyone allow read,file_inherit")
         let copy = inheriting + "/copy.sqlite"
-        try await store.exportCopy(to: URL(filePath: copy))
-        let shown = try listing(copy)
-        #expect(!shown.contains("everyone"), "the inherited ACL was stripped: \(shown)")
-        #expect(Scratch.mode(copy) == 0o600)
+        // Refused, not stripped: until stripped, the user the ACL names could have opened the empty file and kept the descriptor.
+        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: copy)) }
+        do { try await store.exportCopy(to: URL(filePath: copy)) } catch { #expect(error.message.contains("this folder gives others access to new files"), "\(error.message)") }
+        #expect(!Scratch.exists(copy), "the file made under the inherited ACL is removed")
         // One added after the copy was written.
         let added = Scratch.path(folder) + "/added"
         let hooked = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
@@ -661,10 +675,12 @@ struct ImportedRecordTests {
         let inode = UInt64(info.st_ino)
         let bystander = open(path, O_RDONLY)
         defer { close(bystander) }
-        let before = AbapitHistory.closed.withLock { $0.filter { $0 == inode }.count }
+        let counted = Shared(0)
+        AbapitHistory.closeObserver.withLock { $0 = { if $0 == inode { counted.set(counted.value + 1) } } }
+        defer { AbapitHistory.closeObserver.withLock { $0 = nil } }
         #expect(throws: AbapitHistory.Failure.self) { try AbapitHistory(file: URL(filePath: path)) }
         // `deinit` of the failed actor has run by now.
-        let closes = AbapitHistory.closed.withLock { $0.filter { $0 == inode }.count } - before
+        let closes = counted.value
         #expect(closes == 1, "closed \(closes) times")
         #expect(fcntl(bystander, F_GETFD) != -1, "another descriptor of the same file is still open")
     }

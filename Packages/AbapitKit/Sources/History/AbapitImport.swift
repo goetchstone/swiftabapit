@@ -101,13 +101,14 @@ public actor AbapitHistory {
     nonisolated let readsByDescriptor: Bool
     private let inode: UInt64
 
-    /// The inodes of the files whose descriptors this type has closed, one entry per close: what the tests count to hold a
-    /// descriptor to exactly one close (a refused file's was once closed twice, the second time possibly another owner's).
-    static let closed = Mutex<[UInt64]>([])
+    /// Told the inode of each file whose descriptor this type closes, once per close: what a test counts to hold a descriptor to
+    /// exactly one close (a refused file's was once closed twice, the second time possibly another owner's). Nil outside the
+    /// tests, so nothing accumulates.
+    static let closeObserver = Mutex<(@Sendable (UInt64) -> Void)?>(nil)
 
     private static func release(_ fd: Int32, inode: UInt64) {
         close(fd)
-        closed.withLock { $0.append(inode) }
+        closeObserver.withLock { $0 }?(inode)
     }
 
     /// Opens `file` read-only and checks it is abapit's.

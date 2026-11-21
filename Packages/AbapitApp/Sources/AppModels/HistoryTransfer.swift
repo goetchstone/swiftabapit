@@ -93,7 +93,10 @@ public final class HistoryTransfer {
 
     static let busy = "An import or export is already running."
 
-    public init(orgs: OrgsModel, now: @escaping @Sendable () -> Date = { Date() }) {
+    public convenience init(orgs: OrgsModel) { self.init(orgs: orgs, now: { Date() }) }
+
+    /// With a clock of the caller's own: the tests'.
+    package init(orgs: OrgsModel, now: @escaping @Sendable () -> Date) {
         self.orgs = orgs
         self.now = now
         orgs.onSwitch { [weak self] in

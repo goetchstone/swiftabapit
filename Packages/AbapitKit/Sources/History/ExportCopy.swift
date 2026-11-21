@@ -34,8 +34,7 @@ extension SnapshotStore {
     /// - **The destination is created by this call, by descriptor, and nothing else.** `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
     ///   0600)`: never wider than `0600`, never through a link. A path that exists, of any kind and empty or not, is refused ("a copy
     ///   never replaces a file; choose a new name") and left untouched: it is never unlinked, truncated or written into, so a file
-    ///   another program filled meanwhile, or a descriptor it opened earlier, can't be reached. Any ACL (a folder's inheritable
-    ///   one) is stripped from the new file at once. The bytes are copied in, `fsync`ed, and what the path leads to afterwards is
+    ///   another program filled meanwhile, or a descriptor it opened earlier, can't be reached. A folder's inheritable ACL on the new file refuses the export and removes the file. The bytes are copied in, `fsync`ed, and what the path leads to afterwards is
     ///   checked to be that file: regular, one name, `0600`, no ACL, not empty, the same inode; if not, the file this call made is
     ///   removed (only while the path still leads to it). SQLite never opens the destination.
     /// - A symbolic link anywhere above the file is refused (each name `lstat`ed).
@@ -77,6 +76,7 @@ extension SnapshotStore {
             try database.run("VACUUM INTO ?", [.text(work)])
         }
         if let keep { try Self.narrow(work, to: keep) }
+        try hook?(.beforeCreate(path: path))
         try Self.copy(work, to: path, hook: hook)
     }
 
@@ -147,15 +147,15 @@ extension SnapshotStore {
         }
         defer { close(fd) }
         var mine = stat()
+        // Not removed if it can't be identified: without its inode there is no telling it is still ours, so it is left, and said.
         guard fstat(fd, &mine) == 0 else {
-            unlink(path)
-            throw .notCopied("\(path) couldn't be read (\(String(cString: strerror(errno)))).")
+            throw .notCopied("\(path) was made but couldn't be read (\(String(cString: strerror(errno)))); it was left where it is, empty. Remove it and try again.")
         }
         do throws(Failure) {
-            // An ACL inherited from the folder is stripped before a byte is written.
-            if hasACL(fd), let empty = acl_init(0) {
-                defer { acl_free(UnsafeMutableRawPointer(empty)) }
-                guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 else { throw Failure.notCopied("\(path) couldn't be made private (an access control list stays on it).") }
+            // An ACL inherited from the folder is refused, not stripped: until it was stripped, another user it names could have
+            // opened the empty file and kept that descriptor. The file is ours, so it is removed (below).
+            if hasACL(fd) {
+                throw Failure.notCopied("this folder gives others access to new files (an access control list it passes on); choose another folder.")
             }
             var buffer = [UInt8](repeating: 0, count: 1 << 20)
             while true {

@@ -493,11 +493,16 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   panel says it holds this client's snapshots (serial numbers, device models, services, the Managed Apple Accounts the policy
   keeps) and Needs-attention choices only, no key or token, and that only the owner can read it. The destination is created by this
   call, by descriptor, and nothing else (the coordinating session's decision; the placeholder path of the first version is gone):
-  `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)`, any ACL stripped from it at once (a folder's inheritable
-  `everyone allow read` would otherwise make the `0600` file readable by others), the bytes copied in and `fsync`ed, then what the path
+  `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)`, an ACL on the new file (a folder's inheritable `everyone allow
+  read` makes the `0600` file readable by others) **refuses the export and removes the file** (round 3: stripping it left a window in which a
+  user the ACL names could open the empty file and keep that descriptor), the bytes copied in and `fsync`ed, then what the path
   leads to is checked (regular, one name, `0600`, no ACL, not empty, the same inode), and a file that fails the check is removed
   while the path still leads to it. **A path that exists, empty or not, is refused ("a copy never replaces a file; choose a new
-  name") and left untouched**: never unlinked, truncated or written into. No process-wide `umask`. A working copy a crash left
+  name") and left untouched**: never unlinked, truncated or written into. No process-wide `umask`. `O_EXCL` has its own test (`aDestinationMadeAfterTheEarlyLookIsRefusedByOEXCL`, through the `.beforeCreate` hook: a destination made after the early look is
+  refused with the other program's bytes intact). **Known limit**: the path is checked, created and (on failure) removed by path, not by the parent
+  folder's descriptor (`openat`/`unlinkat`); a process with write access to the folder, acting within microseconds, could swap a
+  name there. Removal is only ever of the inode this call created, checked by `lstat` first; a file whose inode can't be read is left, not removed.
+  A working copy a crash left
   (`export-<UUID>.tmp`, and its journal) in the store's own folder is removed at the start of an export, that pattern only.
   After narrowing, `sqlite_sequence` is set to the highest id kept so the copy doesn't say how many snapshots the other orgs
   had; **the kept snapshots keep their ids, so gaps show where another org's were (a known limit; not renumbered)**. With one client the panel,

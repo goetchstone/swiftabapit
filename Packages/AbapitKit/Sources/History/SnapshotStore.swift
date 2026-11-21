@@ -172,6 +172,8 @@ public actor SnapshotStore {
         case migrating(path: String)
         /// An export's bytes are written and synced; the path is checked next.
         case copied(path: String)
+        /// An export has checked that its destination doesn't exist and made its working copy; the destination is created next.
+        case beforeCreate(path: String)
     }
 
     typealias Hook = @Sendable (Step) throws(Failure) -> Void
