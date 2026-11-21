@@ -695,9 +695,11 @@ struct NeedsAttentionTests {
         input.appleMDM = .init([Self.mdm("m1", serial: nil), Self.mdm("m3", serial: nil)], read: .whole, notSent: ["serialNumber"])
         Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "Apple didn't send Apple MDM's devices' serial numbers")
         Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "Apple didn't send Apple MDM's devices' serial numbers")
-        // Sent for some and not for these: every device without one, nothing compared.
+        // Sent for some and not for these: every device without one, nothing compared, on either rule.
         input.appleMDM.notSent = []
         Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "None of Apple MDM's 2 devices came with a serial number")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM),
+                           containing: "None of Apple MDM's 2 devices came with a serial number, so a device assigned to Apple MDM can't be matched with any")
     }
 
     /// Every service read came with no type: no Apple MDM service can be told apart, so nothing was judged.
@@ -750,9 +752,11 @@ struct NeedsAttentionTests {
         input.mosyle = .devices(.init([Self.mosyleWithoutSerial("UDID-1"), Self.mosyleWithoutSerial("UDID-2")], read: .whole, notSent: ["serialNumber"]))
         Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "Mosyle didn't send its devices' serial numbers")
         Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "Mosyle didn't send its devices' serial numbers")
-        // Listed by UDID with no word from the column: nothing can be compared either.
+        // Listed by UDID with no word from the column: nothing can be compared either, on either rule.
         input.mosyle = .devices(Self.whole([Self.mosyleWithoutSerial("UDID-1"), Self.mosyleWithoutSerial("UDID-2")]))
         Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "None of Mosyle's 2 devices came with a serial number")
+        Self.expectSkipped(Self.run(input).result(.missingFromMosyle),
+                           containing: "None of Mosyle's 2 devices came with a serial number, so a device assigned to Service svc-mosyle can't be matched with any")
     }
 
     /// One Mosyle device listed by its UDID could be the assigned one: "missing from Mosyle" shows what no serial matches,
