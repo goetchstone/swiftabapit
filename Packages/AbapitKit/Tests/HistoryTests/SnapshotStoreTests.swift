@@ -90,6 +90,22 @@ struct SnapshotStoreTests {
         #expect(try await store.latest("people", org: org) == nil)
     }
 
+    /// `newestRead` is the newest snapshot that read any of a resource, a part read included (in `counts` and `errors` both); one that
+    /// read none of it (an error only) and another org's are passed over; nil when none read any.
+    @Test func theNewestReadIsThePartReadNotTheNewerFailure() async throws {
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let org = Scratch.apple("acme")
+        #expect(try await store.newestRead("applecare", org: org) == nil)
+        let whole = try await store.record(org: org, takenAt: Scratch.noon, resources: ["applecare": [Scratch.device("A")]])
+        let part = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(60), resources: ["applecare": [Scratch.device("B")]],
+                                          errors: ["applecare": "HTTP 500"], notes: ["applecare": "1 of 2 not read"])
+        _ = try await store.record(org: org, takenAt: Scratch.noon.addingTimeInterval(120), resources: [:], errors: ["applecare": "HTTP 403"])
+        _ = try await store.record(org: Scratch.apple("other"), takenAt: Scratch.noon.addingTimeInterval(180), resources: ["applecare": [Scratch.device("Z")]])
+        let found = try #require(try await store.newestRead("applecare", org: org))
+        #expect(found.summary.id == part && found.summary.errors["applecare"] == "HTTP 500" && found.summary.notes["applecare"] == "1 of 2 not read" && found.items.map(\.id) == ["B"])
+        #expect(whole != part)
+    }
+
     /// The newest attempt failed: the latest says so, when, and why, and shows the last good copy, with its own age
     /// (invariant 8). Recorded `[X]` at T1, an error at T2: "failed at T2; showing T1".
     @Test func aFailedAttemptSaysSoAndShowsTheNewestCopy() async throws {

@@ -38,6 +38,9 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     /// The Apple reads the section shows. A School org hides a section when every one is Business-only (plan §2.4).
     /// Activity lists none: its Changes are local history, readable in either scope and with the audit log refused, so a School
     /// org keeps the section and a role refused the audit log isn't locked out of it (its audit panes say so themselves).
+    /// Reports lists none for the same reason: four of its six reports read the local history's snapshots, so a role refused
+    /// the devices or the services still has them; the two live ones (MDM migration, service health) say "your role can't read
+    /// this" themselves. Every read a report makes is devices or services, which School's API has (`ReportsModel.refusal`).
     public var reads: [AppleSection] {
         switch self {
         case .overview: [.devices, .mdmServers, .auditEvents]

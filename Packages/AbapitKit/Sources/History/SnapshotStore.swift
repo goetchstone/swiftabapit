@@ -383,6 +383,21 @@ public actor SnapshotStore {
         }
     }
 
+    /// The newest of `org`'s snapshots that read any of `resource`: in its `counts`, whether or not it also has an error for it (a part
+    /// read, which `latest` reports as a failure). `summary.errors[resource]` says which it is. Its items, possibly none. Nil when no
+    /// snapshot read any of it. `latest`'s second query without its `NOT EXISTS errors` clause.
+    public func newestRead(_ resource: String, org: OrgProfile) throws(Failure) -> Copy? {
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.reading {
+                guard let summary = try database.rows(Self.summarySQL + """
+                    WHERE s.org_id = ? AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
+                    """, [.text(orgID), .text(resource)], Self.summary).first else { return nil }
+                return Copy(summary: summary, items: try items(resource, in: summary.id))
+            }
+        }
+    }
+
     private func items(_ resource: String, in snapshot: Int64) throws -> [Resource] {
         try database.rows("SELECT item_id, attributes FROM items WHERE snapshot_id = ? AND resource = ? ORDER BY item_id",
                           [.integer(snapshot), .text(resource)]) { row in try Self.item(row, resource: resource, from: 0) }

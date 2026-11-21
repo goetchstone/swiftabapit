@@ -121,6 +121,9 @@ public final class DevicesModel {
     public private(set) var servicesState: LoadState = .idle
     /// The page cap stopped the services list.
     public private(set) var servicesTruncated = false
+    /// When a read that stopped (refused or failed) ended, so a screen can say how old the rows it left are; nil otherwise.
+    public private(set) var devicesStoppedAt: Date?
+    public private(set) var servicesStoppedAt: Date?
     /// Devices per service, for each service whose device list was read whole.
     public private(set) var deviceCount: [String: Int] = [:]
     /// Why some devices' service shows as Unknown, in words, once the services read has ended.
@@ -329,6 +332,8 @@ public final class DevicesModel {
         unknownNote = nil
         servicesFieldsNote = nil
         servicesAbsent = []
+        devicesStoppedAt = nil
+        servicesStoppedAt = nil
     }
 
     /// Whether the load holding `token` may still write: not superseded, not cancelled. Checked after every await
@@ -354,6 +359,7 @@ public final class DevicesModel {
             orgs.record(readsPerMinute: rate, for: org)
         } catch {
             guard current(token) else { return }
+            devicesStoppedAt = Date()
             state = LoadState(after: error)
         }
     }
@@ -373,6 +379,7 @@ public final class DevicesModel {
             }
         } catch {
             guard current(token) else { return }
+            servicesStoppedAt = Date()
             servicesState = LoadState(after: error)
             // The services read stay on screen, and what Apple left out of them stays true of them: kept, worded for the
             // services read, not for every service (a later page might have had what these lack).

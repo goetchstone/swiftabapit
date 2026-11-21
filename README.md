@@ -42,6 +42,8 @@ Drawn by CI from the built-in demo organization, which holds no real data; the f
 
 ![Changes between two snapshots](docs/screenshots/changes.png)
 
+![Reports: AppleCare coverage from the latest snapshot](docs/screenshots/reports.png)
+
 ![Settings](docs/screenshots/settings.png)
 
 ## How it's built to be safe
