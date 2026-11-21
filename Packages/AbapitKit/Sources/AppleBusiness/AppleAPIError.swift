@@ -32,6 +32,34 @@ public enum AppleAPIError: Error, Equatable, Sendable {
     /// screen), and the webhooks get a screen with their writes (plan §8.0). That phase makes them a section, and this goes.
     case webhooksNotInScope
 
+    /// What a read threw, as this type: the transport's failure, which the client throws as it came (`HTTPFailure`), is
+    /// `.http`. For the screen models, which don't import HTTPCore: a snapshot's error code, the sweep's breaker.
+    public static func of(_ error: any Error) -> AppleAPIError? {
+        switch error {
+        case let error as AppleAPIError: error
+        case let failure as HTTPFailure: .http(failure)
+        default: nil
+        }
+    }
+
+    /// What a transport-level failure (`.http`) was, for callers that don't import HTTPCore: no answer at all, an answer
+    /// past the body cap, or a host this app refused. The last two had an answer (or never asked), so they aren't "transport".
+    public enum HTTPKind: Sendable, Equatable {
+        case noAnswer, tooLarge, refusedHost
+    }
+
+    public var httpKind: HTTPKind? {
+        guard case .http(let failure) = self else { return nil }
+        switch failure {
+        case .transport: return .noAnswer
+        case .tooLarge: return .tooLarge
+        case .refusedHost: return .refusedHost
+        }
+    }
+
+    /// No answer from the server: offline, DNS, TLS, a timeout. Only this trips the sweep's breaker.
+    public var isTransport: Bool { httpKind == .noAnswer }
+
     /// A non-2xx response as an error.
     init(_ response: HTTPResponse) {
         let body = ErrorBody(response.body)?.errors.first

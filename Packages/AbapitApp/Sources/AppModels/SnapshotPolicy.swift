@@ -106,10 +106,10 @@ public enum SnapshotPolicy {
     /// events and webhooks.
     public static let lists: [Rule] = [devices, services, assignments, users, userGroups, apps, packages, blueprints, configurations, mdmEnrolled]
 
-    // MARK: the sweeps (one read per device; the next PR runs them)
+    // MARK: the sweeps (one read per device; `Sweep` runs them when a run asks)
 
     /// `orgDevices/{serial}/appleCareCoverage`, as abapit's `fetch_applecare_bulk` kept it: every attribute, and the serial
-    /// number it was read for (`applecare_view` reads it).
+    /// number it was read for (`applecare_view` reads it); each record under Apple's id, or `serial:description` without one.
     public static let appleCare = Rule("applecare", kept: [
         "agreementNumber", "contractCancelDateTime", "description", "endDateTime", "isCanceled", "isRenewable", "paymentType",
         "startDateTime", "status", "serialNumber",
@@ -125,8 +125,8 @@ public enum SnapshotPolicy {
         "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus",
     ], known: MDMDeviceDetail.fields, businessOnly: true)
 
-    /// The per-device sweeps (plan §3.6: bounded fan-out at the limiter's rate, cancellable). Their rules are decided here;
-    /// the collector doesn't run them yet, so a snapshot has them in neither `counts` nor `errors`.
+    /// The per-device sweeps (plan §3.6: bounded fan-out at the limiter's rate, cancellable; `Sweep`). A run that doesn't
+    /// ask for one has it in neither `counts` nor `errors`.
     public static let sweeps: [Rule] = [appleCare, activationLock, mdmDetails]
 
     public static let all: [Rule] = lists + sweeps
@@ -171,7 +171,8 @@ public enum SnapshotPolicy {
     /// The HTTP status and Apple's error `code` when it has a code's shape (`appleCode`), or this app's word for a failure
     /// that has no status.
     public static func code(_ error: any Error) -> String {
-        switch error {
+        // The client throws a transport failure as it came (`HTTPFailure`): `.of` names it `.http`, so it is `transport`.
+        switch AppleAPIError.of(error) ?? error {
         case let error as AppleAPIError:
             switch error {
             case .unauthorized: "HTTP 401"
@@ -184,7 +185,13 @@ public enum SnapshotPolicy {
             case .server(let status), .unexpected(let status): "HTTP \(status)"
             case .notJSON: "not JSON"
             case .malformed: "malformed"
-            case .http: "transport"
+            // What happened, never the host: an answer past the cap or a refused host isn't "no answer".
+            case .http:
+                switch error.httpKind {
+                case .tooLarge?: "too large"
+                case .refusedHost?: "refused host"
+                case .noAnswer?, nil: "transport"
+                }
             case .token: "token"
             case .vault: "keychain"
             case .wrongHost: "wrong host"
