@@ -204,6 +204,21 @@ struct AttentionStoreTests {
         #expect(!SnapshotStore.isIdentifier(String(repeating: "x", count: 65), limit: 64) && SnapshotStore.isIdentifier(String(repeating: "x", count: 64), limit: 64))
     }
 
+    /// Code points that show as nothing are refused, so two ids can't look alike: a grapheme joiner (U+034F), the Hangul fillers
+    /// (U+3164, U+115F), a variation selector (U+FE0F), all default-ignorable; and noncharacters (U+FFFF, U+FDD0). A visible
+    /// letter outside ASCII still passes.
+    @Test func identifiersRefuseDefaultIgnorablesAndNoncharacters() async throws {
+        let store = try Self.store()
+        // A literal can't hold a noncharacter: Swift refuses it, so those two are built from their scalars.
+        let noncharacters = [0xFFFF, 0xFDD0].map { String(Character(Unicode.Scalar($0)!)) }
+        for name in ["a\u{34F}b", "a\u{3164}b", "\u{115F}", "a\u{FE0F}", "a" + noncharacters[0] + "b", noncharacters[1]] {
+            #expect(!SnapshotStore.isIdentifier(name, limit: 128), "\(Array(name.unicodeScalars))")
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [name], at: Scratch.noon) }
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: name, subjects: [], at: Scratch.noon) }
+        }
+        #expect(SnapshotStore.isIdentifier("C02\u{C5}X0001", limit: 128) && SnapshotStore.isIdentifier("\u{3131}", limit: 128))
+    }
+
     /// Canonically equivalent strings are two rows: the table keys by bytes, and a `Set<String>` would have merged them.
     @Test func unicodeEquivalentSubjectsStayTwoRows() async throws {
         let store = try Self.store()

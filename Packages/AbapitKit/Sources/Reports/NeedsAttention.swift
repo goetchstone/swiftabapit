@@ -1,6 +1,7 @@
 import AppleModels
 import Foundation
 import JSONAPI
+import MosyleModels
 
 /// "Needs attention" (plan §8.0): work that should have been done and hasn't, found by deterministic rules over what was
 /// read. **A model never decides what's overdue**: it can be unavailable, and a wrong "nothing's overdue" fails silently
@@ -76,8 +77,9 @@ public struct NeedsAttention: Sendable {
         static func days(_ count: Int) -> String { count == 1 ? "1 day" : "\(count) days" }
     }
 
-    /// When a rule raises a finding, in days. Fed from the local settings (`LocalSettings.Thresholds`, whose defaults are
-    /// proposals for the operator); Reports doesn't import Orgs, so the defaults live there alone and every value is passed.
+    /// When a rule raises a finding, in days. Fed from the local settings (`LocalSettings.Thresholds`, whose defaults, 30, 90,
+    /// 14 and 30, the operator kept on 2026-11-20: "Keep these defaults (Recommended)"); Reports doesn't import Orgs, so the
+    /// defaults live there alone and every value is passed.
     public struct Thresholds: Sendable, Equatable {
         /// A device whose last check-in is this many whole days old or more (`StaleDevices`).
         public let checkInDays: Int
@@ -266,8 +268,8 @@ public struct NeedsAttention: Sendable {
             case .appleCareExpiring: judge.appleCareExpiring()
             case .mosyleCheckIn: judge.mosyleCheckIn()
             case .appleMDMCheckIn: judge.appleMDMCheckIn()
-            case .fileVaultOff: judge.securitySetting("isFileVaultEnabled", "FileVault")
-            case .firewallOff: judge.securitySetting("isFirewallEnabled", "the firewall")
+            case .fileVaultOff: judge.securitySetting("isFileVaultEnabled", "FileVault", off: "FileVault is off.")
+            case .firewallOff: judge.securitySetting("isFirewallEnabled", "firewall", off: "The firewall is off.")
             case .activationLock: judge.activationLock()
             case .quietService: judge.quietService()
             case .migrationDeadline: judge.migrationDeadline()
@@ -290,8 +292,9 @@ public struct NeedsAttention: Sendable {
 
     /// Whether `text` can be a rule or a subject in the attention store: 1 to `limit` characters and at most four bytes a
     /// character in all (`limit * 4` UTF-8 bytes, so one character carrying thousands of combining marks can't pass as one),
-    /// none whitespace, a control, a format character (a direction override, a joiner, a zero-width space), a quote, a slash
-    /// or a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
+    /// none whitespace, a control, a format character (a direction override, a joiner, a zero-width space), a default-ignorable
+    /// code point (a grapheme joiner, a Hangul filler, a variation selector: each shows as nothing), a noncharacter (U+FFFF), a
+    /// quote, a slash or a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
     /// doesn't. A one-word name would pass: callers pass identifiers, and this is the backstop. One rule for the store
     /// (`SnapshotStore.seen` refuses what fails it) and for the findings it is given. Compared by bytes elsewhere:
     /// precomposed and decomposed "e with acute" both pass, and are two subjects.
@@ -299,6 +302,7 @@ public struct NeedsAttention: Sendable {
         guard !text.isEmpty, text.utf8.count <= limit * 4, text.count <= limit else { return false }
         return text.unicodeScalars.allSatisfy { scalar in
             !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format
+              || scalar.properties.isDefaultIgnorableCodePoint || scalar.properties.isNoncharacterCodePoint
               || "\"'`/\\".unicodeScalars.contains(scalar))
         }
     }
@@ -309,7 +313,8 @@ public struct NeedsAttention: Sendable {
 /// One rule's judgment over one input. An input that wasn't read at all skips the rule. An input read in part makes a
 /// per-device rule partial (its findings are real, never recorded); a comparison is partial only when the side it searches
 /// for an absence was read whole, because an absence from a list read in part can't be judged, so it skips then, and says
-/// which list.
+/// which list. A rule that could judge **no item** because every item it read was unknown (no value, no family this version
+/// knows, no serial, Apple's "no details") is skipped too, never "none found": a zero judged over nothing isn't a zero.
 private struct Judge {
     let input: NeedsAttention.Input
     let thresholds: NeedsAttention.Thresholds
@@ -349,12 +354,20 @@ private struct Judge {
     }
 
     /// How much of a sweep wasn't read: `whys` holds one reason per item it didn't read. Nil when it read every item.
-    func sweepGap(_ name: String, whys: [String], of total: Int, _ noun: String) -> String? {
+    func sweepGap(_ name: String, whys: [String], of total: Int, _ one: String, _ many: String) -> String? {
         guard !whys.isEmpty else { return nil }
         var reasons: [String] = []
         for why in whys where !reasons.contains(where: { $0.utf8.elementsEqual(why.utf8) }) { reasons.append(why) }
         let shown = reasons.prefix(3).joined(separator: "; ") + (reasons.count > 3 ? "; and more" : "")
-        return "\(name) wasn't read for \(whys.count) of \(total) \(noun) (\(shown))"
+        return "\(name) wasn't read for \(whys.count) of \(Self.count(total, one, many)) (\(shown))"
+    }
+
+    /// "1 device", "3 devices".
+    static func count(_ n: Int, _ one: String, _ many: String) -> String { n == 1 ? "1 \(one)" : "\(n) \(many)" }
+
+    /// "1 device has", "3 devices have": `count` with its verb.
+    static func count(_ n: Int, _ one: String, _ many: String, _ verbOne: String, _ verbMany: String) -> String {
+        "\(count(n, one, many)) \(n == 1 ? verbOne : verbMany)"
     }
 
     /// Each device's read by id, by bytes (`CoverageReport` reads its map the same way): the first of two equivalent keys.
@@ -372,6 +385,25 @@ private struct Judge {
     /// Whether Apple MDM listed the device with a serial number the reconciliation can join on.
     static func hasSerial(_ device: MDMDevice) -> Bool { device.serialNumber.map { !Reconciliation.key($0).isEmpty } ?? false }
 
+    /// Whether Mosyle listed the device by its serial number. The adapter's id falls back to the UDID, then to nothing
+    /// (`MosyleAdapter.device`), and the reconciliation joins on that id: a device listed by UDID, or with no id, can't be
+    /// matched with Apple's serials.
+    static func hasSerial(mosyle device: Resource) -> Bool {
+        Python.truthy(device.attributes["serialNumber"]) && !Reconciliation.key(device.id).isEmpty
+    }
+
+    /// Why a comparison can't be made with Mosyle's devices, in words: Mosyle sent no serial numbers.
+    static func mosyleSerials(_ mosyle: NeedsAttention.Listed<Resource>) -> String? {
+        mosyle.notSent.contains("serialNumber")
+            ? "Mosyle didn't send its devices' serial numbers (the column wasn't read), so they can't be matched with Apple's" : nil
+    }
+
+    /// Why a comparison can't be made with Apple MDM's devices, in words: Apple sent no serial numbers.
+    static func appleMDMSerials(_ mdm: NeedsAttention.Listed<MDMDevice>) -> String? {
+        mdm.notSent.contains("serialNumber")
+            ? "Apple didn't send Apple MDM's devices' serial numbers, so they can't be matched with Apple's device list" : nil
+    }
+
     // 1. Assigned in Apple to an MDM service, and missing from that MDM. The MDM's list is the one searched.
 
     func missingFromAppleMDM() -> Result {
@@ -382,8 +414,11 @@ private struct Judge {
         }
         var partial = [part("The device management services list", services)].compactMap { $0 }
         let untyped = services.items.filter { $0.type == nil }
+        if !untyped.isEmpty, untyped.count == services.items.count {
+            return skipped("No service came with a type Apple sent as text (\(Self.count(services.items.count, "service", "services"))), so Apple MDM's service can't be told apart")
+        }
         if !untyped.isEmpty {
-            partial.append("\(untyped.count) of \(services.items.count) services came with no type Apple sent as text, so their devices weren't looked for")
+            partial.append("\(untyped.count) of \(Self.count(services.items.count, "service", "services")) came with no type Apple sent as text, so their devices weren't looked for")
         }
         let apple = services.items.filter { $0.type == .known(.appleMDM) }
         // No Apple MDM service among those read: nothing read can be assigned to it.
@@ -404,9 +439,10 @@ private struct Judge {
         guard lists > 0 else { return skipped(partial.joined(separator: "; ")) }
         let mdm = input.appleMDM
         if let why = searched("Apple MDM's device list", mdm) { return skipped(why) }
+        if let why = Self.appleMDMSerials(mdm) { return skipped(why) }
         let unnamed = mdm.items.filter { !Self.hasSerial($0) }
         if !unnamed.isEmpty {
-            return skipped("\(unnamed.count) of Apple MDM's devices came with no serial number, so a device assigned to Apple MDM can't be called missing from it")
+            return skipped("\(unnamed.count) of Apple MDM's devices came with no serial number, so a device assigned to Apple MDM can't be called missing from it: it could be one of them")
         }
         ages.append(mdm.takenAt)
         let report = Reconciliation(apple: assigned, mosyle: mdm.items.map { Resource(type: MDMDevice.resourceType, id: Self.serial($0)) })
@@ -427,6 +463,12 @@ private struct Judge {
         guard let listed = input.serviceDevices[serviceID] else { return skipped("The device list of \(name) wasn't read") }
         if let why = unread("The device list of \(name)", listed) { return skipped(why) }
         if let why = searched("Mosyle's device list", mosyle) { return skipped(why) }
+        if let why = Self.mosyleSerials(mosyle) { return skipped(why) }
+        // As the Apple MDM half: a Mosyle device listed by its UDID, or by nothing, could be the assigned one.
+        let unnamed = mosyle.items.filter { !Self.hasSerial(mosyle: $0) }
+        if !unnamed.isEmpty {
+            return skipped("\(unnamed.count) of Mosyle's devices came with no serial number (listed by UDID or by nothing), so a device assigned to \(name) can't be called missing from Mosyle: it could be one of them")
+        }
         let report = Reconciliation(apple: listed.items.map { Resource(type: OrgDevice.resourceType, id: $0) }, mosyle: mosyle.items)
         return judged(report.appleOnly.map { ($0.serial, "Assigned in Apple to \(name), your Mosyle org's service; Mosyle doesn't list it.") },
                       takenAt: [listed.takenAt, mosyle.takenAt], partial: [part("The device list of \(name)", listed)].compactMap { $0 })
@@ -438,7 +480,11 @@ private struct Judge {
         let mdm = input.appleMDM
         if let why = unread("Apple MDM's device list", mdm) { return skipped(why) }
         if let why = searched("Apple's device list", input.devices) { return skipped(why) }
+        if let why = Self.appleMDMSerials(mdm) { return skipped(why) }
         let named = mdm.items.filter(Self.hasSerial)
+        if named.isEmpty, !mdm.items.isEmpty {
+            return skipped("None of Apple MDM's \(Self.count(mdm.items.count, "device", "devices")) came with a serial number, so none could be compared with Apple's device list")
+        }
         let notes = named.count == mdm.items.count ? []
             : ["\(mdm.items.count - named.count) of Apple MDM's devices came with no serial number: not compared with Apple's device list."]
         let report = Reconciliation(apple: input.devices.items.map(\.resource),
@@ -451,8 +497,17 @@ private struct Judge {
         guard case .devices(let mosyle) = input.mosyle else { return skipped("This client has no Mosyle Business org") }
         if let why = unread("Mosyle's device list", mosyle) { return skipped(why) }
         if let why = searched("Apple's device list", input.devices) { return skipped(why) }
-        let report = Reconciliation(apple: input.devices.items.map(\.resource), mosyle: mosyle.items)
-        return judged(report.mosyleOnly.map { ($0.serial, "In Mosyle; Apple's device list doesn't have it.") },
+        if let why = Self.mosyleSerials(mosyle) { return skipped(why) }
+        // A device Mosyle lists by its UDID, or by nothing, can't be matched with Apple's serials: noted, not compared, as
+        // Apple MDM's devices with no serial are.
+        let named = mosyle.items.filter { Self.hasSerial(mosyle: $0) }
+        if named.isEmpty, !mosyle.items.isEmpty {
+            return skipped("None of Mosyle's \(Self.count(mosyle.items.count, "device", "devices")) came with a serial number, so none could be compared with Apple's device list")
+        }
+        let notes = named.count == mosyle.items.count ? []
+            : ["\(mosyle.items.count - named.count) of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."]
+        let report = Reconciliation(apple: input.devices.items.map(\.resource), mosyle: named)
+        return judged(report.mosyleOnly.map { ($0.serial, "In Mosyle; Apple's device list doesn't have it.") }, notes: notes,
                       takenAt: [input.devices.takenAt, mosyle.takenAt], partial: [part("Mosyle's device list", mosyle)].compactMap { $0 })
     }
 
@@ -474,11 +529,18 @@ private struct Judge {
             if case .notRead(let why)? = reads[Array(device.id.utf8)] { return why }
             return Self.unreached
         }
-        let sweep = sweepGap("AppleCare coverage", whys: whys, of: devices.items.count, "devices")
+        let sweep = sweepGap("AppleCare coverage", whys: whys, of: devices.items.count, "device", "devices")
         if let sweep, whys.count == devices.items.count { return skipped(sweep) }
+        // A device read whose ACTIVE coverage ends on a date this app can't read, and that has nothing expiring, is unknown.
+        let expiring = Set(report.expiring.map { Array($0.device.utf8) })
+        let unknown = Set(report.unreadableEndDevices.map { Array($0.utf8) }).subtracting(expiring)
+        let readDevices = Set(devices.items.map { Array($0.id.utf8) }).subtracting(report.notRead.map { Array($0.id.utf8) })
+        if !unknown.isEmpty, readDevices.subtracting(unknown).isEmpty {
+            return skipped("Every device's ACTIVE coverage read ends on a date this app can't read (\(Self.count(unknown.count, "device", "devices"))), so none could be judged")
+        }
         var notes: [String] = []
         if !report.unreadableEnd.isEmpty {
-            notes.append("\(report.unreadableEnd.count) ACTIVE coverages have an end date this app can't read: covered, but not judged.")
+            notes.append("\(Self.count(report.unreadableEnd.count, "ACTIVE coverage", "ACTIVE coverages", "has", "have")) an end date this app can't read: covered, but not judged.")
         }
         if thresholds.appleCareExpiringDays > CoverageReport.maximumDays {
             notes.append("The threshold, \(Self.days(thresholds.appleCareExpiringDays)), is past the most the coverage report looks ahead: \(Self.days(CoverageReport.maximumDays)) were used.")
@@ -524,10 +586,13 @@ private struct Judge {
                 }
             }
         }
-        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: mdm.items.count, "devices")
+        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: mdm.items.count, "device", "devices")
         if let sweep, whys.count == mdm.items.count { return skipped(sweep) }
+        if stamped.isEmpty, none > 0 {
+            return skipped("None of the \(Self.count(none, "Apple MDM device", "Apple MDM devices")) read has a last check-in in its details (Apple sent none, or no details), so none could be judged")
+        }
         let report = StaleDevices(stamped, days: thresholds.checkInDays, now: now)
-        let notes = none == 0 ? [] : ["\(none) of Apple MDM's devices have no last check-in in their details: unknown, not judged."]
+        let notes = none == 0 ? [] : ["\(none) of Apple MDM's devices \(none == 1 ? "has" : "have") no last check-in in \(none == 1 ? "its" : "their") details: unknown, not judged."]
         return judged(report.rows.map { row in
             row.daysStale.map { (row.serial, "Last checked in to Apple MDM \(Self.days($0)) ago.") }
                 ?? (row.serial, "Apple MDM's last check-in isn't a date this app reads: \(shownJSON(row.lastCheckIn)).")
@@ -537,13 +602,17 @@ private struct Judge {
 
     // 5. FileVault or the firewall off: Macs only, from Apple MDM's details. A value that wasn't sent is unknown, never off.
 
-    func securitySetting(_ key: String, _ name: String) -> Result {
+    /// `key` is the details' attribute, `name` the setting as a noun ("FileVault", "firewall"), `off` the finding's words.
+    func securitySetting(_ key: String, _ name: String, off sentence: String) -> Result {
         let mdm = input.appleMDM
         if let why = unread("Apple MDM's device list", mdm) { return skipped(why) }
+        if mdm.notSent.contains("productFamily") {
+            return skipped("Apple didn't send Apple MDM's devices' product family, so a Mac can't be told apart")
+        }
         let macs = mdm.items.filter { $0.productFamily == .known(.mac) }
         let unplaced = mdm.items.filter { $0.productFamily?.known == nil }.count
         let reads = Self.byBytes(input.appleMDMDetails.reads)
-        var off: [(String, String)] = [], unknown = 0, whys: [String] = []
+        var off: [(String, String)] = [], judgedMacs = 0, unknown = 0, whys: [String] = []
         for mac in macs {
             switch reads[Array(mac.id.utf8)] {
             case nil: whys.append(Self.unreached)
@@ -551,16 +620,24 @@ private struct Judge {
             case .read(nil)?: unknown += 1
             case .read(let detail?)?:
                 switch detail.attributes.bool(key) {
-                case false?: off.append((Self.serial(mac), "\(name.prefix(1).uppercased())\(name.dropFirst()) is off."))
-                case true?: break
+                case false?: judgedMacs += 1; off.append((Self.serial(mac), sentence))
+                case true?: judgedMacs += 1
                 case nil: unknown += 1
                 }
             }
         }
-        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: macs.count, macs.count == 1 ? "Mac" : "Macs")
+        let sweep = sweepGap("Apple MDM's device detail", whys: whys, of: macs.count, "Mac", "Macs")
         if let sweep, whys.count == macs.count { return skipped(sweep) }
+        if judgedMacs == 0, unknown + unplaced > 0 {
+            var why: [String] = []
+            if unknown > 0 { why.append("\(Self.count(unknown, "Mac has", "Macs have")) no \(name) value in the details read") }
+            if unplaced > 0 { why.append("\(unplaced) of Apple MDM's devices came with no product family this version knows, so a Mac can't be told apart") }
+            return skipped("No Mac could be judged: " + why.joined(separator: "; "))
+        }
         var notes: [String] = []
-        if unknown > 0 { notes.append("\(unknown) Macs have no \(name) value in Apple MDM's details (none sent, or not a yes or no): unknown, not counted as off.") }
+        if unknown > 0 {
+            notes.append("\(Self.count(unknown, "Mac has", "Macs have")) no \(name) value in Apple MDM's details (none sent, or not a yes or no): unknown, not counted as off.")
+        }
         if unplaced > 0 { notes.append("\(unplaced) of Apple MDM's devices came with no product family this version knows: not judged (only Macs are).") }
         if case .devices = input.mosyle { notes.append("Mosyle's devices aren't judged: this app reads no \(name) value from Mosyle.") }
         return judged(off, notes: notes, takenAt: [mdm.takenAt, input.appleMDMDetails.takenAt],
@@ -574,16 +651,21 @@ private struct Judge {
         if let why = unread("Apple's device list", devices) { return skipped(why) }
         let report = ActivationLockReport(devices.items, reads: input.activationLock.reads, list: devices.read)
         let whys = report.rows.compactMap { row -> String? in if case .notRead(let why) = row.kind { why } else { nil } }
-        let sweep = sweepGap("Activation Lock status", whys: whys, of: devices.items.count, "devices")
+        let sweep = sweepGap("Activation Lock status", whys: whys, of: devices.items.count, "device", "devices")
         if let sweep, whys.count == devices.items.count { return skipped(sweep) }
-        let unplaced = report.rows.filter { row in
+        var unplaced = 0, placed = 0
+        for row in report.rows {
             switch row.kind {
-            case .otherLock, .unclear: true
-            case .userLock, .mdmLock, .unlocked, .notRead: false
+            case .otherLock, .unclear: unplaced += 1
+            case .userLock, .mdmLock, .unlocked: placed += 1
+            case .notRead: break
             }
-        }.count
+        }
+        if placed == 0, unplaced > 0 {
+            return skipped("Every Activation Lock status read is unclear or a lock type this version can't place (\(Self.count(unplaced, "device", "devices"))), so none could be judged")
+        }
         let notes = unplaced == 0 ? []
-            : ["\(unplaced) devices are locked by a type this version can't place, or sent no readable isLocked: can't say whether they block release."]
+            : ["\(Self.count(unplaced, "device is", "devices are")) locked by a type this version can't place, or sent no readable isLocked: can't say whether \(unplaced == 1 ? "it blocks" : "they block") release."]
         return judged(report.rows.filter(\.blocksRelease).map { ($0.device.id, ActivationLockReport.title("lock:USER") + ".") },
                       notes: notes, takenAt: [devices.takenAt, input.activationLock.takenAt],
                       partial: [part("Apple's device list", devices), sweep].compactMap { $0 })
@@ -640,11 +722,14 @@ private struct Judge {
             }
             found.append((row.device.id, "Migration \(status.rawValue), \(when)."))
         }
+        if report.rows.count == unknownStatus + unreadable, unknownStatus + unreadable > 0 {
+            return skipped("Every device's migration has a status this version doesn't know near or past its deadline, or a deadline this app can't read (\(Self.count(unknownStatus + unreadable, "device", "devices"))), so none could be judged")
+        }
         var notes: [String] = []
         if unknownStatus > 0 {
-            notes.append("\(unknownStatus) devices with a deadline within \(Self.days(limit)) or past have no migration status this version knows: not judged.")
+            notes.append("\(Self.count(unknownStatus, "device", "devices")) with a deadline within \(Self.days(limit)) or past \(unknownStatus == 1 ? "has" : "have") no migration status this version knows: not judged.")
         }
-        if unreadable > 0 { notes.append("\(unreadable) devices have a migration deadline this app can't read: not judged.") }
+        if unreadable > 0 { notes.append("\(Self.count(unreadable, "device has", "devices have")) a migration deadline this app can't read: not judged.") }
         return judged(found, notes: notes, takenAt: [devices.takenAt], partial: [part("Apple's device list", devices)].compactMap { $0 })
     }
 }

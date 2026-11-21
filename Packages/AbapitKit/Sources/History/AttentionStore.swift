@@ -13,7 +13,8 @@ import Reports
 /// from the latest snapshot each time and isn't kept here. **No secret and no name is ever stored**; the sensitive-key leave-out
 /// that snapshot attributes go through has nothing to act on, because nothing here is an attribute.
 ///
-/// Semantics (the coordinating session's proposals, for the operator to confirm; the 30 days is a proposal too):
+/// Semantics (the coordinating session's proposals, for the operator to confirm; the 30 days is the operator's decision,
+/// 2026-11-20: "Yes, forget after 30 days (Recommended)"):
 /// - `seen` is called with every subject a rule found in one run. A new subject gets `first_seen`; `first_seen` is never
 ///   written again for a row that is there, whatever the clock says. `last_seen` moves forward.
 /// - A dismissal holds while the finding is there. When it is not seen, the row (dismissal and all) is kept for
@@ -22,7 +23,8 @@ import Reports
 /// - A snooze hides the finding until its date, then it shows again with its original `first_seen`.
 /// - The latest choice wins: a dismissal clears a snooze, and a snooze clears a dismissal.
 extension SnapshotStore {
-    /// How long a finding may go unseen before its row is forgotten (proposal, for the operator to confirm).
+    /// How long a finding may go unseen before its row is forgotten: the operator's decision, 2026-11-20 ("Yes, forget after
+    /// 30 days (Recommended)").
     public static let forgetAfter: TimeInterval = 30 * 24 * 60 * 60
 
     /// One stored finding.

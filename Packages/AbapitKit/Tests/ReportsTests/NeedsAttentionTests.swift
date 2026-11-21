@@ -38,8 +38,16 @@ struct NeedsAttentionTests {
         MDMDeviceDetail(resource: Resource(type: "mdmDeviceDetails", id: "d", attributes: attributes))
     }
 
+    /// A Mosyle device as the adapter makes it: listed by its serial, which is also its `serialNumber`.
     static func mosyle(_ serial: String, checkIn: JSONValue? = recent) -> Resource {
-        Resource(type: "devices", id: serial, attributes: checkIn.map { ["lastCheckIn": $0] } ?? [:])
+        var attributes: JSONObject = ["serialNumber": .string(serial)]
+        if let checkIn { attributes = attributes.merging(["lastCheckIn": checkIn]) }
+        return Resource(type: "devices", id: serial, attributes: attributes)
+    }
+
+    /// A Mosyle device with no serial: the adapter lists it by its UDID, or by nothing (an empty id) when it has neither.
+    static func mosyleWithoutSerial(_ udid: String) -> Resource {
+        Resource(type: "devices", id: udid, attributes: udid.isEmpty ? [:] : ["deviceUdid": .string(udid)])
     }
 
     /// Every list read whole and empty, the client's Mosyle org set to an ordinary service (recently connected), its devices
@@ -368,13 +376,32 @@ struct NeedsAttentionTests {
     }
 
     @Test func appleCareExpiringSaysWhatItCouldntJudge() {
-        let input = Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: "soon")]])
+        let input = Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: "soon")], "B": []])
         let result = Self.run(input).result(.appleCareExpiring)
         #expect(result.isJudged && result.findings.isEmpty)
-        #expect(result.notes == ["1 ACTIVE coverages have an end date this app can't read: covered, but not judged."])
+        #expect(result.notes == ["1 ACTIVE coverage has an end date this app can't read: covered, but not judged."])
+        let two = Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: "soon"), Fleet.coverage("ACTIVE", end: "later")], "B": []])
+        #expect(Self.run(two).result(.appleCareExpiring).notes == ["2 ACTIVE coverages have an end date this app can't read: covered, but not judged."])
         let far = NeedsAttention.Thresholds(checkInDays: 30, appleCareExpiringDays: 3000, migrationDeadlineDays: 14, quietServiceDays: 30)
         let clamped = Self.run(Self.coverageInput(["A": []]), far).result(.appleCareExpiring)
         #expect(clamped.title.contains("1825 days") && clamped.notes.contains { $0.contains("1825 days were used") })
+    }
+
+    /// The cap's edge: 1825 is the report's most and says nothing; 1826 is past it and says so.
+    @Test func appleCareThresholdAtTheCapSaysNothingAndPastItSaysSo() {
+        func notes(_ days: Int) -> [String] {
+            let t = NeedsAttention.Thresholds(checkInDays: 30, appleCareExpiringDays: days, migrationDeadlineDays: 14, quietServiceDays: 30)
+            return Self.run(Self.coverageInput(["A": []]), t).result(.appleCareExpiring).notes
+        }
+        #expect(notes(1825).isEmpty)
+        #expect(notes(1826) == ["The threshold, 1826 days, is past the most the coverage report looks ahead: 1825 days were used."])
+    }
+
+    /// A device read whose only ACTIVE coverage ends on a date this app can't read is unknown: when every device read is,
+    /// nothing was judged, so the rule is skipped, never "none found".
+    @Test func appleCareWithEveryEndUnreadableIsSkipped() {
+        let result = Self.run(Self.coverageInput(["A": [Fleet.coverage("ACTIVE", end: "soon")], "B": [Fleet.coverage("ACTIVE", end: "")]])).result(.appleCareExpiring)
+        Self.expectSkipped(result, containing: "Every device's ACTIVE coverage read ends on a date this app can't read (2 devices)")
     }
 
     // MARK: 4. no check-in for N days
@@ -467,7 +494,7 @@ struct NeedsAttentionTests {
     /// Macs only; a value Apple didn't send, or sent in another shape, is unknown and never off; an iPhone is never flagged.
     @Test func fileVaultAndTheFirewallOffAreFoundOnMacsOnly() {
         let report = Self.run(Self.securityInput())
-        for (rule, name) in [(Rule.fileVaultOff, "FileVault"), (.firewallOff, "the firewall")] {
+        for (rule, name) in [(Rule.fileVaultOff, "FileVault"), (.firewallOff, "firewall")] {
             let result = report.result(rule)
             #expect(result.findings.map(\.subject) == ["MAC-OFF"], "\(rule)")
             #expect(result.findings.first?.reason == (rule == .fileVaultOff ? "FileVault is off." : "The firewall is off."))
@@ -606,7 +633,7 @@ struct NeedsAttentionTests {
         let report = MigrationReport(input.devices.items, now: Fleet.now)
         #expect(Set(report.pastDue.map(\.device.id)).isSubset(of: Set(reasons.keys)))
         #expect(result.notes == ["2 devices with a deadline within 14 days or past have no migration status this version knows: not judged.",
-                                 "1 devices have a migration deadline this app can't read: not judged."])
+                                 "1 device has a migration deadline this app can't read: not judged."])
         let shorter = NeedsAttention.Thresholds(checkInDays: 30, appleCareExpiringDays: 90, migrationDeadlineDays: 13, quietServiceDays: 30)
         #expect(!Self.subjects(input, .migrationDeadline, shorter).contains("EDGE"))
         let longer = NeedsAttention.Thresholds(checkInDays: 30, appleCareExpiringDays: 90, migrationDeadlineDays: 15, quietServiceDays: 30)
@@ -620,6 +647,130 @@ struct NeedsAttentionTests {
         Self.expectPartial(Self.run(input).result(.migrationDeadline), containing: "Apple's device list was read in part (showing 10 of at least 11)", found: complete)
         input.devices = .notRead("your role can't read this")
         Self.expectSkipped(Self.run(input).result(.migrationDeadline), containing: "Apple's device list wasn't read (your role can't read this)")
+    }
+
+    // MARK: nothing judged is never "none found"
+
+    /// Every Apple MDM device answered "no details" (Apple's 404): the three detail rules judged no device, so each is
+    /// skipped and says why, never "none found" and never recorded.
+    @Test func everyAppleMDMDeviceWithNoDetailsSkipsTheDetailRules() {
+        var input = Self.base()
+        input.appleMDM = Self.whole([Self.mdm("m1", serial: "MAC1"), Self.mdm("m2", serial: "PHONE1", family: "iPhone")])
+        input.appleMDMDetails = .init(["m1": .read(nil), "m2": .read(nil)])
+        let report = Self.run(input)
+        Self.expectSkipped(report.result(.appleMDMCheckIn), containing: "None of the 2 Apple MDM devices read has a last check-in in its details")
+        Self.expectSkipped(report.result(.fileVaultOff), containing: "No Mac could be judged: 1 Mac has no FileVault value in the details read")
+        Self.expectSkipped(report.result(.firewallOff), containing: "No Mac could be judged: 1 Mac has no firewall value in the details read")
+        // One device with a stamp is enough to judge.
+        input.appleMDMDetails.reads["m2"] = .read(Self.detail(["lastCheckInDateTime": Self.recent]))
+        #expect(Self.run(input).result(.appleMDMCheckIn).isJudged)
+        #expect(Self.run(input).result(.appleMDMCheckIn).notes == ["1 of Apple MDM's devices has no last check-in in its details: unknown, not judged."])
+    }
+
+    /// No Apple MDM device has a product family this version knows ("MAC", "macOS"): no Mac can be told apart, so FileVault
+    /// and the firewall are skipped; and a family Apple didn't send for any device skips them too.
+    @Test func noKnownProductFamilySkipsFileVaultAndTheFirewall() {
+        var input = Self.base()
+        input.appleMDM = Self.whole([Self.mdm("m1", serial: "A", family: "MAC"), Self.mdm("m2", serial: "B", family: "macOS")])
+        let off = Self.detail(["isFileVaultEnabled": .bool(false), "isFirewallEnabled": .bool(false)])
+        input.appleMDMDetails = .init(["m1": .read(off), "m2": .read(off)])
+        Self.expectSkipped(Self.run(input).result(.fileVaultOff), containing: "2 of Apple MDM's devices came with no product family this version knows")
+        Self.expectSkipped(Self.run(input).result(.firewallOff), containing: "so a Mac can't be told apart")
+        input.appleMDM = .init([Self.mdm("m1", serial: "A", family: nil)], read: .whole, notSent: ["productFamily"])
+        Self.expectSkipped(Self.run(input).result(.fileVaultOff), containing: "Apple didn't send Apple MDM's devices' product family")
+        // Every device a known family other than Mac: no Mac, judged, nothing found.
+        input.appleMDM = Self.whole([Self.mdm("m1", serial: "A", family: "iPhone")])
+        #expect(Self.run(input).result(.fileVaultOff).isJudged)
+    }
+
+    /// Apple sent Apple MDM's devices without serial numbers: neither comparison can be made, so both are skipped.
+    @Test func appleMDMSerialsNotSentSkipBothComparisons() {
+        var input = Self.appleMDMInput()
+        input.appleMDM = .init([Self.mdm("m1", serial: nil), Self.mdm("m3", serial: nil)], read: .whole, notSent: ["serialNumber"])
+        Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "Apple didn't send Apple MDM's devices' serial numbers")
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "Apple didn't send Apple MDM's devices' serial numbers")
+        // Sent for some and not for these: every device without one, nothing compared.
+        input.appleMDM.notSent = []
+        Self.expectSkipped(Self.run(input).result(.appleMDMNotInApple), containing: "None of Apple MDM's 2 devices came with a serial number")
+    }
+
+    /// Every service read came with no type: no Apple MDM service can be told apart, so nothing was judged.
+    @Test func everyServiceWithoutATypeSkipsMissingFromAppleMDM() {
+        var input = Self.appleMDMInput()
+        input.services = Self.whole([Self.service("svc-a", type: nil), Self.service("svc-b", type: nil)])
+        Self.expectSkipped(Self.run(input).result(.missingFromAppleMDM), containing: "No service came with a type Apple sent as text (2 services)")
+    }
+
+    /// Every Activation Lock status read is unclear or a type this version can't place: nothing judged, so skipped.
+    @Test func everyLockUnplacedSkipsActivationLock() {
+        var input = Self.base()
+        input.devices = Self.whole(["A", "B"].map { Fleet.device($0) })
+        input.activationLock = .init(["A": .read(Fleet.lock(nil, "USER")), "B": .read(Fleet.lock(true, "FAMILY"))])
+        Self.expectSkipped(Self.run(input).result(.activationLock), containing: "Every Activation Lock status read is unclear or a lock type this version can't place (2 devices)")
+        input.activationLock.reads["B"] = .read(Fleet.lock(false, nil))
+        let result = Self.run(input).result(.activationLock)
+        #expect(result.isJudged && result.notes == ["1 device is locked by a type this version can't place, or sent no readable isLocked: can't say whether it blocks release."])
+    }
+
+    /// Every device near or past its deadline has a status this version doesn't know, or an unreadable deadline: skipped.
+    @Test func everyMigrationUnknownSkipsTheMigrationRule() {
+        var input = Self.base()
+        input.devices = Self.whole([Self.migration("A", "PAUSED", deadline: .string(Fleet.stamp(Self.day))),
+                                    Self.migration("B", "REQUESTED", deadline: .string("next month"))])
+        Self.expectSkipped(Self.run(input).result(.migrationDeadline), containing: "(2 devices), so none could be judged")
+        input.devices.items.append(Self.migration("C", "REQUESTED", deadline: .string(Fleet.stamp(60 * Self.day))))
+        let result = Self.run(input).result(.migrationDeadline)
+        #expect(result.isJudged && result.notes == ["1 device with a deadline within 14 days or past has no migration status this version knows: not judged.",
+                                                    "1 device has a migration deadline this app can't read: not judged."])
+    }
+
+    /// FileVault's words for one Mac, and the firewall's, read as English.
+    @Test func oneUnknownMacIsSaidInTheSingular() {
+        var input = Self.base()
+        input.appleMDM = Self.whole([Self.mdm("m1", serial: "A"), Self.mdm("m2", serial: "B")])
+        input.appleMDMDetails = .init(["m1": .read(Self.detail(["isFileVaultEnabled": .bool(true), "isFirewallEnabled": .bool(true)])), "m2": .read(Self.detail([:]))])
+        input.mosyle = .noMosyleOrg
+        #expect(Self.run(input).result(.fileVaultOff).notes == ["1 Mac has no FileVault value in Apple MDM's details (none sent, or not a yes or no): unknown, not counted as off."])
+        #expect(Self.run(input).result(.firewallOff).notes == ["1 Mac has no firewall value in Apple MDM's details (none sent, or not a yes or no): unknown, not counted as off."])
+    }
+
+    // MARK: Mosyle devices without a serial
+
+    /// Mosyle sent no serial numbers (the column wasn't read): neither Mosyle comparison can be made, so both are skipped,
+    /// never every Apple serial and every UDID as findings.
+    @Test func mosyleSerialsNotSentSkipBothComparisons() {
+        var input = Self.mosyleInput()
+        input.devices = Self.whole(["S1", "S2"].map { Fleet.device($0) })
+        input.mosyle = .devices(.init([Self.mosyleWithoutSerial("UDID-1"), Self.mosyleWithoutSerial("UDID-2")], read: .whole, notSent: ["serialNumber"]))
+        Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "Mosyle didn't send its devices' serial numbers")
+        Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "Mosyle didn't send its devices' serial numbers")
+        // Listed by UDID with no word from the column: nothing can be compared either.
+        input.mosyle = .devices(Self.whole([Self.mosyleWithoutSerial("UDID-1"), Self.mosyleWithoutSerial("UDID-2")]))
+        Self.expectSkipped(Self.run(input).result(.mosyleNotInApple), containing: "None of Mosyle's 2 devices came with a serial number")
+    }
+
+    /// One Mosyle device listed by its UDID could be the assigned one: "missing from Mosyle" is skipped, as the Apple MDM half
+    /// is for a device with no serial; "in Mosyle, not in Apple" notes it and compares the rest.
+    @Test func aMosyleDeviceListedByUDIDCouldBeTheAssignedOne() {
+        var input = Self.mosyleInput()
+        input.devices = Self.whole(["S1", "S2", "S3"].map { Fleet.device($0) })
+        input.mosyle = .devices(Self.whole([Self.mosyle("S1"), Self.mosyle("S3"), Self.mosyle("S9"), Self.mosyleWithoutSerial("UDID-2")]))
+        Self.expectSkipped(Self.run(input).result(.missingFromMosyle),
+                           containing: "1 of Mosyle's devices came with no serial number (listed by UDID or by nothing), so a device assigned to Service svc-mosyle can't be called missing from Mosyle: it could be one of them")
+        let notInApple = Self.run(input).result(.mosyleNotInApple)
+        #expect(notInApple.isJudged && notInApple.findings.map(\.subject) == ["S9"])
+        #expect(notInApple.notes == ["1 of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."])
+    }
+
+    /// A Mosyle device with no serial and no UDID has an empty id: it is noted, never dropped silently.
+    @Test func aMosyleDeviceWithAnEmptyIdIsNoted() {
+        var input = Self.mosyleInput()
+        input.devices = Self.whole(["S1", "S2", "S3"].map { Fleet.device($0) })
+        input.mosyle = .devices(Self.whole([Self.mosyle("S1"), Self.mosyle("S2"), Self.mosyle("S3"), Self.mosyleWithoutSerial("")]))
+        let notInApple = Self.run(input).result(.mosyleNotInApple)
+        #expect(notInApple.isJudged && notInApple.findings.isEmpty)
+        #expect(notInApple.notes == ["1 of Mosyle's devices came with no serial number (listed by UDID or by nothing): not compared with Apple's device list."])
+        Self.expectSkipped(Self.run(input).result(.missingFromMosyle), containing: "1 of Mosyle's devices came with no serial number")
     }
 
     // MARK: subjects, age
