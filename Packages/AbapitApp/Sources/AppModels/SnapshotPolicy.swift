@@ -185,7 +185,13 @@ public enum SnapshotPolicy {
             case .server(let status), .unexpected(let status): "HTTP \(status)"
             case .notJSON: "not JSON"
             case .malformed: "malformed"
-            case .http: "transport"
+            // What happened, never the host: an answer past the cap or a refused host isn't "no answer".
+            case .http:
+                switch error.httpKind {
+                case .tooLarge?: "too large"
+                case .refusedHost?: "refused host"
+                case .noAnswer?, nil: "transport"
+                }
             case .token: "token"
             case .vault: "keychain"
             case .wrongHost: "wrong host"

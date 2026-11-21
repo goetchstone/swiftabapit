@@ -160,6 +160,10 @@ struct AppleClientTests {
         #expect(AppleAPIError.of(HTTPFailure.transport(code: URLError.notConnectedToInternet.rawValue)) == .http(.transport(code: -1009)))
         #expect(AppleAPIError.of(HTTPFailure.transport(code: -1005))?.isTransport == true)
         #expect(AppleAPIError.of(HTTPFailure.tooLarge(limit: 1))?.isTransport == false)
+        #expect(AppleAPIError.of(HTTPFailure.tooLarge(limit: 1))?.httpKind == .tooLarge)
+        #expect(AppleAPIError.of(HTTPFailure.refusedHost("evil.example.com"))?.httpKind == .refusedHost)
+        #expect(AppleAPIError.of(HTTPFailure.refusedHost("evil.example.com"))?.isTransport == false)
+        #expect(AppleAPIError.of(HTTPFailure.transport(code: -1005))?.httpKind == .noAnswer)
         #expect(AppleAPIError.of(AppleAPIError.notFound) == .notFound && AppleAPIError.notFound.isTransport == false)
         #expect(AppleAPIError.of(CancellationError()) == nil)
     }

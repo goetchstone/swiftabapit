@@ -3,6 +3,7 @@ import AppleModels
 import AppModels
 import Foundation
 import History
+import HTTPCore
 import JSONAPI
 import Orgs
 import Synchronization
@@ -477,6 +478,40 @@ struct SweepTests {
         let summary = try await world.history!.load(id, org: world.orgs.active!).summary
         #expect(summary.errors["activation_lock"] == "transport")
         #expect(summary.notes["activation_lock"] == "12 of 12 devices not read: 12 left when the sweep stopped at transport")
+    }
+
+    /// The breaker counts transport failures in a row, and an answer resets it (the delta review's surviving mutant D6):
+    /// across 24 devices, twelve transport failures between answers never trip it. Deterministic: every first ask is
+    /// answered 500, so every device is retried, and the retry pass goes a read at a time in the list's order, the odd
+    /// devices' second ask dropped (all five of the client's sends) between the even ones' answers.
+    @Test func transportFailuresBetweenAnswersNeverTripTheBreaker() async throws {
+        let world = try await Self.world(devices: 24)
+        let gate = world.gates["a"]!
+        for index in 0..<24 { world.stubs["a"]!.queue(500, for: Self.lock(index)) }
+        let odd = Set((0..<24).filter { $0 % 2 == 1 }.map(Self.lock)), asks = Mutex<[String: Int]>([:])
+        gate.drop("odd retries") { url in
+            let path = url.path()
+            guard odd.contains(path) else { return false }
+            return asks.withLock { asks in
+                asks[path, default: 0] += 1
+                return asks[path]! > 1
+            }
+        }
+        let snapshot = try await Self.recorded(world, [.activationLock])
+        #expect(snapshot.summary.counts["activation_lock"] == 12)
+        #expect(snapshot.summary.errors["activation_lock"] == "transport")
+        #expect(snapshot.summary.notes["activation_lock"] == "12 of 24 devices not read: 12 failed twice (transport)")
+        #expect(Self.asked(world, Self.lockPath).count == 36, "every device asked twice; the dropped sends never reached the stub")
+    }
+
+    /// A transport-level failure is coded for what happened (the delta review): no answer is `transport`; an answer past the
+    /// body cap and a host this app refused had an answer, or never asked, so they say so, and never the host.
+    @Test func aTransportLevelFailureIsCodedForWhatHappened() {
+        #expect(SnapshotPolicy.code(HTTPFailure.transport(code: URLError.notConnectedToInternet.rawValue)) == "transport")
+        #expect(SnapshotPolicy.code(HTTPFailure.tooLarge(limit: 1 << 25)) == "too large")
+        #expect(SnapshotPolicy.code(AppleAPIError.http(.tooLarge(limit: 1 << 25))) == "too large")
+        #expect(SnapshotPolicy.code(HTTPFailure.refusedHost("evil.example.com")) == "refused host")
+        #expect(SnapshotPolicy.code(AppleAPIError.http(.refusedHost("evil.example.com"))) == "refused host")
     }
 
     /// A School org has no Apple MDM: its run tries AppleCare and Activation Lock only.

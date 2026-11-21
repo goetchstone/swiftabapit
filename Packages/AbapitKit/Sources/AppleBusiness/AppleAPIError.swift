@@ -42,11 +42,23 @@ public enum AppleAPIError: Error, Equatable, Sendable {
         }
     }
 
-    /// No answer from the server: offline, DNS, TLS, a timeout.
-    public var isTransport: Bool {
-        if case .http(.transport) = self { return true }
-        return false
+    /// What a transport-level failure (`.http`) was, for callers that don't import HTTPCore: no answer at all, an answer
+    /// past the body cap, or a host this app refused. The last two had an answer (or never asked), so they aren't "transport".
+    public enum HTTPKind: Sendable, Equatable {
+        case noAnswer, tooLarge, refusedHost
     }
+
+    public var httpKind: HTTPKind? {
+        guard case .http(let failure) = self else { return nil }
+        switch failure {
+        case .transport: return .noAnswer
+        case .tooLarge: return .tooLarge
+        case .refusedHost: return .refusedHost
+        }
+    }
+
+    /// No answer from the server: offline, DNS, TLS, a timeout. Only this trips the sweep's breaker.
+    public var isTransport: Bool { httpKind == .noAnswer }
 
     /// A non-2xx response as an error.
     init(_ response: HTTPResponse) {

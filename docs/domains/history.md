@@ -248,8 +248,9 @@ events in phase 2a; their notes are below.
     client's, which sets the pace (20 reads a minute to start). One throttle event halves its rate once: a 429 inside the
     hold of the one before (the other reads in flight were sent before the first answer) extends the hold, never shortens it,
     and doesn't halve again, so four reads refused at once take 600 a minute to 300, not 37.5, and that is the rate the run
-    records (review of PR #37, M1). The server's `Retry-After`, at most a minute, holds the lane for every read waiting
-    (`RateLimiter.throttled(_:retryAfter:)`, docs/domains/http-core.md); the client retries the refused read itself.
+    records (review of PR #37, M1). The server's `Retry-After`, at most a minute per 429, holds the lane for every read
+    waiting; reads in flight can extend a hold past a minute, chained 429s to about five (`RateLimiter.throttled(_:
+    retryAfter:)`, docs/domains/http-core.md); the client retries the refused read itself.
   - Then one pass over the devices whose read failed, a read at a time, in the list's order (abapit's "gentle, sequential
     second chance"): the sweep asks a device at most twice. An id repeated in the list is asked once. **The real request
     bound** per device is 2 asks × (5 sends, the client's `HTTPClient.attempts` for a 429 or a dropped connection, + 1 after
@@ -303,7 +304,10 @@ events in phase 2a; their notes are below.
   listed: devices stopped at the page limit", "the page limit cut 1 device's records: the rest not read"). A sweep that read
   no device and failed is its error alone; one over a list that failed is "not read: devices failed" (or `mdm_enrolled`) and
   asks nothing. A transport failure the client throws as it came (`HTTPFailure`) is `transport`, never `failed`
-  (`AppleAPIError.of`, so the screen models need no HTTPCore).
+  (`AppleAPIError.of`, so the screen models need no HTTPCore); an answer past the body cap is `too large` and a host this app
+  refused is `refused host`, never the host's name (the delta review: they had an answer, or never asked, so "transport" said
+  more than the app knows). Only no answer at all trips the breaker (`AppleAPIError.isTransport`), whose count an answer
+  resets (`transportFailuresBetweenAnswersNeverTripTheBreaker`).
 - **How to read a stored sweep**: in a whole one (no error), a device with no item was read and had nothing on record (no
   AppleCare record; Apple's 404 for the details, read as "no details" and counted in the note). In a part read, a device with
   an item was read and one without is not read (it may have had nothing on record: the snapshot can't say which), never

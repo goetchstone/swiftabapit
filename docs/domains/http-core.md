@@ -25,9 +25,12 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   only). Logs method, host, path template, status and latency; never a header, body or identifier.
 - `Sources/HTTPCore/RateLimiter.swift` — token buckets per lane: reads 20/min burst 10 to start, floor 2/min,
   ceiling 600/min; writes 10/hour burst 3. Halves once per throttle event; +10% per 20 successes. `throttled(_:retryAfter:)`
-  (Phase 3, the sweeps): with the server's `Retry-After` (Apple's or Mosyle's; at most `longestHold`, a minute, whoever asks),
-  the bucket goes negative so that no token is given before it has passed, or before one token's time at the halved rate,
-  whichever is later (`heldUntil`). A sweep has four reads in flight; without the hold only the refused read waited, and the
+  (Phase 3, the sweeps): with the server's `Retry-After` (Apple's or Mosyle's), the bucket goes negative so that no token is
+  given before it has passed, or before one token's time at the halved rate, whichever is later (`heldUntil`). **The minute is
+  per 429, not per throttle event**: each `Retry-After` is capped at `longestHold` (a minute, whoever asks), counted from that
+  429's answer, and a 429 inside a hold may extend it. So reads already in flight can carry a hold past a minute: at worst the
+  slowest in-flight answer's time plus 60 s. Chained 429s (a refused read's retries refused again inside the hold, up to
+  `HTTPClient.attempts`, five) can reach about five minutes. A sweep has four reads in flight; without the hold only the refused read waited, and the
   other three went on at the halved rate inside the server's window (`aRetryAfterHoldsTheLaneForEveryRead`,
   `the429sRetryAfterReachesTheLimiter`). The refused read's own wait refills the bucket by the same amount, so it doesn't wait
   twice. **One throttle event, one halving** (review of PR #37, M1): a 429 before `heldUntil` is the same event (the reads in
