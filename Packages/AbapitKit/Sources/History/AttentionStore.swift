@@ -1,6 +1,7 @@
 import Foundation
 import JSONAPI
 import Orgs
+import Reports
 
 /// What "Needs attention" keeps (plan §8.0: "Stored: only what can't be read again, which is when a finding first appeared
 /// and whether it was dismissed or snoozed"). Methods on `SnapshotStore`, not a second store, because the table lives in
@@ -12,7 +13,8 @@ import Orgs
 /// from the latest snapshot each time and isn't kept here. **No secret and no name is ever stored**; the sensitive-key leave-out
 /// that snapshot attributes go through has nothing to act on, because nothing here is an attribute.
 ///
-/// Semantics (the coordinating session's proposals, for the operator to confirm; the 30 days is a proposal too):
+/// Semantics (the coordinating session's proposals, for the operator to confirm; the 30 days is the operator's decision,
+/// 2026-11-20: "Yes, forget after 30 days (Recommended)"):
 /// - `seen` is called with every subject a rule found in one run. A new subject gets `first_seen`; `first_seen` is never
 ///   written again for a row that is there, whatever the clock says. `last_seen` moves forward.
 /// - A dismissal holds while the finding is there. When it is not seen, the row (dismissal and all) is kept for
@@ -21,7 +23,8 @@ import Orgs
 /// - A snooze hides the finding until its date, then it shows again with its original `first_seen`.
 /// - The latest choice wins: a dismissal clears a snooze, and a snooze clears a dismissal.
 extension SnapshotStore {
-    /// How long a finding may go unseen before its row is forgotten (proposal, for the operator to confirm).
+    /// How long a finding may go unseen before its row is forgotten: the operator's decision, 2026-11-20 ("Yes, forget after
+    /// 30 days (Recommended)").
     public static let forgetAfter: TimeInterval = 30 * 24 * 60 * 60
 
     /// One stored finding.
@@ -52,7 +55,7 @@ extension SnapshotStore {
     public func seen(org: OrgProfile, rule: String, subjects: some Collection<String>, at: Date) throws(Failure) {
         try writable()
         let orgID = try Self.id(of: org)
-        guard Self.isIdentifier(rule, limit: 64), subjects.allSatisfy({ Self.isIdentifier($0, limit: 128) }) else { throw .notAnIdentifier }
+        guard Self.isIdentifier(rule, limit: NeedsAttention.ruleLimit), subjects.allSatisfy({ Self.isIdentifier($0, limit: NeedsAttention.subjectLimit) }) else { throw .notAnIdentifier }
         let now = Schema.takenAt(at), cutoff = Schema.takenAt(at.addingTimeInterval(-Self.forgetAfter))
         try Self.guarded {
             try database.transaction {
@@ -72,17 +75,9 @@ extension SnapshotStore {
         }
     }
 
-    /// Whether `text` can be a rule or a subject: 1 to `limit` characters, none whitespace, a control, a quote, a slash or
-    /// a backslash. A serial number, a UUID or a numeric id passes; a name with a space ("Jane Example's MacBook Pro")
-    /// doesn't. A one-word name would pass: callers pass identifiers, and this is the backstop. (No id helper exists
-    /// elsewhere in the app to reuse: `OrgStore.slug` makes slugs of names.)
-    static func isIdentifier(_ text: String, limit: Int) -> Bool {
-        guard !text.isEmpty, text.count <= limit else { return false }
-        return text.unicodeScalars.allSatisfy { scalar in
-            !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format
-              || "\"'`/\\".unicodeScalars.contains(scalar))
-        }
-    }
+    /// Whether `text` can be a rule or a subject: `NeedsAttention.isIdentifier`, the one rule the findings are checked by
+    /// too, so a finding the rules call trackable is one this store keeps.
+    static func isIdentifier(_ text: String, limit: Int) -> Bool { NeedsAttention.isIdentifier(text, limit: limit) }
 
     /// The operator dismissed the finding. It must have been recorded by `seen`.
     public func dismiss(org: OrgProfile, rule: String, subject: String, at: Date) throws(Failure) {

@@ -391,6 +391,9 @@ org editor's save).
     when that path is forbidden itself.
   - Does `mdmDevices/{id}/details` 404 for a device with no details on record (the stub's choice), is its id the
     `mdmDevices` id (the serial?), and is the details' own `id` the same?
+  - Is an `mdmDevices` id stable from one read to the next? "Needs attention" keys an Apple MDM device with no serial number
+    (User Enrollment reports none) by that id (docs/domains/history.md, "Subjects"): if it changes between reads, those
+    findings churn and a dismissal never sticks.
   - Does the configuration list send `customSettingsValues` as null (abapit) or leave it out?
   - The models unit's: what the 14 audit payloads Apple documents with no fields carry; whether
     `eventDataPropertyKey` always equals the type's key, and which spelling it uses (the pass says each miss); whether
