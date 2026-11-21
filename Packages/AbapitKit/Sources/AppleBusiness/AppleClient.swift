@@ -132,6 +132,13 @@ public actor AppleClient {
         return try await all(read).map(AppleCareCoverage.init)
     }
 
+    /// The device's coverage a page at a time, so a list the page cap cut says so (`Page.truncated`), as the acceptance pass
+    /// reads it: the snapshot's sweep keeps a cut list as a part read. A serial that can't go in a path is never sent.
+    public nonisolated func appleCarePages(_ serial: String) -> AsyncThrowingStream<Page<AppleCareCoverage>, any Error> {
+        guard let read = AppleRead.appleCare(account.scope, serial: serial) else { return Self.failed(.notFound) }
+        return pages(read).map(AppleCareCoverage.init)
+    }
+
     public func activationLock(_ serial: String) async throws -> ActivationLockStatus {
         guard let read = AppleRead.activationLock(scope, serial: serial) else { throw AppleAPIError.notFound }
         return try await ActivationLockStatus(resource: one(read))
@@ -342,6 +349,8 @@ public actor AppleClient {
             } catch let error as AppleAPIError where Self.refusesMembersRead(error) {
                 return BlueprintRead(blueprint: blueprint, members: .refused(error))
             }
+            // A list read whose task is cancelled ends without throwing: never a short list of members.
+            try Task.checkCancellation()
             related[relationship] = Blueprint.Related(linkages: linkages, isTruncated: cut)
         }
         return BlueprintRead(blueprint: blueprint, members: .read(related: related))
@@ -546,9 +555,12 @@ public actor AppleClient {
         return resource
     }
 
+    /// Every page's resources. A cancelled task's walk ends without throwing (the stream finishes), so what it holds then is
+    /// no answer: a cancelled read throws `CancellationError`, never a short or empty list ("no coverage").
     private func all(_ read: ReadRequest) async throws -> [Resource] {
         var found: [Resource] = []
         for try await page in pages(read) { found += page.items }
+        try Task.checkCancellation()
         return found
     }
 

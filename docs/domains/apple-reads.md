@@ -58,6 +58,13 @@ org editor's save).
   page already in its buffer. A load checks its token after every page and every await, or a superseded load
   says "loaded" and records its rate on the next org (Phase 1b review H2; failure-log 2026-10-16, "the screen
   models had no tests"). An org switch clears every model through `OrgsModel.onSwitch`, not through a view.
+  The client's own whole-list reads check for it after the loop (review of PR #37, L4): `appleCare(_:)` (`all`) and
+  `blueprintWithMembers` throw `CancellationError` when their task was cancelled, where they returned what they had: an
+  empty coverage list read as "no coverage", a blueprint with fewer members. Their callers already took a
+  `CancellationError` as "stopped" (the device detail, Content, the acceptance pass's "error cancelled", the sweep);
+  `aCancelledListReadThrowsNeverNone`. `appleCarePages(_:)` hands the coverage over a page at a time, so a list the page
+  cap cut is said (the snapshot sweep's part read, as the acceptance pass reads it); its caller checks for cancellation
+  after the loop as the client does.
 - **What an await learned is saved for what it was read for**: a load records its rate for the org it captured,
   and only while its token holds; a permissions check passes the profile it probed (`record(_:probed:)`), and its
   results are dropped if the org was edited to another account meanwhile.

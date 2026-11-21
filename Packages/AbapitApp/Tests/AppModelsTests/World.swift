@@ -196,6 +196,7 @@ func eventually(_ what: String, timeout: Duration = .seconds(20), _ condition: (
 final class Gate: Transport, Sendable {
     let stub: AppleStub
     private let holds = Mutex<[String: @Sendable (URL) -> Bool]>([:])
+    private let drops = Mutex<[String: @Sendable (URL) -> Bool]>([:])
     private let waiting = Mutex(0)
     private let forwarded = Mutex(0)
 
@@ -203,11 +204,15 @@ final class Gate: Transport, Sendable {
 
     func hold(_ name: String, _ matches: @escaping @Sendable (URL) -> Bool) { holds.withLock { $0[name] = matches } }
     func release(_ name: String) { holds.withLock { $0[name] = nil } }
+    /// Requests `matches` accepts fail before reaching the stub, as a dropped connection does (`URLError.networkConnectionLost`,
+    /// what the stub's `failTransport` throws for every request): a transport failure for one path, not the next N requests.
+    func drop(_ name: String, _ matches: @escaping @Sendable (URL) -> Bool) { drops.withLock { $0[name] = matches } }
     /// Requests waiting at the gate now, and requests the stub has answered.
     var held: Int { waiting.withLock { $0 } }
     var answered: Int { forwarded.withLock { $0 } }
 
     func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+        if let url = request.url, drops.withLock({ $0.values.contains { $0(url) } }) { throw URLError(.networkConnectionLost) }
         if let url = request.url, isHeld(url) {
             waiting.withLock { $0 += 1 }
             defer { waiting.withLock { $0 -= 1 } }
