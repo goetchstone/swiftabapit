@@ -65,6 +65,9 @@ public actor SnapshotStore {
         /// A row that doesn't read (JSON that isn't, text that isn't UTF-8, an escape of half a character): the file was
         /// changed outside this app.
         case corrupt(String)
+        /// `exportCopy` refused or couldn't make the copy; the words say why (the destination exists and isn't empty, a link on
+        /// its path, the system's error).
+        case notCopied(String)
 
         public var message: String {
             switch self {
@@ -83,6 +86,7 @@ public actor SnapshotStore {
             case .noFinding: "That finding isn't in the list any more, so it can't be changed."
             case .notAnIdentifier: "A finding's rule and subject must be identifiers, not names."
             case .corrupt(let what): "The snapshot history holds a row this app can't read (\(what)); it was changed outside abapit."
+            case .notCopied(let why): "The copy wasn't made: \(why)"
             }
         }
     }
@@ -145,7 +149,9 @@ public actor SnapshotStore {
     public nonisolated let access: Access
     let database: SQLiteDatabase
     private let writer: String
-    private let hook: Hook?
+    let hook: Hook?
+    /// The store's own folder, which only this user can enter: where an export's working copy is made. Nil in memory.
+    let home: String?
 
     /// Where a test can stop the store, as a crash or a failing disk would, or change the disk under it, as another
     /// program could (`hook`). Never set outside the tests.
@@ -164,6 +170,10 @@ public actor SnapshotStore {
         case foundVersion1(path: String)
         /// Inside the migration's transaction, the version confirmed as still 1: the attention table is made next.
         case migrating(path: String)
+        /// An export's bytes are written and synced; the path is checked next.
+        case copied(path: String)
+        /// An export has checked that its destination doesn't exist and made its working copy; the destination is created next.
+        case beforeCreate(path: String)
     }
 
     typealias Hook = @Sendable (Step) throws(Failure) -> Void
@@ -176,13 +186,16 @@ public actor SnapshotStore {
 
     init(storage: Storage, appVersion: String, hook: Hook?) throws(Failure) {
         let opened: (database: SQLiteDatabase, access: Access)
+        var home: String?
         switch storage {
         case .memory:
             let database = try Self.guarded { try SQLiteDatabase(path: ":memory:", flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) }
             opened = (database, try Self.prepare(database, path: ":memory:", hook: hook))
         case .folder(let folder):
             opened = try Self.openFile(in: folder, hook: hook)
+            home = "/" + folder.path(percentEncoded: false).split(separator: "/").joined(separator: "/")
         }
+        self.home = home
         database = opened.database
         access = opened.access
         writer = "swiftabapit \(appVersion)"
@@ -200,6 +213,25 @@ public actor SnapshotStore {
     @discardableResult
     public func record(org: OrgProfile, takenAt: Date, resources: [String: [Resource]], errors: [String: String] = [:],
                        notes: [String: String] = [:]) throws(Failure) -> Int64 {
+        // Never nil: only an import skips a duplicate.
+        guard let id = try insert(org: org, takenAt: takenAt, writtenBy: writer, resources: resources, errors: errors, notes: notes,
+                                  skippingDuplicate: false) else { throw .noSnapshot(0) }
+        return id
+    }
+
+    /// Records a snapshot imported from abapit's history (`AbapitHistory`), under `writtenBy` (`abapit <version>`, never
+    /// `swiftabapit …`, so the row is told from one this app took). A snapshot of `org` already recorded at `takenAt` by
+    /// `writtenBy` is the same one imported before: nothing is written and nil is returned (the duplicate check and the
+    /// write are one transaction; a caller that has itself written a snapshot at that time in this run passes `skippingDuplicate:
+    /// false`, since the earlier row is its own, not an earlier import). Otherwise as `record`.
+    @discardableResult
+    public func recordImported(org: OrgProfile, takenAt: Date, writtenBy: String, resources: [String: [Resource]], errors: [String: String] = [:],
+                               notes: [String: String] = [:], skippingDuplicate: Bool = true) throws(Failure) -> Int64? {
+        try insert(org: org, takenAt: takenAt, writtenBy: writtenBy, resources: resources, errors: errors, notes: notes, skippingDuplicate: skippingDuplicate)
+    }
+
+    private func insert(org: OrgProfile, takenAt: Date, writtenBy: String, resources: [String: [Resource]], errors: [String: String],
+                        notes: [String: String], skippingDuplicate: Bool) throws(Failure) -> Int64? {
         try writable()
         let orgID = try Self.id(of: org)
         let names = resources.keys.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
@@ -217,12 +249,17 @@ public actor SnapshotStore {
             counts[name] = .number(String(Set(items.map { Array($0.id.utf8) }).count))
         }
         let scope = org.provider == .known(.apple) ? org.scope.rawValue : org.provider.rawValue
+        let taken = Schema.takenAt(takenAt)
         return try Self.guarded {
             try database.transaction {
+                if skippingDuplicate, try database.rows("SELECT 1 FROM snapshots WHERE org_id = ? AND taken_at = ? AND abapit_version = ? LIMIT 1",
+                                                        [.text(orgID), .text(taken), .text(writtenBy)], { $0.integer(0) }).first != nil {
+                    return nil
+                }
                 try database.run("""
                     INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors, org_id, notes, counts) \
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, [.text(Schema.takenAt(takenAt)), .text(org.clientID), .text(org.name), .text(scope), .text(writer),
+                    """, [.text(taken), .text(org.clientID), .text(org.name), .text(scope), .text(writtenBy),
                           .text(Self.words(errors)), .text(orgID), .text(Self.words(notes)), .text(StoredJSON.text(.object(counts)))])
                 let snapshot = database.lastInsertRowID
                 var written = 0
@@ -240,7 +277,7 @@ public actor SnapshotStore {
         }
     }
 
-    /// Keeps the newest `keep` snapshots of `org`, by id (the order they were recorded, whatever their `takenAt`), and
+    /// Keeps the newest `keep` snapshots of `org`, by `takenAt` (an import records old snapshots after new ones; `Schema.takenAt` is fixed-width UTC, so text order is time order; the id breaks a tie), and
     /// removes the rest with their items. A negative `keep` removes nothing. Returns the snapshots removed.
     @discardableResult
     public func prune(org: OrgProfile, keep: Int) throws(Failure) -> Int {
@@ -251,7 +288,7 @@ public actor SnapshotStore {
             try database.transaction {
                 try database.run("""
                     DELETE FROM snapshots WHERE org_id = ? AND id NOT IN (\
-                    SELECT id FROM snapshots WHERE org_id = ? ORDER BY id DESC LIMIT ?)
+                    SELECT id FROM snapshots WHERE org_id = ? ORDER BY taken_at DESC, id DESC LIMIT ?)
                     """, [.text(orgID), .text(orgID), .integer(Int64(keep))])
                 return database.changes
             }
@@ -286,11 +323,11 @@ public actor SnapshotStore {
         }
     }
 
-    /// `org`'s snapshots, newest first (by id), at most `limit` (abapit's list).
+    /// `org`'s snapshots, newest first (by `takenAt`, then id), at most `limit` (abapit's list).
     public func snapshots(org: OrgProfile, limit: Int = 100) throws(Failure) -> [Summary] {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
-            try database.rows(Self.summarySQL + "WHERE s.org_id = ? ORDER BY s.id DESC LIMIT ?",
+            try database.rows(Self.summarySQL + "WHERE s.org_id = ? ORDER BY s.taken_at DESC, s.id DESC LIMIT ?",
                               [.text(orgID), .integer(Int64(max(limit, 0)))], Self.summary)
         }
     }
@@ -320,7 +357,7 @@ public actor SnapshotStore {
             try database.reading {
                 guard let attempt = try database.rows(Self.summarySQL + """
                     WHERE s.org_id = ? AND (EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
-                    OR EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?)) ORDER BY s.id DESC LIMIT 1
+                    OR EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?)) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource), .text(resource)], Self.summary).first else { return nil }
                 // The error by the key's bytes, as SQLite compares them, not by a Swift dictionary's equivalence.
                 let error = try database.rows("SELECT e.value AS errors FROM snapshots s, json_each(s.errors) e WHERE s.id = ? AND e.key = ?",
@@ -329,7 +366,7 @@ public actor SnapshotStore {
                 guard let id = try database.rows("""
                     SELECT s.id FROM snapshots s WHERE s.org_id = ? \
                     AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
-                    AND NOT EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?) ORDER BY s.id DESC LIMIT 1
+                    AND NOT EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource), .text(resource)], { $0.integer(0) }).first,
                       let summary = try database.rows(Self.summarySQL + "WHERE s.id = ?", [.integer(id)], Self.summary).first
                 else { return .failed(attempt, error: error, newest: nil) }

@@ -190,9 +190,9 @@ struct SnapshotStoreTests {
 
     // MARK: pruning
 
-    /// Newest by id, the order they were recorded: an import records old snapshots after new ones, so `taken_at` would
-    /// keep the wrong ones. Their items go with them (foreign keys on).
-    @Test func pruneKeepsTheNewestByIDAndTheirItemsGoToo() async throws {
+    /// Newest by `taken_at` (then id), whatever order they were recorded in: an import records old snapshots after new ones, which
+    /// the id would keep (changed 2026-11-21, the review of PR 36). Their items go with them (foreign keys on).
+    @Test func pruneKeepsTheNewestByTimeAndTheirItemsGoToo() async throws {
         let root = try Scratch.folder()
         defer { Scratch.remove(root) }
         let store = try SnapshotStore(storage: .folder(root.appending(path: "store")), appVersion: "1")
@@ -206,7 +206,7 @@ struct SnapshotStoreTests {
         #expect(try await store.prune(org: org, keep: -1) == 0)
         #expect(try await store.snapshots(org: org).count == 4)
         #expect(try await store.prune(org: org, keep: 2) == 2)
-        #expect(try await store.snapshots(org: org).map(\.id) == [ids[3], ids[2]])
+        #expect(try await store.snapshots(org: org).map(\.id) == [ids[0], ids[1]], "the two newest by time, not the two recorded last")
         #expect(try await store.prune(org: org, keep: 2) == 0)
 
         let file = try Scratch.open(Scratch.path(root.appending(path: "store/history.sqlite")))

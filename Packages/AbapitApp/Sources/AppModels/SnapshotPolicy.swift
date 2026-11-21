@@ -33,8 +33,13 @@ public enum SnapshotPolicy {
         /// Every string kept goes through `ContentWords.addresses(in:)`, as a package's row, detail and CSV do, so a user
         /// and password written into its name or description never reach the file (invariant 11).
         public let masksAddresses: Bool
+        /// Kept attributes Apple sends as an object, with the inner keys kept: only `customSettingsValues` (`CustomSettingsValues`: its
+        /// file name and the withheld profile's marker). Every other kept attribute is a scalar or a list of scalars in
+        /// `Contracts/apple/`, and `keep` stores nothing else under it.
+        public let nested: [String: [String]]
 
-        init(_ name: String, kept: [String], known: [String], businessOnly: Bool = false, masksAddresses: Bool = false) {
+        init(_ name: String, kept: [String], known: [String], businessOnly: Bool = false, masksAddresses: Bool = false, nested: [String: [String]] = [:]) {
+            self.nested = nested
             self.name = name
             self.kept = kept
             self.known = known
@@ -95,7 +100,7 @@ public enum SnapshotPolicy {
     /// from the list, which sends it as null; the single read that carries it is never made for a snapshot.
     public static let configurations = Rule("configurations", kept: [
         "type", "name", "configuredForPlatforms", "customSettingsValues", "createdDateTime", "updatedDateTime",
-    ], known: Configuration.fields, businessOnly: true)
+    ], known: Configuration.fields, businessOnly: true, nested: ["customSettingsValues": ["configurationProfile", "filename"]])
 
     /// `mdmDevices`, as abapit kept the list (`mdm_enrolled`): every attribute, `deviceName` included (the operator,
     /// 2026-11-20: "All three").
@@ -134,18 +139,25 @@ public enum SnapshotPolicy {
     // MARK: keeping
 
     /// One item as a snapshot keeps it.
-    struct Kept {
-        let item: Resource
-        /// The attributes left out that this version doesn't know (Apple added them), by their bytes: counted in the
-        /// snapshot's note, never stored or named.
-        let unknown: Set<[UInt8]>
+    package struct Kept {
+        package let item: Resource
+        /// The attributes left out that this version doesn't know (Apple added them) or whose shape it doesn't keep (an object where
+        /// a scalar is kept), by their bytes: counted in the snapshot's note, never stored or named.
+        package let unknown: Set<[UInt8]>
         /// Whether a string of it had an address masked.
-        let masked: Bool
+        package let masked: Bool
     }
 
     /// `resource` with only `rule.kept`'s attributes, compared by bytes (a key canonically equal to a kept one but other
     /// bytes is another key), and with `rule.masksAddresses`, every string of them through `ContentWords.addresses(in:)`.
-    static func keep(_ resource: Resource, _ rule: Rule) -> Kept {
+    ///
+    /// The one home of "a snapshot keeps no custom setting's profile" (operator, 2026-10-31): the resource goes through
+    /// `Configuration(resource:).resource` first, whatever its rule, so a profile in any attribute is withheld however the item
+    /// came (a list read sends null; abapit's history held the single read's profile). A kept attribute keeps only a scalar or a
+    /// list of scalars, or for `rule.nested` an object's listed inner keys with scalar values: a nested object under a kept name
+    /// (a device model that is `{imei: …}`) is left out and counted, never stored whole.
+    package static func keep(_ resource: Resource, _ rule: Rule) -> Kept {
+        let resource = Configuration(resource: resource).resource
         let kept = Set(rule.kept.map { Array($0.utf8) }), known = Set(rule.known.map { Array($0.utf8) })
         var attributes = JSONObject(), unknown: Set<[UInt8]> = [], masked = false
         for (key, value) in resource.attributes {
@@ -154,15 +166,43 @@ public enum SnapshotPolicy {
                 if !known.contains(bytes) { unknown.insert(bytes) }
                 continue
             }
+            guard let shaped = scalars(value, inner: rule.nested.first { Array($0.key.utf8) == bytes }?.value) else {
+                unknown.insert(bytes)
+                continue
+            }
             if rule.masksAddresses {
-                let shown = value.mappingStrings(ContentWords.addresses(in:))
-                masked = masked || shown != value
+                let shown = shaped.mappingStrings(ContentWords.addresses(in:))
+                masked = masked || shown != shaped
                 attributes[key] = shown
             } else {
-                attributes[key] = value
+                attributes[key] = shaped
             }
         }
         return Kept(item: Resource(type: rule.name, id: resource.id, attributes: attributes), unknown: unknown, masked: masked)
+    }
+
+    /// `value` if it is a scalar or a list of scalars; for an attribute with `inner` keys, an object cut to those keys when each
+    /// is a scalar; otherwise nil (left out whole).
+    private static func scalars(_ value: JSONValue, inner: [String]?) -> JSONValue? {
+        func scalar(_ value: JSONValue) -> Bool {
+            switch value {
+            case .null, .bool, .number, .string: true
+            case .array, .object: false
+            }
+        }
+        switch value {
+        case .null, .bool, .number, .string: return value
+        case .array(let items): return items.allSatisfy(scalar) ? value : nil
+        case .object(let object):
+            guard let inner else { return nil }
+            let allowed = Set(inner.map { Array($0.utf8) })
+            var out = JSONObject()
+            for (key, member) in object where allowed.contains(Array(key.utf8)) {
+                guard scalar(member) else { return nil }
+                out[key] = member
+            }
+            return .object(out)
+        }
     }
 
     // MARK: errors

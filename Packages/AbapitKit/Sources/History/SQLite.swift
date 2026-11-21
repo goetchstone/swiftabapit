@@ -79,6 +79,10 @@ final class SQLiteDatabase {
 
     var lastInsertRowID: Int64 { sqlite3_last_insert_rowid(handle) }
 
+    /// Whether the main database was opened read-only (`SQLITE_OPEN_READONLY`, or a file the system won't let this process
+    /// write): what the abapit import checks before it reads, since a write through it must be impossible.
+    var isReadOnly: Bool { sqlite3_db_readonly(handle, "main") == 1 }
+
     /// `PRAGMA user_version`.
     func userVersion() throws -> Int32 {
         try rows("PRAGMA user_version") { Int32(truncatingIfNeeded: $0.integer(0)) }.first ?? 0
