@@ -186,12 +186,7 @@ struct ContentView: View {
             case .mosyle: MosyleView(model: services.screens.mosyle)
             case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
             case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)
-            case .reports:
-                ContentUnavailableView {
-                    Label(section.title, systemImage: section.symbol)
-                } description: {
-                    Text("This section arrives in Phase 3 of the port.")
-                }
+            case .reports: ReportsView(model: services.screens.reports)
             }
         }
     }
