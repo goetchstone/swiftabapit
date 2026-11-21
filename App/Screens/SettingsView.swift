@@ -22,6 +22,8 @@ struct SettingsView: View {
     @State private var removing: OrgProfile?
     /// The snapshots the org being removed has in the history, read before the question is asked; nil when it couldn't be read.
     @State private var removalSnapshots: Int?
+    /// The org the removal question was last asked about: a count that comes back for another is dropped.
+    @State private var asking: String?
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
     @State private var problem: String?
@@ -166,20 +168,27 @@ struct SettingsView: View {
                 Button("Remove, \(keyWords) and Delete Its \(count.formatted()) Snapshot\(count == 1 ? "" : "s") for Good", role: .destructive) {
                     remove(profile, deleteHistory: true)
                 }
+                .disabled(orgs.historyDeletionBlocked != nil)
+                .help(orgs.historyDeletionBlocked ?? "Deletes this organization's snapshots and its Needs-attention findings; it can't be undone")
             }
             Button("Cancel", role: .cancel) {}
         } message: { profile in
             Text((profile.provider == .known(.mosyle)
                   ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it. "
                   : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it. ")
-                 + OrgsModel.removalHistoryNote(snapshots: removalSnapshots))
+                 + OrgsModel.removalHistoryNote(snapshots: removalSnapshots)
+                 + (orgs.historyDeletionBlocked.map { " Deleting is off now: \($0)" } ?? ""))
         }
     }
 
     /// Reads how much history the org has, then asks: the question names what is deleted, so it is asked once the count is known.
     private func askToRemove(_ profile: OrgProfile) {
+        asking = profile.id
         Task {
-            removalSnapshots = await orgs.historySnapshots(of: profile.id)
+            let count = await orgs.historySnapshots(of: profile.id)
+            // A slow count for another org, asked about since, must not replace this question.
+            guard asking == profile.id else { return }
+            removalSnapshots = count
             removing = profile
         }
     }

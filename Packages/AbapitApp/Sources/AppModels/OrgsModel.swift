@@ -678,6 +678,9 @@ public final class OrgsModel {
     /// can't be deleted (a file a newer version wrote, one that won't open) refuses the removal and leaves the org, its key
     /// and its history as they were.
     public func remove(_ id: String, deleteSecrets: Bool, deleteHistory: Bool = false) async throws {
+        // A write for this history in flight (a snapshot past its last check, an import into another org of the client) could land
+        // after the deletion: refused, in words. Removing the org and keeping its history stays allowed.
+        if deleteHistory, let why = historyDeletionBlocked { throw SaveFailure.refused(why) }
         if deleteHistory, let profile = store[id] {
             switch openHistory() {
             case .success(let opened): try await opened.removeAll(org: profile)
@@ -699,15 +702,22 @@ public final class OrgsModel {
         case nil: "Its snapshot history couldn't be read, so it is kept."
         case 0?: "It has no snapshots in this Mac's history."
         case let count?:
-            "Its \(count.formatted()) snapshot\(count == 1 ? "" : "s") in this Mac's history stay unless you delete them too. Deleting them can't be undone: no copy is kept."
+            "Its \(count.formatted()) snapshot\(count == 1 ? "" : "s") in this Mac's history stay unless you delete them too, with its Needs-attention findings. Deleting them can't be undone: no copy is kept."
         }
     }
+
+    /// Why the history can't be deleted now: a snapshot is being taken, or an import or export is running (the screens' models set
+    /// `historyBusy`). Nil when nothing is writing to it.
+    public var historyDeletionBlocked: String? { historyBusy?() }
+
+    /// Set by `ScreenModels`: the words for a write to the history in flight, nil when none is.
+    @ObservationIgnored public var historyBusy: (@MainActor () -> String?)?
 
     /// How many snapshots the org's history holds, for the question Settings asks when it is removed; nil when the history
     /// can't be read (the question then says so and offers no deletion).
     public func historySnapshots(of id: String) async -> Int? {
         guard let profile = store[id], case .success(let opened) = openHistory() else { return nil }
-        return try? await opened.snapshots(org: profile, limit: Int.max).count
+        return try? await opened.count(org: profile)
     }
 
     /// What Settings → Permissions found, kept so sections show locked without probing again. `probed` is the

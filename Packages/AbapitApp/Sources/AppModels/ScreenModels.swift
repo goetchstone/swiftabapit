@@ -41,6 +41,12 @@ public final class ScreenModels {
         snapshots = SnapshotCollector(orgs: orgs)
         changes = ChangesModel(orgs: orgs, collector: snapshots)
         historyTransfer = HistoryTransfer(orgs: orgs)
+        let snapshots = snapshots, transfer = historyTransfer
+        orgs.historyBusy = {
+            if snapshots.isRunning { return "A snapshot is being taken, and it could write to the history after it was deleted. Wait for it to finish, or remove the organization and keep its history." }
+            if transfer.isWorking { return "A history import or export is running, and it could write to the history after it was deleted. Wait for it to finish, or remove the organization and keep its history." }
+            return nil
+        }
     }
 
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices

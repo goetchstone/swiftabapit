@@ -73,6 +73,8 @@ public final class ChangesModel {
         public let title: String
         /// One side or both was read in part.
         public let partial: Bool
+        /// Which side was read in part and why, in words ("the newer snapshot (page cap)"); nil when both were read in full.
+        public let partialWhy: String?
         public let added: [Entry]
         public let removed: [Entry]
         public let changed: [ChangedEntry]
@@ -120,6 +122,8 @@ public final class ChangesModel {
 
     public private(set) var state: LoadState = .idle
     public private(set) var rows: [SnapshotRow] = []
+    /// Said when the history holds more snapshots than the list shows; nil otherwise.
+    public private(set) var listNote: String?
     /// The pair compared: the newest and the one before by default (`rows` is newest first). `choose` sets them.
     public private(set) var olderID: Int64?
     public private(set) var newerID: Int64?
@@ -143,11 +147,19 @@ public final class ChangesModel {
     private let orgs: OrgsModel
     private let collector: SnapshotCollector
     /// Newest snapshot's counts, for the estimates.
-    @ObservationIgnored private var newestCounts: [String: Int]?
+    private var newestCounts: [String: Int]?
+    private var newestErrors: [String: String] = [:]
+    /// Whether the operator picked the pair (`choose`): a chosen pair survives a reload, an unchosen one always moves to the newest two.
+    @ObservationIgnored private var pairChosen = false
+    /// Run in the middle of a read, after its await and before its guard, when set: the tests switch orgs there, as one can come
+    /// while a read is out. `package`: the app never sets it. Stages: `load`, `compare`, `estimate`.
+    @ObservationIgnored package var afterRead: (@MainActor (String) async -> Void)?
     @ObservationIgnored private var loadToken = 0
     @ObservationIgnored private var compareToken = 0
 
     public static let mosyleWords = "Snapshots of a Mosyle Business organization aren't built yet: this version takes Apple Business and Apple School Manager snapshots only. Nothing was read from Mosyle."
+    /// The most snapshots the list shows (the store is asked for one more, to know there are more).
+    static let listLimit = 100
     static let needTwo = "Take a second snapshot to compare: a comparison needs two."
     static let needDifferent = "Choose two different snapshots."
 
@@ -172,6 +184,9 @@ public final class ChangesModel {
         estimates = [:]
         estimateBasis = nil
         newestCounts = nil
+        newestErrors = [:]
+        pairChosen = false
+        listNote = nil
         result = nil
         // The screen on show reads the new org's history, as the other screens do.
         if wasShowing { refresh() }
@@ -218,12 +233,19 @@ public final class ChangesModel {
         if on { sweeps.insert(sweep) } else { sweeps.remove(sweep) }
     }
 
-    /// One sweep's line before the run: its title and the collector's estimate (which says it is one), or why there is none yet.
+    /// One sweep's line before the run: its title and the collector's estimate (which says it is one), or why there is none.
     public func estimateLine(_ sweep: Sweep) -> String {
-        guard let estimate = estimates[sweep] else {
-            return "\(sweep.title): the time can't be estimated yet. It needs a device count, which the first snapshot's device list gives."
+        if let estimate = estimates[sweep] { return "\(sweep.title): \(estimate.words)" }
+        let none = "\(sweep.title): the time can't be estimated"
+        if rows.isEmpty { return none + " yet. It needs a device count, which the first snapshot's device list gives." }
+        guard let counts = newestCounts else { return none + " yet." }
+        if counts["devices"] == nil {
+            return none + ": the newest snapshot didn't read the device list, so there is no device count. A snapshot that reads it gives one."
         }
-        return "\(sweep.title): \(estimate.words)"
+        if sweep == .mdmDetails, counts["mdm_enrolled"] == nil {
+            return none + ": the newest snapshot didn't read Apple MDM's device list, so the number of managed devices is unknown."
+        }
+        return none + " yet."
     }
 
     /// Takes a snapshot of the active org, with the sweeps chosen, which are then cleared (each run asks again). Refuses a Mosyle
@@ -247,7 +269,11 @@ public final class ChangesModel {
         let outcome = await collector.run(sweeps: chosen)
         if busy || generation != orgs.generation { return outcome }
         result = Self.words(outcome)
-        if case .recorded = outcome { await load() }
+        if case .recorded = outcome {
+            // A new snapshot moves an unchosen pair to the newest two.
+            pairChosen = false
+            await load()
+        }
         return outcome
     }
 
@@ -293,7 +319,8 @@ public final class ChangesModel {
         }
         let summaries: [SnapshotStore.Summary]
         do {
-            summaries = try await store.snapshots(org: profile)
+            summaries = try await store.snapshots(org: profile, limit: Self.listLimit + 1)
+            await afterRead?("load")
         } catch {
             guard token == loadToken, generation == orgs.generation else { return }
             rows = []
@@ -301,13 +328,17 @@ public final class ChangesModel {
             return
         }
         guard token == loadToken, generation == orgs.generation else { return }
-        rows = summaries.map(Self.row)
-        newestCounts = summaries.first?.counts
+        let listed = Array(summaries.prefix(Self.listLimit))
+        listNote = summaries.count > Self.listLimit ? "Showing the newest \(Self.listLimit) snapshots; older ones aren't listed." : nil
+        rows = listed.map(Self.row)
+        newestCounts = listed.first?.counts
+        newestErrors = listed.first?.errors ?? [:]
         state = .loaded(at: Date())
         let ids = Set(rows.map(\.id))
-        if let older = olderID, let newer = newerID, ids.contains(older), ids.contains(newer) {
-            // The pair stays.
+        if pairChosen, let older = olderID, let newer = newerID, ids.contains(older), ids.contains(newer) {
+            // The operator's pair stays.
         } else {
+            pairChosen = false
             newerID = rows.first?.id
             olderID = rows.count > 1 ? rows[1].id : nil
         }
@@ -323,6 +354,7 @@ public final class ChangesModel {
         }
         olderID = older
         newerID = newer
+        pairChosen = true
         await compare()
     }
 
@@ -347,6 +379,7 @@ public final class ChangesModel {
             return
         }
         let made = await Task.detached { Self.compare(older: first, newer: second) }.value
+        await afterRead?("compare")
         guard token == compareToken, generation == orgs.generation else { return }
         comparison = made
         comparisonProblem = nil
@@ -360,15 +393,23 @@ public final class ChangesModel {
             estimateBasis = nil
             return
         }
-        let managed = counts["mdm_enrolled"] ?? 0
+        // No `mdm_enrolled` count is no data, not none: the details' estimate isn't made from it.
+        let managed = counts["mdm_enrolled"]
         var made: [Sweep: Sweep.Estimate] = [:]
         for sweep in availableSweeps {
-            if let estimate = await collector.estimate([sweep], devices: devices, appleManaged: managed) { made[sweep] = estimate }
+            if sweep == .mdmDetails, managed == nil { continue }
+            if let estimate = await collector.estimate([sweep], devices: devices, appleManaged: managed ?? 0) { made[sweep] = estimate }
         }
+        await afterRead?("estimate")
         guard generation == orgs.generation else { return }
         estimates = made
-        estimateBasis = "Counted from the newest snapshot: \(devices) device\(devices == 1 ? "" : "s")"
-            + (availableSweeps.contains(.mdmDetails) ? ", \(managed) managed by Apple MDM." : ".")
+        let cut = newestErrors["devices"] != nil ? " (read in part)" : ""
+        var basis = "Counted from the newest snapshot: \(devices) device\(devices == 1 ? "" : "s")\(cut)"
+        if availableSweeps.contains(.mdmDetails) {
+            basis += managed.map { ", \($0) managed by Apple MDM" + (newestErrors["mdm_enrolled"] != nil ? " (read in part)" : "") }
+                ?? ", the number managed by Apple MDM unknown"
+        }
+        estimateBasis = basis + "."
     }
 
     // MARK: the comparison
@@ -384,6 +425,13 @@ public final class ChangesModel {
             let summary = snapshot.summary
             guard summary.counts[resource] != nil else { return .notRead(summary.errors[resource]) }
             return summary.errors[resource].map(Read.partial) ?? .whole
+        }
+        func partialWords(_ before: Read, _ after: Read) -> String {
+            func side(_ name: String, _ read: Read) -> String? {
+                guard case .partial(let code) = read else { return nil }
+                return "the \(name) snapshot" + (code.map { " (\($0))" } ?? "")
+            }
+            return [side("older", before), side("newer", after)].compactMap { $0 }.joined(separator: " and ")
         }
         var names = Set<String>()
         for snapshot in [older, newer] {
@@ -442,6 +490,7 @@ public final class ChangesModel {
             if !(added.isEmpty && removed.isEmpty && delta.changed.isEmpty) { deltas.append(shown) }
             changes.append(ResourceChange(
                 resource: resource, title: Self.title(of: resource), partial: partial,
+                partialWhy: partial ? partialWords(before, after) : nil,
                 added: added.map { Entry(id: $0.id, label: Self.label($0.attributes, $0.id)) },
                 removed: removed.map { Entry(id: $0.id, label: Self.label($0.attributes, $0.id)) },
                 changed: delta.changed.map { change in
@@ -518,8 +567,13 @@ public final class ChangesModel {
     public func csv() -> String {
         guard let comparison else { return "" }
         var skipped = comparison.skipped.map { ExportHistory.NotCompared(resource: $0.resource, why: $0.why) }
-        for change in comparison.changes { for words in change.withheld { skipped.append(ExportHistory.NotCompared(resource: change.resource, why: words)) } }
-        return ExportHistory.snapshotDiff(older: comparison.older.takenAt, newer: comparison.newer.takenAt, deltas: comparison.deltas, notCompared: skipped)
+        var partial: [ExportHistory.NotCompared] = []
+        for change in comparison.changes {
+            if let why = change.partialWhy { partial.append(ExportHistory.NotCompared(resource: change.resource, why: "read in part in \(why): what is listed is only what both could vouch for")) }
+            for words in change.withheld { skipped.append(ExportHistory.NotCompared(resource: change.resource, why: words)) }
+        }
+        return ExportHistory.snapshotDiff(older: comparison.older.takenAt, newer: comparison.newer.takenAt, deltas: comparison.deltas,
+                                          notCompared: skipped, partial: partial)
     }
 
     /// `2026-11-20T08:00:00Z` as `20261120T080000Z`: a file name holds no colon.

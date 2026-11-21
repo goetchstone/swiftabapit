@@ -34,6 +34,13 @@ struct ExportSnapshotDiffTests {
         #expect(skipped == "id,older,newer,change,resource,label,field,old,new,note\r\n,a,b,not compared,devices,,,,,\"not read in the newer snapshot, so no change is shown.\"\r\n", "\(skipped.debugDescription)")
     }
 
+    /// A resource read in part has a `partial` row, and "no differences" is only for a comparison with nothing at all to say.
+    @Test func aPartReadIsNeverNoDifferences() {
+        let csv = ExportHistory.snapshotDiff(older: "a", newer: "b", deltas: [], notCompared: [],
+                                             partial: [.init(resource: "devices", why: "read in part in the newer snapshot (page cap)")])
+        #expect(csv == "id,older,newer,change,resource,label,field,old,new,note\r\n,a,b,partial,devices,,,,,read in part in the newer snapshot (page cap)\r\n", "\(csv.debugDescription)")
+    }
+
     /// A cell that reads as a formula is guarded as in every export.
     @Test func aFormulaIsGuarded() {
         let old = Self.snapshot(["D1": ["name": .string("a")]])

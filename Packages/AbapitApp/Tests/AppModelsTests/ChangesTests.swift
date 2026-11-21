@@ -503,6 +503,162 @@ struct ChangesTests {
         #expect(ran == 1 && model.rows.count == 3, "the hook runs once")
     }
 
+    // MARK: the review round
+
+    /// A part read is never written over as "no differences": the CSV has a `partial` row for each resource read in part, with
+    /// changes or without.
+    @Test func theCSVSaysPartialWhateverWasWithheld() async throws {
+        let same: [String: [Resource]] = ["devices": [Self.device("D1")]]
+        let (_, none) = try await Self.compared(older: same, newer: same, newerErrors: ["devices": "page cap"])
+        let older = try #require(none.comparison).older.takenAt, newer = try #require(none.comparison).newer.takenAt
+        let lines = none.csv().split(separator: "\r\n").map(String.init)
+        #expect(lines.count == 2 && !none.csv().contains("no differences"), "\(lines)")
+        #expect(lines[1].hasPrefix(",\(older),\(newer),partial,devices,") && lines[1].contains("the newer snapshot (page cap)"), "\(lines)")
+        // With a change in what both read: the change and the partial row.
+        let (_, some) = try await Self.compared(older: ["devices": [Self.device("D1"), Self.device("D2")]],
+                                                newer: ["devices": [Self.device("D1", status: "UNASSIGNED")]], newerErrors: ["devices": "page cap"])
+        let rows = some.csv().split(separator: "\r\n").map(String.init)
+        #expect(rows.contains { $0.contains(",changed,devices,") } && rows.contains { $0.contains(",partial,devices,") }, "\(rows)")
+        // Nothing partial, nothing skipped: "no differences".
+        let (_, whole) = try await Self.compared(older: same, newer: same)
+        #expect(whole.csv().contains("no differences") && !whole.csv().contains("partial"))
+        // A skipped resource is not "no differences" either.
+        let (_, skipped) = try await Self.compared(older: same, newer: same, newerErrors: ["users": "HTTP 403"], world: nil)
+        #expect(!skipped.csv().contains("no differences") && skipped.csv().contains("not compared,users"))
+    }
+
+    /// 105 snapshots: the list shows the newest 100 and says so; exactly 100 says nothing.
+    @Test func moreThanAHundredSnapshotsAreSaid() async throws {
+        let world = try await World.make()
+        for index in 0..<105 { try await Self.record(world, days: Double(index), ["devices": [Self.device("D\(index)")]]) }
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.rows.count == 100 && model.listNote == "Showing the newest 100 snapshots; older ones aren't listed.")
+        #expect(model.rows.first?.devices == 1 && model.rows.first?.takenAt == model.comparison?.newer.takenAt)
+        let exact = try await World.make()
+        for index in 0..<100 { try await Self.record(exact, days: Double(index), ["devices": [Self.device("D\(index)")]]) }
+        await exact.screens.changes.load()
+        #expect(exact.screens.changes.rows.count == 100 && exact.screens.changes.listNote == nil)
+    }
+
+    /// No Apple MDM count is no data: no estimate for the details, and the line and basis say the count is unknown.
+    @Test func noManagedDeviceCountMakesNoDetailsEstimate() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1"), Self.device("D2")]])
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.estimates[.mdmDetails] == nil && model.estimates[.appleCare] != nil)
+        #expect(model.estimateLine(.mdmDetails) == "Apple MDM details: the time can't be estimated: the newest snapshot didn't read Apple MDM's device list, so the number of managed devices is unknown.")
+        #expect(model.estimateBasis == "Counted from the newest snapshot: 2 devices, the number managed by Apple MDM unknown.")
+    }
+
+    /// Snapshots exist but the newest didn't read devices: the words say that, not "the first snapshot".
+    @Test func aNewestSnapshotWithoutDevicesIsSaidSeparately() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")]])
+        try await Self.record(world, days: 1, ["users": [Self.person("U1")]], errors: ["devices": "HTTP 403"])
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.estimates.isEmpty && model.estimateBasis == nil)
+        #expect(model.estimateLine(.appleCare) == "AppleCare coverage: the time can't be estimated: the newest snapshot didn't read the device list, so there is no device count. A snapshot that reads it gives one.")
+    }
+
+    /// A page-capped device count is not shown as exact.
+    @Test func aPartReadDeviceCountIsSaidToBePartial() async throws {
+        let world = try await World.make()
+        try await Self.record(world, days: 0, ["devices": [Self.device("D1")], "mdm_enrolled": [Resource(type: "mdm_enrolled", id: "M1", attributes: ["serialNumber": .string("D1")])]],
+                              errors: ["devices": "page cap", "mdm_enrolled": "page cap"])
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.estimateBasis == "Counted from the newest snapshot: 1 device (read in part), 1 managed by Apple MDM (read in part).", "\(String(describing: model.estimateBasis))")
+    }
+
+    /// An unchosen pair moves to the newest two when a snapshot is taken; a chosen pair survives a reload (and is dropped by a new snapshot).
+    @Test func theDefaultPairFollowsTheNewestAndAChosenPairStays() async throws {
+        let world = try await CollectorTests.world()
+        let first = try await Self.record(world, days: 0, ["devices": [Self.device("D1")]])
+        let second = try await Self.record(world, days: 1, ["devices": [Self.device("D1"), Self.device("D2")]])
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.olderID == first && model.newerID == second)
+        let outcome = await model.snapshotNow()
+        guard case .recorded(let third)? = outcome else {
+            Issue.record("\(String(describing: outcome))")
+            return
+        }
+        // The snapshot is taken now (after the fake ones): it is the newest.
+        #expect(model.newerID == third && model.olderID == second, "the default pair moved to the newest two")
+        await model.choose(older: first, newer: second)
+        await model.load()
+        #expect(model.olderID == first && model.newerID == second, "a chosen pair survives a reload")
+        await model.snapshotNow()
+        #expect(model.rows.count == 4 && model.newerID == model.rows[0].id && model.olderID == model.rows[1].id, "a new snapshot resets it")
+    }
+
+    /// Deleting history is refused while a snapshot is being taken or an import runs; removing the org and keeping its history is not.
+    @Test func historyIsNotDeletedWhileSomethingWritesToIt() async throws {
+        let world = try await CollectorTests.world()
+        try await Self.record(world, "b", days: 0, ["devices": [Self.device("B1")]])
+        let gate = world.gates["a"]!
+        gate.hold("users") { $0.path() == "/v1/users" }
+        let running = Task { await world.snapshots.run() }
+        await eventually("the run at the users") { gate.held == 1 }
+        let why = try #require(world.orgs.historyDeletionBlocked)
+        #expect(why.hasPrefix("A snapshot is being taken"))
+        await #expect(throws: OrgsModel.SaveFailure.self) { try await world.orgs.remove("b", deleteSecrets: true, deleteHistory: true) }
+        #expect(world.orgs.store["b"] != nil, "the org stays")
+        let kept = try await world.history!.snapshots(org: world.orgs.store["b"]!).count
+        #expect(kept == 1, "and its history")
+        gate.release("users")
+        _ = await running.value
+        #expect(world.orgs.historyDeletionBlocked == nil)
+
+        // An import running blocks it too.
+        let source = try HistoryTransferTests.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let imp = try await HistoryTransferTests.world()
+        let rows = [HistoryTransferTests.Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: HistoryTransferTests.a, items: [HistoryTransferTests.device("D1")])]
+        let url = URL(filePath: try HistoryTransferTests.abapitFile(rows, in: source))
+        var during: String?
+        imp.screens.historyTransfer.beforeWrite = { during = imp.orgs.historyDeletionBlocked }
+        await imp.screens.historyTransfer.importHistory(from: url)
+        #expect(during?.hasPrefix("A history import or export is running") == true, "\(String(describing: during))")
+        #expect(imp.orgs.historyDeletionBlocked == nil)
+        // Keeping the history is allowed while a run goes.
+        try await world.orgs.remove("b", deleteSecrets: true, deleteHistory: false)
+        #expect(world.orgs.store["b"] == nil)
+    }
+
+    /// A read that returns after a switch is dropped: each guard (the list, the comparison, the estimates) is held by a hook that
+    /// switches orgs while the read is out, and the screen shows nothing of the old org right after.
+    @Test func aReadThatReturnsAfterASwitchIsDropped() async throws {
+        func seeded() async throws -> (World, ChangesModel) {
+            let world = try await World.make()
+            try await Self.record(world, "a", days: 0, ["devices": [Self.device("A1")]])
+            try await Self.record(world, "a", days: 1, ["devices": [Self.device("A1"), Self.device("A2")]])
+            return (world, world.screens.changes)
+        }
+        // The list.
+        var (world, model) = try await seeded()
+        model.afterRead = { stage in if stage == "load" { world.orgs.select("b") } }
+        await model.load()
+        #expect(model.rows.isEmpty && model.comparison == nil && model.newerID == nil, "the list read for a isn't shown under b")
+        // The comparison.
+        (world, model) = try await seeded()
+        await model.load()
+        #expect(model.comparison != nil)
+        let w = world
+        model.afterRead = { stage in if stage == "compare" { w.orgs.select("b") } }
+        await model.compare()
+        #expect(model.comparison == nil && model.rows.isEmpty, "the comparison of a isn't shown under b")
+        // The estimates.
+        (world, model) = try await seeded()
+        let w2 = world
+        model.afterRead = { stage in if stage == "estimate" { w2.orgs.select("b") } }
+        await model.load()
+        #expect(model.estimates.isEmpty && model.estimateBasis == nil, "a's estimates aren't shown under b")
+    }
+
     // MARK: through the collector: R3 and R6
 
     /// R6: assignments are "not read" when every service's list failed, never counted as none; a screen compares nothing there.

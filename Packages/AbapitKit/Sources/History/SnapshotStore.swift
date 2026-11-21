@@ -332,6 +332,14 @@ public actor SnapshotStore {
         }
     }
 
+    /// How many snapshots `org` has, without reading them (the question Settings asks when an org is removed).
+    public func count(org: OrgProfile) throws(Failure) -> Int {
+        let orgID = try Self.id(of: org)
+        return try Self.guarded {
+            try database.rows("SELECT COUNT(*) FROM snapshots WHERE org_id = ?", [.text(orgID)]) { Int($0.integer(0)) }.first ?? 0
+        }
+    }
+
     /// One of `org`'s snapshots with every item. Another org's snapshot is refused as one that isn't there.
     public func load(_ id: Int64, org: OrgProfile) throws(Failure) -> Snapshot {
         let orgID = try Self.id(of: org)

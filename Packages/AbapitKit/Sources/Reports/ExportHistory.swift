@@ -41,9 +41,10 @@ public enum ExportHistory {
     /// What differs between two snapshots, one row per added or removed item and one per changed field, then a row for each
     /// resource not compared and why. Values go through `masking` (a secret-named key's value withheld at any depth), as
     /// `shownJSON` does. `older` and `newer` are the snapshots' times, written on every row. A comparison with nothing to say
-    /// is one row, `no differences`, never a bare header. `deltas` are what the comparison shows: a removal a part read couldn't
+    /// is one row, `no differences`, never a bare header, and only when every resource was read in full on both sides and none was
+    /// left out: a `partial` row is written for every resource read in part (`partial`), and a `not compared` row for each left out. `deltas` are what the comparison shows: a removal a part read couldn't
     /// vouch for is never in them (the caller withholds it), and says so in `notCompared`.
-    public static func snapshotDiff(older: String, newer: String, deltas: [SnapshotDiff.Delta], notCompared: [NotCompared]) -> String {
+    public static func snapshotDiff(older: String, newer: String, deltas: [SnapshotDiff.Delta], notCompared: [NotCompared], partial: [NotCompared] = []) -> String {
         func row(_ id: String, _ change: String, _ resource: String, label: String = "", field: String = "", old: JSONValue = .null,
                  new: JSONValue = .null, note: String = "") -> CSV.Item {
             CSV.Item(id: id, attributes: ["older": .string(older), "newer": .string(newer), "change": .string(change), "resource": .string(resource),
@@ -63,6 +64,8 @@ public enum ExportHistory {
                 }
             }
         }
+        // A resource read in part says so, whatever else it shows: "no differences" is never written over a part read.
+        for part in partial { rows.append(row("", "partial", part.resource, note: part.why)) }
         for skipped in notCompared { rows.append(row("", "not compared", skipped.resource, note: skipped.why)) }
         if rows.isEmpty { rows = [row("", "no differences", "")] }
         return CSV.text(rows, columns: ExportPolicy.snapshotDiff)

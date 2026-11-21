@@ -122,8 +122,8 @@ struct CollectorLowsTests {
     /// The question's words say what is deleted and that it can't be undone, and how many snapshots.
     @Test func theRemovalQuestionSaysWhatIsDeleted() {
         #expect(OrgsModel.removalHistoryNote(snapshots: 3)
-                == "Its 3 snapshots in this Mac's history stay unless you delete them too. Deleting them can't be undone: no copy is kept.")
-        #expect(OrgsModel.removalHistoryNote(snapshots: 1).hasPrefix("Its 1 snapshot in this Mac's history stay"))
+                == "Its 3 snapshots in this Mac's history stay unless you delete them too, with its Needs-attention findings. Deleting them can't be undone: no copy is kept.")
+        #expect(OrgsModel.removalHistoryNote(snapshots: 1).hasPrefix("Its 1 snapshot in this Mac's history stay unless you delete them too, with its"))
         #expect(OrgsModel.removalHistoryNote(snapshots: 0) == "It has no snapshots in this Mac's history.")
         #expect(OrgsModel.removalHistoryNote(snapshots: nil) == "Its snapshot history couldn't be read, so it is kept.")
     }
@@ -153,6 +153,22 @@ struct CollectorLowsTests {
         #expect(try await again.history!.snapshots(org: a).isEmpty, "deleted on a yes")
         let others = try await again.history!.snapshots(org: b).count, ids = try await again.history!.orgIDs()
         #expect(others == 2 && ids == ["b"], "another org's history stays")
+    }
+
+    /// The history deleted is the removed org's, not the active org's, and the count is a count, not a list.
+    @Test func removingANonActiveOrgDeletesItsHistoryAndNotTheActiveOnes() async throws {
+        let world = try await World.make()
+        #expect(world.orgs.active?.id == "a")
+        try await Self.record(world, "a", 3)
+        try await Self.record(world, "b", 105)
+        let counted = await world.orgs.historySnapshots(of: "b")
+        #expect(counted == 105, "every snapshot is counted, not the first hundred")
+        let a = try #require(world.orgs.store["a"]), b = try #require(world.orgs.store["b"])
+        try await world.orgs.remove("b", deleteSecrets: true, deleteHistory: true)
+        let underA = try await world.history!.snapshots(org: a).count, underB = try await world.history!.snapshots(org: b).count
+        let ids = try await world.history!.orgIDs()
+        #expect(underA == 3 && underB == 0 && ids == ["a"], "a's history stays, b's is gone")
+        #expect(world.orgs.active?.id == "a")
     }
 
     /// A history that can't be deleted refuses the removal and leaves the org, its key and its history as they were.

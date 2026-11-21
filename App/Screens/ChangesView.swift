@@ -48,7 +48,6 @@ struct ActivityScreen: View {
 struct ChangesView: View {
     let model: ChangesModel
     @State private var exporting = false
-    @Environment(\.exportClient) private var exportClient
 
     /// The most items of one kind shown under a resource; the rest are in the CSV, and the screen says so.
     private static let shownLimit = 100
@@ -96,6 +95,7 @@ struct ChangesView: View {
                 }
                 .accessibilityIdentifier("changes.newer")
             }
+            if let note = model.listNote { Label(note, systemImage: "list.number").accessibilityIdentifier("changes.listnote") }
             if model.rows.isEmpty, case .loaded = model.state {
                 Label("No snapshots yet. Snapshot Now below reads this organization and records it; the second snapshot gives something to compare.",
                       systemImage: "tray")
@@ -110,7 +110,10 @@ struct ChangesView: View {
         Section("Changes") {
             Text("From \(Self.when(comparison.older)) to \(Self.when(comparison.newer)).")
                 .accessibilityIdentifier("changes.range")
-            if !comparison.hasChanges && comparison.changes.isEmpty {
+            if comparison.changes.isEmpty && comparison.unchanged.isEmpty {
+                Label("Nothing was read in full in both snapshots, so nothing is compared.", systemImage: "eye.slash")
+                    .accessibilityIdentifier("changes.nothingcompared")
+            } else if comparison.changes.isEmpty {
                 Label("No difference in what both snapshots read in full.", systemImage: "equal.circle")
                     .accessibilityIdentifier("changes.nodiff")
             }
@@ -223,7 +226,7 @@ private struct SnapshotNowSection: View {
                     if model.isRunning {
                         ProgressView().controlSize(.small)
                         Button("Cancel") { model.cancel() }
-                            .help("Stops the run. Nothing is written")
+                            .help("Stops reading. A snapshot not yet written is not saved")
                             .accessibilityIdentifier("changes.cancel")
                     }
                     Spacer()
