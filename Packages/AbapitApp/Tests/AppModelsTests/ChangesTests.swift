@@ -488,6 +488,21 @@ struct ChangesTests {
         for text in model.comparison?.changes.flatMap({ $0.added + $0.removed }).map(\.id) ?? [] { #expect(text.hasPrefix("DEMO")) }
     }
 
+    /// The demo's first read waits for its seeding, once, so the screen never draws half a history.
+    @Test func theFirstLoadWaitsForTheDemoSeedOnce() async throws {
+        let world = try await World.make()
+        let model = world.screens.changes
+        var ran = 0
+        model.beforeFirstLoad = {
+            ran += 1
+            await DemoHistory.seed(world.history!, org: world.orgs.store["a"]!)
+        }
+        await model.load()
+        #expect(ran == 1 && model.rows.count == 3 && model.comparison != nil)
+        await model.load()
+        #expect(ran == 1 && model.rows.count == 3, "the hook runs once")
+    }
+
     // MARK: through the collector: R3 and R6
 
     /// R6: assignments are "not read" when every service's list failed, never counted as none; a screen compares nothing there.

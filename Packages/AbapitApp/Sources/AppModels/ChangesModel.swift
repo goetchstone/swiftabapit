@@ -134,6 +134,9 @@ public final class ChangesModel {
     public private(set) var estimateBasis: String?
     /// How the last Snapshot now ended, in words; cleared by a new run and by a switch.
     public private(set) var result: String?
+    /// Awaited once, before the first load, when set: the demo's seeding of its fake snapshots finishes first, so the screen never
+    /// draws half a history. The app sets it for the demo only.
+    @ObservationIgnored public var beforeFirstLoad: (@MainActor () async -> Void)?
     /// Loads that have returned: what the tests wait on.
     package private(set) var loadsFinished = 0
 
@@ -268,6 +271,10 @@ public final class ChangesModel {
     /// Reads the active org's snapshots from the history, newest first, keeps the pair chosen if both are still there (else the
     /// newest and the one before), and compares them.
     public func load() async {
+        if let first = beforeFirstLoad {
+            beforeFirstLoad = nil
+            await first()
+        }
         loadToken += 1
         let token = loadToken, generation = orgs.generation
         defer { loadsFinished += 1 }

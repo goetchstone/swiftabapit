@@ -58,12 +58,14 @@ struct ChangesView: View {
             StatusBanner(state: model.state) { model.refresh() }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
-            List {
-                SnapshotNowSection(model: model)
+            // The comparison first: it is what the screen is for. A grouped form, as Settings is, so long lines wrap.
+            Form {
                 compareSection
                 if let comparison = model.comparison { comparisonSections(comparison) }
+                SnapshotNowSection(model: model)
                 historySection
             }
+            .formStyle(.grouped)
             .accessibilityIdentifier("changes.list")
         }
         .toolbar {
@@ -95,7 +97,7 @@ struct ChangesView: View {
                 .accessibilityIdentifier("changes.newer")
             }
             if model.rows.isEmpty, case .loaded = model.state {
-                Label("No snapshots yet. Snapshot Now above reads this organization and records it; the second snapshot gives something to compare.",
+                Label("No snapshots yet. Snapshot Now below reads this organization and records it; the second snapshot gives something to compare.",
                       systemImage: "tray")
                     .accessibilityIdentifier("changes.empty")
             } else if let why = model.comparisonProblem, model.comparison == nil, !model.rows.isEmpty {

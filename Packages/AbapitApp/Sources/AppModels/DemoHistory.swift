@@ -29,6 +29,12 @@ public enum DemoHistory {
                                                             "lastConnectedDateTime": .string(connected)])
     }
 
+    static func managed(_ index: Int) -> Resource {
+        let serial = String(format: "DEMOCHG%04d", index)
+        return Resource(type: "mdm_enrolled", id: "DEMOMDM\(index)", attributes: ["serialNumber": .string(serial), "deviceName": .string("Demo Mac \(index)"),
+                                                                                 "productFamily": .string("Mac")])
+    }
+
     static func person(_ index: Int) -> Resource {
         Resource(type: "users", id: "DEMOUSER\(index)", attributes: ["managedAppleAccount": .string("demo.user\(index)@example.com"), "status": .string("ACTIVE"),
                                                                        "isExternalUser": .bool(false)])
@@ -41,17 +47,20 @@ public enum DemoHistory {
                 "devices": (1...5).map { device($0) },
                 "mdm_servers": [service("DEMOSVC1", name: "Demo MDM", connected: "2026-10-15T08:00:00Z")],
                 "users": [person(1), person(2)],
+                "mdm_enrolled": [managed(1), managed(4)],
             ])
             try await store.record(org: org, takenAt: second, resources: [
                 // One added (6), one removed (4), one changed (2 became unassigned).
                 "devices": [device(1), device(2, status: "UNASSIGNED"), device(3), device(5), device(6)],
                 "mdm_servers": [service("DEMOSVC1", name: "Demo MDM", connected: "2026-10-29T08:00:00Z")],
                 "users": [person(1), person(2), person(3)],
+                "mdm_enrolled": [managed(1), managed(4)],
             ])
             try await store.record(org: org, takenAt: third, resources: [
                 // The device list stopped at the page limit: three of five read, so devices 5 and 6 are not read, never removed.
                 "devices": [device(1), device(2), device(3)],
                 "mdm_servers": [service("DEMOSVC1", name: "Demo MDM", connected: "2026-11-12T08:00:00Z")],
+                "mdm_enrolled": [managed(1), managed(4)],
                 "applecare": [Resource(type: "applecare", id: "DEMOCARE1", attributes: ["serialNumber": .string("DEMOCHG0001"),
                                                                                          "description": .string("AppleCare+"), "status": .string("ACTIVE")])],
             ], errors: ["devices": "page cap", "users": "HTTP 403 FORBIDDEN_ERROR"],
