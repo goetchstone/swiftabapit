@@ -545,6 +545,8 @@ struct ImportedRecordTests {
         let other = Scratch.path(folder) + "/other"
         let store = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
             if case .copied(let path) = step {
+                // Our file keeps one name (a hard link elsewhere), so nlink, mode and size of it still pass: only its inode tells.
+                link(path, path + ".kept")
                 try? Data("someone else's".utf8).write(to: URL(filePath: other))
                 chmod(other, 0o600)
                 rename(other, path)
