@@ -100,6 +100,7 @@ final class AppServices {
         if case .success(let history) = model.history {
             let seeding = Task { await DemoHistory.seed(history, org: profile) }
             services.screens.changes.beforeFirstLoad = { await seeding.value }
+            services.screens.reports.beforeFirstLoad = { await seeding.value }
         }
         return services
     }

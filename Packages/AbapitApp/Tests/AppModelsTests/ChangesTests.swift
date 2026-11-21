@@ -484,7 +484,7 @@ struct ChangesTests {
         let devices = try #require(Self.change(model, "devices"))
         #expect(devices.partial && devices.removed.isEmpty && devices.changed.map(\.id) == ["DEMOCHG0002"] && devices.withheld.count == 1)
         #expect(Self.change(model, "mdm_servers")?.changed.map(\.id) == ["DEMOSVC1"])
-        #expect(model.comparison?.skipped.map(\.resource).sorted() == ["applecare", "users"])
+        #expect(model.comparison?.skipped.map(\.resource).sorted() == ["activation_lock", "applecare", "users"])
         #expect(model.rows[0].marks == ["partial: Devices (page cap)", "not read: People (HTTP 403 FORBIDDEN_ERROR)"], "\(model.rows[0].marks)")
         for text in model.comparison?.changes.flatMap({ $0.added + $0.removed }).map(\.id) ?? [] { #expect(text.hasPrefix("DEMO")) }
     }

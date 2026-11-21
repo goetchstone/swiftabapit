@@ -9,7 +9,8 @@ import Orgs
 /// The demo org's snapshot history (plan §6.5: the Changes screen's screenshot draws a real-looking diff): three snapshots,
 /// two weeks apart, of obviously fake devices (`DEMOCHG…`), services and people. Between the last two: one device changed, two
 /// not read because the device list was cut at the page limit (partial), People refused (not read), a service changed, and
-/// AppleCare read only in the newest. No tenant data: every serial, name and address is invented.
+/// AppleCare and Activation Lock read only in the newest (so the Reports screen draws them from it, with its part-read device
+/// list). No tenant data: every serial, name and address is invented.
 public enum DemoHistory {
     public static let first = Date(timeIntervalSince1970: 1_792_152_000)       // 2026-10-16T12:00:00Z
     public static let second = Date(timeIntervalSince1970: 1_793_361_600)      // +14 days
@@ -21,6 +22,8 @@ public enum DemoHistory {
         return Resource(type: "devices", id: serial, attributes: [
             "serialNumber": .string(serial), "deviceModel": .string(models[(index - 1) % models.count]), "productFamily": .string(index % 3 == 0 ? "iPad" : "Mac"),
             "status": .string(status), "addedToOrgDateTime": .string("2026-01-0\(index)T09:00:00Z"),
+            // Ordered years back, so Out of warranty has an estimate to label and Fleet age has candidates.
+            "orderDateTime": .string("202\(index % 3 + 2)-0\(index)-15T09:00:00Z"),
         ])
     }
 
@@ -40,8 +43,25 @@ public enum DemoHistory {
                                                                        "isExternalUser": .bool(false)])
     }
 
+    static func iso(_ date: Date) -> String { date.formatted(Date.ISO8601FormatStyle(timeZone: TimeZone(secondsFromGMT: 0)!)) }
+
+    /// An AppleCare record of a fake device; `ends` is relative to `now`, so the demo's expiring coverage is always in its window.
+    static func care(_ serial: String, _ id: String, status: String, ends: Date) -> Resource {
+        Resource(type: "applecare", id: id, attributes: ["serialNumber": .string(serial), "description": .string("AppleCare+ (demo)"), "status": .string(status),
+                                                         "paymentType": .string("PAID_UP_FRONT"), "isRenewable": .bool(true), "endDateTime": .string(iso(ends))])
+    }
+
+    static func lock(_ index: Int, locked: Bool, type: String?) -> Resource {
+        let serial = String(format: "DEMOCHG%04d", index)
+        var attributes: JSONObject = ["isLocked": .bool(locked)]
+        if let type { attributes["lockType"] = .string(type) }
+        return Resource(type: "activation_lock", id: serial, attributes: attributes)
+    }
+
     /// Records the three snapshots for `org` into `store`. A store that refuses (a newer file) leaves the demo without history.
-    public static func seed(_ store: SnapshotStore, org: OrgProfile) async {
+    /// `now` places the AppleCare records' end dates (twelve and two hundred days on, and one that has ended).
+    public static func seed(_ store: SnapshotStore, org: OrgProfile, now: Date = Date()) async {
+        let day = 86_400.0
         do {
             try await store.record(org: org, takenAt: first, resources: [
                 "devices": (1...5).map { device($0) },
@@ -61,8 +81,10 @@ public enum DemoHistory {
                 "devices": [device(1), device(2), device(3)],
                 "mdm_servers": [service("DEMOSVC1", name: "Demo MDM", connected: "2026-11-12T08:00:00Z")],
                 "mdm_enrolled": [managed(1), managed(4)],
-                "applecare": [Resource(type: "applecare", id: "DEMOCARE1", attributes: ["serialNumber": .string("DEMOCHG0001"),
-                                                                                         "description": .string("AppleCare+"), "status": .string("ACTIVE")])],
+                "applecare": [care("DEMOCHG0001", "DEMOCARE1", status: "ACTIVE", ends: now + 12 * day),
+                              care("DEMOCHG0002", "DEMOCARE2", status: "ACTIVE", ends: now + 200 * day),
+                              care("DEMOCHG0003", "DEMOCARE3", status: "INACTIVE", ends: now - 40 * day)],
+                "activation_lock": [lock(1, locked: true, type: "USER"), lock(2, locked: false, type: nil), lock(3, locked: true, type: "MDM")],
             ], errors: ["devices": "page cap", "users": "HTTP 403 FORBIDDEN_ERROR"],
             notes: ["devices": "stopped at the page limit: 3 of 5 read, more not read"])
         } catch {

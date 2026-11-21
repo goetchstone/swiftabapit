@@ -50,6 +50,8 @@ struct NavigationTests {
             .overview: [.devices, .mdmServers, .auditEvents], .devices: [.devices], .services: [.mdmServers],
             .appleMDM: [.mdmEnrolled], .people: [.users, .userGroups, .orgUnits],
             // Activity lists none: its Changes are local history, so it shows in a School org and isn't locked by a refused audit log.
+            // Reports lists none either: four of its six reports read snapshots (local history), and the two live ones (migration,
+            // service health) say "your role can't read this" themselves, so a role refused devices keeps the rest.
             .content: [.apps, .packages, .blueprints, .configurations], .activity: [], .mosyle: [], .reconciliation: [],
             .reports: [], .settings: [],
         ])
@@ -180,7 +182,7 @@ struct NavigationTests {
         let names = Set(SidebarItem.allCases.map(\.rawValue))
         for spec in specs { #expect(spec.count >= 2 && names.contains(spec[1]), "\(spec.joined(separator: ":")) names no section") }
         let screens = Set(specs.map { $0[1] })
-        #expect(screens == names.subtracting(["reports"]), "\(screens.sorted())")
+        #expect(screens == names, "every section has a run, Reports too: \(screens.sorted())")
         let inspected = Set(specs.filter { $0.count > 2 && $0[2] == "first" }.map { $0[1] })
         #expect(inspected == ["devices", "people", "content", "apple-mdm", "activity", "mosyle"], "\(inspected.sorted())")
         let narrow = specs.filter { $0[0].hasPrefix("narrow-") }
@@ -189,6 +191,7 @@ struct NavigationTests {
         #expect(narrow.contains { $0[1] == "overview" && $0[2].isEmpty })
         #expect(Set(specs.map { $0[0] }).count == specs.count, "two runs write one picture")
         // A run's pane (its seventh field) is one Activity opens on: Changes, over the demo's fake snapshots.
+        #expect(specs.contains { $0 == ["reports", "reports"] }, "Reports' picture is drawn over the demo's history")
         #expect(specs.filter { $0.count > 6 }.map { "\($0[0]):\($0[1]):\($0[6])" } == ["changes:activity:changes"])
         // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
         // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
