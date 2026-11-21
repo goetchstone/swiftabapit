@@ -1,5 +1,6 @@
 import Foundation
 @testable import HTTPCore
+import Synchronization
 import Testing
 import TestSupport
 import Wire
@@ -69,5 +70,61 @@ struct HTTPCoreTests {
         #expect(abs(await limiter.readsPerMinute - 33) < 0.01)
         for _ in 0..<20 { await limiter.throttled(.read) }
         #expect(await limiter.readsPerMinute == RateLimiter.floor)
+    }
+
+    /// A sweep has several reads in flight (plan §3.6): Apple's `Retry-After` holds the lane, so no token goes to any of
+    /// them before it has passed; then the lane runs at the halved rate, the wait not repeated. Without one, the next
+    /// token comes one token's time later, as before.
+    @Test func aRetryAfterHoldsTheLaneForEveryRead() async throws {
+        let clock = Clock()
+        let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+        let start = clock.now
+        await limiter.throttled(.read, retryAfter: .seconds(30))
+        try await limiter.acquire(.read)
+        #expect(clock.now - start >= .seconds(29.999) && clock.now - start < .seconds(30.001), "\(clock.now - start)")
+        try await limiter.acquire(.read)
+        #expect(clock.now - start < .seconds(30.3), "the next waits a token at 300 a minute, not the Retry-After again")
+        await limiter.throttled(.read)
+        let unsaid = clock.now
+        try await limiter.acquire(.read)
+        #expect(clock.now - unsaid < .seconds(1), "no Retry-After: one token's time")
+        // A Retry-After shorter than a token's time at the new rate waits the token's time.
+        await limiter.throttled(.read, retryAfter: .zero)
+        let short = clock.now
+        try await limiter.acquire(.read)
+        #expect(clock.now - short > .zero)
+    }
+
+    /// The client passes a 429's `Retry-After` to the limiter: here its own wait returns at once, so the limiter's clock
+    /// shows the hold (another read waiting on the lane would wait as long).
+    @Test func the429sRetryAfterReachesTheLimiter() async throws {
+        for (headers, held) in [(["Retry-After": "30"], true), ([:], false)] {
+            let clock = Clock()
+            let limiter = RateLimiter(readsPerMinute: 600, now: { clock.now }, sleep: { clock.advance($0) })
+            let client = HTTPClient(transport: Scripted([(429, headers)]), limiter: limiter, sleep: { _ in })
+            let start = clock.now
+            let response = try await client.read(next: URL(string: "https://api-business.apple.com/v1/orgDevices")!, on: .appleBusiness,
+                                                 template: "/v1/orgDevices", authorizer: NoAuth())
+            #expect(response.status == 200)
+            #expect((clock.now - start >= .seconds(29.999)) == held, "\(headers): \(clock.now - start)")
+        }
+    }
+
+    /// Answers each request with the next scripted status and headers, then 200 `{}`.
+    final class Scripted: Transport, Sendable {
+        private let answers: Mutex<[(Int, [String: String])]>
+        init(_ answers: [(Int, [String: String])]) { self.answers = Mutex(answers) }
+
+        func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+            let (status, headers) = answers.withLock { $0.isEmpty ? (200, [:]) : $0.removeFirst() }
+            return (Data("{}".utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/2", headerFields: headers)!)
+        }
+    }
+
+    /// A clock only the limiter's sleeps move.
+    final class Clock: Sendable {
+        private let instant = Mutex(ContinuousClock.now)
+        var now: ContinuousClock.Instant { instant.withLock { $0 } }
+        func advance(_ by: Duration) { instant.withLock { $0 = $0.advanced(by: by) } }
     }
 }

@@ -106,10 +106,10 @@ public enum SnapshotPolicy {
     /// events and webhooks.
     public static let lists: [Rule] = [devices, services, assignments, users, userGroups, apps, packages, blueprints, configurations, mdmEnrolled]
 
-    // MARK: the sweeps (one read per device; the next PR runs them)
+    // MARK: the sweeps (one read per device; `Sweep` runs them when a run asks)
 
     /// `orgDevices/{serial}/appleCareCoverage`, as abapit's `fetch_applecare_bulk` kept it: every attribute, and the serial
-    /// number it was read for (`applecare_view` reads it).
+    /// number it was read for (`applecare_view` reads it); each record under Apple's id, or `serial:description` without one.
     public static let appleCare = Rule("applecare", kept: [
         "agreementNumber", "contractCancelDateTime", "description", "endDateTime", "isCanceled", "isRenewable", "paymentType",
         "startDateTime", "status", "serialNumber",
@@ -125,8 +125,8 @@ public enum SnapshotPolicy {
         "storageFreeCapacity", "storageTotalCapacity", "deviceLockStatus", "deviceEraseStatus", "lostModeStatus",
     ], known: MDMDeviceDetail.fields, businessOnly: true)
 
-    /// The per-device sweeps (plan §3.6: bounded fan-out at the limiter's rate, cancellable). Their rules are decided here;
-    /// the collector doesn't run them yet, so a snapshot has them in neither `counts` nor `errors`.
+    /// The per-device sweeps (plan §3.6: bounded fan-out at the limiter's rate, cancellable; `Sweep`). A run that doesn't
+    /// ask for one has it in neither `counts` nor `errors`.
     public static let sweeps: [Rule] = [appleCare, activationLock, mdmDetails]
 
     public static let all: [Rule] = lists + sweeps

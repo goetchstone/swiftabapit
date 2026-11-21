@@ -42,7 +42,8 @@ extension HTTPResponse: CustomStringConvertible, CustomDebugStringConvertible, C
 /// `send(_:ticket:)`, which only ChangeCore's executor can call.
 ///
 /// - Reads retry transport failures up to 4 times with backoff; a 429 waits for `Retry-After` (seconds or
-///   an HTTP date, at most 60 s) or backs off exponentially, and halves the limiter's rate; a 401 drops the
+///   an HTTP date, at most 60 s) or backs off exponentially, and halves the limiter's rate; a `Retry-After`
+///   also holds the limiter's read lane that long, for every read waiting on it; a 401 drops the
 ///   token and retries once. Any other status is returned as is.
 /// - A credential exchange is never retried, but on a 429 the limiter learns.
 public actor HTTPClient {
@@ -135,7 +136,8 @@ public actor HTTPClient {
                 continue
             }
             if response.status == 429 {
-                await limiter.throttled(.read)
+                // The server's `Retry-After` holds the lane, so the other reads in flight (a sweep's) wait it out too.
+                await limiter.throttled(.read, retryAfter: Self.retryAfter(response, now: clock()))
                 if attempt < Self.attempts - 1 {
                     attempt += 1
                     try await sleep(Self.wait(after: response, attempt: attempt, now: clock()))
@@ -183,16 +185,20 @@ public actor HTTPClient {
 
     /// `Retry-After` in seconds or as an HTTP date, else 2^attempt seconds; never more than 60 s (plan §3.3).
     static func wait(after response: HTTPResponse, attempt: Int, now: Date) -> Duration {
-        if let value = response.headers["retry-after"]?.trimmingCharacters(in: .whitespaces) {
-            let ceiling = Double(longestWait.components.seconds)
-            // Clamped as a number first: `Duration.seconds` traps past about 1.7e20 (Phase 1a's review).
-            if let seconds = Double(value), seconds.isFinite, seconds >= 0 { return .seconds(min(seconds, ceiling)) }
-            if let date = httpDate(value) {
-                let wait = date.timeIntervalSince(now)
-                return .seconds(wait.isFinite ? min(max(wait, 0), ceiling) : ceiling)
-            }
+        retryAfter(response, now: now) ?? min(.seconds(1 << min(attempt, 6)), longestWait)
+    }
+
+    /// The response's `Retry-After`, in seconds or as an HTTP date, never more than 60 s; nil when it has none this reads.
+    static func retryAfter(_ response: HTTPResponse, now: Date) -> Duration? {
+        guard let value = response.headers["retry-after"]?.trimmingCharacters(in: .whitespaces) else { return nil }
+        let ceiling = Double(longestWait.components.seconds)
+        // Clamped as a number first: `Duration.seconds` traps past about 1.7e20 (Phase 1a's review).
+        if let seconds = Double(value), seconds.isFinite, seconds >= 0 { return .seconds(min(seconds, ceiling)) }
+        if let date = httpDate(value) {
+            let wait = date.timeIntervalSince(now)
+            return .seconds(wait.isFinite ? min(max(wait, 0), ceiling) : ceiling)
         }
-        return min(.seconds(1 << min(attempt, 6)), longestWait)
+        return nil
     }
 
     /// RFC 9110's IMF-fixdate (`Sun, 06 Nov 1994 08:49:37 GMT`).

@@ -60,11 +60,15 @@ public actor RateLimiter {
         }
     }
 
-    /// A 429: the rate halves (not below the floor) and the bucket empties.
-    public func throttled(_ lane: Lane) {
+    /// A 429: the rate halves (not below the floor) and the bucket empties. With `retryAfter` (the server's `Retry-After`), no
+    /// token is given until it has passed, so every request waiting on the lane honours it, not only the one refused: a
+    /// sweep has several reads in flight (plan §3.6).
+    public func throttled(_ lane: Lane, retryAfter: Duration? = nil) {
         refill(lane)
         buckets[lane]!.perSecond = max(buckets[lane]!.perSecond / 2, buckets[lane]!.minimum)
-        buckets[lane]!.tokens = 0
+        // The next token comes after `retryAfter` or one token's time at the new rate, whichever is later.
+        let wait = retryAfter.map(Self.seconds) ?? 0
+        buckets[lane]!.tokens = min(0, 1 - wait * buckets[lane]!.perSecond)
         buckets[lane]!.successes = 0
     }
 
@@ -79,9 +83,12 @@ public actor RateLimiter {
 
     private func refill(_ lane: Lane) {
         let current = now()
-        let elapsed = current - buckets[lane]!.stamp
-        let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+        let seconds = Self.seconds(current - buckets[lane]!.stamp)
         buckets[lane]!.tokens = min(buckets[lane]!.burst, buckets[lane]!.tokens + seconds * buckets[lane]!.perSecond)
         buckets[lane]!.stamp = current
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
     }
 }

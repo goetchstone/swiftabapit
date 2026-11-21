@@ -19,11 +19,17 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   credential storage, TLS ≥ 1.2, bodies capped at 32 MiB while they stream in, redirects followed only to the
   same allowlisted host.
 - `Sources/HTTPCore/HTTPClient.swift` — reads (retry transport failures ×4 with backoff; 429 → `Retry-After`
-  seconds or HTTP date, else 2^n s, capped 60 s, and the limiter halves; 401 → `invalidate()` and one retry;
+  seconds or HTTP date, else 2^n s, capped 60 s, and the limiter halves, a `Retry-After` holding its read lane that long
+  for every read waiting on it; 401 → `invalidate()` and one retry;
   any other status returned as is), credential exchanges (never retried), next-page links (same host, `/v1/`
   only). Logs method, host, path template, status and latency; never a header, body or identifier.
 - `Sources/HTTPCore/RateLimiter.swift` — token buckets per lane: reads 20/min burst 10 to start, floor 2/min,
-  ceiling 600/min; writes 10/hour burst 3. Halves on 429; +10% per 20 successes.
+  ceiling 600/min; writes 10/hour burst 3. Halves on 429; +10% per 20 successes. `throttled(_:retryAfter:)` (Phase 3,
+  the sweeps): with the server's `Retry-After` (Apple's or Mosyle's), the bucket goes negative so that no token is given before it has passed, or
+  before one token's time at the halved rate, whichever is later. A sweep has four reads in flight; without the hold only
+  the refused read waited, and the other three went on at the halved rate inside the server's window
+  (`aRetryAfterHoldsTheLaneForEveryRead`, `the429sRetryAfterReachesTheLimiter`). The refused read's own wait refills
+  the bucket by the same amount, so it doesn't wait twice. A 429 on a credential exchange halves the rate as before.
 
 ## Gotchas
 - **Foundation's `Host` and the ObjC runtime's `Method` shadow plain names**: the types are `APIHost` and
