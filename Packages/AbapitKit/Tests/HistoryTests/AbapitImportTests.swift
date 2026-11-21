@@ -150,18 +150,19 @@ struct AbapitImportTests {
         #expect(throws: Failure.unfinishedWrite(path: path)) { try AbapitHistory(file: URL(filePath: path)) }
     }
 
-    /// Whether the files beside it can be looked at is part of the answer: if they can't, nothing is imported.
+    /// Whether the files beside it can be looked at is part of the answer: if they can't, nothing is imported. A name of 250 bytes
+    /// opens, but `<name>-journal` is too long to look at (`ENAMETOOLONG`), the one way to make the file reachable and its
+    /// sibling not, without the sandbox.
     @Test func aSiblingThatCannotBeLookedAtRefusesTheImport() async throws {
         let folder = try Scratch.folder()
-        defer { chmod(Scratch.path(folder), 0o700); Scratch.remove(folder) }
-        let inner = Scratch.path(folder) + "/inner"
-        mkdir(inner, 0o700)
-        let path = try Self.makeFile(in: URL(filePath: inner, directoryHint: .isDirectory), snapshots: Self.rows.snapshots, items: Self.rows.items)
-        // A folder that can't be searched: the file can't be opened either, so the refusal is the system's; both are refusals.
-        chmod(inner, 0o000)
-        defer { chmod(inner, 0o700) }
-        #expect(throws: Failure.self) { try AbapitHistory(file: URL(filePath: path)) }
+        defer { Scratch.remove(folder) }
+        let name = String(repeating: "h", count: 250)
+        let short = try Self.makeFile(in: folder, snapshots: Self.rows.snapshots, items: Self.rows.items)
+        let path = Scratch.path(folder) + "/" + name
+        try FileManager.default.moveItem(atPath: short, toPath: path)
+        #expect(throws: Failure.unchecked(path: path, errno: ENAMETOOLONG)) { try AbapitHistory(file: URL(filePath: path)) }
         #expect(Failure.unchecked(path: path, errno: EPERM).message.contains("couldn't be checked"))
+        #expect(try Footprint(path).names == [name], "nothing was made beside it")
     }
 
     // MARK: refusing what isn't abapit's
