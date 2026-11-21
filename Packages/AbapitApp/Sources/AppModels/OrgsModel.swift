@@ -1,5 +1,6 @@
 import AppleBusiness
 import Foundation
+import History
 import Mosyle
 import Observation
 import Orgs
@@ -154,6 +155,11 @@ public final class OrgsModel {
     public private(set) var problem: String?
 
     public let vault: Vault
+    /// The snapshot history (plan Phase 3), or why it couldn't be opened. A new org's id avoids every id it holds
+    /// snapshots or findings under (`takenIDs`), and the snapshot collector records into it. One that failed is opened again
+    /// when it is next needed (`openHistory`).
+    public private(set) var history: Result<SnapshotStore, SnapshotStore.Failure>
+    private let opensHistory: @MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>
     private let storage: Storage
     private let makeClient: @MainActor (TokenBroker.Account, Double?) -> AppleClient
     @ObservationIgnored private var cached: (account: TokenBroker.Account, generation: Int, client: AppleClient)?
@@ -168,11 +174,14 @@ public final class OrgsModel {
     @ObservationIgnored private var reservedIDs: [String] = []
     @ObservationIgnored private var reservedClientIDs: [(org: String, client: String)] = []
 
-    public init(storage: Storage, vault: Vault, store: OrgStore? = nil,
+    /// `history` opens the snapshot history: called once now, and again whenever it is needed while the last try failed.
+    public init(storage: Storage, vault: Vault, store: OrgStore? = nil, history: @escaping @MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>,
                 makeClient: @escaping @MainActor (TokenBroker.Account, Double?) -> AppleClient,
                 makeMosyleClient: (@MainActor (String) -> MosyleClient)? = nil) {
         self.storage = storage
         self.vault = vault
+        opensHistory = history
+        self.history = history()
         self.makeClient = makeClient
         self.makeMosyleClient = makeMosyleClient
         if let store {
@@ -415,12 +424,7 @@ public final class OrgsModel {
             guard current.provider == .known(.mosyle) else { throw .refused("\(Self.title(current)) isn't a Mosyle Business organization.") }
             orgID = current.id
         } else {
-            let stored: Set<String>
-            do {
-                stored = Set(try await vault.inventory().keys)
-            } catch {
-                throw .refused(Self.message(error))
-            }
+            let stored = try await takenIDs()
             // No await between choosing the id and reserving it below: two Adds can't both take it.
             orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs))
             let joining = try target(choice, adding: .mdm)
@@ -565,14 +569,7 @@ public final class OrgsModel {
             (orgID, opened) = (id, current)
         } else {
             guard key != nil else { throw .refused("Choose the key file Apple gave you for this API account.") }
-            // Ids an org removed from orgs.json still holds Keychain items under are taken too: a new org never
-            // inherits another's secrets. The inventory is names only: no prompt.
-            let stored: Set<String>
-            do {
-                stored = Set(try await vault.inventory().keys)
-            } catch {
-                throw .refused(Self.message(error))
-            }
+            let stored = try await takenIDs()
             // No await between choosing the id and reserving it below: two Adds can't both take it.
             orgID = store.uniqueID(for: draft.name, avoiding: stored.union(reservedIDs))
             opened = OrgProfile(id: orgID, name: draft.name, provider: .apple)
@@ -636,8 +633,47 @@ public final class OrgsModel {
         return profile
     }
 
+    /// The ids a new org can't take besides the store's own: every id an org removed from orgs.json still holds Keychain
+    /// items under (a new org never inherits another's secrets; the inventory is names only, no prompt), and every id the
+    /// snapshot history holds snapshots or findings under, since ids are slugs of names and come round again: a new org never
+    /// inherits a removed org's history, which could be another customer's (docs/domains/history.md). The history is opened
+    /// again here if it failed before, so a failure at launch doesn't hold for the session; one that still can't be opened
+    /// refuses the Add, saying why and what to do: its ids can't be checked.
+    private func takenIDs() async throws(SaveFailure) -> Set<String> {
+        let stored: Set<String>
+        do {
+            stored = Set(try await vault.inventory().keys)
+        } catch {
+            throw .refused(Self.message(error))
+        }
+        switch openHistory() {
+        case .failure(let failure):
+            throw .refused(Self.historyUnopened(failure))
+        case .success(let snapshots):
+            do {
+                return stored.union(try await snapshots.orgIDs())
+            } catch {
+                throw .refused(error.message)
+            }
+        }
+    }
+
+    /// The snapshot history, opened again if the last try failed (the file moved aside or fixed since).
+    public func openHistory() -> Result<SnapshotStore, SnapshotStore.Failure> {
+        if case .failure = history { history = opensHistory() }
+        return history
+    }
+
+    /// Why an Add was refused when the history can't be opened, with what to do.
+    static func historyUnopened(_ failure: SnapshotStore.Failure) -> String {
+        "A new organization's id can't be checked against the snapshot history, which couldn't be opened: \(failure.message) "
+            + "Fix what that names, or move history.sqlite out of the app's Application Support folder, then add the organization again: "
+            + "the history is opened again at each Add."
+    }
+
     /// Removes the org's profile, and with `deleteSecrets` its Keychain items first (defect 14: abapit left
-    /// them orphaned). A refused Keychain removal keeps the profile, so the secret stays reachable to remove.
+    /// them orphaned). A refused Keychain removal keeps the profile, so the secret stays reachable to remove. Its snapshot
+    /// history stays, and its id with it: no new org takes it (`takenIDs`).
     public func remove(_ id: String, deleteSecrets: Bool) async throws {
         if deleteSecrets { try await vault.remove(org: id) }
         // The Mosyle org the active Apple org is paired with is on screen too: removing it clears what was read from it.
@@ -688,6 +724,7 @@ public final class OrgsModel {
         case let error as MosyleAPIError: error.message
         case let error as VaultError: error.guidance
         case let error as OrgStore.Failure: error.message
+        case let error as SnapshotStore.Failure: error.message
         case let error as SaveFailure: error.message
         default: "\(error.localizedDescription)"
         }

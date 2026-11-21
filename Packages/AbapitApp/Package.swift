@@ -26,17 +26,19 @@ let package = Package(
         .package(path: "../AbapitKit"),
     ],
     targets: [
-        // Never HTTPCore, Wire or ChangeCore: no read is built and no write is reachable from a screen model.
+        // Never HTTPCore, Wire or ChangeCore: no read is built and no write is reachable from a screen model. History: the
+        // snapshot collector records through `SnapshotStore.record`, and a new org's id avoids the ids it holds (Phase 3).
         .target(name: "AppModels", dependencies: [
             .product(name: "AppleBusiness", package: kit), .product(name: "AppleModels", package: kit),
             .product(name: "Orgs", package: kit), .product(name: "Vault", package: kit), .product(name: "Reports", package: kit),
             .product(name: "Mosyle", package: kit), .product(name: "MosyleModels", package: kit), .product(name: "JSONAPI", package: kit),
+            .product(name: "History", package: kit),
         ], swiftSettings: settings),
         .testTarget(name: "AppModelsTests", dependencies: [
             "AppModels",
             .product(name: "AppleBusiness", package: kit), .product(name: "AppleModels", package: kit),
             .product(name: "Orgs", package: kit), .product(name: "Vault", package: kit), .product(name: "Reports", package: kit),
-            .product(name: "Mosyle", package: kit), .product(name: "MosyleModels", package: kit),
+            .product(name: "Mosyle", package: kit), .product(name: "MosyleModels", package: kit), .product(name: "History", package: kit),
             .product(name: "JSONAPI", package: kit), .product(name: "HTTPCore", package: kit), .product(name: "TestSupport", package: kit),
         ], swiftSettings: settings),
     ]
