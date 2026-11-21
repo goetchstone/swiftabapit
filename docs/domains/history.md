@@ -8,12 +8,11 @@
 the Needs-attention store and `settings.json` are built (PR #33; below); the fleet reports (Activation Lock, migration,
 service health, out of warranty, the catalog) are built (PR #29); the parity goldens for the store, diff and coverage are
 merged (PR #28); the diff, coverage and fleet-age ports are built (PR #31), and read devices as the fleet reports do
-(PR #32). The Apple collector is built on branch
-`phase-3-apple-collector` (below, "The Apple collector"), without its per-device sweeps. The abapit import and the export of a
-copy are built (PR #36; "Import and export", below). The sweeps, the Mosyle collector, the Changes screen and scheduled snapshots
-are still to do. The Reports module (CSV, the export policy,
-Find, the dashboard's stats) shipped in phase 1b, and the audit digests and the dashboard's quiet services and recent
-events in phase 2a; their notes are below.
+(PR #32). The Apple collector merged in PR #34 ("The Apple collector", below), without its per-device sweeps; the Needs-attention
+rules merged in PR #35 ("Needs attention rules", below). The per-device sweeps are in PR #37 (open). The abapit import and the export of a
+copy are this PR (#36; "Import and export", below). The Mosyle collector, the Changes screen, the Needs-attention screen and scheduled
+snapshots are still to do. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in phase 1b, and the audit
+digests and the dashboard's quiet services and recent events in phase 2a; their notes are below.
 
 ## Files
 
@@ -264,7 +263,7 @@ events in phase 2a; their notes are below.
   - `dismiss` and `snooze` need a row `seen` made (`.noFinding` otherwise, so no row is invented); the latest choice wins
     (a dismissal clears a snooze and the reverse). A dismissal holds while the finding is there. A snooze hides it until its
     date (`Finding.isHidden(at:)`), then it shows again with its original `first_seen`.
-  - **Forgetting** (the 30 days is a **proposal, for the operator to confirm**): each `seen` deletes **that rule's** rows
+  - **Forgetting** (the 30 days is **the operator's decision, 2026-11-20**: "Yes, forget after 30 days (Recommended)"): each `seen` deletes **that rule's** rows
     of the org not seen for more than 30 days (exactly 30 is kept), a dismissal included. Another rule's rows are never
     aged by the call, so a rule that isn't run keeps its findings and dismissals. This reads "a dismissal holds until the
     finding clears" as "cleared for 30 days", so one failed read doesn't un-dismiss; a finding that returns after that is new,
@@ -272,16 +271,20 @@ events in phase 2a; their notes are below.
   - **The caller's contract**: call `seen` only for a run that judged the rule over a complete read, `[]` included. For a
     rule skipped as not read, or a partial read (cut at a page cap, a resource that failed), don't call it at all, not even
     with `[]`, which would age every finding of the rule. `at` is the current time.
-  - **Identifiers only**: `rule` (up to 64 characters) and `subject` (up to 128) can't be empty or hold whitespace, a control
-    or format character, a quote, a slash or a backslash (`.notAnIdentifier`), so a name with a space ("Jane Example's
-    MacBook Pro") can't be stored. A one-word name would pass: the collectors pass serials and ids, and this is the backstop.
+  - **Identifiers only**: `rule` (up to 64 characters) and `subject` (up to 128), and at most four bytes a character in all
+    (256 and 512 UTF-8 bytes: "e" with 5,000 combining marks is one character and is refused), can't be empty or hold
+    whitespace, a control or format character (U+202E, U+200D and U+200B are refused), a default-ignorable code point
+    (U+034F, U+3164, U+115F, U+FE0F: each shows as nothing), a noncharacter (U+FFFF, U+FDD0), a quote, a slash or a backslash
+    (`.notAnIdentifier`), so a name with a space ("Jane Example's MacBook Pro") can't be stored. The rule is
+    `NeedsAttention.isIdentifier`, which the findings are checked by too. A one-word name would pass: the collectors pass serials and ids, and this is the backstop.
     Subjects are compared by bytes: precomposed and decomposed "e with acute" are two rows.
   - `orgIDs()` lists orgs with snapshots or findings, so an org that has only findings is still a name in use.
   - There is no undo for a dismissal yet; a later screen PR adds it if the operator wants it.
   - Org isolation is the snapshots': every query filters on `org_id`; another org's finding is `.noFinding`.
 - **`settings.json`** (`Orgs/LocalSettings.swift`; the file beside `orgs.json`, in the app's container; never
   `UserDefaults` or `@AppStorage`, which `scripts/check_app.sh` fails). It holds the Needs-attention thresholds, in days:
-  check-in 30, AppleCare expiring 90, migration deadline 14, quiet service 30 (**proposals, for the operator to confirm**).
+  check-in 30, AppleCare expiring 90, migration deadline 14, quiet service 30 (proposed by the coordinating session; **the
+  operator kept them on 2026-11-20**, answering "Keep these defaults (Recommended)").
   `load` reads a value outside 1...3650, or not a whole number, as its default; `save` throws for one (`thresholdOutOfRange`),
   writing nothing. Written atomically (a `0600` temporary file made
   `O_EXCL | O_NOFOLLOW`, synced, renamed), read with `O_NOFOLLOW`; unknown keys, at the top and among the thresholds, are
@@ -412,6 +415,166 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   every import is refused as unchecked** (it says why), since whether abapit left a write unfinished isn't then known. Opening the file
   through `/dev/fd` needs no check: if the system refuses that name, the path is used.
   If the import says an unfinished write was left beside the file, run `sqlite3 <the file> "select 1"` once and import again.
+### Needs attention rules (branch `phase-3-attention-rules`)
+
+- **What it is** (plan §8.0, "Deterministic rules in `Reports`"): `Reports/NeedsAttention.swift`, pure (no store, no UI, no
+  read of its own), held by `ReportsTests/NeedsAttentionTests`. A model never decides what's overdue: a wrong "nothing's
+  overdue" fails silently (invariant 8). No abapit counterpart, so no golden.
+- **Input** (`NeedsAttention.Input`, one client): every list as a `Listed` (its items, its `ListRead`, the attributes its
+  source sent for no item, `notSent`, and `takenAt`, the snapshot's time, nil for a live read); every per-device sweep
+  (AppleCare, Activation Lock, Apple MDM details) as a `Swept` (reads by device id; a device with no entry wasn't reached;
+  `takenAt`); the Mosyle org as `.noMosyleOrg` or its device list; and `mosyleServiceID`, which Apple service is the
+  client's Mosyle org. `Input()` is "nothing read": every rule is skipped and says why, so a list the caller forgets is
+  said, never judged as empty.
+- **Output**: one `RuleResult` per rule, in order, with one of three verdicts. Findings carry the rule id, the subject, a
+  short reason, the oldest `takenAt` among the rule's inputs, and `isPartial`.
+  - `.judged`: over a complete read. **Only this is recorded**: `subjectsToRecord` is every trackable subject, possibly none.
+  - `.partial(why)`: over an input read in part (cut at a page limit, some devices not read), or a "missing from" rule whose
+    searched list holds devices with no serial number (below). What it found is shown, every finding marked partial, the
+    first line says "marked partial" and `why` says on its own line what is uncertain (how much wasn't read, or how many
+    devices couldn't be matched: never "read in part" where all was read); `subjectsToRecord` is nil, so `seen` isn't
+    called and dismissals and "first seen" stay accurate. **The operator's decision (2026-11-20)**, asked "when a list was
+    only partly read (cut at a page limit, or some devices not read), what should a per-device rule do?", answered "Show
+    what it found, marked partial (Recommended)": "Lists the problems it did find, says the list was only partly read, and
+    doesn't record them as findings (so dismissals and 'first seen' stay accurate)."
+  - `.skipped(why)`: nothing could be judged (an input not read at all, a sweep that read no device the rule needs, a
+    client with no Mosyle org, an attribute the source sent for no item that the rule needs). No findings, no count;
+    `subjectsToRecord` nil, not even `[]`.
+- **A comparison is partial only when the list searched for an absence was read whole.** "Missing from Apple MDM" searches
+  Apple MDM's list, "missing from Mosyle" Mosyle's, and the two "not in Apple" rules Apple's device list: when that list was
+  read in part, an absence can't be judged, so the rule is skipped and names the list ("…was read in part (…), so a device
+  can't be called absent from it"). The other side read in part makes it partial.
+- **Read whole, but an item's value is missing** (a Mac with no FileVault value, an Activation Lock Apple sent no readable
+  `isLocked` for): the item isn't a finding and a note counts it. Its earlier finding then isn't seen, so the store forgets
+  it after 30 days unknown: **the operator's decision (2026-11-20)**, "Yes, forget after 30 days (Recommended)".
+- **Nothing judged is never "none found"** (the review of PR #35, item 1, invariant 8): when every item a rule read is
+  unknown (no value, a family this version doesn't know, no serial, Apple's "no details", an unclear lock, an unreadable
+  end or deadline) the rule judged nothing, so it is skipped and says why, never `.judged` with `[]`. And `notSent` is
+  honoured for every attribute a rule needs: Apple MDM's `serialNumber` (both Apple MDM comparisons) and `productFamily`
+  (FileVault, the firewall), Mosyle's `serialNumber` (both Mosyle comparisons), as for `serverType`,
+  `lastConnectedDateTime` and `lastCheckIn`.
+- **One rule, two screens**: each rule is its report's rule, never a second implementation, and its edge is the report's
+  (each held by a test at the edge and one past it):
+  - `missing_from_apple_mdm`: the services (every `serverType` sent), the device list of each `APPLE_MDM` service, and
+    Apple MDM's device list (`mdmDevices`, searched). A serial assigned to an `APPLE_MDM` service that the reconciliation
+    (`Reconciliation`, joining as it joins: stripped, upper-cased) leaves Apple-only. No `APPLE_MDM` service among those
+    read: nothing found. Partial: the services list read in part, a service with no type or a type this version doesn't
+    know (said, with the type as sent: it could be an Apple MDM service, invariant 10), an `APPLE_MDM` service's device list
+    read in part or not read while another's was, and **Apple MDM devices with no serial number** (User Enrollment, which
+    personal devices use, reports none). Such a device could be any assigned one, so the assigned serials no device with a
+    serial matches are shown, marked partial, never recorded, with "K of Apple MDM's devices came with no serial number, so
+    each device found here could be one of them", and, when more are found than K, "at least (found minus K) of the found are
+    really missing" (the coordinating session's decision, 2026-11-21: partial, not skipped, so one personal device never
+    switches the rule off). The same when no Apple MDM device has a serial (an org of personal devices): every assigned
+    serial is shown, partial, never recorded, so a column Apple didn't fill can't flood the store (the coordinating
+    session's decision from the round-3 review, 2026-11-21). "is" or "are" agrees with the number surely missing. Nothing
+    found is judged: every assigned serial is matched. Skipped: services read without `serverType`; every service read with
+    no type or one this version doesn't know; no `APPLE_MDM` service's devices read; Apple MDM's list not whole;
+    `serialNumber` in `notSent`.
+  - `missing_from_mosyle`: the same over the client's Mosyle org: the device list of the service `mosyleServiceID` names,
+    and Mosyle's device list (searched). Partial: the service's list read in part; Mosyle devices with no serial number (the
+    adapter lists such a device by its UDID, or by nothing), treated as on the Apple MDM half: what no serial matches is
+    shown, marked partial, with the same words. Skipped: no Mosyle org; the setting not set ("Which Apple service is your
+    Mosyle org isn't set"); a whole services list without that service; the service's list not read; Mosyle's list not
+    whole; Mosyle's `serialNumber` in `notSent`. No Mosyle device with a serial is partial, as on the Apple MDM half: 5
+    personal phones and 40 devices assigned and never enrolled show the 40, with "at least 35 of the 40 found are really
+    missing".
+  - `apple_mdm_not_in_apple`: Apple MDM's list against Apple's device list (searched): the reconciliation's MDM-only bucket,
+    and **every Apple MDM device with no serial number, flagged** under its Apple MDM id ("Enrolled in Apple MDM with no
+    serial number (listed by its Apple MDM id): can't be matched with Apple's device list."): such a device can't be shown
+    to be Apple's, and the operator's answer is to flag every MDM device Apple doesn't own, personal or not ("Flag them
+    all"). One whose id isn't an identifier can't be a subject and is counted in a note. Partial: Apple MDM's list read in
+    part; **no device with a serial** (an org made entirely of personal devices): every device is shown under its Apple MDM
+    id, marked partial, never recorded, with "if Apple didn't send the serial numbers, these are every device, not only
+    personal ones", so a column Apple didn't fill shows rather than floods the store. Skipped: Apple MDM's list not read,
+    Apple's list not whole, `serialNumber` in `notSent`.
+  - `mosyle_not_in_apple`: the Reconciliation screen's Mosyle-only bucket, serial for serial, over the Mosyle devices listed
+    by a serial, and **every Mosyle device with no serial number, flagged** under its UDID ("In Mosyle with no serial number
+    (listed by its UDID): can't be matched with Apple's device list."), by the same answer ("Flag them all": personal
+    devices, serial-less ones included). One with an empty id (`MosyleAdapter.device` falls back to the UDID, then to
+    nothing) or a UDID that isn't an identifier can't be a subject and is counted in a note, never dropped silently.
+    Partial: Mosyle's list read in part; no device with a serial, as on the Apple MDM half (every device under its UDID,
+    "if Mosyle's serial column wasn't read, these are every device, not only personal ones"). Skipped: Mosyle's list not
+    read, Apple's list not whole, Mosyle's `serialNumber` in `notSent`.
+  - **The Mosyle collector** (a later PR) must keep `serialNumber` in its allowlist: without it every Mosyle device is
+    serial-less to these rules, so both Mosyle comparisons are only ever partial (every device shown, nothing recorded), or
+    skipped where the collector says `serialNumber` wasn't sent.
+  - `applecare_expiring`: Apple's device list and the AppleCare sweep: `CoverageReport`'s `expiring` with `days` the
+    threshold (now to now + days, both ends included, to the microsecond; an ended coverage isn't expiring; "no record" is
+    never a finding). A finding is the device id the record sat under: `CoverageReport.Expiring.device`, added here (the
+    golden compares attributes only). Partial: the list read in part, some devices' coverage not read (how many, and why).
+    Skipped: the list not read, no device's coverage read, every listed device read with an ACTIVE coverage whose end can't
+    be read and nothing expiring (`CoverageReport.unreadableEndDevices`, added here). A record under a key no listed device
+    has (a device gone from the list) is beside the fleet: over a list read whole it has left the org, so an expiring
+    coverage is noted ("for a device no longer in Apple's device list: not counted"), never found; over a list read in
+    part it may be in the part not read, so it is found, marked partial. An unreadable end is noted either way, never
+    counted toward "every device". Notes: an ACTIVE coverage whose end can't be
+    read; a threshold past `CoverageReport.maximumDays` (1825), which is used instead and said (1825 itself says nothing).
+  - `mosyle_check_in`: `StaleDevices` over Mosyle's list, `days` the threshold: whole days, floored, the threshold itself
+    stale; never checked in (no stamp) and a stamp that isn't a date are found, as that report says. Partial: the list read
+    in part. Skipped: the list not read; `lastCheckIn` in `notSent` (the `date_last_beat` column wasn't read).
+  - `apple_mdm_check_in`: the same `StaleDevices` rule over each Apple MDM device's `lastCheckInDateTime` (`.read(nil)` is
+    Apple's answer that there are no details, a 404). A stamp Apple didn't send is unknown and noted, never "never": Apple
+    doesn't say it means that. Partial: the list read in part, some devices' details not read. Skipped: the list not read,
+    no device's details read, no device read with a stamp (every one "no details" or none sent).
+  - `filevault_off`, `firewall_off`: Macs (`productFamily` `Mac`) in Apple MDM's list, from their details: `false` is off;
+    missing, null or not a boolean is unknown, noted, never off. An iPhone, iPad or other family is never flagged; a device
+    with no family this version knows is noted. Partial: the list read in part, some Macs' details not read (an iPhone's
+    unread details change nothing). Skipped: the list not read, no Mac's details read, `productFamily` not sent, no Mac
+    judged (every Mac read had no value, or no device has a family this version knows: "MAC", "macOS"). With a Mosyle org a
+    note says this app reads no such value from Mosyle.
+  - `activation_lock_user`: Apple's device list and the Activation Lock sweep: `ActivationLockReport`'s `blocksRelease`.
+    Partial: the list read in part, some devices' status not read. Skipped: the list not read, no device's status read,
+    every status read unclear or a lock type this version can't place. Notes: an unclear status or such a lock type.
+  - `quiet_service`: the services: `ServiceHealth`'s `quiet` group, which is `QuietServices` with `days` the threshold (more
+    than the threshold by the instant; never connected; a stamp that can't be read; `DELETED` never). Partial: the list
+    read in part. Skipped: the list not read; `lastConnectedDateTime` not sent (a default-fields read). Note: `status` not sent.
+  - `migration_deadline`: Apple's device list: `MigrationReport`'s rows with a known status other than `SUCCESS` whose days
+    left, as the report counts them (rounded down), are at most the threshold, or that are past the deadline (its
+    `pastDue`). A deadline that reads 14 days left is near at 14. Partial: the list read in part. Skipped: the list not
+    read; every device unknown (a status near or past this version doesn't know, or a deadline that can't be read).
+    Unknown or missing status near or past, and a deadline that can't be read: noted, not judged.
+- **Subjects** are a serial or an id, never a name: an Apple device's id (Apple sets it to the serial), the serial Apple MDM
+  or Mosyle lists, a service's id. **A device with no serial is keyed by the id its MDM lists it by**: a Mosyle device by its
+  UDID (the adapter's id: the same whether `serial_number` is "", null or missing, so the key holds; it changes once if
+  Mosyle later learns the serial, and the old finding then ages out after 30 days unseen), an Apple MDM device by its
+  `mdmDevices` id. Whether that id is stable between reads is not known (apple-reads, "Assumed, check live"): if it changes,
+  findings churn and dismissals never stick. `NeedsAttention.isIdentifier` is the store's
+  rule, moved here so both check by one: a finding whose subject fails it (a Mosyle serial with a space) is shown, left out of
+  `subjectsToRecord`, and said ("can't be kept for later").
+- **Thresholds**: `NeedsAttention.Thresholds` has no defaults: `LocalSettings.Thresholds` holds them (Reports doesn't import
+  Orgs) and AppModels passes them. Each is measured from `now`; a finding from a snapshot carries the snapshot's time.
+- **Words**: counts agree with their nouns ("1 device has", "1 ACTIVE coverage has", "1 Mac has"), and FileVault and the
+  firewall are named as nouns ("no firewall value"), each held by a test.
+- **Not read yet** (what the rules wait for): the AppleCare and Activation Lock sweeps, and every Apple MDM device's
+  details (the Apple MDM screen reads 50 per load, `detailLimit`), come with the collectors; until then those rules are
+  skipped (nothing read) or partial (some read) and say how many devices weren't read. The Mosyle-service setting is an
+  input only: nothing stores it yet. Mosyle reads no FileVault or firewall value.
+- **Decisions, and who made them.**
+  - The operator's build order (2026-11-07, plan §8.0): deterministic rules in Reports, a model never deciding what's
+    overdue, the eight rules, and a rule needing Mosyle skipped and said for a client without it.
+  - The operator, 2026-11-20: a per-device rule over a partly read list shows what it found, marked partial, and doesn't
+    record it ("Show what it found, marked partial (Recommended)"); every device in Apple MDM or Mosyle that Apple doesn't
+    own is flagged by the "not in Apple" rules, personal (BYOD) or not ("Flag them all"); a finding whose value went unknown
+    is forgotten after 30 days ("Yes, forget after 30 days (Recommended)"); the thresholds keep their defaults, check-in 30,
+    AppleCare 90, migration 14, quiet service 30 days ("Keep these defaults (Recommended)").
+  - The coordinating session's proposal, for the operator to confirm: the per-client setting naming which Apple service is
+    the Mosyle org (none by default, so `missing_from_mosyle` is skipped until it is set). The coordinating session's design
+    of the partial verdict (a comparison is partial only when its searched side was read whole, else skipped, naming that
+    list), its review findings of PR #35 (nothing judged is skipped; `notSent` honoured; a Mosyle device with no serial
+    treated as Apple MDM's is; default-ignorables and noncharacters refused), and its decision of 2026-11-21 from the
+    delta review: a "missing from" rule whose searched list holds devices with no serial is partial, not skipped, and the
+    "not in Apple" rules flag serial-less devices (the operator's "Flag them all").
+  - The executor's, for review: a rule per provider half (and FileVault apart from the firewall), so a skipped half or a
+    dismissal never stands for the other; an item read whole with its value missing noted while the rule is judged; the
+    migration rule's edge on the report's days; Apple MDM's missing check-in as unknown where Mosyle's reads as never;
+    `.read(nil)` for Apple's "no details"; `Expiring.device` and `unreadableEndDevices`; the identifier rule moved to
+    Reports; a sweep that read none of the devices a rule needs counts as not read (skipped), one that read some as
+    partial; a service of a type this version doesn't know treated as one with no type; the partial line worded for its
+    cause; "not in Apple" still skipped when no device has a serial; a gone device's coverage beside the fleet.
+- **Open, for the screen PR**: which org a client-level rule's findings are recorded under in `seen(org:)`. The rules
+  that compare Apple with Mosyle (`missing_from_mosyle`, `mosyle_not_in_apple`) belong to a client, not to one org, and
+  the store keys every finding by an org's id; whether they go under the Apple org, the Mosyle org or both is not decided.
 
 ### Reports
 

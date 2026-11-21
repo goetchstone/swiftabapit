@@ -621,6 +621,17 @@ struct ImportedRecordTests {
         for path in notMine { #expect(Scratch.exists(path), "\(path) isn't an export's working file") }
     }
 
+    /// The export narrows `snapshots` (its items go by the foreign key) and `attention`, and each of those tables has an `org_id`. A
+    /// table added later (another PR's) would be copied whole into a client's export: this fails until the narrowing covers it.
+    @Test func everyTableTheStoreHasIsCoveredByTheExportsNarrowing() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        _ = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        let database = try Scratch.open(Scratch.path(folder) + "/history.sqlite")
+        let tables = try database.rows("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name") { try $0.text(0) ?? "" }
+        #expect(tables == ["attention", "items", "snapshots", "sqlite_sequence"], "a new table needs the export's narrowing: \(tables)")
+    }
+
     /// The copy's AUTOINCREMENT counter doesn't say how many snapshots the other orgs had. (The remaining ids keep their numbers,
     /// so gaps show: a known limit, in history.md.)
     @Test func aCopyForSomeOrgsDoesNotCarryTheOthersSnapshotCount() async throws {

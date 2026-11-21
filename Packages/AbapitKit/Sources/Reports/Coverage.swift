@@ -45,6 +45,9 @@ public struct CoverageReport: Sendable {
         /// The record's attributes with `days_left` set over them, abapit's `{**attrs, "days_left": n}`.
         public let attributes: JSONObject
         public let daysLeft: Int
+        /// The device id the record sat under in `coverage` (a record is its device's by that key, whatever its own
+        /// `serialNumber` says): what "Needs attention" names the finding by.
+        public let device: String
     }
 
     /// How much of the device list this was given. A list that wasn't read judges nothing.
@@ -58,6 +61,8 @@ public struct CoverageReport: Sendable {
     /// Active records with an `endDateTime` that isn't a date (not a string, an empty one, or one that doesn't read):
     /// covered, but when they end is not known.
     public let unreadableEnd: [Resource]
+    /// The device id each of `unreadableEnd`'s records sat under, in the same order (as `Expiring.device`).
+    public let unreadableEndDevices: [String]
     public let days: Int
 
     /// The most days a window looks ahead (abapit's route: `min(days, 1825)`).
@@ -67,7 +72,7 @@ public struct CoverageReport: Sendable {
         self.list = list
         let devices = list.isNotRead ? [] : listed
         let days = min(max(requested, 0), Self.maximumDays)
-        var unreadable: [Resource] = []
+        var unreadable: [Resource] = [], unreadableDevices: [String] = []
         let start = Instant.micros(now)
         let cutoff = start + days * Instant.day
         var rows: [(offset: Int, row: Expiring)] = []
@@ -84,12 +89,16 @@ public struct CoverageReport: Sendable {
             for item in records where item.attributes["status"]?.string.map(Instant.bytes) == Instant.bytes("ACTIVE") {
                 covered.insert(key)
                 guard let end = ISODate.parse(item.attributes["endDateTime"]?.string).map(Instant.micros) else {
-                    if let value = item.attributes["endDateTime"], value != .null { unreadable.append(item) }
+                    if let value = item.attributes["endDateTime"], value != .null {
+                        unreadable.append(item)
+                        unreadableDevices.append(String(decoding: key, as: UTF8.self))
+                    }
                     continue
                 }
                 guard start <= end, end <= cutoff else { continue }
                 let left = Instant.days(end - start)
-                rows.append((rows.count, Expiring(attributes: item.attributes.merging(["days_left": .number(String(left))]), daysLeft: left)))
+                rows.append((rows.count, Expiring(attributes: item.attributes.merging(["days_left": .number(String(left))]), daysLeft: left,
+                                                  device: String(decoding: key, as: UTF8.self))))
             }
         }
         // Python's sort is stable: equal days_left keep the input order.
@@ -100,6 +109,7 @@ public struct CoverageReport: Sendable {
         notRead = missing.filter { unreadBytes.contains(Instant.bytes($0.id)) }
         coveredCount = Set(devices.map { Instant.bytes($0.id) }).intersection(covered).count
         unreadableEnd = unreadable
+        unreadableEndDevices = unreadableDevices
         self.days = days
     }
 
