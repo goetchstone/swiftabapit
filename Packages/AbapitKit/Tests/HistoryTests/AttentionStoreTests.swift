@@ -178,7 +178,9 @@ struct AttentionStoreTests {
     /// character), so one character carrying thousands of combining marks is refused.
     @Test func identifiersRefuseFormatCharactersAndAreBoundedInBytes() async throws {
         let store = try Self.store()
-        for name in ["a\u{202E}b", "a\u{200D}b", "a\u{200B}b"] {
+        // U+0600 (a Prepend mark) and U+FFF9 (an annotation anchor) are format characters that aren't default-ignorable, so
+        // the format check holds them, not the default-ignorable one.
+        for name in ["a\u{202E}b", "a\u{200D}b", "a\u{200B}b", "a\u{600}b", "a\u{FFF9}b"] {
             #expect(!SnapshotStore.isIdentifier(name, limit: 128), "\(Array(name.unicodeScalars))")
             await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [name], at: Scratch.noon) }
             await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: name, subjects: [], at: Scratch.noon) }
@@ -217,6 +219,9 @@ struct AttentionStoreTests {
             await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: name, subjects: [], at: Scratch.noon) }
         }
         #expect(SnapshotStore.isIdentifier("C02\u{C5}X0001", limit: 128) && SnapshotStore.isIdentifier("\u{3131}", limit: 128))
+        // The two checks are apart: each of these is one and not the other.
+        #expect(Unicode.Scalar(0x600)!.properties.generalCategory == .format && !Unicode.Scalar(0x600)!.properties.isDefaultIgnorableCodePoint)
+        #expect(Unicode.Scalar(0x115F)!.properties.generalCategory != .format && Unicode.Scalar(0x115F)!.properties.isDefaultIgnorableCodePoint)
     }
 
     /// Canonically equivalent strings are two rows: the table keys by bytes, and a `Set<String>` would have merged them.
