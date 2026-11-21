@@ -18,9 +18,10 @@ public final class ScreenModels {
     public let mosyle: MosyleModel
     /// Counts `devices` and `mosyle`'s devices.
     public let reconciliation: ReconciliationModel
-    /// Takes the active Apple org's snapshots into `orgs.history`. No screen starts one yet (Phase 3's Changes screen and
-    /// "Snapshot now" come later).
+    /// Takes the active Apple org's snapshots into `orgs.history` (Activity › Changes starts one: "Snapshot now").
     public let snapshots: SnapshotCollector
+    /// Activity › Changes: the active org's snapshots, two compared, and "Snapshot now".
+    public let changes: ChangesModel
     /// Imports abapit's history into the snapshot store and exports a copy of it (Settings, "History").
     public let historyTransfer: HistoryTransfer
 
@@ -38,6 +39,7 @@ public final class ScreenModels {
         dashboard = DashboardModel(orgs: orgs, devices: devices)
         reconciliation = ReconciliationModel(orgs: orgs, devices: devices, mosyle: mosyle)
         snapshots = SnapshotCollector(orgs: orgs)
+        changes = ChangesModel(orgs: orgs, collector: snapshots)
         historyTransfer = HistoryTransfer(orgs: orgs)
     }
 
@@ -50,7 +52,10 @@ public final class ScreenModels {
         case .appleMDM: appleMDM.load(force: true)
         case .people: people.load(force: true)
         case .content: content.load(force: true)
-        case .activity: activity.load(force: true)
+        case .activity:
+            activity.load(force: true)
+            // Changes is local history: reading it again asks Apple for nothing.
+            changes.refresh()
         case .mosyle: mosyle.load(force: true)
         case .reconciliation: reconciliation.load(force: true)
         case .devices, .services, .reports, .settings: devices.load(force: true)

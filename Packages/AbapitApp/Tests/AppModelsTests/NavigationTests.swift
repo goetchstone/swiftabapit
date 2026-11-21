@@ -20,9 +20,10 @@ struct NavigationTests {
     }
 
     /// Apple School Manager has no people, content, Apple MDM or audit endpoints (plan §2.4): those sections are hidden,
-    /// not shown empty. The Overview stays: it reads devices and services too.
+    /// not shown empty. The Overview stays: it reads devices and services too. Activity stays: its Changes are local history
+    /// (its audit pane says "not in scope" itself).
     @Test func aSchoolOrgHidesTheBusinessOnlySections() {
-        #expect(SidebarItem.shown(for: Self.org("school")) == [.overview, .devices, .services, .mosyle, .reconciliation, .reports, .settings])
+        #expect(SidebarItem.shown(for: Self.org("school")) == [.overview, .devices, .services, .activity, .mosyle, .reconciliation, .reports, .settings])
     }
 
     @Test func aBusinessOrgShowsEverySectionInOrder() {
@@ -48,10 +49,11 @@ struct NavigationTests {
         #expect(reads == [
             .overview: [.devices, .mdmServers, .auditEvents], .devices: [.devices], .services: [.mdmServers],
             .appleMDM: [.mdmEnrolled], .people: [.users, .userGroups, .orgUnits],
-            .content: [.apps, .packages, .blueprints, .configurations], .activity: [.auditEvents], .mosyle: [], .reconciliation: [],
+            // Activity lists none: its Changes are local history, so it shows in a School org and isn't locked by a refused audit log.
+            .content: [.apps, .packages, .blueprints, .configurations], .activity: [], .mosyle: [], .reconciliation: [],
             .reports: [], .settings: [],
         ])
-        #expect(SidebarItem.allCases.filter(\.isBusinessOnly) == [.appleMDM, .people, .content, .activity])
+        #expect(SidebarItem.allCases.filter(\.isBusinessOnly) == [.appleMDM, .people, .content])
         // Every Apple read the client has is some section's: none is left without a screen.
         #expect(Set(SidebarItem.allCases.flatMap(\.reads)) == Set(AppleSection.allCases))
     }
@@ -65,7 +67,7 @@ struct NavigationTests {
         #expect(SidebarItem.showing(.people, for: Self.org("business", provider: "mosyle")) == .mosyle)
         #expect(SidebarItem.showing(nil, for: Self.org("business", provider: "mosyle")) == .mosyle)
         #expect(SidebarItem.showing(.settings, for: Self.org("business", provider: "mosyle")) == .settings)
-        #expect(SidebarItem.showing(.activity, for: school) == .overview)
+        #expect(SidebarItem.showing(.activity, for: school) == .activity, "Changes is local history: a School org keeps Activity")
         #expect(SidebarItem.showing(.devices, for: school) == .devices)
         #expect(SidebarItem.showing(.people, for: business) == .people)
         #expect(SidebarItem.showing(.appleMDM, for: nil) == .appleMDM)
@@ -81,13 +83,15 @@ struct NavigationTests {
         #expect(!SidebarItem.appleMDM.isLocked(for: Self.org("business")))
         let every = Dictionary(uniqueKeysWithValues: AppleSection.allCases.map { ($0.rawValue, "forbidden") })
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: Self.org("business", capabilities: every)) }
-                == [.overview, .devices, .services, .appleMDM, .people, .content, .activity], "Reports and Settings read nothing of Apple's")
+                == [.overview, .devices, .services, .appleMDM, .people, .content], "Activity's Changes, Reports and Settings read nothing of Apple's")
         let people = Self.org("business", capabilities: ["users": "forbidden", "user_groups": "forbidden", "org_units": "forbidden"])
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: people) } == [.people])
         let content = Self.org("business", capabilities: ["apps": "forbidden", "packages": "forbidden", "blueprints": "forbidden",
                                                           "configurations": "forbidden"])
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: content) } == [.content])
-        #expect(SidebarItem.activity.isLocked(for: Self.org("business", capabilities: ["audit_events": "forbidden"])))
+        // A refused audit log locks the Overview's audit card's section no more than Changes, which is local: Activity stays open, and
+        // its audit pane says so itself.
+        #expect(!SidebarItem.activity.isLocked(for: Self.org("business", capabilities: ["audit_events": "forbidden"])))
     }
 
     /// Phase 2b review M1: one refused probe locked all of People (users) or Content (apps), though their models show the
@@ -123,7 +127,7 @@ struct NavigationTests {
         let lasts = Self.org("business", capabilities: ["users": "ok", "user_groups": "ok", "org_units": "forbidden", "apps": "ok",
                                                         "configurations": "forbidden", "devices": "ok", "mdm_servers": "ok",
                                                         "audit_events": "forbidden"])
-        #expect(SidebarItem.allCases.filter { $0.isLocked(for: lasts) } == [.activity])
+        #expect(SidebarItem.allCases.filter { $0.isLocked(for: lasts) }.isEmpty)
     }
 
     /// A locked section's sentence names what the role can't read; the Overview's names its three reads, never "can't read
@@ -148,7 +152,7 @@ struct NavigationTests {
         #expect(!SidebarItem.people.isLocked(for: errors), "an error isn't a refusal")
         let school = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden"])
         #expect(SidebarItem.allCases.filter { $0.isLocked(for: school) } == [.devices, .services])
-        #expect(SidebarItem.shown(for: school) == [.overview, .devices, .services, .mosyle, .reconciliation, .reports, .settings])
+        #expect(SidebarItem.shown(for: school) == [.overview, .devices, .services, .activity, .mosyle, .reconciliation, .reports, .settings])
         let schoolAll = Self.org("school", capabilities: ["devices": "forbidden", "mdm_servers": "forbidden", "audit_events": "forbidden"])
         #expect(SidebarItem.overview.isLocked(for: schoolAll), "every read recorded refused")
     }
@@ -184,6 +188,8 @@ struct NavigationTests {
         #expect(Set(narrow.filter { $0[2] == "first" }.map { $0[1] }) == inspected)
         #expect(narrow.contains { $0[1] == "overview" && $0[2].isEmpty })
         #expect(Set(specs.map { $0[0] }).count == specs.count, "two runs write one picture")
+        // A run's pane (its seventh field) is one Activity opens on: Changes, over the demo's fake snapshots.
+        #expect(specs.filter { $0.count > 6 }.map { "\($0[0]):\($0[1]):\($0[6])" } == ["changes:activity:changes"])
         // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
         // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
         let demos = specs.map { $0.count > 4 ? $0[4] : "" }
@@ -192,7 +198,7 @@ struct NavigationTests {
         // A run's sheet (its sixth field) is one Settings opens: each add sheet drawn once, with its customer question, in a
         // demo where some client has room for that kind (`apple`: the Mosyle sheet names the Apple org; `clients`: the Apple
         // sheet lists the client with no Apple org).
-        let sheets = specs.filter { $0.count > 5 }.map { "\($0[1]):\($0[4]):\($0[5])" }
+        let sheets = specs.filter { $0.count > 5 && !$0[5].isEmpty }.map { "\($0[1]):\($0[4]):\($0[5])" }
         #expect(sheets.sorted() == ["settings:apple:add-mosyle", "settings:clients:add-apple"], "\(sheets)")
     }
 }

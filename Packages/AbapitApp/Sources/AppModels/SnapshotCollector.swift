@@ -45,6 +45,10 @@ public final class SnapshotCollector {
     }
 
     public private(set) var isRunning = false
+    /// Whether the run going started for the org and client on screen now. After a switch `isRunning` stays true until the
+    /// stopped run returns (a second run is refused meanwhile); a screen shows this, never `isRunning`, so nothing of the
+    /// previous org's run is said under the new one.
+    public var isRunningForActiveOrg: Bool { isRunning && runningGeneration == orgs.generation }
     /// The resource being read (the store's name), while a run goes.
     public private(set) var reading: String?
     /// How the last run for the orgs' current generation ended; nil after a switch.
@@ -111,6 +115,8 @@ public final class SnapshotCollector {
         reading = nil
         sweepEstimate = nil
         sweepProgress = nil
+        // A refusal was about the run that was going: it ends with it, never outliving it.
+        refusal = nil
         return finish(outcome, for: run.generation)
     }
 
@@ -245,6 +251,7 @@ public final class SnapshotCollector {
             collected.errors[rule.name] = Self.notAsked(after: stopped)
             return nil
         }
+        guard current(run) else { return nil }
         reading = rule.name
         var views: [View] = [], last: Page<View>?
         var failure: (any Error)?
@@ -293,6 +300,7 @@ public final class SnapshotCollector {
             collected.errors[rule.name] = "not read: \(SnapshotPolicy.services.name) failed"
             return
         }
+        guard current(run) else { return }
         reading = rule.name
         // An id that can't go in a path is never sent: the client would call a service Apple has just listed "no such item".
         let sendable = services.views.filter { AppleRead.isPathSafe($0.id) }
@@ -395,9 +403,11 @@ public final class SnapshotCollector {
             collected.errors[rule.name] = "not read: \(list.name) failed"
             return
         }
+        guard current(run) else { return }
         reading = rule.name
         let swept = await Sweep.run(source.ids, read: sweep.reader(run.client, serials: source.serials), going: { current(run) }) { done, total in
-            sweepProgress = Sweep.Progress(sweep: sweep, done: done, total: total)
+            // A stopped run never says anything under the org that replaced it.
+            if current(run) { sweepProgress = Sweep.Progress(sweep: sweep, done: done, total: total) }
         }
         guard current(run) else { return }
         let stop = swept.stop.map(Sweep.code)

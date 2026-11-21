@@ -15,7 +15,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     /// Appendix B's "Devices › Apple MDM": the devices Apple's own MDM enrolls, beside the services.
     case appleMDM = "apple-mdm"
     case people, content
-    /// Appendix B's "Activity › Audit" and its views; Phase 3 adds Changes.
+    /// Appendix B's "Activity › Audit" and its views, and Changes (Phase 3: the snapshot history).
     case activity
     /// Mosyle Business (Phase 7): the Mosyle org in view, the active one or the one the Apple org is paired with.
     case mosyle
@@ -36,7 +36,8 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     public var phrase: String { [.appleMDM, .mosyle].contains(self) ? title : title.lowercased() }
 
     /// The Apple reads the section shows. A School org hides a section when every one is Business-only (plan §2.4).
-    /// Phase 3's Changes are local history, readable in either scope: when Activity shows them, it lists none here.
+    /// Activity lists none: its Changes are local history, readable in either scope and with the audit log refused, so a School
+    /// org keeps the section and a role refused the audit log isn't locked out of it (its audit panes say so themselves).
     public var reads: [AppleSection] {
         switch self {
         case .overview: [.devices, .mdmServers, .auditEvents]
@@ -45,7 +46,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         case .appleMDM: [.mdmEnrolled]
         case .people: [.users, .userGroups, .orgUnits]
         case .content: [.apps, .packages, .blueprints, .configurations]
-        case .activity: [.auditEvents]
+        case .activity: []
         case .mosyle, .reconciliation, .reports, .settings: []
         }
     }

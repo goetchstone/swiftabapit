@@ -673,14 +673,41 @@ public final class OrgsModel {
 
     /// Removes the org's profile, and with `deleteSecrets` its Keychain items first (defect 14: abapit left
     /// them orphaned). A refused Keychain removal keeps the profile, so the secret stays reachable to remove. Its snapshot
-    /// history stays, and its id with it: no new org takes it (`takenIDs`).
-    public func remove(_ id: String, deleteSecrets: Bool) async throws {
+    /// history stays, and its id with it (no new org takes it, `takenIDs`), unless `deleteHistory` is set: the operator's
+    /// yes to "delete its history too" (`removeAll(org:)`, which can't be undone). The history goes first, so one that
+    /// can't be deleted (a file a newer version wrote, one that won't open) refuses the removal and leaves the org, its key
+    /// and its history as they were.
+    public func remove(_ id: String, deleteSecrets: Bool, deleteHistory: Bool = false) async throws {
+        if deleteHistory, let profile = store[id] {
+            switch openHistory() {
+            case .success(let opened): try await opened.removeAll(org: profile)
+            case .failure(let failure): throw failure
+            }
+        }
         if deleteSecrets { try await vault.remove(org: id) }
         // The Mosyle org the active Apple org is paired with is on screen too: removing it clears what was read from it.
         let wasShown = store.active?.id == id || mosyleOrg?.id == id
         store.remove(id)
         if wasShown { bump() }
         save()
+    }
+
+    /// What Settings' removal says of the org's snapshot history: that it is kept unless the operator deletes it too, and that
+    /// deleting it can't be undone. `snapshots` is `historySnapshots(of:)`'s answer.
+    public static func removalHistoryNote(snapshots: Int?) -> String {
+        switch snapshots {
+        case nil: "Its snapshot history couldn't be read, so it is kept."
+        case 0?: "It has no snapshots in this Mac's history."
+        case let count?:
+            "Its \(count.formatted()) snapshot\(count == 1 ? "" : "s") in this Mac's history stay unless you delete them too. Deleting them can't be undone: no copy is kept."
+        }
+    }
+
+    /// How many snapshots the org's history holds, for the question Settings asks when it is removed; nil when the history
+    /// can't be read (the question then says so and offers no deletion).
+    public func historySnapshots(of id: String) async -> Int? {
+        guard let profile = store[id], case .success(let opened) = openHistory() else { return nil }
+        return try? await opened.snapshots(org: profile, limit: Int.max).count
     }
 
     /// What Settings → Permissions found, kept so sections show locked without probing again. `probed` is the

@@ -182,7 +182,7 @@ struct ContentView: View {
             case .appleMDM: AppleMDMView(model: services.appleMDM)
             case .people: PeopleView(model: services.people)
             case .content: ContentScreen(model: services.content)
-            case .activity: ActivityView(model: services.activity)
+            case .activity: ActivityScreen(activity: services.activity, changes: services.screens.changes)
             case .mosyle: MosyleView(model: services.screens.mosyle)
             case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
             case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)

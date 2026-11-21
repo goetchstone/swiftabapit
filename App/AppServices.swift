@@ -95,6 +95,9 @@ final class AppServices {
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault, transport: mosyleStub)
         }
+        // A few fake snapshots, so Activity › Changes draws a real-looking diff. The store is the actor's: the seeding is queued
+        // before any screen asks it for anything.
+        if case .success(let history) = model.history { Task { await DemoHistory.seed(history, org: profile) } }
         return AppServices(orgs: model, isDemo: true)
     }
     #endif

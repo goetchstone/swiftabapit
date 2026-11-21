@@ -10,7 +10,8 @@ service health, out of warranty, the catalog) are built (PR #29); the parity gol
 merged (PR #28); the diff, coverage and fleet-age ports are built (PR #31), and read devices as the fleet reports do
 (PR #32). The Apple collector merged in PR #34 ("The Apple collector", below), without its per-device sweeps; the Needs-attention
 rules merged in PR #35 ("Needs attention rules", below). The per-device sweeps merged in PR #37 ("The sweeps", below). The abapit import and the export of a
-copy are this PR (#36; "Import and export", below). The Mosyle collector, the Changes screen, the Needs-attention screen and scheduled
+copy merged in PR #36 ("Import and export", below). The Changes screen, "Snapshot now" and the question asked when an org is removed
+are the next PR (S4.7, "The Changes screen", below). The Mosyle collector, the Needs-attention screen and scheduled
 snapshots are still to do. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in phase 1b, and the audit
 digests and the dashboard's quiet services and recent events in phase 2a; their notes are below.
 
@@ -29,6 +30,9 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   error codes), `SnapshotCollector.swift` (the Apple collector; `ScreenModels.snapshots`) and `Sweep.swift` (the per-device
   sweeps); `OrgsModel.history` (the store, or why it didn't open) and its `takenIDs`. Tests:
   `Packages/AbapitApp/Tests/AppModelsTests/CollectorTests.swift` and `SweepTests.swift`.
+- `AppModels/ChangesModel.swift` (Activity › Changes; `ScreenModels.changes`), `AppModels/DemoHistory.swift` (the demo's fake
+  snapshots, DEBUG only), `App/Screens/ChangesView.swift` (`ActivityScreen`: the toolbar's Audit Log / Changes, and `ChangesView`).
+  Tests: `ChangesTests.swift`, `CollectorLowsTests.swift` (AppModelsTests), `ExportSnapshotDiffTests` (ReportsTests).
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
   (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
@@ -124,9 +128,8 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   refused only while it still can't be, saying why and what to do: fix what the message names or move `history.sqlite`
   aside, then add again (`aHistoryThatDidntOpenRefusesAnAdd`, `aHistoryThatFailedToOpenIsOpenedAgainAtTheNextAdd`; the
   executor's choice, refined by the coordinating session's review: one failure must not block Adds for the session).
-  Removing an org keeps its history; the offer
-  to delete it (`removeAll(org:)`) is a question in Settings' removal, so it comes with the Changes screen, the first UI
-  over the history.
+  Removing an org keeps its history unless the operator says yes to deleting it too: a question in Settings' removal
+  ("The Changes screen", below).
 - **What it never holds**: a secret, or a custom setting's profile (operator, 2026-10-31; Gotchas below). The collectors
   decide what is recorded. As a backstop (coordinating session's decision, 2026-11-20, for the operator), `record` leaves
   out every attribute, at any depth, whose name `ExportPolicy.isSensitive` reads as a secret's, keeps the rest of the
@@ -236,8 +239,8 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   `latest` passes over it for them.
 - **The store** is opened at launch in `AppServices` (`history.sqlite` in `Application Support/abapit`, beside
   `orgs.json`; in memory for the demo) through an opener handed to `OrgsModel`, which opens it again when it is needed
-  while the last try failed (`openHistory`); the collector takes it from there. No screen starts a
-  snapshot yet: the Changes screen and "Snapshot now" come later.
+  while the last try failed (`openHistory`); the collector takes it from there. Activity › Changes
+  starts a snapshot with "Snapshot now" ("The Changes screen", below).
 
 ### The sweeps (Phase 3, branch `phase-3-sweeps`)
 
@@ -344,6 +347,90 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   warranty has a coverage record (the out-of-warranty report's caution); whether coverage ids repeat across devices (the
   `serial:id` rule rests on it); what `mdmDevices/{id}/details` answers for a device with no details (the meaning of its
   404); and whether an Activation Lock status's id is always the device's serial.
+
+### The Changes screen (PR S4.7)
+
+Activity › Changes (`App/Screens/ChangesView.swift` over `AppModels/ChangesModel.swift`, `ScreenModels.changes`): the first UI over the
+history. It is a pane of Activity, chosen by a toolbar picker beside the audit log (`ActivityScreen`), so the audit screens keep their
+own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/screenshots.sh`, seventh field).
+
+- **Local history, readable in a School org too.** `SidebarItem.activity.reads` is empty now (it was `[.auditEvents]`): a School org
+  keeps the section (it was hidden as Business-only), and a role the audit log refuses isn't locked out of it; the audit pane says
+  "your role can't read this" or "not in scope" itself. A Mosyle org's sidebar is unchanged (`mosyleSections`), so a Mosyle org doesn't
+  reach the screen yet; the model says what it would say ("a Mosyle org", below). Changes asks Apple for nothing but through
+  "Snapshot now".
+- **The list**: the active org's snapshots, newest first (`SnapshotStore.snapshots`, ordered by `taken_at`), each with its time, device
+  count, writer, **marks** and **notes**. A resource in the snapshot's `counts` and `errors` both is **partial** ("partial: Devices (page
+  cap)"); one only in `errors` is **not read** ("not read: People (HTTP 403)"); the snapshot's `notes` (attributes left out, the
+  sweeps' not-read counts, the page-limit counts) are shown beneath it, per resource. An empty history says so, and Snapshot now is
+  offered. The default pair is the newest and the one before; two pickers choose any two, either way round.
+- **A side that wasn't read is never a removal** (`ChangesModel.compare`, a pure function). A resource is compared only when both
+  snapshots read it in full (in `counts`, not in `errors`).
+  - Not read on a side (not in `counts`: it failed before any item, or the run didn't ask): left out, in words naming the side:
+    "not read in the newer snapshot (HTTP 403), so no change is shown." Both sides: "not read in either snapshot". A resource neither
+    snapshot says anything of (a sweep not chosen) isn't listed.
+  - Read in part on a side: marked "partial". A **newer** side read in part never shows what the older has and it lacks as removed
+    ("2 items in the older snapshot aren't in the newer, which was read in part (page cap): not shown as removed, since it may only not
+    have been read"); an **older** side read in part never shows what the newer has and it lacks as added. What is in both is real
+    and shown as changed. The coordinating session's design said "never removals"; holding back the additions of a part-read older
+    side is the executor's extension of the same rule (the same argument: an item it lacks may only be unread).
+  - An imported snapshot's `counts` hold only resources with items (abapit stored no empty list), so a resource it read and found empty
+    reads as not read: no additions are shown for it either. Conservative, and said.
+  - The diff is `SnapshotDiff` (the operator's two decisions apply: a boolean isn't a number, `null` against missing is no change).
+    Items are labelled by `SnapshotDiff.label`, else their id; a changed field is `old → new` through `SnapshotDiff.shown` (a secret-named
+    field withheld at any depth; a snapshot never holds one, so this is the second defence). At most 100 of each kind show; the screen
+    says "Showing 100 of N: the rest are in the CSV export" (invariant 7, 8). The two snapshots load and compare off the main actor.
+- **Snapshot now** (`ChangesModel.snapshotNow`) runs `SnapshotCollector.run(sweeps:)` for the active org.
+  - The sweeps (AppleCare, Activation Lock, Apple MDM details; the details only for a Business org) are **opt-in for that one run** and
+    are off again after it: each is one read per device. Each is shown with the collector's `Sweep.Estimate` before the run, counted from
+    the newest snapshot's device and Apple-MDM counts at the org's rate now; the words are the estimate's ("An estimate: Apple may slow
+    the reads …"). With no snapshot there is no count, and the line says the time can't be estimated yet. The run's own estimate (the
+    collector's, once the lists are read) shows while it goes.
+  - While it runs: "Reading devices…", the sweep's progress ("Activation Lock: 5 of 84 devices") and Cancel (`SnapshotCollector.cancel()`:
+    nothing is written, and the screen says "Cancelled: nothing was written."). A refusal or error is the collector's words
+    ("No snapshot was taken: …", "Apple was read, but the snapshot wasn't recorded: …"). A refusal (a run already going) is shown
+    while that run goes and ends with it.
+  - **A Mosyle org** has no collector yet: the screen says "Snapshots of a Mosyle Business organization aren't built yet … Nothing was
+    read from Mosyle", and the button is off (abapit's defect 6, `snapshot` crashing on a Mosyle org, is a refusal in words). The
+    collector refuses it too, in its own words.
+- **One org at a time, nothing of the old one on screen.** An org or client switch clears the screen at once (list, pair, comparison,
+  sweeps chosen, estimates, result) and reads the new org's history; a load or comparison that returns after a switch is dropped, and a
+  Snapshot now that returns after one shows no result under the new org. `SnapshotCollector.isRunning` stays true until a stopped run
+  returns (a second run is refused meanwhile), so the screen shows `isRunningForActiveOrg`, `reading`, `progress` and the run's estimate
+  only for a run started for the org on screen; it says "A snapshot of the previous organization is still stopping" and nothing of that
+  run. The collector clears `refusal` when the run it was about ends (it outlived its run before), and every `reading` and progress
+  write checks the run is still current (`aSwitchMidRunShowsNothingOfTheOldOrg`).
+- **CSV of the comparison** (`ExportHistory.snapshotDiff`, columns `ExportPolicy.snapshotDiff`: `older`, `newer`, `change`, `resource`,
+  `label`, `field`, `old`, `new`, `note`, after the item's `id`): one row per added or removed item and per changed field, a `not compared`
+  row for each resource left out or held back (with the same words as the screen), and one `no differences` row when there is nothing
+  (never a bare header). Cells go through the same writer, formula guard and denylist as every export, and values through `masking`
+  (a secret-named key withheld at any depth). It goes through a Save panel (`fileExporter`, with `fileDialogMessage`): the name is
+  `changes <older> to <newer>.csv` (times without separators), led by the client's name only when the app shows clients
+  (`ScreenWords.filename`, `orgs.showsClients`); the panel's text says it holds this organization's differences, serial numbers, labels and
+  the attributes snapshots keep, that a secret-named value is withheld, that no key or token is in it, and, with several clients, that it
+  is that client's data only. abapit had no diff CSV: this one is new.
+- **Removing an org asks about its history** (`OrgsModel.remove(_:deleteSecrets:deleteHistory:)`, `historySnapshots(of:)`,
+  `removalHistoryNote`; Settings' confirmation). The question is asked once the count is known; with history it offers "Remove, Delete
+  Its Key and Keep Its History" (the default) and "Remove, Delete Its Key and Delete Its N Snapshots for Good", and the message says the
+  snapshots stay unless deleted and that deleting them can't be undone (no copy is kept). The history is deleted first (`removeAll(org:)`,
+  which also clears the org's findings), so a history that can't be deleted (a newer version's file, one that won't open) refuses the
+  removal and leaves the org, its key and its history as they were. Without a yes nothing of the history is touched.
+- **The demo** (`DemoHistory`, DEBUG only): three fake snapshots of the demo org, `DEMOCHG…` serials and `example.com` addresses, so the
+  screen and its screenshot draw a real diff: one change, one partial resource (devices, cut at the page limit, two removals held back),
+  one resource not read (People refused), AppleCare read only in the newest.
+- **Carried over from the collector's review** (found open or closed after PRs #36 and #37): the `refusal` outliving its run and the old
+  org's `isRunning` and `reading` under the new one are fixed, with tests through the model. R2 (a secret nested in a kept attribute)
+  was already stopped by #36's scalars-only `keep`; `aSecretNestedInAKeptAttributeNeverReachesTheStore` now holds it end to end. R3: a
+  list that failed part-way keeps its items and its error (the policy path was right); what is built from a part-read services list or
+  device list (the assignments, the sweeps) is "not read", never invented. R6 was closed by #34's rule (a failed read is never counted as
+  none), held by `assignmentsAreNeverCountedAsNoneWhenAListFailed`, and shown on the screen as "not read".
+- **Decisions, and who made them.** The coordinating session: the pane in Activity, the opt-in sweeps with estimates, "not read" never a
+  removal, the CSV, the removal question, the demo history. The executor, for review: holding back additions of a part-read older side;
+  the history deleted before the key and the profile; Snapshot now off for a Mosyle org (its sidebar is unchanged); clearing the chosen
+  sweeps after each run; a column set for the diff CSV; at most 100 items of a kind shown.
+- **Live checks** (for the operator, read-only, through `live-verify`): Snapshot now on the real org without sweeps, then with each
+  sweep, and how long each took against its estimate; Cancel mid-sweep (nothing written); Compare the first real snapshot with an imported
+  abapit one (the imported counts omit empty resources); and the CSV's file name and panel words with one and with several clients.
 
 ### Needs attention: the store and the local settings (PR #33)
 
@@ -527,7 +614,7 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   every import is refused as unchecked** (it says why), since whether abapit left a write unfinished isn't then known. Opening the file
   through `/dev/fd` needs no check: if the system refuses that name, the path is used.
   If the import says an unfinished write was left beside the file, run `sqlite3 <the file> "select 1"` once and import again.
-### Needs attention rules (branch `phase-3-attention-rules`)
+### Needs attention rules (merged in PR #35)
 
 - **What it is** (plan §8.0, "Deterministic rules in `Reports`"): `Reports/NeedsAttention.swift`, pure (no store, no UI, no
   read of its own), held by `ReportsTests/NeedsAttentionTests`. A model never decides what's overdue: a wrong "nothing's
