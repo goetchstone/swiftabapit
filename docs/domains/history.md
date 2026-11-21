@@ -415,6 +415,8 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   snapshots stay unless deleted and that deleting them can't be undone (no copy is kept). The history is deleted first (`removeAll(org:)`,
   which also clears the org's findings), so a history that can't be deleted (a newer version's file, one that won't open) refuses the
   removal and leaves the org, its key and its history as they were. Without a yes nothing of the history is touched.
+- **Screenshots**: `docs/screenshots/changes.png` (CI's `changes` run, over the demo's snapshots) and the refreshed `settings.png`
+  (PR #36's History group). The demo's first read waits for its seeding (`beforeFirstLoad`): the first picture drew one snapshot.
 - **The demo** (`DemoHistory`, DEBUG only): three fake snapshots of the demo org, `DEMOCHG…` serials and `example.com` addresses, so the
   screen and its screenshot draw a real diff: one change, one partial resource (devices, cut at the page limit, two removals held back),
   one resource not read (People refused), AppleCare read only in the newest.
