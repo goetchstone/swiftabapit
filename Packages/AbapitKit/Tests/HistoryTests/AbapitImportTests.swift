@@ -408,20 +408,23 @@ struct ImportedRecordTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: Scratch.path(folder)) == ["copy.sqlite"])
     }
 
-    /// An existing file with anything in it is never replaced; an existing empty file is replaced by the copy, which is `0600` whatever the empty one was.
-    @Test func aCopyNeverReplacesAFileButUsesAnEmptyOne() async throws {
+    /// An existing file, empty or not, is refused and left exactly as it was: same bytes, same inode, same mode. Never unlinked,
+    /// truncated or written into (so a file another program filled meanwhile, or a descriptor it holds, can't be reached).
+    @Test func aCopyNeverTouchesAnExistingFile() async throws {
         let (store, folder) = try await filled()
         defer { Scratch.remove(folder) }
-        let taken = Scratch.path(folder) + "/taken.sqlite"
-        try Data("precious".utf8).write(to: URL(filePath: taken))
-        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: taken)) }
-        do { try await store.exportCopy(to: URL(filePath: taken)) } catch { #expect(error.message.contains("already exists")) }
-        #expect(try Data(contentsOf: URL(filePath: taken)) == Data("precious".utf8))
-        let empty = Scratch.path(folder) + "/empty.sqlite"
-        FileManager.default.createFile(atPath: empty, contents: nil, attributes: [.posixPermissions: 0o644])
-        try await store.exportCopy(to: URL(filePath: empty))
-        #expect(Scratch.mode(empty) == 0o600)
-        #expect(try Scratch.count(try SQLiteDatabase(path: empty, flags: SQLITE_OPEN_READONLY), "SELECT COUNT(*) FROM items") == 2)
+        for (name, contents, mode) in [("taken.sqlite", Data("precious".utf8), mode_t(0o600)), ("empty.sqlite", Data(), mode_t(0o644))] {
+            let path = Scratch.path(folder) + "/" + name
+            FileManager.default.createFile(atPath: path, contents: contents, attributes: [.posixPermissions: Int(mode)])
+            var before = stat()
+            stat(path, &before)
+            await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: path)) }
+            do { try await store.exportCopy(to: URL(filePath: path)) } catch { #expect(error.message.contains("A copy never replaces a file; choose a new name."), "\(error.message)") }
+            var after = stat()
+            stat(path, &after)
+            #expect(try Data(contentsOf: URL(filePath: path)) == contents)
+            #expect(before.st_ino == after.st_ino && before.st_mode == after.st_mode && before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec, "\(name) untouched")
+        }
     }
 
     /// A link as the destination, or a folder on its way, receives nothing; so a link can't send the copy somewhere else.
@@ -508,26 +511,125 @@ struct ImportedRecordTests {
         await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: made)) }
         do { try await store.exportCopy(to: URL(filePath: made)) } catch { #expect(error.message.contains("isn't the private file")) }
         #expect(widen.value.hasSuffix("/made.sqlite") && !Scratch.exists(made), "a file this call made is removed")
-        // A placeholder (not made by this call) is emptied again, and left where it was.
-        let placeholder = Scratch.path(folder) + "/placeholder.sqlite"
-        FileManager.default.createFile(atPath: placeholder, contents: nil, attributes: [.posixPermissions: 0o600])
-        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: placeholder)) }
-        #expect(try Data(contentsOf: URL(filePath: placeholder)).isEmpty)
     }
 
-    /// The destination is never opened by SQLite and never unlinked: an empty placeholder keeps its inode, and the working
-    /// copy is the only file SQLite makes (in a private folder), so a swapped-in link receives nothing.
-    @Test func anEmptyPlaceholderIsWrittenIntoNotReplaced() async throws {
+    /// The post-copy check looks at the inode: a different regular file renamed onto the path while the copy was written (private,
+    /// one name, not empty: everything else about it passes) is refused, and is left alone, since it isn't ours to remove.
+    @Test func aFileSwappedOntoTheDestinationIsRefusedAndLeftAlone() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let other = Scratch.path(folder) + "/other"
+        let store = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
+            if case .copied(let path) = step {
+                try? Data("someone else's".utf8).write(to: URL(filePath: other))
+                chmod(other, 0o600)
+                rename(other, path)
+            }
+        })
+        try await store.record(org: Scratch.apple("acme"), takenAt: Scratch.noon, resources: ["devices": [Scratch.device("S1")]])
+        let made = Scratch.path(folder) + "/made.sqlite"
+        await #expect(throws: Failure.self) { try await store.exportCopy(to: URL(filePath: made)) }
+        #expect(try Data(contentsOf: URL(filePath: made)) == Data("someone else's".utf8), "the swapped-in file is untouched")
+    }
+
+    /// An ACL (a folder's inheritable `everyone allow read`, which makes a `0600` file readable by others) is stripped from the new
+    /// file at once, and one added after the bytes are written is refused with the file removed.
+    @Test func aCopyHasNoACL() async throws {
         let (store, folder) = try await filled()
         defer { Scratch.remove(folder) }
-        let placeholder = Scratch.path(folder) + "/placeholder.sqlite"
-        FileManager.default.createFile(atPath: placeholder, contents: nil, attributes: [.posixPermissions: 0o644])
-        var before = stat()
-        stat(placeholder, &before)
-        try await store.exportCopy(to: URL(filePath: placeholder))
-        var after = stat()
-        stat(placeholder, &after)
-        #expect(before.st_ino == after.st_ino && after.st_size > 0 && after.st_mode & 0o777 == 0o600)
+        func chmodACL(_ path: String, _ acl: String) throws {
+            let process = Process()
+            process.executableURL = URL(filePath: "/bin/chmod")
+            process.arguments = ["+a", acl, path]
+            try process.run()
+            process.waitUntilExit()
+            #expect(process.terminationStatus == 0, "chmod +a works here")
+        }
+        func listing(_ path: String) throws -> String {
+            let process = Process(), pipe = Pipe()
+            process.executableURL = URL(filePath: "/bin/ls")
+            process.arguments = ["-led", path]
+            process.standardOutput = pipe
+            try process.run()
+            let out = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return String(decoding: out, as: UTF8.self)
+        }
+        let inheriting = Scratch.path(folder) + "/inheriting"
+        mkdir(inheriting, 0o700)
+        try chmodACL(inheriting, "everyone allow read,file_inherit")
+        let copy = inheriting + "/copy.sqlite"
+        try await store.exportCopy(to: URL(filePath: copy))
+        let shown = try listing(copy)
+        #expect(!shown.contains("everyone"), "the inherited ACL was stripped: \(shown)")
+        #expect(Scratch.mode(copy) == 0o600)
+        // One added after the copy was written.
+        let added = Scratch.path(folder) + "/added"
+        let hooked = try SnapshotStore(storage: .memory, appVersion: "1", hook: { step throws(Failure) in
+            if case .copied(let path) = step {
+                let process = Process()
+                process.executableURL = URL(filePath: "/bin/chmod")
+                process.arguments = ["+a", "everyone allow read", path]
+                try? process.run()
+                process.waitUntilExit()
+            }
+        })
+        try await hooked.record(org: Scratch.apple("acme"), takenAt: Scratch.noon, resources: [:])
+        await #expect(throws: Failure.self) { try await hooked.exportCopy(to: URL(filePath: added)) }
+        #expect(!Scratch.exists(added), "a file that gained an ACL is removed")
+    }
+
+    /// A working copy a crash left in the store's folder is removed at the start of an export; only that pattern, only there.
+    @Test func aCrashsWorkingCopyIsRemovedAtTheNextExport() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let storeFolder = root.appending(path: "store")
+        let store = try SnapshotStore(storage: .folder(storeFolder), appVersion: "1")
+        let home = Scratch.path(storeFolder)
+        let mine = home + "/export-0A1B2C3D-0000-4000-8000-0123456789AB.tmp", journal = mine + "-journal"
+        let notMine = ["/export-notes.tmp", "/export-0A1B2C3D-0000-4000-8000-0123456789AB.txt", "/other.tmp"].map { home + $0 }
+        for path in [mine, journal] + notMine { try Data("x".utf8).write(to: URL(filePath: path)) }
+        let target = Scratch.path(root) + "/copy.sqlite"
+        try await store.exportCopy(to: URL(filePath: target))
+        #expect(!Scratch.exists(mine) && !Scratch.exists(journal), "the leftovers are gone")
+        for path in notMine { #expect(Scratch.exists(path), "\(path) isn't an export's working file") }
+    }
+
+    /// The copy's AUTOINCREMENT counter doesn't say how many snapshots the other orgs had. (The remaining ids keep their numbers,
+    /// so gaps show: a known limit, in history.md.)
+    @Test func aCopyForSomeOrgsDoesNotCarryTheOthersSnapshotCount() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let store = try SnapshotStore(storage: .memory, appVersion: "1")
+        let (a, b) = (Scratch.apple("a"), Scratch.apple("b"))
+        for _ in 0..<5 { try await store.record(org: b, takenAt: Scratch.noon, resources: [:]) }
+        let kept = try await store.record(org: a, takenAt: Scratch.noon, resources: [:])
+        for _ in 0..<5 { try await store.record(org: b, takenAt: Scratch.noon, resources: [:]) }
+        let copy = Scratch.path(root) + "/copy.sqlite"
+        try await store.exportCopy(to: URL(filePath: copy), orgs: ["a"])
+        let database = try SQLiteDatabase(path: copy, flags: SQLITE_OPEN_READONLY)
+        #expect(try Scratch.count(database, "SELECT seq FROM sqlite_sequence WHERE name = 'snapshots'") == kept)
+    }
+
+    /// A refused file's descriptor is closed once, by the actor's `deinit` alone (it was closed by the init's `defer` as well: the
+    /// second close could hit a descriptor some other code had just been given). Counted by the file's inode.
+    @Test func aRefusedFilesDescriptorIsClosedOnce() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let path = Scratch.path(folder) + "/other.sqlite"
+        let database = try SQLiteDatabase(path: path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+        try database.execute("CREATE TABLE notes (a TEXT)")
+        var info = stat()
+        stat(path, &info)
+        let inode = UInt64(info.st_ino)
+        let bystander = open(path, O_RDONLY)
+        defer { close(bystander) }
+        let before = AbapitHistory.closed.withLock { $0.filter { $0 == inode }.count }
+        #expect(throws: AbapitHistory.Failure.self) { try AbapitHistory(file: URL(filePath: path)) }
+        // `deinit` of the failed actor has run by now.
+        let closes = AbapitHistory.closed.withLock { $0.filter { $0 == inode }.count } - before
+        #expect(closes == 1, "closed \(closes) times")
+        #expect(fcntl(bystander, F_GETFD) != -1, "another descriptor of the same file is still open")
     }
 
     /// A newer file the store only reads can be copied too: the copy changes nothing in it.

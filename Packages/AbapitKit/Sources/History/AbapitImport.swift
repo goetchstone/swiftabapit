@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import JSONAPI
 import SQLite3
+import Synchronization
 
 /// abapit's `history.sqlite`, opened to be copied from (plan Phase 3, "Import abapit history"): read-only, never changed.
 ///
@@ -27,6 +28,8 @@ public actor AbapitHistory {
         case unopenable(path: String, errno: Int32)
         /// Not abapit's history; `why` says what it is instead, in words.
         case notAbapits(why: String)
+        /// The file at the path isn't the one that was checked and opened (replaced while it was being opened).
+        case changed(path: String)
         /// A non-empty `-journal` or `-wal` beside the file: abapit stopped part way through a write. Reading it as it stands would
         /// import pages of a transaction that never committed (a snapshot of 13 of 2000 devices, with `integrity_check` saying ok).
         case unfinishedWrite(path: String)
@@ -44,6 +47,7 @@ public actor AbapitHistory {
             case .notAFile(let path): "\(path) isn't a file."
             case .unopenable(let path, let code): "\(path) couldn't be opened (\(String(cString: strerror(code))))."
             case .notAbapits(let why): "That isn't abapit's history: \(why) Nothing was read from it and it was not changed."
+            case .changed(let path): "\((path as NSString).lastPathComponent) was replaced while it was being opened, so it wasn't imported."
             case .unfinishedWrite(let path):
                 "abapit stopped part way through writing \((path as NSString).lastPathComponent): an unfinished write was left beside it. Open the file once "
                     + "in sqlite3 (for example: sqlite3 <the file> \"select 1\") so SQLite finishes the rollback, then import again. Nothing was read from it and it was not changed."
@@ -95,6 +99,16 @@ public actor AbapitHistory {
     private let descriptor: Int32
     /// Whether SQLite reads the checked descriptor (`/dev/fd/N`) rather than the path (the fallback where the system won't open that name).
     nonisolated let readsByDescriptor: Bool
+    private let inode: UInt64
+
+    /// The inodes of the files whose descriptors this type has closed, one entry per close: what the tests count to hold a
+    /// descriptor to exactly one close (a refused file's was once closed twice, the second time possibly another owner's).
+    static let closed = Mutex<[UInt64]>([])
+
+    private static func release(_ fd: Int32, inode: UInt64) {
+        close(fd)
+        closed.withLock { $0.append(inode) }
+    }
 
     /// Opens `file` read-only and checks it is abapit's.
     public init(file: URL) throws(Failure) {
@@ -110,8 +124,8 @@ public actor AbapitHistory {
         let fd = open(given, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { throw errno == ELOOP ? .link(path: given) : .unopenable(path: given, errno: errno) }
         var keep = false
-        defer { if !keep { close(fd) } }
         var info = stat()
+        defer { if !keep { Self.release(fd, inode: UInt64(info.st_ino)) } }
         guard fstat(fd, &info) == 0 else { throw .unopenable(path: given, errno: errno) }
         guard info.st_mode & S_IFMT == S_IFREG else { throw .notAFile(path: given) }
         // A journal or WAL beside it holds a write abapit didn't finish; `immutable` would read the file without it applied.
@@ -129,32 +143,50 @@ public actor AbapitHistory {
         let opened: SQLiteDatabase
         var byDescriptor = false
         do throws(SQLiteDatabase.Failure) {
-            // The descriptor first; the path only if this system won't open the descriptor's name (the path was checked above).
-            // SQLite opens lazily: the first read is what tells whether the descriptor's name works here.
-            if let viaDescriptor = try? SQLiteDatabase(path: "file:/dev/fd/\(fd)?mode=ro&immutable=1", flags: flags),
-               (try? viaDescriptor.userVersion()) != nil {
+            // The descriptor first. SQLite opens lazily: the first read tells whether the descriptor's name works here. Only a
+            // "can't open" or a permission refusal falls back to the checked path; any other answer (not a database, say) is the
+            // file's, and is refused.
+            do {
+                let viaDescriptor = try SQLiteDatabase(path: "file:/dev/fd/\(fd)?mode=ro&immutable=1", flags: flags)
+                _ = try viaDescriptor.userVersion()
                 opened = viaDescriptor
                 byDescriptor = true
-            } else {
+            } catch let failure as SQLiteDatabase.Failure where Self.mayFallBack(failure.code) {
                 opened = try SQLiteDatabase(path: "file:\(name)?mode=ro&immutable=1", flags: flags)
+            } catch let failure as SQLiteDatabase.Failure {
+                throw failure
+            } catch {
+                throw SQLiteDatabase.Failure(code: SQLITE_ERROR, message: "\(error)")
             }
         } catch {
             if error.code == SQLiteDatabase.cantOpenSymlink { throw .link(path: given) }
             throw Self.refusal(error.code)
         }
+        if !byDescriptor {
+            // The path is read again: it must lead to the file that was checked and held.
+            var there = stat()
+            guard stat(given, &there) == 0, there.st_dev == info.st_dev, there.st_ino == info.st_ino else { throw .changed(path: given) }
+        }
         database = opened
         readsByDescriptor = byDescriptor
         descriptor = fd
+        inode = UInt64(info.st_ino)
+        // From here `deinit` owns the descriptor, also when a check below refuses the file: closing it here too closed it twice.
+        keep = true
         try Self.guarded {
             try opened.execute("PRAGMA query_only = ON")
             guard opened.isReadOnly else { throw Failure.notAbapits(why: "it couldn't be opened read-only.") }
             try Self.verify(opened)
         }
-        keep = true
     }
 
     deinit {
-        close(descriptor)
+        Self.release(descriptor, inode: inode)
+    }
+
+    /// SQLite's "can't open" and permission refusals: the descriptor's name isn't available here, the path may be.
+    private static func mayFallBack(_ code: Int32) -> Bool {
+        [SQLITE_CANTOPEN, SQLITE_PERM, SQLITE_AUTH].contains(code & 0xFF)
     }
 
     /// Whether the connection reports itself read-only and a write through it fails: what the tests hold the open to. (On a

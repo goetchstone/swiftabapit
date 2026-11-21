@@ -42,6 +42,10 @@ public final class HistoryTransfer {
         public var skippedAccounts = 0
         /// Snapshots a row of which didn't read.
         public var unreadable = 0
+        /// Of those, snapshots dated more than a day after now: never stored (a future time would outrank every real snapshot).
+        public var future = 0
+        /// Whether the operator has more than one client: only then does a line talk of clients.
+        public var showsClients = true
         /// Attribute values the policy left out of the items kept, and resources it left out whole (a snapshot's resource the
         /// policy doesn't list, or Business-only for a School org).
         public var attributesLeftOut = 0
@@ -54,9 +58,11 @@ public final class HistoryTransfer {
                 parts.append("\(alreadyHere) had the same time as a snapshot already here (an earlier import of this file, or another taken in that second) "
                              + "and \(alreadyHere == 1 ? "wasn't" : "weren't") imported again.")
             }
-            parts.append("\(skipped) skipped because no organization of this client has that client ID"
-                         + (skippedAccounts > 0 ? " (\(skippedAccounts) account\(skippedAccounts == 1 ? "" : "s")); switch client to import another customer's." : "."))
-            if unreadable > 0 { parts.append("\(unreadable) couldn't be read.") }
+            parts.append("\(skipped) skipped because no organization \(showsClients ? "of this client" : "here") has that client ID"
+                         + (skippedAccounts > 0 ? " (\(skippedAccounts) account\(skippedAccounts == 1 ? "" : "s"))\(showsClients ? "; switch client to import another customer's." : ".")" : "."))
+            if unreadable > 0 {
+                parts.append("\(unreadable) couldn't be read" + (future > 0 ? " (\(future) dated in the future)." : "."))
+            }
             parts.append("\(attributesLeftOut) attribute\(attributesLeftOut == 1 ? "" : "s") left out by the snapshot policy"
                          + (resourcesLeftOut > 0 ? ", and \(resourcesLeftOut) resource\(resourcesLeftOut == 1 ? "" : "s") it doesn't keep." : "."))
             return parts.joined(separator: " ")
@@ -80,14 +86,16 @@ public final class HistoryTransfer {
     public private(set) var problem: String?
 
     private let orgs: OrgsModel
+    private let now: @Sendable () -> Date
     /// Run before each snapshot is written, when set: the tests change an org there, as the operator could in another window.
     /// `package`: the app never sets it.
     @ObservationIgnored package var beforeWrite: (@MainActor () async -> Void)?
 
     static let busy = "An import or export is already running."
 
-    public init(orgs: OrgsModel) {
+    public init(orgs: OrgsModel, now: @escaping @Sendable () -> Date = { Date() }) {
         self.orgs = orgs
+        self.now = now
         orgs.onSwitch { [weak self] in
             self?.summary = nil
             self?.problem = nil
@@ -145,11 +153,17 @@ public final class HistoryTransfer {
                 continue
             }
             do {
-                let snapshot = try await source.load(header)
                 guard let taken = ISODate.parse(header.takenAt)?.date else {
                     report.unreadable += 1
                     continue
                 }
+                // A time after tomorrow is no snapshot's: it would outrank every real one in `latest`, and never be pruned.
+                guard taken <= now().addingTimeInterval(86_400) else {
+                    report.unreadable += 1
+                    report.future += 1
+                    continue
+                }
+                let snapshot = try await source.load(header)
                 let kept = AbapitMapping.keep(snapshot, for: org)
                 report.attributesLeftOut += kept.attributesLeftOut
                 report.resourcesLeftOut += kept.resourcesLeftOut
@@ -188,6 +202,7 @@ public final class HistoryTransfer {
         var report = report
         report.skippedAccounts = skippedAccounts.count
         report.orgs = written.count
+        report.showsClients = orgs.showsClients
         return report
     }
 
@@ -220,6 +235,12 @@ public final class HistoryTransfer {
     /// What the Save panel says the copy holds: the active client's only.
     public var exportWords: String { SnapshotStore.exportCopyWords(client: orgs.exportClient) }
 
+    /// What Settings says under History: "client" only when there is more than one.
+    public var settingsWords: String {
+        "Import abapit's history from the retired Python tool, or save a copy of "
+            + (orgs.showsClients ? "this client's history" : "your history") + " to open in sqlite3 or Datasette."
+    }
+
     /// Writes a copy of the active client's snapshots and Needs-attention state at `destination` (see `SnapshotStore.exportCopy`):
     /// no other client's rows are in it (the clients rule); says how it went.
     public func exportCopy(to destination: URL) async {
@@ -240,7 +261,7 @@ public final class HistoryTransfer {
             do {
                 try await store.exportCopy(to: destination, orgs: ids)
                 guard orgs.generation == generation else { return }
-                summary = "Saved a copy of this client's snapshot history as \(destination.lastPathComponent)."
+                summary = "Saved a copy of \(orgs.exportClient.map { "\($0)'s" } ?? "the") snapshot history as \(destination.lastPathComponent)."
                 return
             } catch {
                 result = error.message

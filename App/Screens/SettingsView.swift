@@ -171,13 +171,13 @@ struct SettingsView: View {
     /// copy of this app's history for `sqlite3` or Datasette. Only files the operator picks in a panel.
     private var historySection: some View {
         Section("History") {
-            Text("Import abapit's history from the retired Python tool, or save a copy of this client's history to open in sqlite3 or Datasette.")
+            Text(transfer.settingsWords)
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Import abapit history…") { chooseHistoryToImport() }
                     .disabled(transfer.isWorking)
                     .accessibilityIdentifier("settings.history.import")
-                    .help("Choose abapit's history.sqlite. It is opened read-only and never changed; snapshots are matched to the organizations of this client by client ID.")
+                    .help("Choose abapit's history.sqlite. It is opened read-only and never changed; snapshots are matched to your organizations by client ID.")
                 Button("Export a copy…") { chooseWhereToExport() }
                     .disabled(transfer.isWorking)
                     .accessibilityIdentifier("settings.history.export")

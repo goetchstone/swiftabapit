@@ -406,6 +406,64 @@ struct HistoryTransferTests {
         #expect(HistoryTransfer.isStill(padded, in: world.orgs), "the same key as the store's compare it")
     }
 
+    /// A time after tomorrow is no snapshot's: stored, it would outrank every real snapshot in `latest` and never be pruned. It is
+    /// counted as unreadable, "dated in the future", and skipped; a time within the day is kept.
+    @Test func aFutureDatedSnapshotIsSkippedAndCounted() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let world = try await Self.world()
+        let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")]),
+                    Row(id: 2, takenAt: "2099-01-01T00:00:00Z", client: Self.a, items: [Self.device("D2")]),
+                    Row(id: 3, takenAt: "2026-09-03T08:00:00Z", client: Self.a, items: [Self.device("D3")])]
+        guard case .imported(let report) = await world.screens.historyTransfer.importHistory(from: URL(filePath: try Self.abapitFile(rows, in: source))) else {
+            Issue.record("not imported"); return
+        }
+        #expect(report.imported == 2 && report.unreadable == 1 && report.future == 1)
+        #expect(world.screens.historyTransfer.summary?.contains("1 couldn't be read (1 dated in the future).") == true)
+        #expect(try await stored(world).map(\.takenAt) == ["2026-09-03T08:00:00Z", "2026-09-01T08:00:00Z"], "the future one is never stored")
+    }
+
+    /// The boundary, with a clock of the test's own: a day ahead is kept, a minute past it is not.
+    @Test func theFutureLimitIsADayAfterNow() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let world = try await Self.world()
+        let now = Date(timeIntervalSince1970: 1_795_000_000)  // 2026-11-18T11:06:40Z
+        let transfer = HistoryTransfer(orgs: world.orgs, now: { now })
+        let rows = [Row(id: 1, takenAt: "2026-11-19T11:06:40Z", client: Self.a), Row(id: 2, takenAt: "2026-11-19T11:07:41Z", client: Self.a)]
+        guard case .imported(let report) = await transfer.importHistory(from: URL(filePath: try Self.abapitFile(rows, in: source))) else { Issue.record("not imported"); return }
+        #expect(report.imported == 1 && report.future == 1)
+    }
+
+    /// With one client the screens never say "client" (there is no other to switch to or mix with); with two they do.
+    @Test func theWordsSayClientOnlyWhenThereAreSeveral() async throws {
+        let source = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")]),
+                    Row(id: 2, takenAt: "2026-09-02T08:00:00Z", client: "SOMEONE-ELSE", items: [Self.device("D2")])]
+        let url = URL(filePath: try Self.abapitFile(rows, in: source))
+        // One client.
+        let one = try await World.make(profiles: [World.profile("a")])
+        let single = one.screens.historyTransfer
+        #expect(!one.orgs.showsClients)
+        #expect(single.settingsWords == "Import abapit's history from the retired Python tool, or save a copy of your history to open in sqlite3 or Datasette.")
+        #expect(single.exportFileName == "history.sqlite")
+        #expect(!single.exportWords.contains("client") && single.exportWords.contains("your organizations' snapshots"), "\(single.exportWords)")
+        _ = await single.importHistory(from: url)
+        #expect(single.summary == "Imported 1 snapshot for 1 organization. 1 skipped because no organization here has that client ID (1 account). 0 attributes left out by the snapshot policy.", "\(single.summary ?? "")")
+        let copy = source.appending(path: "copy.sqlite")
+        await single.exportCopy(to: copy)
+        #expect(single.summary == "Saved a copy of the snapshot history as copy.sqlite.")
+        // Two clients.
+        let two = try await World.make()
+        let several = two.screens.historyTransfer
+        #expect(two.orgs.showsClients)
+        #expect(several.settingsWords.contains("this client's history") && several.exportWords.contains("Org a's snapshots only"))
+        _ = await several.importHistory(from: url)
+        #expect(several.summary?.contains("no organization of this client has that client ID (1 account); switch client to import another customer's.") == true)
+    }
+
+
     // MARK: the policy's shape rule (items 5 and 6)
 
     /// A kept attribute keeps a scalar or a list of scalars; an object (or a list with one) under a kept name, which Apple never
@@ -486,7 +544,7 @@ struct HistoryTransferTests {
         }
         let copy = folder.appending(path: "copy.sqlite")
         await transfer.exportCopy(to: copy)
-        #expect(transfer.problem == nil && transfer.summary == "Saved a copy of this client's snapshot history as copy.sqlite.")
+        #expect(transfer.problem == nil && transfer.summary == "Saved a copy of Org a's snapshot history as copy.sqlite.")
         let bytes = try Data(contentsOf: copy)
         #expect(bytes.range(of: Data("CANARYCLIENTAONE".utf8)) != nil && bytes.range(of: Data("CANARYSUBJECTA".utf8)) != nil, "this client's is in it")
         for canary in ["CANARYCLIENTBONE", "CANARYSUBJECTB"] { #expect(bytes.range(of: Data(canary.utf8)) == nil, "\(canary): another client's") }

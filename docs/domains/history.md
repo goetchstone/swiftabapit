@@ -302,9 +302,11 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
 - **The file is opened read-only, and nothing is written beside it.** `AbapitHistory` opens it `O_NOFOLLOW` first (a regular file; a
   FIFO is refused without opening), looks at each name above it for a link, and holds that descriptor: SQLite is given
   `/dev/fd/N` (`SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW`, URI `mode=ro&immutable=1`, `PRAGMA query_only`), so
-  it reads the file that was checked, never what the path leads to a moment later (a FIFO swapped in would hang the open). Where
-  the system won't open that name (the first read tells), it falls back to the checked path with the same flags
-  (`readsByDescriptor` says which). `immutable` means SQLite makes no lock file, journal or WAL. `AbapitImportTests` hold it: bytes, mode,
+  it reads the file that was checked, never what the path leads to a moment later (a FIFO swapped in would hang the open). Only
+  SQLite's "can't open" or a permission refusal falls back to the checked path (same flags), and then the path's device and inode
+  must equal the descriptor's or the import is refused (`.changed`); any other answer is the file's, and is refused. A refused
+  file's descriptor is closed once, by the actor's `deinit` alone (a second close by the init could hit a descriptor some other code had
+  just been given, the snapshot store's, say: `aRefusedFilesDescriptorIsClosedOnce` counts the closes). `immutable` means SQLite makes no lock file, journal or WAL. `AbapitImportTests` hold it: bytes, mode,
   modification time and the folder's names unchanged after every read; a read-only file in a read-only folder still reads; the
   connection reports itself read-only and refuses a write (`refusesWrites`).
 - **An unfinished write is refused, never read around** (the review of PR 36, invariant 8). `immutable` ignores a hot journal,
@@ -347,8 +349,10 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   also holds the *shape* of a kept attribute: only a scalar or a list of scalars is kept, so a nested object under a kept name
   (a `deviceModel` of `{imei: …}`, a `status` of `{email: …}`, which reached the store in the first version) is left out and counted.
   The checked exception, from `Contracts/apple/` (every kept attribute of every rule, `applecare`, `activation_lock` and
-  `mdm_details` included, is a string, a date, an enum, a boolean, a number or a list of enum strings): `customSettingsValues`, an
+  `mdm_details` included, is a string, a date, an enum, a boolean, a number or a list of strings: a plain `[string]` list is kept too, as `bundleIds` and `supportedOS` are): `customSettingsValues`, an
   object (`CustomSettingsValues`), keeps its two inner keys, `configurationProfile` (the withheld marker) and `filename`, and no other.
+- **A future time is no snapshot's**: a `taken_at` more than a day after now is counted as unreadable, "dated in the future", and
+  never stored (it would outrank every real snapshot in `latest` and never be pruned).
 - **Errors are codes.** abapit's `errors` hold Python's exception text, URLs included. Only the *key* is read: a resource the
   policy keeps becomes `abapit error`, and `applecare_partial` becomes `abapit partial` for `applecare` (its items are kept,
   and the code makes it never a good copy for `latest`). A key for a resource the policy doesn't list is dropped and counted.
@@ -377,16 +381,20 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   Needs-attention rows deleted, `VACUUM`ed again so no page of theirs survives, and only then written out; a removed org's history
   isn't in it either. The default file name is `ScreenWords.filename("history.sqlite", client: orgs.exportClient)` and the Save
   panel says it holds this client's snapshots (serial numbers, device models, services, the Managed Apple Accounts the policy
-  keeps) and Needs-attention choices only, no key or token, and that only the owner can read it. The destination is made by this
-  call, by descriptor, and SQLite never opens it: `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)`, the bytes copied in and
-  `fsync`ed, then what the path leads to is checked (regular, one name, `0600`, not empty, the same inode). No process-wide `umask`.
-  **An existing destination**: non-empty, a link, a folder or a second name is refused, never replaced; an existing *empty* regular
-  file (a Save panel's placeholder) is written into through its descriptor (checked again on the descriptor, narrowed to `0600`
-  before a byte is written), not unlinked or replaced (my choice: no rename to get wrong). A failure removes a file this call made
-  (only while the path still leads to it) or empties the placeholder again. No link on the path (each name `lstat`ed). A newer
+  keeps) and Needs-attention choices only, no key or token, and that only the owner can read it. The destination is created by this
+  call, by descriptor, and nothing else (the coordinating session's decision; the placeholder path of the first version is gone):
+  `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)`, any ACL stripped from it at once (a folder's inheritable
+  `everyone allow read` would otherwise make the `0600` file readable by others), the bytes copied in and `fsync`ed, then what the path
+  leads to is checked (regular, one name, `0600`, no ACL, not empty, the same inode), and a file that fails the check is removed
+  while the path still leads to it. **A path that exists, empty or not, is refused ("a copy never replaces a file; choose a new
+  name") and left untouched**: never unlinked, truncated or written into. No process-wide `umask`. A working copy a crash left
+  (`export-<UUID>.tmp`, and its journal) in the store's own folder is removed at the start of an export, that pattern only.
+  After narrowing, `sqlite_sequence` is set to the highest id kept so the copy doesn't say how many snapshots the other orgs
+  had; **the kept snapshots keep their ids, so gaps show where another org's were (a known limit; not renumbered)**. With one client the panel,
+  the summary and Settings never say "client" (`showsClients`). No link on the path (each name `lstat`ed). A newer
   file the store only reads can be copied (`query_only` lifted for the one statement). The copy has this app's schema (version 2), so importing it
-  is refused ("written by this app"). `aDestinationWidenedAfterTheCopyIsRefusedAndRemoved` drives the post-copy check through a test hook
-  (the disk changing under the call).
+  is refused ("written by this app"). `aDestinationWidenedAfterTheCopyIsRefusedAndRemoved`, `aFileSwappedOntoTheDestinationIsRefusedAndLeftAlone` and `aCopyHasNoACL` drive the
+  post-copy check through a test hook (the disk changing under the call).
 - **Parity** (`HistoryImportParityTests`): a fake abapit database is made from `history.json`'s own schema and seed and
   imported (A, then B as the active client); abapit's `list_snapshots`, `latest_resource` and `snapshot_resource` answers are
   compared with the store's. The listed differences: store ids differ (found by `taken_at`); attributes off the allowlist
@@ -400,8 +408,9 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
 - **Live check (the operator's)**: in Settings, Import abapit history…, choose `~/.local/share/abapit/history.sqlite` (the panel
   shows hidden files); read the result line (imported, already here, skipped for no matching client ID, left out by the policy);
   then Export a copy…, and open it in `sqlite3` to see `snapshots`, `items` and `devices_view`. Never done by a session.
-  Also confirm the sandbox lets the app look at the files beside the one you pick (the import refuses, and says why, if it can't
-  check for abapit's `-journal` or `-wal`) and open the file through `/dev/fd` (it falls back to the path if not; `readsByDescriptor`).
+  Also confirm the sandbox lets the app look at the files beside the one you pick: **if it can't `lstat` `<file>-journal` and `<file>-wal`,
+  every import is refused as unchecked** (it says why), since whether abapit left a write unfinished isn't then known. Opening the file
+  through `/dev/fd` needs no check: if the system refuses that name, the path is used.
   If the import says an unfinished write was left beside the file, run `sqlite3 <the file> "select 1"` once and import again.
 
 ### Reports

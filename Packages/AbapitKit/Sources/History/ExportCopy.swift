@@ -11,11 +11,16 @@ import SQLite3
 /// policy keeps them) and its Needs-attention findings and dismissals. No key, token or secret is ever in the history, so none
 /// is in the copy.
 extension SnapshotStore {
-    /// What the Save panel says the copy holds. `client` is the active client's name when the operator has more than one.
+    /// What the Save panel says the copy holds. `client` is the active client's name when the operator has more than one client,
+    /// nil when there is one (then nothing says "client": there is no other to mix with).
     public static func exportCopyWords(client: String?) -> String {
-        "The copy holds \(client.map { "\($0)'s" } ?? "this client's") snapshots only (serial numbers, device models, services and the people's "
-            + "Managed Apple Accounts the snapshot policy keeps) and its Needs-attention choices; no other client's, and no history of an "
-            + "organization you removed. It holds no key or token. Only you can read the file; keep it somewhere only you can reach."
+        let tail = " It holds no key or token. Only you can read the file; keep it somewhere only you can reach."
+        guard let client else {
+            return "The copy holds your organizations' snapshots (serial numbers, device models, services and the people's Managed Apple Accounts "
+                + "the snapshot policy keeps) and their Needs-attention choices; no history of an organization you removed." + tail
+        }
+        return "The copy holds \(client)'s snapshots only (serial numbers, device models, services and the people's Managed Apple Accounts the "
+            + "snapshot policy keeps) and its Needs-attention choices; no other client's, and no history of an organization you removed." + tail
     }
 
     /// Writes a copy of the history at `destination`, owner-only (`0600`). With `orgs`, only those organizations' snapshots, items
@@ -26,11 +31,13 @@ extension SnapshotStore {
     ///   new `0700` folder under the temporary folder for an in-memory store), the other orgs' rows deleted and the file
     ///   `VACUUM`ed again, so nothing of them survives in its free pages. Nothing is written to the destination until that
     ///   succeeded, and the working copy is removed afterwards.
-    /// - **The destination is made by this call, by descriptor.** `open(O_CREAT | O_EXCL | O_NOFOLLOW, 0600)`: never wider than
-    ///   `0600`, never through a link, and a destination that exists and isn't empty is refused, never replaced. An existing
-    ///   *empty* regular file (a Save panel's placeholder) with one name is written into through its descriptor, not replaced
-    ///   or unlinked, and narrowed to `0600` before a byte is written. The bytes are copied in, `fsync`ed, and what the path
-    ///   leads to afterwards is checked to be that file: regular, one name, `0600`, not empty. SQLite never opens the destination.
+    /// - **The destination is created by this call, by descriptor, and nothing else.** `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+    ///   0600)`: never wider than `0600`, never through a link. A path that exists, of any kind and empty or not, is refused ("a copy
+    ///   never replaces a file; choose a new name") and left untouched: it is never unlinked, truncated or written into, so a file
+    ///   another program filled meanwhile, or a descriptor it opened earlier, can't be reached. Any ACL (a folder's inheritable
+    ///   one) is stripped from the new file at once. The bytes are copied in, `fsync`ed, and what the path leads to afterwards is
+    ///   checked to be that file: regular, one name, `0600`, no ACL, not empty, the same inode; if not, the file this call made is
+    ///   removed (only while the path still leads to it). SQLite never opens the destination.
     /// - A symbolic link anywhere above the file is refused (each name `lstat`ed).
     public func exportCopy(to destination: URL, orgs keep: Set<String>? = nil) throws(Failure) {
         let given = destination.path(percentEncoded: false)
@@ -47,11 +54,14 @@ extension SnapshotStore {
             if info.st_mode & S_IFMT == S_IFLNK { throw .notCopied("\(prefix) is a symbolic link; choose a place that isn't behind one.") }
             if info.st_mode & S_IFMT != S_IFDIR { throw .notCopied("\(prefix) isn't a folder.") }
         }
-        // A look before the work, so a refusal costs nothing; the descriptor below is what decides.
+        // A look before the work, so a refusal costs nothing; `O_EXCL` below is what decides.
         var existing = stat()
-        if lstat(path, &existing) == 0 { try Self.refuseUnlessEmptyFile(existing, path) } else if errno != ENOENT {
+        if lstat(path, &existing) == 0 {
+            throw .notCopied(Self.exists(path))
+        } else if errno != ENOENT {
             throw .notCopied("\(path) couldn't be looked at (\(String(cString: strerror(errno)))).")
         }
+        if let home { Self.removeLeftovers(in: home) }
         let (folder, made) = try workFolder()
         let work = folder + "/export-\(UUID().uuidString).tmp"
         defer {
@@ -90,46 +100,51 @@ extension SnapshotStore {
             let list = StoredJSON.text(.array(keep.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }.map { .string($0) }))
             try copy.run("DELETE FROM snapshots WHERE org_id NOT IN (SELECT value FROM json_each(?))", [.text(list)])
             try copy.run("DELETE FROM attention WHERE org_id NOT IN (SELECT value FROM json_each(?))", [.text(list)])
+            // AUTOINCREMENT's counter would say how many snapshots the other orgs had: it is set to the highest id kept. The ids
+            // that remain keep their numbers (renumbering would break nothing here, but is not needed), so gaps show.
+            try copy.execute("UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id), 0) FROM snapshots) WHERE name = 'snapshots'")
             try copy.execute("VACUUM")
         }
     }
 
-    private static func refuseUnlessEmptyFile(_ info: stat, _ path: String) throws(Failure) {
-        switch info.st_mode & S_IFMT {
-        case S_IFLNK: throw .notCopied("\(path) is a symbolic link; choose a name that isn't used.")
-        case S_IFREG: break
-        default: throw .notCopied("\(path) already exists and isn't a file. Choose a name that isn't used.")
+    static func exists(_ path: String) -> String { "\(path) already exists. A copy never replaces a file; choose a new name." }
+
+    /// A working copy a crash left behind (`export-<UUID>.tmp`, and its journal) in the store's own folder: only that pattern, only
+    /// regular files, only there.
+    static func removeLeftovers(in folder: String) {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder) else { return }
+        for name in names where name.wholeMatch(of: /export-[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.tmp(-journal)?/) != nil {
+            var info = stat()
+            if lstat(folder + "/" + name, &info) == 0, info.st_mode & S_IFMT == S_IFREG { unlink(folder + "/" + name) }
         }
-        guard info.st_size == 0 else {
-            throw .notCopied("\(path) already exists and isn't empty. Choose a name that isn't used: a copy never replaces a file.")
-        }
-        guard info.st_nlink == 1 else { throw .notCopied("\(path) has a second name on disk (a hard link).") }
+    }
+
+    /// Whether `fd` has an access control list (a folder's inheritable `everyone allow read` is one): it is a way for others to read.
+    private static func hasACL(_ fd: Int32) -> Bool {
+        guard let acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED) else { return false }
+        acl_free(UnsafeMutableRawPointer(acl))
+        return true
     }
 
     private static func copy(_ work: String, to path: String, hook: Hook?) throws(Failure) {
         let source = open(work, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard source >= 0 else { throw .notCopied("the working copy couldn't be read (\(String(cString: strerror(errno)))).") }
         defer { close(source) }
-        var created = true
-        var fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-        if fd < 0, errno == EEXIST {
-            created = false
-            fd = open(path, O_WRONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
-            guard fd >= 0 else {
-                throw .notCopied(errno == ELOOP ? "\(path) is a symbolic link; choose a name that isn't used."
-                                 : "\(path) couldn't be opened (\(String(cString: strerror(errno)))).")
-            }
-        } else if fd < 0 {
-            throw .notCopied("\(path) couldn't be made (\(String(cString: strerror(errno)))).")
+        let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else {
+            throw .notCopied(errno == EEXIST ? exists(path) : "\(path) couldn't be made (\(String(cString: strerror(errno)))).")
         }
         defer { close(fd) }
         var mine = stat()
-        guard fstat(fd, &mine) == 0 else { throw .notCopied("\(path) couldn't be read (\(String(cString: strerror(errno)))).") }
+        guard fstat(fd, &mine) == 0 else {
+            unlink(path)
+            throw .notCopied("\(path) couldn't be read (\(String(cString: strerror(errno)))).")
+        }
         do throws(Failure) {
-            if !created {
-                // The descriptor decides, not the look above: a file swapped in since is refused here.
-                try refuseUnlessEmptyFile(mine, path)
-                guard fchmod(fd, 0o600) == 0 else { throw Failure.notCopied("\(path) couldn't be made private (\(String(cString: strerror(errno)))).") }
+            // An ACL inherited from the folder is stripped before a byte is written.
+            if hasACL(fd), let empty = acl_init(0) {
+                defer { acl_free(UnsafeMutableRawPointer(empty)) }
+                guard acl_set_fd_np(fd, empty, ACL_TYPE_EXTENDED) == 0 else { throw Failure.notCopied("\(path) couldn't be made private (an access control list stays on it).") }
             }
             var buffer = [UInt8](repeating: 0, count: 1 << 20)
             while true {
@@ -147,13 +162,13 @@ extension SnapshotStore {
             try hook?(.copied(path: path))
             var after = stat(), linked = stat()
             guard fstat(fd, &after) == 0, lstat(path, &linked) == 0, linked.st_mode & S_IFMT == S_IFREG, linked.st_dev == mine.st_dev, linked.st_ino == mine.st_ino,
-                  after.st_nlink == 1, after.st_mode & 0o077 == 0, after.st_size > 0 else {
+                  after.st_nlink == 1, after.st_mode & 0o077 == 0, after.st_size > 0, !hasACL(fd) else {
                 throw Failure.notCopied("\(path) isn't the private file the copy was written to. Nothing there can be trusted; remove it and try again.")
             }
         } catch {
-            // Whole or absent: a file this call made is removed (only while the path still leads to it), a placeholder emptied.
+            // Whole or absent: this call made the file, so it is removed, but only while the path still leads to it.
             var linked = stat()
-            if created, lstat(path, &linked) == 0, linked.st_ino == mine.st_ino, linked.st_dev == mine.st_dev { unlink(path) } else if !created { _ = ftruncate(fd, 0) }
+            if lstat(path, &linked) == 0, linked.st_ino == mine.st_ino, linked.st_dev == mine.st_dev { unlink(path) }
             throw error
         }
     }
