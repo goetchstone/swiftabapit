@@ -112,6 +112,12 @@ public actor AbapitHistory {
 
     /// Opens `file` read-only and checks it is abapit's.
     public init(file: URL) throws(Failure) {
+        try self.init(file: file, viaDescriptor: true, beforeOpen: nil)
+    }
+
+    /// `viaDescriptor: false` goes straight to the path and `beforeOpen` runs once the file is checked and held, before SQLite opens
+    /// it: where a test changes the disk under the open, as another program could. Never set outside the tests.
+    init(file: URL, viaDescriptor: Bool, beforeOpen: (() -> Void)?) throws(Failure) {
         let given = file.path(percentEncoded: false)
         guard file.isFileURL, given.hasPrefix("/") else { throw .notAFile(path: given) }
         // No link on the way: `O_NOFOLLOW` looks at the last name only, and SQLite, handed the descriptor, looks at no path.
@@ -140,6 +146,7 @@ public actor AbapitHistory {
         // `?` and `#` and `%` in a name are escaped, so the name can't carry a parameter of its own.
         let name = given.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? given
         let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_URI | SQLITE_OPEN_NOFOLLOW
+        beforeOpen?()
         let opened: SQLiteDatabase
         var byDescriptor = false
         do throws(SQLiteDatabase.Failure) {
@@ -147,9 +154,10 @@ public actor AbapitHistory {
             // "can't open" or a permission refusal falls back to the checked path; any other answer (not a database, say) is the
             // file's, and is refused.
             do {
-                let viaDescriptor = try SQLiteDatabase(path: "file:/dev/fd/\(fd)?mode=ro&immutable=1", flags: flags)
-                _ = try viaDescriptor.userVersion()
-                opened = viaDescriptor
+                guard viaDescriptor else { throw SQLiteDatabase.Failure(code: SQLITE_CANTOPEN, message: "not tried") }
+                let direct = try SQLiteDatabase(path: "file:/dev/fd/\(fd)?mode=ro&immutable=1", flags: flags)
+                _ = try direct.userVersion()
+                opened = direct
                 byDescriptor = true
             } catch let failure as SQLiteDatabase.Failure where Self.mayFallBack(failure.code) {
                 opened = try SQLiteDatabase(path: "file:\(name)?mode=ro&immutable=1", flags: flags)
@@ -185,7 +193,7 @@ public actor AbapitHistory {
     }
 
     /// SQLite's "can't open" and permission refusals: the descriptor's name isn't available here, the path may be.
-    private static func mayFallBack(_ code: Int32) -> Bool {
+    static func mayFallBack(_ code: Int32) -> Bool {
         [SQLITE_CANTOPEN, SQLITE_PERM, SQLITE_AUTH].contains(code & 0xFF)
     }
 

@@ -223,6 +223,30 @@ struct AbapitImportTests {
         #expect(throws: Failure.self) { try AbapitHistory(file: folder.appending(path: "missing.sqlite")) }
     }
 
+    /// Where the descriptor's name isn't used (the fallback to the path), the path must still lead to the file that was checked: one
+    /// replaced between the check and the open is refused, and nothing is read from it.
+    @Test func aPathReplacedBeforeTheFallbackOpenIsRefused() async throws {
+        let folder = try Scratch.folder()
+        defer { Scratch.remove(folder) }
+        let path = try Self.makeFile(in: folder, snapshots: Self.rows.snapshots, items: Self.rows.items)
+        let other = try Self.makeFile(in: folder, name: "other.sqlite", snapshots: [(9, "2026-09-09T08:00:00Z", "OTHER", "business", "0.2.0", "{}")])
+        #expect(throws: Failure.changed(path: path)) {
+            try AbapitHistory(file: URL(filePath: path), viaDescriptor: false, beforeOpen: { rename(other, path) })
+        }
+        // Unchanged, the path route reads the same file.
+        let again = try Self.makeFile(in: folder, name: "again.sqlite", snapshots: Self.rows.snapshots, items: Self.rows.items)
+        let source = try AbapitHistory(file: URL(filePath: again), viaDescriptor: false, beforeOpen: nil)
+        let count = try await source.headers().count
+        #expect(!source.readsByDescriptor && count == 2)
+    }
+
+    /// Only "can't open" and a permission refusal fall back to the path; another answer is the file's.
+    @Test func onlyACantOpenOrAPermissionRefusalFallsBack() {
+        #expect(AbapitHistory.mayFallBack(SQLITE_CANTOPEN) && AbapitHistory.mayFallBack(SQLITE_CANTOPEN | (6 << 8)))
+        #expect(AbapitHistory.mayFallBack(SQLITE_PERM) && AbapitHistory.mayFallBack(SQLITE_AUTH))
+        for code in [SQLITE_NOTADB, SQLITE_CORRUPT, SQLITE_ERROR, SQLITE_IOERR, SQLITE_BUSY, SQLITE_READONLY] { #expect(!AbapitHistory.mayFallBack(code), "\(code)") }
+    }
+
     /// A FIFO where the file should be is refused without opening it (no hang), and the file SQLite reads is the one checked.
     @Test func aFIFOIsRefusedWithoutHanging() async throws {
         let folder = try Scratch.folder()

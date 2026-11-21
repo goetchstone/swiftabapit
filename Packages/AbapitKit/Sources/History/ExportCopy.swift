@@ -113,10 +113,21 @@ extension SnapshotStore {
     /// regular files, only there.
     static func removeLeftovers(in folder: String) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder) else { return }
-        for name in names where name.wholeMatch(of: /export-[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.tmp(-journal)?/) != nil {
+        for name in names where isWorkingName(name) {
             var info = stat()
             if lstat(folder + "/" + name, &info) == 0, info.st_mode & S_IFMT == S_IFREG { unlink(folder + "/" + name) }
         }
+    }
+
+    /// `export-<UUID>.tmp` or its `-journal`, exactly: what `exportCopy` names its working copy.
+    static func isWorkingName(_ name: String) -> Bool {
+        var rest = Substring(name)
+        guard rest.hasPrefix("export-") else { return false }
+        rest = rest.dropFirst("export-".count)
+        if rest.hasSuffix("-journal") { rest = rest.dropLast("-journal".count) }
+        guard rest.hasSuffix(".tmp") else { return false }
+        let uuid = rest.dropLast(".tmp".count)
+        return UUID(uuidString: String(uuid)) != nil && uuid.count == 36
     }
 
     /// Whether `fd` has an access control list (a folder's inheritable `everyone allow read` is one): it is a way for others to read.
