@@ -380,7 +380,8 @@ struct ChangesTests {
         #expect(await running.value == .cancelled)
         await eventually("the new org's history read") { if case .loaded = model.state { true } else { false } }
         #expect(model.result == nil && model.refusal == nil && model.rows.isEmpty && !model.isRunning && model.startBlocked == nil)
-        let underB = try await world.history!.snapshots(org: world.orgs.store["b"]!), underA = try await world.history!.snapshots(org: world.orgs.store["a"]!)
+        let bProfile = try #require(world.orgs.store["b"])
+        let underB = try await world.history!.snapshots(org: bProfile), underA = try await world.history!.snapshots(org: world.orgs.store["a"]!)
         #expect(underB.isEmpty && underA.count == 1, "the stopped run wrote nothing under either org")
     }
 
@@ -607,7 +608,8 @@ struct ChangesTests {
         #expect(why.hasPrefix("A snapshot is being taken"))
         await #expect(throws: OrgsModel.SaveFailure.self) { try await world.orgs.remove("b", deleteSecrets: true, deleteHistory: true) }
         #expect(world.orgs.store["b"] != nil, "the org stays")
-        let kept = try await world.history!.snapshots(org: world.orgs.store["b"]!).count
+        let bProfile = try #require(world.orgs.store["b"])
+        let kept = try await world.history!.snapshots(org: bProfile).count
         #expect(kept == 1, "and its history")
         gate.release("users")
         _ = await running.value
@@ -629,6 +631,19 @@ struct ChangesTests {
         #expect(world.orgs.store["b"] == nil)
     }
 
+    /// A switch clears the note about a list cut at 100 snapshots.
+    @Test func aSwitchClearsTheListNote() async throws {
+        let world = try await World.make()
+        for index in 0..<101 { try await Self.record(world, days: Double(index), ["devices": [Self.device("D\(index)")]]) }
+        let model = world.screens.changes
+        await model.load()
+        #expect(model.listNote != nil)
+        world.orgs.select("b")
+        #expect(model.listNote == nil && model.rows.isEmpty)
+        await eventually("b's history read") { if case .loaded = model.state { true } else { false } }
+        #expect(model.listNote == nil)
+    }
+
     /// A read that returns after a switch is dropped: each guard (the list, the comparison, the estimates) is held by a hook that
     /// switches orgs while the read is out, and the screen shows nothing of the old org right after.
     @Test func aReadThatReturnsAfterASwitchIsDropped() async throws {
@@ -640,7 +655,15 @@ struct ChangesTests {
         }
         // The list.
         var (world, model) = try await seeded()
-        model.afterRead = { stage in if stage == "load" { world.orgs.select("b") } }
+        // Once, and b's own load finishes inside the hook: the stale list then returns after it, where only the guard stops it.
+        var fired = false
+        let before = model.loadsFinished, m0 = model, w0 = world
+        model.afterRead = { stage in
+            guard stage == "load", !fired else { return }
+            fired = true
+            w0.orgs.select("b")
+            await eventually("b's own load") { m0.loadsFinished > before }
+        }
         await model.load()
         #expect(model.rows.isEmpty && model.comparison == nil && model.newerID == nil, "the list read for a isn't shown under b")
         // The comparison.

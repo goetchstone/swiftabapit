@@ -270,7 +270,7 @@ public final class ChangesModel {
         if busy || generation != orgs.generation { return outcome }
         result = Self.words(outcome)
         if case .recorded = outcome {
-            // A new snapshot moves an unchosen pair to the newest two.
+            // A new snapshot resets the pair: the newest two, whether or not the operator had chosen one.
             pairChosen = false
             await load()
         }
@@ -314,6 +314,7 @@ public final class ChangesModel {
         case .success(let opened): store = opened
         case .failure(let failure):
             rows = []
+            listNote = nil
             state = .failed(failure.message)
             return
         }
@@ -324,6 +325,7 @@ public final class ChangesModel {
         } catch {
             guard token == loadToken, generation == orgs.generation else { return }
             rows = []
+            listNote = nil
             state = .failed(error.message)
             return
         }

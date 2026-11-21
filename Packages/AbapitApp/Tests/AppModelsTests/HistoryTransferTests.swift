@@ -306,8 +306,8 @@ struct HistoryTransferTests {
         #expect(try await stored(world).isEmpty)
     }
 
-    /// A switch of client before the first snapshot is read stops the import: nothing is mapped to the new client's org from
-    /// the old client's start, and nothing is shown under the new client.
+    /// A switch of client after the snapshot is read and before it is written (the `beforeWrite` hook) stops the import: nothing is
+    /// mapped to the new client's org from the old client's start, and nothing is shown under the new client.
     @Test func aSwitchStopsTheImportAndShowsNothingUnderTheNewClient() async throws {
         let source = try Self.folder()
         defer { try? FileManager.default.removeItem(at: source) }

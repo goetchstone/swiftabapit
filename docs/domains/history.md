@@ -363,7 +363,10 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   count, writer, **marks** and **notes**. A resource in the snapshot's `counts` and `errors` both is **partial** ("partial: Devices (page
   cap)"); one only in `errors` is **not read** ("not read: People (HTTP 403)"); the snapshot's `notes` (attributes left out, the
   sweeps' not-read counts, the page-limit counts) are shown beneath it, per resource. An empty history says so, and Snapshot now is
-  offered. The default pair is the newest and the one before; two pickers choose any two, either way round.
+  offered. The store is asked for 101 snapshots: with more than 100 the list shows the newest 100 and says "Showing the newest 100 snapshots;
+  older ones aren't listed." (a switch or a failed read clears the note). The default pair is the newest and the one before; two pickers choose
+  any two, either way round. An unchosen pair always moves to the newest two after a reload; a chosen pair survives a reload; a Snapshot
+  now resets it to the newest two either way.
 - **A side that wasn't read is never a removal** (`ChangesModel.compare`, a pure function). A resource is compared only when both
   snapshots read it in full (in `counts`, not in `errors`).
   - Not read on a side (not in `counts`: it failed before any item, or the run didn't ask): left out, in words naming the side:
@@ -384,7 +387,9 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   - The sweeps (AppleCare, Activation Lock, Apple MDM details; the details only for a Business org) are **opt-in for that one run** and
     are off again after it: each is one read per device. Each is shown with the collector's `Sweep.Estimate` before the run, counted from
     the newest snapshot's device and Apple-MDM counts at the org's rate now; the words are the estimate's ("An estimate: Apple may slow
-    the reads …"). With no snapshot there is no count, and the line says the time can't be estimated yet. The run's own estimate (the
+    the reads …"). With no snapshot there is no count, and the line says the time can't be estimated yet; a newest snapshot that didn't read devices says
+    there is no device count; no `mdm_enrolled` count makes no Apple MDM details estimate and says the managed count is unknown (it is never
+    taken as none); a page-capped device or managed count is shown "(read in part)". The run's own estimate (the
     collector's, once the lists are read) shows while it goes.
   - While it runs: "Reading devices…", the sweep's progress ("Activation Lock: 5 of 84 devices") and Cancel (`SnapshotCollector.cancel()`:
     nothing is written, and the screen says "Cancelled: nothing was written."). A refusal or error is the collector's words
@@ -402,8 +407,9 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   write checks the run is still current (`aSwitchMidRunShowsNothingOfTheOldOrg`).
 - **CSV of the comparison** (`ExportHistory.snapshotDiff`, columns `ExportPolicy.snapshotDiff`: `older`, `newer`, `change`, `resource`,
   `label`, `field`, `old`, `new`, `note`, after the item's `id`): one row per added or removed item and per changed field, a `not compared`
-  row for each resource left out or held back (with the same words as the screen), and one `no differences` row when there is nothing
-  (never a bare header). Cells go through the same writer, formula guard and denylist as every export, and values through `masking`
+  row for each resource left out or held back (with the same words as the screen), a `partial` row for every resource read in part (with
+  which side and why, whether or not it has changes), and one `no differences` row only when every resource was read in full on both sides
+  and none was left out (never a bare header, never written over a part read). Cells go through the same writer, formula guard and denylist as every export, and values through `masking`
   (a secret-named key withheld at any depth). It goes through a Save panel (`fileExporter`, with `fileDialogMessage`): the name is
   `changes <older> to <newer>.csv` (times without separators), led by the client's name only when the app shows clients
   (`ScreenWords.filename`, `orgs.showsClients`); the panel's text says it holds this organization's differences, serial numbers, labels and
@@ -414,7 +420,10 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   Its Key and Keep Its History" (the default) and "Remove, Delete Its Key and Delete Its N Snapshots for Good", and the message says the
   snapshots stay unless deleted and that deleting them can't be undone (no copy is kept). The history is deleted first (`removeAll(org:)`,
   which also clears the org's findings), so a history that can't be deleted (a newer version's file, one that won't open) refuses the
-  removal and leaves the org, its key and its history as they were. Without a yes nothing of the history is touched.
+  removal and leaves the org, its key and its history as they were. Deleting is also refused while a snapshot is being taken or an import
+  or export is running (`OrgsModel.historyDeletionBlocked`, set by `ScreenModels`; the coordinating session's decision): a write in flight
+  could land after the deletion. The button is off with the reason, and the model refuses too; removing the org and keeping its history stays
+  allowed. The snapshot count is `SnapshotStore.count(org:)`, a `COUNT(*)`, not a list. Without a yes nothing of the history is touched.
 - **Screenshots**: `docs/screenshots/changes.png` (CI's `changes` run, over the demo's snapshots) and the refreshed `settings.png`
   (PR #36's History group). The demo's first read waits for its seeding (`beforeFirstLoad`): the first picture drew one snapshot.
 - **The demo** (`DemoHistory`, DEBUG only): three fake snapshots of the demo org, `DEMOCHG…` serials and `example.com` addresses, so the
