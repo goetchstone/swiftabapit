@@ -342,39 +342,50 @@ events in phase 2a; their notes are below.
     serial matches are shown, marked partial, never recorded, with "K of Apple MDM's devices came with no serial number, so
     each device found here could be one of them", and, when more are found than K, "at least (found minus K) of the found are
     really missing" (the coordinating session's decision, 2026-11-21: partial, not skipped, so one personal device never
-    switches the rule off). Nothing found is judged: every assigned serial is matched. Skipped: services read without
-    `serverType`; every service read with no type or one this version doesn't know; no `APPLE_MDM` service's devices read;
-    Apple MDM's list not whole; `serialNumber` not sent; no Apple MDM device with a serial.
+    switches the rule off). The same when no Apple MDM device has a serial (an org of personal devices): every assigned
+    serial is shown, partial, never recorded, so a column Apple didn't fill can't flood the store (the coordinating
+    session's decision from the round-3 review, 2026-11-21). "is" or "are" agrees with the number surely missing. Nothing
+    found is judged: every assigned serial is matched. Skipped: services read without `serverType`; every service read with
+    no type or one this version doesn't know; no `APPLE_MDM` service's devices read; Apple MDM's list not whole;
+    `serialNumber` in `notSent`.
   - `missing_from_mosyle`: the same over the client's Mosyle org: the device list of the service `mosyleServiceID` names,
     and Mosyle's device list (searched). Partial: the service's list read in part; Mosyle devices with no serial number (the
     adapter lists such a device by its UDID, or by nothing), treated as on the Apple MDM half: what no serial matches is
     shown, marked partial, with the same words. Skipped: no Mosyle org; the setting not set ("Which Apple service is your
     Mosyle org isn't set"); a whole services list without that service; the service's list not read; Mosyle's list not
-    whole; Mosyle's `serialNumber` not sent; no Mosyle device with a serial.
+    whole; Mosyle's `serialNumber` in `notSent`. No Mosyle device with a serial is partial, as on the Apple MDM half: 5
+    personal phones and 40 devices assigned and never enrolled show the 40, with "at least 35 of the 40 found are really
+    missing".
   - `apple_mdm_not_in_apple`: Apple MDM's list against Apple's device list (searched): the reconciliation's MDM-only bucket,
     and **every Apple MDM device with no serial number, flagged** under its Apple MDM id ("Enrolled in Apple MDM with no
     serial number (listed by its Apple MDM id): can't be matched with Apple's device list."): such a device can't be shown
     to be Apple's, and the operator's answer is to flag every MDM device Apple doesn't own, personal or not ("Flag them
     all"). One whose id isn't an identifier can't be a subject and is counted in a note. Partial: Apple MDM's list read in
-    part. Skipped: Apple MDM's list not read, Apple's list not whole, `serialNumber` not sent, no device with a serial (the
-    column most likely wasn't read: flagging every device would be a flood of false findings).
+    part; **no device with a serial** (an org made entirely of personal devices): every device is shown under its Apple MDM
+    id, marked partial, never recorded, with "if Apple didn't send the serial numbers, these are every device, not only
+    personal ones", so a column Apple didn't fill shows rather than floods the store. Skipped: Apple MDM's list not read,
+    Apple's list not whole, `serialNumber` in `notSent`.
   - `mosyle_not_in_apple`: the Reconciliation screen's Mosyle-only bucket, serial for serial, over the Mosyle devices listed
     by a serial, and **every Mosyle device with no serial number, flagged** under its UDID ("In Mosyle with no serial number
     (listed by its UDID): can't be matched with Apple's device list."), by the same answer ("Flag them all": personal
     devices, serial-less ones included). One with an empty id (`MosyleAdapter.device` falls back to the UDID, then to
     nothing) or a UDID that isn't an identifier can't be a subject and is counted in a note, never dropped silently.
-    Partial: Mosyle's list read in part. Skipped: Mosyle's list not read, Apple's list not whole, Mosyle's `serialNumber`
-    not sent, no device with a serial.
+    Partial: Mosyle's list read in part; no device with a serial, as on the Apple MDM half (every device under its UDID,
+    "if Mosyle's serial column wasn't read, these are every device, not only personal ones"). Skipped: Mosyle's list not
+    read, Apple's list not whole, Mosyle's `serialNumber` in `notSent`.
   - **The Mosyle collector** (a later PR) must keep `serialNumber` in its allowlist: without it every Mosyle device is
-    serial-less to these rules, and both Mosyle comparisons skip.
+    serial-less to these rules, so both Mosyle comparisons are only ever partial (every device shown, nothing recorded), or
+    skipped where the collector says `serialNumber` wasn't sent.
   - `applecare_expiring`: Apple's device list and the AppleCare sweep: `CoverageReport`'s `expiring` with `days` the
     threshold (now to now + days, both ends included, to the microsecond; an ended coverage isn't expiring; "no record" is
     never a finding). A finding is the device id the record sat under: `CoverageReport.Expiring.device`, added here (the
     golden compares attributes only). Partial: the list read in part, some devices' coverage not read (how many, and why).
     Skipped: the list not read, no device's coverage read, every listed device read with an ACTIVE coverage whose end can't
     be read and nothing expiring (`CoverageReport.unreadableEndDevices`, added here). A record under a key no listed device
-    has (a device gone from the list) is beside the fleet, as the report keeps it: found if it expires, noted if its end
-    can't be read, never counted toward "every device". Notes: an ACTIVE coverage whose end can't be
+    has (a device gone from the list) is beside the fleet: over a list read whole it has left the org, so an expiring
+    coverage is noted ("for a device no longer in Apple's device list: not counted"), never found; over a list read in
+    part it may be in the part not read, so it is found, marked partial. An unreadable end is noted either way, never
+    counted toward "every device". Notes: an ACTIVE coverage whose end can't be
     read; a threshold past `CoverageReport.maximumDays` (1825), which is used instead and said (1825 itself says nothing).
   - `mosyle_check_in`: `StaleDevices` over Mosyle's list, `days` the threshold: whole days, floored, the threshold itself
     stale; never checked in (no stamp) and a stamp that isn't a date are found, as that report says. Partial: the list read
@@ -401,7 +412,11 @@ events in phase 2a; their notes are below.
     read; every device unknown (a status near or past this version doesn't know, or a deadline that can't be read).
     Unknown or missing status near or past, and a deadline that can't be read: noted, not judged.
 - **Subjects** are a serial or an id, never a name: an Apple device's id (Apple sets it to the serial), the serial Apple MDM
-  or Mosyle lists (Apple MDM's device id when it lists none), a service's id. `NeedsAttention.isIdentifier` is the store's
+  or Mosyle lists, a service's id. **A device with no serial is keyed by the id its MDM lists it by**: a Mosyle device by its
+  UDID (the adapter's id: the same whether `serial_number` is "", null or missing, so the key holds; it changes once if
+  Mosyle later learns the serial, and the old finding then ages out after 30 days unseen), an Apple MDM device by its
+  `mdmDevices` id. Whether that id is stable between reads is not known (apple-reads, "Assumed, check live"): if it changes,
+  findings churn and dismissals never stick. `NeedsAttention.isIdentifier` is the store's
   rule, moved here so both check by one: a finding whose subject fails it (a Mosyle serial with a space) is shown, left out of
   `subjectsToRecord`, and said ("can't be kept for later").
 - **Thresholds**: `NeedsAttention.Thresholds` has no defaults: `LocalSettings.Thresholds` holds them (Reports doesn't import
