@@ -15,16 +15,16 @@ public struct LocalSettings: Sendable, Equatable {
     public static let version = 1
     public static let fileName = "settings.json"
 
-    /// When "Needs attention" raises a finding, in days. **Proposal, for the operator to confirm**: the defaults
-    /// (30, 90, 14, 30) are the coordinating session's, not the operator's.
+    /// When "Needs attention" raises a finding, in days. The defaults (30, 90, 14, 30) were the coordinating session's
+    /// proposal; the operator kept them on 2026-11-20, answering "Keep these defaults (Recommended)".
     public struct Thresholds: Sendable, Equatable {
-        /// A device that hasn't checked in to its MDM server for this long (proposal: 30).
+        /// A device that hasn't checked in to its MDM server for this long (default 30).
         public var checkInDays = 30
-        /// AppleCare coverage that ends within this long (proposal: 90).
+        /// AppleCare coverage that ends within this long (default 90).
         public var appleCareExpiringDays = 90
-        /// An MDM migration whose deadline is this near (proposal: 14).
+        /// An MDM migration whose deadline is this near (default 14).
         public var migrationDeadlineDays = 14
-        /// A service that hasn't connected for this long (proposal: 30).
+        /// A service that hasn't connected for this long (default 30).
         public var quietServiceDays = 30
 
         public init() {}

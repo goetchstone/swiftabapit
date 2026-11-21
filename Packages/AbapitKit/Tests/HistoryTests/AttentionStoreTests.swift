@@ -173,6 +173,57 @@ struct AttentionStoreTests {
         #expect(try await store.state(org: Self.acme).count == 3)
     }
 
+    /// Format characters are refused (a direction override, a joiner, a zero-width space: each would make two ids look alike);
+    /// "e with acute" precomposed and decomposed are both identifiers, and two; and the limits hold in bytes too (four a
+    /// character), so one character carrying thousands of combining marks is refused.
+    @Test func identifiersRefuseFormatCharactersAndAreBoundedInBytes() async throws {
+        let store = try Self.store()
+        // U+0600 (a Prepend mark) and U+FFF9 (an annotation anchor) are format characters that aren't default-ignorable, so
+        // the format check holds them, not the default-ignorable one.
+        for name in ["a\u{202E}b", "a\u{200D}b", "a\u{200B}b", "a\u{600}b", "a\u{FFF9}b"] {
+            #expect(!SnapshotStore.isIdentifier(name, limit: 128), "\(Array(name.unicodeScalars))")
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [name], at: Scratch.noon) }
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: name, subjects: [], at: Scratch.noon) }
+        }
+        let precomposed = "\u{E9}", decomposed = "e\u{301}"
+        #expect(SnapshotStore.isIdentifier(precomposed, limit: 128) && SnapshotStore.isIdentifier(decomposed, limit: 128))
+        try await store.seen(org: Self.acme, rule: "r", subjects: [precomposed, decomposed], at: Scratch.noon)
+        #expect(Set(try await store.state(org: Self.acme).map { Array($0.subject.utf8) }) == [Array(precomposed.utf8), Array(decomposed.utf8)])
+
+        let marked = "e" + String(repeating: "\u{301}", count: 5000)
+        #expect(marked.count == 1 && marked.utf8.count == 10_001)
+        #expect(!SnapshotStore.isIdentifier(marked, limit: 128) && !SnapshotStore.isIdentifier(marked, limit: 64))
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [marked], at: Scratch.noon) }
+        await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: marked, subjects: [], at: Scratch.noon) }
+
+        // At the edge: 128 characters of four bytes are 512 bytes and pass; 128 characters of 513 bytes don't.
+        let widest = String(repeating: "\u{10000}", count: 128)
+        #expect(widest.count == 128 && widest.utf8.count == 512 && SnapshotStore.isIdentifier(widest, limit: 128))
+        let justUnder = String(repeating: "\u{10000}", count: 127) + "e\u{301}"
+        #expect(justUnder.count == 128 && justUnder.utf8.count == 511 && SnapshotStore.isIdentifier(justUnder, limit: 128))
+        let over = justUnder + "\u{301}"
+        #expect(over.count == 128 && over.utf8.count == 513 && !SnapshotStore.isIdentifier(over, limit: 128))
+        #expect(!SnapshotStore.isIdentifier(String(repeating: "x", count: 65), limit: 64) && SnapshotStore.isIdentifier(String(repeating: "x", count: 64), limit: 64))
+    }
+
+    /// Code points that show as nothing are refused, so two ids can't look alike: a grapheme joiner (U+034F), the Hangul fillers
+    /// (U+3164, U+115F), a variation selector (U+FE0F), all default-ignorable; and noncharacters (U+FFFF, U+FDD0). A visible
+    /// letter outside ASCII still passes.
+    @Test func identifiersRefuseDefaultIgnorablesAndNoncharacters() async throws {
+        let store = try Self.store()
+        // A literal can't hold a noncharacter: Swift refuses it, so those two are built from their scalars.
+        let noncharacters = [0xFFFF, 0xFDD0].map { String(Character(Unicode.Scalar($0)!)) }
+        for name in ["a\u{34F}b", "a\u{3164}b", "\u{115F}", "a\u{FE0F}", "a" + noncharacters[0] + "b", noncharacters[1]] {
+            #expect(!SnapshotStore.isIdentifier(name, limit: 128), "\(Array(name.unicodeScalars))")
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: "r", subjects: [name], at: Scratch.noon) }
+            await #expect(throws: SnapshotStore.Failure.notAnIdentifier) { try await store.seen(org: Self.acme, rule: name, subjects: [], at: Scratch.noon) }
+        }
+        #expect(SnapshotStore.isIdentifier("C02\u{C5}X0001", limit: 128) && SnapshotStore.isIdentifier("\u{3131}", limit: 128))
+        // The two checks are apart: each of these is one and not the other.
+        #expect(Unicode.Scalar(0x600)!.properties.generalCategory == .format && !Unicode.Scalar(0x600)!.properties.isDefaultIgnorableCodePoint)
+        #expect(Unicode.Scalar(0x115F)!.properties.generalCategory != .format && Unicode.Scalar(0x115F)!.properties.isDefaultIgnorableCodePoint)
+    }
+
     /// Canonically equivalent strings are two rows: the table keys by bytes, and a `Set<String>` would have merged them.
     @Test func unicodeEquivalentSubjectsStayTwoRows() async throws {
         let store = try Self.store()
