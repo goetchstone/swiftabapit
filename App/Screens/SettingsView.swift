@@ -20,6 +20,10 @@ struct SettingsView: View {
     /// The selected org's client's name as typed, renamed on Return.
     @State private var clientName = ""
     @State private var removing: OrgProfile?
+    /// The snapshots the org being removed has in the history, read before the question is asked; nil when it couldn't be read.
+    @State private var removalSnapshots: Int?
+    /// The org the removal question was last asked about: a count that comes back for another is dropped.
+    @State private var asking: String?
     @State private var testResult: [String: String] = [:]
     @State private var working: String?
     @State private var problem: String?
@@ -91,7 +95,7 @@ struct SettingsView: View {
                                 .help("Reads one item from each section; Apple has no permissions endpoint")
                             Spacer()
                             Button("Edit…") { editing = .edit(profile) }
-                            Button("Remove…", role: .destructive) { removing = profile }
+                            Button("Remove…", role: .destructive) { askToRemove(profile) }
                         }
                         if working == profile.id { ProgressView().controlSize(.small) }
                         if let result = testResult[profile.id] { Text(result).textSelection(.enabled) }
@@ -156,14 +160,36 @@ struct SettingsView: View {
         }
         .confirmationDialog("Remove \(removing?.name ?? "this organization")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { profile in
-            Button(profile.provider == .known(.mosyle) ? "Remove and Delete Its Credentials" : "Remove and Delete Its Key", role: .destructive) {
-                remove(profile)
+            let keyWords = profile.provider == .known(.mosyle) ? "Delete Its Credentials" : "Delete Its Key"
+            Button((removalSnapshots ?? 0) > 0 ? "Remove, \(keyWords) and Keep Its History" : "Remove and \(keyWords)", role: .destructive) {
+                remove(profile, deleteHistory: false)
+            }
+            if let count = removalSnapshots, count > 0 {
+                Button("Remove, \(keyWords) and Delete Its \(count.formatted()) Snapshot\(count == 1 ? "" : "s") for Good", role: .destructive) {
+                    remove(profile, deleteHistory: true)
+                }
+                .disabled(orgs.historyDeletionBlocked != nil)
+                .help(orgs.historyDeletionBlocked ?? "Deletes this organization's snapshots and its Needs-attention findings; it can't be undone")
             }
             Button("Cancel", role: .cancel) {}
         } message: { profile in
-            Text(profile.provider == .known(.mosyle)
-                 ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it."
-                 : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it.")
+            Text((profile.provider == .known(.mosyle)
+                  ? "Its credentials are deleted from this Mac's Keychain, and its settings from abapit. Mosyle keeps the access token: revoke it there if you no longer need it. "
+                  : "Its key is deleted from this Mac's Keychain, and its settings from abapit. Apple Business keeps the API account: revoke it there if you no longer need it. ")
+                 + OrgsModel.removalHistoryNote(snapshots: removalSnapshots)
+                 + (orgs.historyDeletionBlocked.map { " Deleting is off now: \($0)" } ?? ""))
+        }
+    }
+
+    /// Reads how much history the org has, then asks: the question names what is deleted, so it is asked once the count is known.
+    private func askToRemove(_ profile: OrgProfile) {
+        asking = profile.id
+        Task {
+            let count = await orgs.historySnapshots(of: profile.id)
+            // A slow count for another org, asked about since, must not replace this question.
+            guard asking == profile.id else { return }
+            removalSnapshots = count
+            removing = profile
         }
     }
 
@@ -233,7 +259,7 @@ struct SettingsView: View {
                     .help("Logs in afresh with the stored credentials and reads one page of Macs: proves the token, the admin account and the network")
                 Spacer()
                 Button("Edit…") { editingMosyle = .edit(profile) }
-                Button("Remove…", role: .destructive) { removing = profile }
+                Button("Remove…", role: .destructive) { askToRemove(profile) }
             }
             if working == profile.id { ProgressView().controlSize(.small) }
             if let result = testResult[profile.id] { Text(result).textSelection(.enabled) }
@@ -363,10 +389,10 @@ struct SettingsView: View {
     }
     #endif
 
-    private func remove(_ profile: OrgProfile) {
+    private func remove(_ profile: OrgProfile, deleteHistory: Bool) {
         Task {
             do {
-                try await orgs.remove(profile.id, deleteSecrets: true)
+                try await orgs.remove(profile.id, deleteSecrets: true, deleteHistory: deleteHistory)
                 selected = nil
             } catch {
                 problem = DevicesModel.message(error)

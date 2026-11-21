@@ -95,7 +95,13 @@ final class AppServices {
         } makeMosyleClient: { org in
             MosyleClient(org: org, vault: vault, transport: mosyleStub)
         }
-        return AppServices(orgs: model, isDemo: true)
+        let services = AppServices(orgs: model, isDemo: true)
+        // A few fake snapshots, so Activity › Changes draws a real-looking diff; its first read waits for them.
+        if case .success(let history) = model.history {
+            let seeding = Task { await DemoHistory.seed(history, org: profile) }
+            services.screens.changes.beforeFirstLoad = { await seeding.value }
+        }
+        return services
     }
     #endif
 }

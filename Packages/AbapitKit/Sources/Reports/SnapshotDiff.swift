@@ -1,3 +1,4 @@
+import AppleModels
 import Foundation
 import JSONAPI
 import MosyleModels
@@ -78,6 +79,14 @@ public enum SnapshotDiff {
         public let added: [Item]
         public let removed: [Item]
         public let changed: [Change]
+
+        /// A delta as a screen shows it, after it has withheld what a part read couldn't vouch for.
+        public init(resource: String, added: [Item], removed: [Item], changed: [Change]) {
+            self.resource = resource
+            self.added = added
+            self.removed = removed
+            self.changed = changed
+        }
     }
 
     /// The resources that differ, in code-point order; added, removed and changed items, each in code-point order of
@@ -195,6 +204,21 @@ public enum SnapshotDiff {
             }
         }
         return ""
+    }
+}
+
+extension SnapshotDiff {
+    /// A field's value as a screen shows it (invariant 11): a string as it is, nothing as a dash, anything else as JSON text, with
+    /// every value under a secret-named key withheld at any depth (`shownJSON`). A field whose own name is a secret's is withheld
+    /// whole. A snapshot never holds one (the store leaves them out), so this is the second defence, for a row changed outside
+    /// the app.
+    public static func shown(_ value: JSONValue, field: String) -> String {
+        if ExportPolicy.isSensitive(field) { return AuditEvent.withheld }
+        switch value {
+        case .null: return "—"
+        case .string(let text): return text
+        default: return shownJSON(value)
+        }
     }
 }
 

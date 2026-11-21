@@ -306,18 +306,18 @@ struct HistoryTransferTests {
         #expect(try await stored(world).isEmpty)
     }
 
-    /// A switch of client before the first snapshot is read stops the import: nothing is mapped to the new client's org from
-    /// the old client's start, and nothing is shown under the new client.
+    /// A switch of client after the snapshot is read and before it is written (the `beforeWrite` hook) stops the import: nothing is
+    /// mapped to the new client's org from the old client's start, and nothing is shown under the new client.
     @Test func aSwitchStopsTheImportAndShowsNothingUnderTheNewClient() async throws {
         let source = try Self.folder()
         defer { try? FileManager.default.removeItem(at: source) }
         let world = try await Self.world()
         let rows = [Row(id: 1, takenAt: "2026-09-01T08:00:00Z", client: Self.a, items: [Self.device("D1")])]
         let url = URL(filePath: try Self.abapitFile(rows, in: source))
-        let task = Task { await world.screens.historyTransfer.importHistory(from: url) }
-        await Task.yield()
-        world.orgs.selectClient(try #require(world.orgs.store.client(of: "b")).id)
-        let outcome = await task.value
+        // The switch comes inside the import, before its write, through the hook: no Task and no yield, so no race against the import's hops.
+        let other = try #require(world.orgs.store.client(of: "b")).id
+        world.screens.historyTransfer.beforeWrite = { world.orgs.selectClient(other) }
+        let outcome = await world.screens.historyTransfer.importHistory(from: url)
         guard case .stopped(let report, _) = outcome else { Issue.record("\(outcome)"); return }
         #expect(report.imported == 0)
         #expect(world.screens.historyTransfer.summary == nil && world.screens.historyTransfer.problem == nil)

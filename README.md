@@ -40,6 +40,8 @@ Drawn by CI from the built-in demo organization, which holds no real data; the f
 
 ![Apple against Mosyle](docs/screenshots/reconciliation.png)
 
+![Changes between two snapshots](docs/screenshots/changes.png)
+
 ![Settings](docs/screenshots/settings.png)
 
 ## How it's built to be safe
