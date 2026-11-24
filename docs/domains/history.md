@@ -995,8 +995,11 @@ screenshot run.
 - **The counts, never "nothing open" over less than a whole read** (the review of PR 43, invariant 8): `Summary` (the card's and the screen's words,
   held by `nothingOpenIsNeverSaidOverAPartRead`) counts as clear only the rules judged over a whole read; the rules judged in part are said apart
   ("1 rule judged in part: not every device was read, so it may have missed some, and what it found isn't kept."); the skipped ones are counted;
-  and a rule skipped only because a list it reads, or the history, was still being read is "reading", never "skipped" ("Reading: 12 of 12 rules wait
-  for a list that is still being read."; the first paint said "12 of 12 rules skipped").
+  and a rule skipped only because a list it reads, or the history, was still being read is "reading", never "skipped" ("Reading: 11 of 12 rules wait
+  for a list that is still being read."; the first paint said "12 of 12 rules skipped"). **Only that** (the delta review): a rule one of whose lists
+  failed, was refused or can't be read (no Mosyle org), or "missing from Mosyle" without a setting it can use, is skipped with that reason even while
+  another of its lists still loads (`aFailedListBesideALoadingOneIsSkippedNotReading`: Mosyle refused beside Apple's devices loading, the services
+  refused beside Mosyle loading, the setting Not set, no Mosyle org).
 - **When it evaluates**: `load()` reads the history and evaluates; the screen and the Overview's card evaluate again whenever what the rules read
   changes (`inputKey`: each list's state and count, the history's read, the setting, the thresholds). A list still being read is one key however
   many pages have come, so the rules aren't run and recorded again for each page. Recording the same subjects again only moves `last_seen`.
@@ -1005,8 +1008,9 @@ screenshot run.
 - **Dismiss and Snooze** (**the operator's Q10**): writes to the local history only (`SnapshotStore.dismiss`, `snooze`), under the finding's
   keeper. **Bound to the org it was evaluated under** (the review of PR 43): each finding carries its keeper's org id (`Finding.keeperOrg`), and a
   Dismiss or Snooze whose keeper is no longer the active client's org, a finding held from before a switch or a switch between the click and the
-  write, is refused in words ("it was found for an organization that isn't the active client's now, so nothing was changed") and writes nothing
-  (`dismissAndSnoozeAreBoundToTheirOrg`). A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
+  write, is refused and writes nothing (`dismissAndSnoozeAreBoundToTheirOrg`). A finding held from before a switch says so ("it was found for an
+  organization that isn't the active client's now, so nothing was changed"); a refusal caused by a switch while it waited isn't shown on the new
+  client's screen, which a switch clears. A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
   until its date (a week, 30 or 90 days on screen; a date not after now is refused in words). Both are off, with the reason, for a finding not kept
   (found over a part read, an id the store can't keep, or a history that can't be written); a dismissed or snoozed finding is hidden, and shown
   with "Show dismissed and snoozed (N)". No undo for a dismissal yet (the store has none).
@@ -1023,7 +1027,12 @@ screenshot run.
   - **Dropped with the client's orgs**: removing the client, or removing or separating its Apple or Mosyle org, drops its entry
     (`OrgsModel.dropMosyleServices`), after the org change, which stays whole or not at all on its own and drops nothing when refused; a settings
     file that can't be written keeps the entry and Settings says so (`settingsProblem`); such an entry still reads as stale where its Mosyle org
-    differs, and as "isn't among the services" where Apple doesn't list its service (`aClientsSettingGoesWithItsOrgs`, five cases).
+    differs, and as "isn't among the services" where Apple doesn't list its service (`aClientsSettingGoesWithItsOrgs`, five cases). A move drops the
+    entries of the client the org left and the client it is in now, which a separation makes on an id another client may have had
+    (`aSeparatedOrgsNewClientNeverKeepsALeftoverEntry`). **Replacing a Mosyle org's credentials drops its client's entry** (the coordinating session's
+    decision: new credentials may be another tenant's under the same org id; a rename alone keeps it; `newMosyleCredentialsDropTheClientsEntry`).
+    An org added into an existing client drops nothing (the coordinating session's decision): that client had no org of that kind, so it couldn't
+    have had a usable entry, and a leftover one names another Mosyle org and reads as stale.
   - **Couldn't be read, never written over**: a `mosyle_services` that isn't an object, or this client's entry of another shape, reads as
     "couldn't be read". The screen says so in the rule's skip, never "isn't set"; Settings can't choose, a choice is refused, and the file is left as
     it was (`aSettingThatCouldntBeReadIsSaidAndNeverWrittenOver`). The thresholds are read either way: a bad `mosyle_services` no longer costs them.

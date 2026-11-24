@@ -369,20 +369,31 @@ public final class NeedsAttentionModel {
         for (source, run) in runs { if let input = run.input { judged[source] = NeedsAttention(input, thresholds: thresholds, now: now) } }
         let live = liveWords(now: now)
         let history = state == .idle || state.isLoading
-        func pending(_ state: LoadState) -> Bool { state == .idle || state.isLoading }
-        let lists = (devices: pending(devices.state), services: pending(devices.servicesState),
-                     mosyle: orgs.mosyleOrg != nil && pending(mosyle.devices.state))
+        // A rule is "reading" only while a list it reads is still being read and none of them failed, was refused or can't be read
+        // at all (no Mosyle org): a failed list beside a loading one is a reason, said as skipped (the review of fix round 1).
+        enum List { case ready, pending, unusable }
+        func list(_ state: LoadState) -> List {
+            switch state {
+            case .idle, .loading: .pending
+            case .loaded: .ready
+            case .failed, .forbidden, .unusable, .notInScope: .unusable
+            }
+        }
+        func reading(_ lists: [List]) -> Bool { !lists.contains(.unusable) && lists.contains(.pending) }
+        let apple = list(devices.state), services = list(devices.servicesState)
+        let mosyleList: List = orgs.mosyleOrg == nil ? .unusable : list(mosyle.devices.state)
         return Rule.allCases.map { rule in
             let source = Self.source(of: rule), run = runs[source]
             guard source == .live else {
                 return Evaluated(rule: rule, result: judged[source]?.result(rule), skip: run?.skip, source: run?.source ?? [], pending: history)
             }
             let (lines, waiting): ([String?], Bool) = switch rule {
-            case .missingFromMosyle: ([live.services, live.mosyle], lists.services || lists.mosyle)
-            case .mosyleNotInApple: ([live.devices, live.mosyle], lists.devices || lists.mosyle)
-            case .mosyleCheckIn: ([live.mosyle], lists.mosyle)
-            case .quietService: ([live.services], lists.services)
-            default: ([live.devices], lists.devices)
+            // And only with a setting it can use: Not set, stale or unreadable is a reason, said as skipped.
+            case .missingFromMosyle: ([live.services, live.mosyle], reading([services, mosyleList]) && mosyleServiceID != nil)
+            case .mosyleNotInApple: ([live.devices, live.mosyle], reading([apple, mosyleList]))
+            case .mosyleCheckIn: ([live.mosyle], reading([mosyleList]))
+            case .quietService: ([live.services], reading([services]))
+            default: ([live.devices], reading([apple]))
             }
             // The setting "missing from Mosyle" needs, when it can't be used: said, and the rule not run on a guess.
             if rule == .missingFromMosyle, orgs.mosyleOrg != nil, let why = serviceState.unusable {
@@ -634,7 +645,8 @@ public final class NeedsAttentionModel {
 
         /// The screen's first line: the open findings, or that the lists are still being read.
         public var headline: String {
-            if rows.isEmpty, clear + partial + skipped.count == 0, reading > 0 { return "Reading what the rules need…" }
+            // Nothing judged yet and lists still being read: no count of open findings is claimed.
+            if rows.isEmpty, clear + partial == 0, reading > 0 { return "Reading what the rules need…" }
             return "\(Self.count(open, "open finding")) in \(rows.count.formatted()) of \(total.formatted()) rules."
         }
 
@@ -716,7 +728,10 @@ public final class NeedsAttentionModel {
         // while this waits, is never written under the org on screen now.
         await afterAwait?("choose")
         guard let apple = appleOrg, let org = keeperOrg(of: finding.rule), org.id == finding.keeperOrg else {
-            actionNote = "Not \(verb): it was found for an organization that isn't the active client's now, so nothing was changed."
+            // A switch while this waited cleared the screen it was clicked on: its refusal isn't shown on the new client's.
+            if generation == orgs.generation {
+                actionNote = "Not \(verb): it was found for an organization that isn't the active client's now, so nothing was changed."
+            }
             return
         }
         let store: SnapshotStore

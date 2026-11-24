@@ -243,10 +243,13 @@ public final class OrgsModel {
         settings = LocalSettings.load(from: folder)
     }
 
-    /// A client lost an org (removed, or moved out of it) or gained one: its Mosyle service setting, made for the client as it was, is
-    /// dropped (the coordinating session's decision). It runs after the org change, which is whole or not at all on its own, and
-    /// only when that change was made. A settings file that can't be written keeps the entry, said here; an entry left that names
-    /// another Mosyle org still reads as stale on the Needs-attention screen, and one whose service Apple no longer lists, too.
+    /// A client lost an org (removed, or moved out of it), was made by a move, or had its Mosyle org's credentials replaced (new
+    /// credentials may be another tenant's under the same org id): its Mosyle service setting, made for the client as it was, is
+    /// dropped (the coordinating session's decisions). An org added into an existing client drops nothing: that client couldn't have
+    /// had a usable entry (it had no org of that kind), and a leftover one names another Mosyle org, so it reads as stale. It runs
+    /// after the org change, which is whole or not at all on its own, and only when that change was made. A settings file that can't
+    /// be written keeps the entry, said here; an entry left that names another Mosyle org still reads as stale on the
+    /// Needs-attention screen, and one whose service Apple no longer lists, too.
     private func dropMosyleServices(of clients: [String]) {
         let clients = clients.filter { !$0.isEmpty }
         guard !clients.isEmpty else { return }
@@ -353,9 +356,10 @@ public final class OrgsModel {
         // org is in already changes nothing, and clears nothing).
         if before.0 != activeClient?.id || before.1 != mosyleOrg?.id { bump() }
         save()
-        // The client it left and the one it joined each changed: their Mosyle service settings go.
+        // The client it left and the one it is in now (joined, or made for it, on an id that may have been another's) each changed:
+        // their Mosyle service settings go.
         let to = store.client(of: org)?.id
-        if from != to { dropMosyleServices(of: [from, target].compactMap { $0 }) }
+        if from != to { dropMosyleServices(of: [from, to].compactMap { $0 }) }
     }
 
     /// The add sheet's question for a new org of `slot`'s kind, given the sheet's `answer` so far; nil when no client has room
@@ -548,6 +552,9 @@ public final class OrgsModel {
         let shown = store.active?.id == orgID || mosyleOrg?.id == orgID
         if shown, id == nil || draft.givesCredentials { bump() }
         save()
+        // New credentials may be another tenant's under the same org id: its client's Mosyle service setting goes (the coordinating
+        // session's decision), as the other drops do, after the change.
+        if id != nil, draft.givesCredentials, let client = store.client(of: orgID)?.id { dropMosyleServices(of: [client]) }
         return profile
     }
 

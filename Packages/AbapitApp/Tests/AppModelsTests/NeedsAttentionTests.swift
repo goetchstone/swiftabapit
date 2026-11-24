@@ -475,9 +475,12 @@ struct NeedsAttentionTests {
         model.readLive()
         await model.evaluate()
         let summary = try #require(model.summary)
-        #expect(summary.reading == 12 && summary.skipped.isEmpty && summary.rows.isEmpty, "\(summary)")
-        #expect(summary.headline == "Reading what the rules need…" && summary.words == ["Reading: 12 of 12 rules wait for a list that is still being read."])
-        #expect(model.lines.allSatisfy { $0.isReading })
+        // "Missing from Mosyle" isn't waiting: its setting isn't set, which is a reason (fix round 2), said as skipped.
+        let unset = Self.line(model, .missingFromMosyle).title
+        #expect(summary.reading == 11 && summary.skipped == [unset] && summary.rows.isEmpty, "\(summary)")
+        #expect(summary.headline == "Reading what the rules need…")
+        #expect(summary.words == ["Reading: 11 of 12 rules wait for a list that is still being read.", "1 of 12 rules skipped: open Needs Attention to see why."], "\(summary.words)")
+        #expect(model.lines.allSatisfy { $0.isReading == ($0.rule != .missingFromMosyle) })
         // Once read, what is still skipped is said as skipped.
         await model.load()
         await Self.settle(world, model)
@@ -614,9 +617,94 @@ struct NeedsAttentionTests {
         await Self.settle(world, model)
         model.afterAwait = { stage in if stage == "choose" { world.orgs.select("b") } }
         await model.dismiss(Self.line(model, .quietService).findings[0])
-        #expect(model.actionNote?.hasPrefix("Not dismissed: it was found for an organization") == true)
+        // Refused, and its note isn't left on the new client's screen (fix round 2).
+        #expect(model.actionNote == nil && world.orgs.active?.id == "b")
         for org in ["a", "b", "m"] {
             #expect(try await world.history!.state(org: world.orgs.store[org]!).allSatisfy { $0.dismissedAt == nil && $0.snoozedUntil == nil }, "\(org)")
         }
+    }
+
+    // MARK: fix round 2 (the delta review)
+
+    /// A list that failed beside one still loading is a reason, not "reading": the rule is skipped with the failed list's words and
+    /// counted as skipped. Mosyle refused while Apple's devices load; the services refused while Mosyle loads; the setting Not set while
+    /// Mosyle loads.
+    @Test func aFailedListBesideALoadingOneIsSkippedNotReading() async throws {
+        // Mosyle's credentials refused, Apple's device list held mid-read.
+        let world = try await Self.world()
+        world.mosyleStub.revoke()
+        world.gates["a"]!.hold("devices") { $0.path() == "/v1/orgDevices" }
+        let model = world.screens.attention
+        model.now = { Self.now }
+        model.readLive()
+        await eventually("Mosyle refused") { if case .failed = world.mosyle.devices.state { true } else { false } }
+        #expect(world.devices.state.isLoading)
+        await model.evaluate()
+        let notInApple = Self.line(model, .mosyleNotInApple)
+        #expect(Self.isSkipped(notInApple)?.hasPrefix("Mosyle's device list wasn't read (") == true && !notInApple.isReading, "\(notInApple.verdict)")
+        #expect(!Self.line(model, .mosyleCheckIn).isReading && Self.line(model, .migrationDeadline).isReading, "Apple's own rule still waits")
+        let summary = try #require(model.summary)
+        #expect(summary.skipped.contains(notInApple.title) && summary.skipped.contains(Self.line(model, .mosyleCheckIn).title))
+        world.gates["a"]!.release("devices")
+
+        // The services refused, Mosyle held mid-read, the setting set.
+        let second = try await Self.world()
+        second.stubs["a"]!.queue(403, for: "/v1/mdmServers")
+        second.mosyleStub.holdRequests(to: "/v1/devices", fromPage: 1)
+        let other = second.screens.attention
+        other.now = { Self.now }
+        other.setMosyleService("S2")
+        other.readLive()
+        await eventually("the services refused") { second.devices.servicesState == .forbidden }
+        #expect(second.mosyle.devices.state.isLoading)
+        await other.evaluate()
+        let missing = Self.line(other, .missingFromMosyle)
+        #expect(missing.isSkipped && !missing.isReading && Self.isSkipped(missing)?.contains("wasn't read") == true, "\(missing.verdict)")
+        #expect(Self.line(other, .mosyleCheckIn).isReading, "Mosyle's own rule still waits")
+        // Not set while Mosyle loads: the setting is the reason.
+        other.setMosyleService(nil)
+        await other.evaluate()
+        let unset = Self.line(other, .missingFromMosyle)
+        #expect(!unset.isReading && Self.isSkipped(unset)?.hasPrefix("Which Apple service is your Mosyle org isn't set") == true, "\(unset.verdict)")
+        second.mosyleStub.release()
+
+        // No Mosyle org while Apple's devices load: the Mosyle rules are skipped for that, never waiting.
+        let alone = try await World.make()
+        let solo = alone.screens.attention
+        solo.readLive()
+        await solo.evaluate()
+        #expect(alone.devices.state.isLoading)
+        for rule: NeedsAttention.Rule in [.mosyleNotInApple, .mosyleCheckIn, .missingFromMosyle] {
+            #expect(!Self.line(solo, rule).isReading && Self.isSkipped(Self.line(solo, rule)) == "This client has no Mosyle Business org", "\(rule)")
+        }
+    }
+
+    /// An org separated into a client of its own drops the entry of the client it is in now, which may sit on an id another client had.
+    @Test func aSeparatedOrgsNewClientNeverKeepsALeftoverEntry() async throws {
+        // Learn the id the separated Mosyle org's new client gets.
+        let probe = try await Self.world()
+        try probe.orgs.move("m", toClient: nil)
+        let reused = try #require(probe.orgs.store.client(of: "m")?.id)
+        let world = try await Self.world()
+        #expect(world.orgs.store[client: reused] == nil)
+        try world.orgs.changeSettings { (settings: inout LocalSettings) throws(LocalSettings.Failure) in
+            try settings.setMosyleService("LEFTOVER", mosyleOrg: "m", for: reused)
+        }
+        try world.orgs.move("m", toClient: nil)
+        #expect(world.orgs.store.client(of: "m")?.id == reused && world.orgs.settings.mosyleService(for: reused) == .none)
+    }
+
+    /// Replacing a Mosyle org's credentials drops its client's entry (they may be another tenant's under the same org id); renaming it
+    /// alone doesn't.
+    @Test func newMosyleCredentialsDropTheClientsEntry() async throws {
+        let world = try await Self.world()
+        let client = world.orgs.activeClient!.id, m = world.orgs.store["m"]!
+        world.screens.attention.setMosyleService("S2")
+        _ = try await world.orgs.saveMosyle(MosyleDraft(name: "Renamed", editing: m), editing: "m")
+        #expect(world.orgs.settings.mosyleService(for: client) == .set(service: "S2", mosyleOrg: "m"), "a rename keeps it")
+        let renamed = world.orgs.store["m"]!
+        _ = try await world.orgs.saveMosyle(MosyleDraft(name: "Renamed", accessToken: "other-token", email: "other@example.com", password: "other-password",
+                                                        editing: renamed), editing: "m")
+        #expect(world.orgs.settings.mosyleService(for: client) == .none && world.orgs.settingsProblem == nil)
     }
 }
