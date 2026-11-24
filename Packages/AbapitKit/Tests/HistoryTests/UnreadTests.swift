@@ -139,6 +139,58 @@ struct UnreadTests {
         #expect(try Scratch.open(path).userVersion() == 3)
     }
 
+    /// A v1 file of this app's shape that already has an `unread` column: version 3's script fails, and the whole migration is rolled back:
+    /// the version stays 1 and no `attention` table is left behind.
+    @Test func aFailedMigrationIsRolledBackWhole() throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]))
+        try Scratch.open(path).execute(Schema.toVersion1 + "ALTER TABLE snapshots ADD COLUMN unread TEXT NOT NULL DEFAULT '{}';")
+        #expect(throws: SnapshotStore.Failure.self) { _ = try SnapshotStore(storage: .folder(folder), appVersion: "1") }
+        let file = try Scratch.open(path)
+        #expect(try file.userVersion() == 1)
+        #expect(try Scratch.count(file, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'attention'") == 0)
+    }
+
+    /// A version-2 file this process can't write (mode 0400) used to open; it still does, read-only at the version it has, `unread` reading as
+    /// `{}` ("not recorded") because the column isn't there. Nothing is written to it.
+    @Test func aFileThatCantBeWrittenOpensReadOnlyAtItsVersion() async throws {
+        for version in [Int32(1), 2] {
+            let (root, folder, path) = try Self.versionTwoFile()
+            defer { Scratch.remove(root) }
+            if version == 1 {
+                // The same file at version 1: no attention table either.
+                let file = try Scratch.open(path)
+                try file.execute("DROP TABLE attention; PRAGMA user_version = 1;")
+            }
+            #expect(chmod(path, 0o400) == 0)
+            let before = try Data(contentsOf: URL(filePath: path))
+            let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+            #expect(store.access == .readOnly(version: version), "version \(version)")
+            let snapshots = try await store.snapshots(org: Self.acme)
+            #expect(snapshots.count == 1 && snapshots[0].unread == [:] && snapshots[0].counts["applecare"] == 1, "version \(version): \(snapshots)")
+            #expect(try await store.load(snapshots[0].id, org: Self.acme).resources["devices"]?.count == 2)
+            await #expect(throws: SnapshotStore.Failure.readOnly(version: version)) { try await store.record(org: Self.acme, takenAt: Scratch.noon, resources: [:]) }
+            #expect(try Data(contentsOf: URL(filePath: path)) == before && Scratch.mode(path) == 0o400)
+            #expect(try Scratch.open(path).userVersion() == version)
+        }
+    }
+
+    /// Another build migrates the file past this one between this one's looking and its taking the lock: decided on the version read under
+    /// the lock, the file is read-only, never `.readWrite`.
+    @Test func aFileMigratedPastThisOneUnderTheLockIsReadOnly() async throws {
+        let (root, folder, path) = try Self.versionTwoFile()
+        defer { Scratch.remove(root) }
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(SnapshotStore.Failure) in
+            if case .foundVersion2 = step { try? Scratch.open(path).execute("PRAGMA user_version = 4") }
+        }
+        #expect(store.access == .readOnly(version: 4))
+        await #expect(throws: SnapshotStore.Failure.readOnly(version: 4)) { try await store.record(org: Self.acme, takenAt: Scratch.noon, resources: [:]) }
+    }
+
     // MARK: the column
 
     /// What a snapshot records reads back: each sweep's ids sorted by bytes, each once; an empty list is kept (a sweep that ran and missed

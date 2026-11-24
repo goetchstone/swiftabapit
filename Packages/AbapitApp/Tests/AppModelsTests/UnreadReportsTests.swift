@@ -122,22 +122,56 @@ struct UnreadReportsTests {
         let lock = await R.model(world).build(.activationLock, tokens: [:])
         #expect(Self.groups(lock)["L3"] == "not-read" && Self.groups(lock)["L4"] == "not-read" && Self.groups(lock)["L2"] != "not-read" && Self.groups(lock)["L1"] != "not-read", "\(lock.lines)")
         #expect(lock.summary[0].hasPrefix("Read in part: the Activation Lock read was cut: HTTP 404"), "\(lock.summary)")
-        #expect(lock.source.contains { $0.contains("It records which devices it missed: the 1 device it missed counts as not read, and the rest are judged.") }, "\(lock.source)")
+        #expect(lock.source.contains { $0.contains("It records which devices it missed: the 1 device it missed counts as not read, and the rest are judged where a status was read.") }, "\(lock.source)")
     }
 
     // MARK: bounds, and one snapshot only
 
-    /// A list that names a device not in the snapshot's own device list: the stray is ignored for judging, counted and said.
-    @Test func anIdOutsideTheSnapshotsDeviceListIsIgnoredCountedAndSaid() async throws {
+    /// A list that names a device not in the snapshot's own device list can't be trusted to name every miss: the devices it names that are in
+    /// the list are still not read, the stray is counted and said, and a device with no record is not read either (the conservative rule).
+    @Test func anIdOutsideTheSnapshotsDeviceListFallsBackToTheConservativeRule() async throws {
         let world = try await World.make()
-        var resources = Self.fleet(["D1", "D2"])
+        var resources = Self.fleet(["D1", "D2", "D3"])
         resources["applecare"] = [R.care("D1")]
         try await Self.record(world, days: 0, resources, errors: ["applecare": "HTTP 500"], unread: ["applecare": ["D2", "GHOST1", "GHOST2", "GHOST2"]])
         let model = await R.model(world)
         let warranty = model.build(.outOfWarranty, tokens: [:])
-        #expect(Self.groups(warranty) == ["D1": "active", "D2": "not-read"] && !R.text(warranty).contains("GHOST"), "\(warranty.lines)")
+        #expect(Self.groups(warranty) == ["D1": "active", "D2": "not-read", "D3": "not-read"] && !R.text(warranty).contains("GHOST"), "\(warranty.lines)")
         #expect(warranty.source.contains { $0.contains("That snapshot lists 2 ids as not read that aren't in its own device list: left out, never matched to a device.") }, "\(warranty.source)")
-        #expect(warranty.source.contains { $0.contains("the 1 device it missed counts as not read") }, "the stray isn't counted among the missed: \(warranty.source)")
+        #expect(warranty.source.contains { $0.contains("The 1 device it names in its list counts as not read, and a device it doesn't name counts as not read when it has no record: its list names devices this snapshot's device list doesn't hold, so it can't be trusted to name every miss.") }, "\(warranty.source)")
+        #expect(warranty.summary[0].contains("the devices it names count as not read, and so does a device with no record: its list names devices"), "\(warranty.summary)")
+        let coverage = model.build(.coverage, tokens: ["days": "90"])
+        #expect(coverage.summary.contains { $0.contains("0 have none among the records read; 2 had their coverage unread") }, "\(coverage.summary)")
+        // The same list with every id in the device list is trusted: D3 is "no record".
+        let inside = try await World.make()
+        try await Self.record(inside, days: 0, resources, errors: ["applecare": "HTTP 500"], unread: ["applecare": ["D2"]])
+        #expect(Self.groups(await R.model(inside).build(.outOfWarranty, tokens: [:])) == ["D1": "active", "D2": "not-read", "D3": "no-record"])
+    }
+
+    /// A device named in `unread` that has an Activation Lock item is not read, whatever else is held for it.
+    @Test func aNamedDeviceWithALockItemIsNotRead() async throws {
+        let world = try await World.make()
+        var resources = Self.fleet(["L1", "L2"])
+        resources["activation_lock"] = [R.lock("L1", locked: true, type: "USER"), R.lock("L2", locked: true, type: "USER")]
+        try await Self.record(world, days: 0, resources, errors: ["activation_lock": "HTTP 404"], unread: ["activation_lock": ["L2"]])
+        let lock = await R.model(world).build(.activationLock, tokens: [:])
+        #expect(Self.groups(lock)["L2"] == "not-read" && Self.groups(lock)["L1"] != "not-read", "\(lock.lines)")
+    }
+
+    /// `unread` in a whole read (no error): a device it names is still not read, and an empty list changes nothing.
+    @Test func unreadInAWholeReadIsHonoured() async throws {
+        let world = try await World.make()
+        var resources = Self.fleet(["D1", "D2", "D3"])
+        resources["applecare"] = [R.care("D1"), R.care("D2")]
+        resources["activation_lock"] = [R.lock("D1", locked: false, type: nil), R.lock("D2", locked: false, type: nil), R.lock("D3", locked: false, type: nil)]
+        try await Self.record(world, days: 0, resources, unread: ["applecare": ["D2"], "activation_lock": ["D3"]])
+        let model = await R.model(world)
+        let warranty = model.build(.outOfWarranty, tokens: [:])
+        #expect(Self.groups(warranty) == ["D1": "active", "D2": "not-read", "D3": "no-record"], "\(warranty.lines)")
+        #expect(Self.groups(model.build(.activationLock, tokens: [:]))["D3"] == "not-read")
+        let empty = try await World.make()
+        try await Self.record(empty, days: 0, resources, unread: ["applecare": [], "activation_lock": []])
+        #expect(Self.groups(await R.model(empty).build(.outOfWarranty, tokens: [:])) == ["D1": "active", "D2": "active", "D3": "no-record"])
     }
 
     /// Never mixed: the newest attempt read none (it names every device missed) so the older part read is used with its own list and its own

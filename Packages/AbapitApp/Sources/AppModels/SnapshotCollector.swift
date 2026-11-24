@@ -422,8 +422,13 @@ public final class SnapshotCollector {
         if sweep == .appleCare { (items, shared) = Sweep.keyedBySerialWhereShared(items) }
         // Two records with one id left (one device's list holding it twice): the store keeps the last, so a record could go
         // unseen. Said, and a part read.
-        var ids: Set<[UInt8]> = [], duplicates = 0
-        for item in items where !ids.insert(Array(item.id.utf8)).inserted { duplicates += 1 }
+        // The device whose list holds the id twice is not wholly read either: the store keeps one of the two records, so which one
+        // it kept is chance. Its id goes to `unread` (the serial the record was read for is the device list's id).
+        var ids: Set<[UInt8]> = [], duplicates = 0, duplicated: [String] = []
+        for item in items where !ids.insert(Array(item.id.utf8)).inserted {
+            duplicates += 1
+            if let serial = item.attributes["serialNumber"]?.string, !serial.isEmpty { duplicated.append(serial) }
+        }
         let error = stop ?? swept.failed.first ?? (swept.unsendable > 0 ? "unsendable id" : nil) ?? (duplicates > 0 ? "duplicate id" : nil)
             ?? (source.cut || swept.cut > 0 ? SnapshotPolicy.pageCap : nil) ?? (swept.notAsked > 0 ? "not asked" : nil)
         // Read and found nothing is an answer (counted); nothing read and an error is the error alone.
@@ -437,10 +442,11 @@ public final class SnapshotCollector {
         if swept.unsendable > 0 { why.append("\(swept.unsendable) \(swept.unsendable == 1 ? "has an id" : "have ids") Apple can't be asked for") }
         if swept.notAsked > 0 { why.append(stop.map { "\(swept.notAsked) left when the sweep stopped at \($0)" } ?? "\(swept.notAsked) not asked") }
         let total = swept.read + swept.failed.count + swept.unsendable + swept.notAsked, missing = total - swept.read
-        // The devices behind the note's count, and the ones whose own list was cut: ids only, never a name. A sweep that ran and missed
+        // The devices behind the note's count, the ones whose own list was cut, and the ones whose list held an id twice (the note's
+        // "had the id of another read" counts records, not devices): ids only, never a name. A sweep that ran and missed
         // none records an empty list ("recorded: none missed"), so the key is "not recorded" only when it wasn't run. The list can't be
         // longer than the list the sweep covers, so no longer than the snapshot's devices (Apple's device list, or Apple MDM's).
-        collected.unread[rule.name] = swept.notReadIDs + swept.cutIDs
+        collected.unread[rule.name] = swept.notReadIDs + swept.cutIDs + duplicated
         if missing > 0 { collected.note(rule, "\(missing) of \(Sweep.devices(total)) not read: \(why.joined(separator: "; "))") }
         if source.cut { collected.note(rule, "covers only the devices listed: \(list.name) stopped at the page limit") }
         if swept.cut > 0 {

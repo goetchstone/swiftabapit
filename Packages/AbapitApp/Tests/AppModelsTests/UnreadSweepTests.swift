@@ -98,6 +98,25 @@ struct UnreadSweepTests {
         Self.bounded(snapshot)
     }
 
+    /// One device's list holding an id twice: the store keeps one record, so that device isn't wholly read: it is in `unread`, and the Reports
+    /// screen shows it as not read, the others as read. The note counts records ("1 record had the id of another read"), so `unread` holds the
+    /// device where the note holds a record: one device here, as one record.
+    @Test func aDeviceWithADuplicateCoverageIdIsRecordedAndNotJudged() async throws {
+        let world = try await SweepTests.world()
+        let twice = SweepTests.coverage("DUP1", "AppleCare+", payment: "SUBSCRIPTION")
+        world.stubs["a"]!.setCoverage(SweepTests.serial(2), [twice, twice])
+        let snapshot = try await SweepTests.recorded(world, [.appleCare])
+        #expect(snapshot.summary.errors["applecare"] == "duplicate id")
+        #expect(snapshot.summary.notes["applecare"] == "1 record had the id of another read: the history keeps one of each")
+        #expect(snapshot.summary.unread == ["applecare": [SweepTests.serial(2)]], "\(snapshot.summary.unread)")
+        Self.bounded(snapshot)
+        let model = world.screens.reports
+        await model.load()
+        let warranty = model.build(.outOfWarranty, tokens: [:])
+        let by = Dictionary(uniqueKeysWithValues: warranty.lines.map { ($0.title, $0.group ?? "") })
+        #expect(by[SweepTests.serial(2)] == "not-read" && by[SweepTests.serial(0)] == "active" && by[SweepTests.serial(1)] == "no-record", "\(by)")
+    }
+
     /// A sweep that wasn't run has no key; one that ran and missed none has an empty list, so "none missed" is told from "not recorded".
     @Test func aSweepNotRunHasNoKeyAndOneThatMissedNoneHasAnEmptyList() async throws {
         let world = try await SweepTests.world()

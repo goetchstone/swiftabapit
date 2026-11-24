@@ -73,8 +73,12 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   and nothing else touched. A version-2 file migrates by that script alone; a version-1 file by version 2's and then version 3's in the same
   transaction; a new file is made by version 1's, 2's and 3's. The migration decides a file is this app's as version 1 did: `snapshots` has `org_id` and
   `counts`, and at version 2 also the `attention` table and no `unread` column yet (a foreign file at version 2 is refused, `.notThisAppsFile`, before any
-  write). The version is read again under the write lock, so two stores opening one file migrate it once (`foundVersion2`). A file from a version after
-  this one stays read-only, as below. The value is JSON, keys sorted: `{"<sweep resource name>": ["<device id>", ...]}`, the ids of the devices the sweep
+  write). The version is read again under the write lock and **decided on there**: a version after this one (another build migrated it meanwhile) is
+  read-only, this one is left as it is, an older one is migrated from where it stands, so two stores opening one file migrate it once (`foundVersion2`).
+  **A file this process can't write** (mode 0400, a read-only volume: SQLITE_READONLY at the lock) is not migrated and still opens, **read-only at the
+  version it has**, `access` `.readOnly(version:)`; its snapshots read with `unread` as `{}`, "not recorded" (the column isn't there: `hasUnread`), and
+  `record` throws `.readOnly`. **The migration is one-way**: a build from before version 3 opens a version-3 file read-only. A file from a version after
+  this one stays read-only, as below. A failed script rolls the whole migration back (`aFailedMigrationIsRolledBackWhole`). The value is JSON, keys sorted: `{"<sweep resource name>": ["<device id>", ...]}`, the ids of the devices the sweep
   didn't read, **sorted by bytes, each once** (`SnapshotStore.unreadText`). **`{}`, or a missing key, means "not recorded"** (a row from before version 3, an
   imported one, a sweep that wasn't run): it **never means "every device was read"**; an empty list means "the sweep ran and missed none".
   `Summary.unread` hands it to every reader (`snapshots`, `load`, `latest`, `newestRead`); a value that isn't an object of lists of strings is `.corrupt`.
@@ -262,8 +266,8 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
 - **Which devices a sweep didn't read** (the coordinating session's design, 2026-11-24, for the operator; schema version 3). For each sweep that
   ran, the collector records `unread[<resource>]`: the ids of every device it didn't read. They are the devices the note's "N of M not read" counts (failed
   twice, an id that can't be sent, not asked because the sweep stopped: `Swept.notReadIDs`), **plus the devices whose own coverage list the page cap cut**
-  (`Swept.cutIDs`: read in part, so not wholly read, and counted in the note's other line, "the page limit cut N devices' records"). So `unread.count`
-  equals the note's N, plus the cut devices (`UnreadSweepTests`). The ids are the covering list's own: Apple's device ids for AppleCare and Activation
+  (`Swept.cutIDs`: read in part, so not wholly read, and counted in the note's other line, "the page limit cut N devices' records"), **plus the device of each AppleCare record whose id its list holds twice** (the store keeps one of the two, so which one is chance; the sweep is already a part read, "duplicate id"; counted in the note's "N records had the id of another read", which counts records, so one device is one record there and a device with three copies is two). So `unread.count`
+  equals the note's N, plus the cut devices and the duplicated-id devices (`UnreadSweepTests`). The ids are the covering list's own: Apple's device ids for AppleCare and Activation
   Lock, Apple MDM's ids for the details. **Ids only**: nothing that isn't already an item id of the snapshot, no name or attribute, and nothing a policy
   withholds (`SnapshotPolicy` is unchanged). **Bounded** (invariant 7): the list can't be longer than the list the sweep covers, so it can't exceed the
   snapshot's device count (`counts[devices]`, or `counts[mdm_enrolled]` for the details), and the store keeps each id once. **A sweep that wasn't run has no
@@ -505,13 +509,16 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     - **Without it** (an older snapshot, an imported abapit one, `{}`, or a key for another sweep only): today's conservative rule. A device with no
       record can't be told from one the sweep didn't reach, so it is left out of the map and counts as not read, and the words say why: "in a part read a
       device with no record counts as not read: this snapshot doesn't record which devices it missed". A missing key is never "all read".
-    - **Bounds** (the executor's decision): an id in `unread` that isn't in the snapshot's own device list (a list longer than its devices, another
-      fleet's ids) is **ignored** for judging, **counted and said** in the source ("That snapshot lists N ids as not read that aren't in its own
-      device list: left out, never matched to a device"), and never shown. Ids are compared by bytes.
+    - **Bounds** (the coordinating session's decision, 2026-11-24, changing the executor's first choice): an id in `unread` that isn't in the snapshot's own
+      device list (a list longer than its devices, another fleet's ids) is **counted and said** in the source ("That snapshot lists N ids as not read that
+      aren't in its own device list: left out, never matched to a device"), and never shown. Such a list **can't be trusted to name every miss**, so the
+      named devices that are in the list are still not read, and the rest follow the **conservative rule** (a device with no record is not read); the
+      source and the first summary line say why ("its list names devices this snapshot's device list doesn't hold, so it can't be trusted to name every
+      miss"). Ids are compared by bytes.
     - In an Activation Lock copy (one item per device) a device with no item is not read in either case (`ActivationLockReport`'s "the sweep didn't
       reach this device"), never unlocked: a device the sweep read always has its status, so with `unread` the named devices are not read and a device
-      with no item that isn't named still is (`activationLockWithUnreadNeverTakesNoItemForUnlocked`). Its words add only that the missed devices count
-      as not read and the rest are judged. An AppleCare record with no serial number can't be given to a device: counted and said on screen ("N coverage records have no
+      with no item that isn't named still is (`activationLockWithUnreadNeverTakesNoItemForUnlocked`). Its words say the missed devices count
+      as not read and the rest are judged "where a status was read". An AppleCare record with no serial number can't be given to a device: counted and said on screen ("N coverage records have no
     serial number … counted here and left out of the report"), left out of the report.
   - **The snapshot's device list** is `.whole`, `.partly` when its `counts` and `errors` both have `devices` ("the snapshot's device list
     was cut: page cap (stopped at the page limit: 3 of 5 read, more not read)"), or `.notRead` (not in `counts`). The report's first

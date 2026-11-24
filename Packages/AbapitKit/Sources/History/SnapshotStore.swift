@@ -153,6 +153,8 @@ public actor SnapshotStore {
     public nonisolated let access: Access
     let database: SQLiteDatabase
     private let writer: String
+    /// Whether `snapshots` has the `unread` column (version 3): a file that couldn't be migrated lacks it, and reads as "not recorded".
+    private let hasUnread: Bool
     let hook: Hook?
     /// The store's own folder, which only this user can enter: where an export's working copy is made. Nil in memory.
     let home: String?
@@ -206,6 +208,7 @@ public actor SnapshotStore {
         access = opened.access
         writer = "swiftabapit \(appVersion)"
         self.hook = hook
+        hasUnread = try Self.guarded { try opened.database.rows("PRAGMA table_info(snapshots)") { try $0.text(1) ?? "" } }.contains("unread")
     }
 
     // MARK: writing
@@ -338,7 +341,7 @@ public actor SnapshotStore {
     public func snapshots(org: OrgProfile, limit: Int = 100) throws(Failure) -> [Summary] {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
-            try database.rows(Self.summarySQL + "WHERE s.org_id = ? ORDER BY s.taken_at DESC, s.id DESC LIMIT ?",
+            try database.rows(summarySQL + "WHERE s.org_id = ? ORDER BY s.taken_at DESC, s.id DESC LIMIT ?",
                               [.text(orgID), .integer(Int64(max(limit, 0)))], Self.summary)
         }
     }
@@ -356,7 +359,7 @@ public actor SnapshotStore {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
             try database.reading {
-                guard let summary = try database.rows(Self.summarySQL + "WHERE s.id = ? AND s.org_id = ?", [.integer(id), .text(orgID)],
+                guard let summary = try database.rows(summarySQL + "WHERE s.id = ? AND s.org_id = ?", [.integer(id), .text(orgID)],
                                                       Self.summary).first else { throw Failure.noSnapshot(id) }
                 var resources: [String: [Resource]] = [:]
                 let rows = try database.rows("SELECT resource, item_id, attributes FROM items WHERE snapshot_id = ? ORDER BY resource, item_id",
@@ -374,7 +377,7 @@ public actor SnapshotStore {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
             try database.reading {
-                guard let attempt = try database.rows(Self.summarySQL + """
+                guard let attempt = try database.rows(summarySQL + """
                     WHERE s.org_id = ? AND (EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
                     OR EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?)) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource), .text(resource)], Self.summary).first else { return nil }
@@ -387,7 +390,7 @@ public actor SnapshotStore {
                     AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) \
                     AND NOT EXISTS (SELECT 1 FROM json_each(s.errors) e WHERE e.key = ?) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource), .text(resource)], { $0.integer(0) }).first,
-                      let summary = try database.rows(Self.summarySQL + "WHERE s.id = ?", [.integer(id)], Self.summary).first
+                      let summary = try database.rows(summarySQL + "WHERE s.id = ?", [.integer(id)], Self.summary).first
                 else { return .failed(attempt, error: error, newest: nil) }
                 return .failed(attempt, error: error, newest: Copy(summary: summary, items: try items(resource, in: id)))
             }
@@ -401,7 +404,7 @@ public actor SnapshotStore {
         let orgID = try Self.id(of: org)
         return try Self.guarded {
             try database.reading {
-                guard let summary = try database.rows(Self.summarySQL + """
+                guard let summary = try database.rows(summarySQL + """
                     WHERE s.org_id = ? AND EXISTS (SELECT 1 FROM json_each(s.counts) c WHERE c.key = ?) ORDER BY s.taken_at DESC, s.id DESC LIMIT 1
                     """, [.text(orgID), .text(resource)], Self.summary).first else { return nil }
                 return Copy(summary: summary, items: try items(resource, in: summary.id))
@@ -564,13 +567,31 @@ public actor SnapshotStore {
                 }
                 guard try isThisApps(found) else { throw Failure.notThisAppsFile(path: path) }
                 try hook?(found == 1 ? .foundVersion1(path: path) : .foundVersion2(path: path))
-                try database.transaction {
-                    let now = try database.userVersion()
-                    guard now == found else { return }
-                    guard try isThisApps(now) else { throw Failure.notThisAppsFile(path: path) }
-                    try hook?(.migrating(path: path))
-                    if now == 1 { try database.execute(Schema.toVersion2) }
-                    try database.execute(Schema.toVersion3)
+                // Decided on the version read under the lock: a newer one (another build migrated it past this one) is read-only, this
+                // one is left as it is, an older one is migrated from where it stands.
+                var newer: Int32?
+                do {
+                    try database.transaction {
+                        let now = try database.userVersion()
+                        if now > Schema.version {
+                            newer = now
+                            return
+                        }
+                        guard now < Schema.version else { return }
+                        guard now >= 1, try isThisApps(now) else { throw Failure.notThisAppsFile(path: path) }
+                        try hook?(.migrating(path: path))
+                        if now == 1 { try database.execute(Schema.toVersion2) }
+                        try database.execute(Schema.toVersion3)
+                    }
+                } catch let failure as SQLiteDatabase.Failure where failure.code & 0xFF == SQLITE_READONLY {
+                    // A file this process can't write (mode 0400, a read-only volume) can't be migrated: it is read at the version it has,
+                    // and never written (the version-1 and version-2 columns this build reads are there; `unread` reads as `{}`).
+                    try database.execute("PRAGMA query_only = ON")
+                    return .readOnly(version: found)
+                }
+                if let newer {
+                    try database.execute("PRAGMA query_only = ON")
+                    return .readOnly(version: newer)
                 }
                 return .readWrite
             }
@@ -591,10 +612,14 @@ public actor SnapshotStore {
     // MARK: rows
 
     /// A snapshot's row and abapit's `device_count`; a `WHERE` follows.
-    private static let summarySQL = "SELECT s.id, s.taken_at, s.org_id, s.org_name, s.org_scope, s.org_client_id, s.abapit_version, "
-        + "s.errors, s.notes, s.counts, s.unread, "
-        + "(SELECT COUNT(*) FROM items i WHERE i.snapshot_id = s.id AND i.resource = 'devices') AS device_count "
-        + "FROM snapshots s "
+    /// A file at a version before 3 that couldn't be migrated (it can't be written) has no `unread` column: its rows read `{}`, "not recorded".
+    private static func summarySQL(hasUnread: Bool) -> String {
+        "SELECT s.id, s.taken_at, s.org_id, s.org_name, s.org_scope, s.org_client_id, s.abapit_version, "
+            + "s.errors, s.notes, s.counts, " + (hasUnread ? "s.unread" : "'{}'") + ", "
+            + "(SELECT COUNT(*) FROM items i WHERE i.snapshot_id = s.id AND i.resource = 'devices') AS device_count "
+            + "FROM snapshots s "
+    }
+    private var summarySQL: String { Self.summarySQL(hasUnread: hasUnread) }
 
     private static func summary(_ row: SQLiteDatabase.Row) throws -> Summary {
         Summary(id: row.integer(0), takenAt: try row.text(1) ?? "", orgID: try row.text(2) ?? "", orgName: try row.text(3) ?? "",
