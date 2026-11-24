@@ -82,7 +82,8 @@ public enum DemoHistory {
                 "mdm_servers": [service("DEMOSVC1", name: "Demo MDM", connected: "2026-11-12T08:00:00Z")],
                 "mdm_enrolled": [managed(1), managed(4)],
                 // The device list was cut, so both sweeps covered only the devices listed and are part reads (the collector marks them so):
-                // device 3 has no AppleCare record, which a part read can't tell from a device it didn't reach.
+                // Every device listed was read (`unread` is recorded, and empty for both), so device 3's having no AppleCare record is
+                // judged as "no record", not "not read".
                 "applecare": [care("DEMOCHG0001", "DEMOCARE1", status: "ACTIVE", ends: now + 12 * day),
                               care("DEMOCHG0001", "DEMOCARE2", status: "ACTIVE", ends: now + 200 * day),
                               care("DEMOCHG0002", "DEMOCARE3", status: "INACTIVE", ends: now - 40 * day)],
@@ -90,7 +91,8 @@ public enum DemoHistory {
             ], errors: ["devices": "page cap", "users": "HTTP 403 FORBIDDEN_ERROR", "applecare": "page cap", "activation_lock": "page cap"],
             notes: ["devices": "stopped at the page limit: 3 of 5 read, more not read",
                     "applecare": "covers only the devices listed: devices stopped at the page limit",
-                    "activation_lock": "covers only the devices listed: devices stopped at the page limit"])
+                    "activation_lock": "covers only the devices listed: devices stopped at the page limit"],
+            unread: ["applecare": [], "activation_lock": []])
         } catch {
             return
         }

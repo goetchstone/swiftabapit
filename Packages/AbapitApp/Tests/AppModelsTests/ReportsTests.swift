@@ -181,7 +181,7 @@ struct ReportsTests {
         #expect(care.summary.contains { $0.contains("1 devices have ACTIVE coverage; 0 have none among the records read; 2 had their coverage unread") }, "\(care.summary)")
         #expect(Self.titles(care) == ["P1"])
         let csv = model.csv(of: care)
-        #expect(csv.contains(",read in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500)); in a part read a device with no record counts as not read,"), "\(csv)")
+        #expect(csv.contains(",read in part: the AppleCare coverage read was cut: HTTP 500 (1 of 3 not read: 1 failed twice (HTTP 500)); in a part read a device with no record counts as not read: this snapshot doesn't record which devices it missed,"), "\(csv)")
         let warranty = model.build(.outOfWarranty, tokens: [:])
         let by = Dictionary(uniqueKeysWithValues: warranty.lines.map { ($0.title, $0) })
         #expect(by["P1"]?.group == "active" && by["P2"]?.group == "not-read" && by["P3"]?.group == "not-read" && by["OLD1"] == nil, "\(warranty.lines)")
@@ -229,7 +229,9 @@ struct ReportsTests {
             #expect(output.source.first?.hasPrefix("From the snapshot of ") == true, "\(output.source)")
         }
         let warranty = model.build(.outOfWarranty, tokens: [:])
-        #expect(warranty.lines.filter { $0.group == "not-read" }.count == 5 && warranty.lines.first { $0.group == "active" }?.title == SweepTests.serial(0), "\(warranty.lines)")
+        // The collector recorded which device it missed (device 3), so the four others, read with no record, are judged as having none.
+        #expect(warranty.lines.filter { $0.group == "not-read" }.map(\.title) == [SweepTests.serial(3)] && warranty.lines.first { $0.group == "active" }?.title == SweepTests.serial(0), "\(warranty.lines)")
+        #expect(warranty.lines.filter { $0.group == "no-record" }.count == 4, "\(warranty.lines.map(\.group))")
     }
 
     /// Different snapshots hold different devices: each sweep's report uses its own snapshot's list, never the other's.
@@ -930,7 +932,7 @@ struct ReportsTests {
         let coverage = model.build(.coverage, tokens: ["days": "90"])
         #expect(Self.titles(coverage) == ["DEMOCHG0001"], "\(Self.text(coverage))")
         // The whole line names both the cut list and the sweep's part.
-        #expect(coverage.summary[0] == "Read in part: the snapshot's device list was cut: page cap (stopped at the page limit: 3 of 5 read, more not read); the AppleCare coverage read was cut: page cap (covers only the devices listed: devices stopped at the page limit); in a part read a device with no record counts as not read. The counts below cover only what was read.", "\(coverage.summary)")
+        #expect(coverage.summary[0] == "Read in part: the snapshot's device list was cut: page cap (stopped at the page limit: 3 of 5 read, more not read); the AppleCare coverage read was cut: page cap (covers only the devices listed: devices stopped at the page limit); the devices it missed count as not read, and the rest are judged. The counts below cover only what was read.", "\(coverage.summary)")
         let warranty = model.build(.outOfWarranty, tokens: [:])
         #expect(Self.titles(warranty).sorted() == ["DEMOCHG0001", "DEMOCHG0002", "DEMOCHG0003"] && warranty.lines.contains { $0.detail.contains("estimate: past the assumed one year") })
         let lock = model.build(.activationLock, tokens: [:])

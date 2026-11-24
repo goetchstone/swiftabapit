@@ -7,7 +7,7 @@ import JSONAPI
 enum Schema {
     /// The version this app writes. A database with a higher one was written by a newer version and opens read-only
     /// (`SnapshotStore.Access.readOnly`); abapit's own file says 0.
-    static let version: Int32 = 2
+    static let version: Int32 = 3
 
     /// abapit's `SCHEMA` (`abapit/history.py` at the commit `scripts/gen_fixtures.py` pins, `ABAPIT_PIN`), byte for byte.
     /// `SchemaTests` holds it to that text's SHA-256.
@@ -107,8 +107,24 @@ enum Schema {
     /// The script that takes a version-1 file to version 2.
     static var toVersion2: String { attention }
 
-    /// The script that makes a new, empty database current: version 1's, then version 2's.
-    static var newDatabase: String { toVersion1 + toVersion2 }
+    /// Version 3 (the sweeps' unread devices): one column on `snapshots`, and nothing else. `unread` is a JSON object, keys
+    /// sorted like `errors`: per per-device sweep that ran (its resource name: `applecare`, `activation_lock`, `mdm_details`)
+    /// the ids of the devices in the list it covers that it did not read (failed twice, an id that can't be sent, not asked
+    /// because the sweep stopped, or its own list cut), sorted by bytes. Ids only: nothing a snapshot's items don't already
+    /// hold. A sweep that wasn't run has no key; a sweep that ran and missed none has an empty list. `{}`, or a missing key,
+    /// means "not recorded" (a row from before version 3, one abapit wrote, an imported one), never "every device was read".
+    /// A version-2 file migrates by this script alone, in one transaction; the rows it already holds read as `{}`.
+    static let unread = """
+    ALTER TABLE snapshots ADD COLUMN unread TEXT NOT NULL DEFAULT '{}';
+    PRAGMA user_version = 3;
+
+    """
+
+    /// The script that takes a version-2 file to version 3.
+    static var toVersion3: String { unread }
+
+    /// The script that makes a new, empty database current: version 1's, then version 2's, then version 3's.
+    static var newDatabase: String { toVersion1 + toVersion2 + toVersion3 }
 
     /// `taken_at` as abapit writes it: UTC, to the second, `Z` (`strftime("%Y-%m-%dT%H:%M:%SZ")`).
     static func takenAt(_ date: Date) -> String {

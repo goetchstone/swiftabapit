@@ -153,6 +153,29 @@ public final class ReportsModel {
         package let note: String?
     }
 
+    /// The devices a snapshot says a sweep didn't read (`SnapshotStore.Summary.unread`), held against that snapshot's own device list.
+    /// Compared by bytes, as the store orders ids.
+    package struct Unread: Equatable, Sendable {
+        /// The ids that are in the snapshot's own device list: each is a device the sweep didn't read.
+        package let ids: Set<[UInt8]>
+        /// Ids the snapshot names that aren't in its own device list (a list longer than its devices, or another fleet's ids): ignored
+        /// for judging, counted and said (invariant 7: the list is bounded by the snapshot's devices).
+        package let outside: Int
+
+        /// `recorded` is the snapshot's list for the sweep; nil when it has no key ("not recorded"): nil here too, so the conservative rule holds.
+        package init?(_ recorded: [String]?, devices: [Resource]) {
+            guard let recorded else { return nil }
+            let own = Set(devices.map { Array($0.id.utf8) })
+            let named = Set(recorded.map { Array($0.utf8) })
+            ids = named.intersection(own)
+            outside = named.count - ids.count
+        }
+
+        /// Whether the list can be taken to name every device the sweep missed: not when it names devices this snapshot's device list
+        /// doesn't hold (it was written against another list, or was changed), so a device it doesn't name may be a miss too.
+        package var trusted: Bool { outside == 0 }
+    }
+
     /// A snapshot's sweep with that same snapshot's device list.
     package struct Used: Equatable, Sendable {
         package let id: Int64
@@ -166,6 +189,9 @@ public final class ReportsModel {
         package let failure: Failure?
         /// Set when this snapshot read the sweep only in part.
         package let part: SweepPart?
+        /// Which of its devices that same snapshot says the sweep didn't read; nil when it doesn't record that (an older snapshot, an
+        /// imported one, or the sweep has no key), which is never "every device was read".
+        package let unread: Unread?
     }
 
     package enum SweepSource: Equatable, Sendable {
@@ -386,18 +412,19 @@ public final class ReportsModel {
             case .read(let whole):
                 let snapshot = try await load(whole.summary.id)
                 read[sweep] = .used(Used(id: whole.summary.id, takenAt: whole.summary.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
-                                         items: whole.items, failure: nil, part: nil))
-            case .failed(let attempt, let error, let newest):
+                                         items: whole.items, failure: nil, part: nil,
+                                         unread: Unread(whole.summary.unread[name], devices: snapshot.devices)))
+            case .failed(let attempt, let error, _):
                 if attempt.counts[name] != nil {
                     // Some of it was read: that part is used, over the attempt's own device list.
                     let snapshot = try await load(attempt.id)
                     read[sweep] = .used(Used(id: attempt.id, takenAt: attempt.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
-                                             items: snapshot.sweeps[name] ?? [], failure: nil, part: SweepPart(code: error, note: attempt.notes[name])))
+                                             items: snapshot.sweeps[name] ?? [], failure: nil, part: SweepPart(code: error, note: attempt.notes[name]),
+                                             unread: Unread(attempt.unread[name], devices: snapshot.devices)))
                 } else {
                     // It read none of it: the newest snapshot that read any of it is used (whole, or part and marked so), with its own
                     // device list, and the newer failure is kept to be said. Nothing is "unavailable" unless no snapshot read any.
                     let failure = Failure(takenAt: attempt.takenAt, code: error, note: attempt.notes[name])
-                    _ = newest
                     guard let some = try await store.newestRead(name, org: org) else {
                         read[sweep] = .unavailable(failure)
                         continue
@@ -405,7 +432,8 @@ public final class ReportsModel {
                     let snapshot = try await load(some.summary.id)
                     let part = some.summary.errors[name].map { SweepPart(code: $0, note: some.summary.notes[name]) }
                     read[sweep] = .used(Used(id: some.summary.id, takenAt: some.summary.takenAt, devices: snapshot.devices, deviceList: snapshot.list,
-                                             items: some.items, failure: failure, part: part))
+                                             items: some.items, failure: failure, part: part,
+                                             unread: Unread(some.summary.unread[name], devices: snapshot.devices)))
                 }
             }
         }
@@ -509,6 +537,9 @@ public final class ReportsModel {
             guard case .used(let used) = source else { return nothing(unavailable(.activationLock, source)) }
             var reads: [String: DeviceRead<ActivationLockStatus>] = [:]
             for item in used.items { reads[item.id] = .read(ActivationLockStatus(resource: item)) }
+            // A device the snapshot says the sweep missed is not read, whatever else is held for it. A device with no item and not in that
+            // list is not read either: a device the sweep read always has its status (the report's own rule for a missing entry).
+            for device in used.devices where used.unread?.ids.contains(Array(device.id.utf8)) == true { reads[device.id] = .notRead(Self.missed) }
             let list = Self.listRead(used, sweep: .activationLock)
             let built = ActivationLockReport(list.isNotRead ? [] : used.devices.map(OrgDevice.init(resource:)), reads: reads, list: list)
             let rows = key.map { built.rows(group: $0) } ?? built.rows
@@ -529,7 +560,10 @@ public final class ReportsModel {
             var reads: [String: DeviceRead<[AppleCareCoverage]>] = [:]
             let (map, unattributed) = Self.coverage(used)
             for (id, read) in map {
-                if case .read(let records) = read { reads[id] = .read(records.map(AppleCareCoverage.init(resource:))) }
+                switch read {
+                case .read(let records): reads[id] = .read(records.map(AppleCareCoverage.init(resource:)))
+                case .notRead(let why): reads[id] = .notRead(why)
+                }
             }
             let list = Self.listRead(used, sweep: .appleCare)
             let built = WarrantyReport(list.isNotRead ? [] : used.devices.map(OrgDevice.init(resource:)), coverage: reads, now: when, list: list)
@@ -675,7 +709,18 @@ public final class ReportsModel {
         case .whole: break
         }
         if let part = used.part {
-            parts.append(cutWords(part, sweep: sweep) + (sweep == .appleCare ? "; in a part read a device with no record counts as not read" : ""))
+            var words = cutWords(part, sweep: sweep)
+            if sweep == .appleCare {
+                switch used.unread {
+                case let unread? where unread.trusted:
+                    words += "; the devices it missed count as not read, and the rest are judged"
+                case _?:
+                    words += "; the devices it names count as not read, and so does a device with no record: \(untrusted)"
+                case nil:
+                    words += "; in a part read a device with no record counts as not read: this snapshot doesn't record which devices it missed"
+                }
+            }
+            parts.append(words)
         }
         return parts.isEmpty ? .whole : .partly(parts.joined(separator: "; "))
     }
@@ -687,9 +732,28 @@ public final class ReportsModel {
             if used.deviceList.isNotRead {
                 lines.append("That snapshot read \(sweep.title) only in part (\(cutWords(part, sweep: sweep))), and its own device list wasn't read, so nothing is judged.")
             } else {
-                lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). What it read is used; a device it didn't read counts as not read"
-                             + (sweep == .appleCare ? ", and so does a device with no record, since a part read can't tell the two apart." : "."))
+                if let unread = used.unread, unread.trusted {
+                    // The snapshot says which devices the sweep missed: those count as not read, every other device of its list was read.
+                    let n = unread.ids.count
+                    let tail = sweep == .appleCare ? " (a device with no record is shown as having none)." : " where a status was read."
+                    let missed = n == 0
+                        ? (sweep == .appleCare ? "none, so every device in its list was read and is judged" : "none, so each device in its list is judged where a status was read")
+                        : "the \(n.formatted()) \(n == 1 ? "device" : "devices") it missed count\(n == 1 ? "s" : "") as not read, and the rest are judged"
+                    lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). It records which devices it missed: \(missed)"
+                                 + (n == 0 && sweep != .appleCare ? "." : tail))
+                } else if let unread = used.unread {
+                    // It names devices outside its own list: what it names in the list is not read, and nothing else is taken as read.
+                    lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). The \(unread.ids.count.formatted()) "
+                                 + "\(unread.ids.count == 1 ? "device" : "devices") it names in its list count\(unread.ids.count == 1 ? "s" : "") as not read, and a device it "
+                                 + "doesn't name counts as not read when it has no \(sweep == .appleCare ? "record" : "status"): \(Self.untrusted).")
+                } else {
+                    lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). What it read is used; a device it didn't read counts as not read"
+                                 + (sweep == .appleCare ? ", and so does a device with no record, since this snapshot doesn't record which devices it missed and a part read alone can't tell the two apart." : ", and this snapshot doesn't record which devices it missed."))
+                }
             }
+        }
+        if let outside = used.unread?.outside, outside > 0 {
+            lines.append("That snapshot lists \(outside.formatted()) id\(outside == 1 ? "" : "s") as not read that \(outside == 1 ? "isn't" : "aren't") in its own device list: left out, never matched to a device.")
         }
         if let failure = used.failure {
             let which = used.part == nil ? "this is the last good copy" : "the newest snapshot that read any of it is used, and that read was only in part"
@@ -724,11 +788,16 @@ public final class ReportsModel {
     }
 
     /// A sweep's items by device id, as the report types take them, and the records with no serial number to attribute them by.
+    /// - **A device the snapshot says the sweep didn't read** (`used.unread`): `.notRead`, whatever records it has (a device whose
+    ///   own list was cut has some, not all).
     /// - **A whole copy**: a device of the snapshot's list with no record was read and has none (`.read([])`).
-    /// - **A part read** (`used.part`): a device with no record can't be told from one the sweep didn't reach, so it is left out of
-    ///   the map, and the reports count it as not read. A later change that has the collector record which devices a sweep didn't read
-    ///   can give those devices `.notRead` and the rest `.read([])` here: `notReached` is that seam.
-    nonisolated static func coverage(_ used: Used, notReached: Set<String>? = nil) -> (map: [String: DeviceRead<[Resource]>], unattributed: Int) {
+    /// - **A part read with `used.unread`**: the snapshot says which devices the sweep missed, so every other device of its list was
+    ///   read, and one with no record has none (`.read([])`).
+    /// - **A part read with `unread` that names ids outside the snapshot's device list**: the named devices that are in the list are
+    ///   `.notRead`, and the list can't be trusted to name every miss, so the rest follow the conservative rule below.
+    /// - **A part read without it** (an older snapshot, an imported one): a device with no record can't be told from one the sweep
+    ///   didn't reach, so it is left out of the map, and the reports count it as not read.
+    nonisolated static func coverage(_ used: Used) -> (map: [String: DeviceRead<[Resource]>], unattributed: Int) {
         var records: [String: [Resource]] = [:]
         var unattributed = 0
         var order: [String] = []
@@ -742,17 +811,23 @@ public final class ReportsModel {
         }
         var map: [String: DeviceRead<[Resource]>] = [:]
         for device in used.devices {
-            if let found = records[device.id] {
+            if used.unread?.ids.contains(Array(device.id.utf8)) == true {
+                map[device.id] = .notRead(Self.missed)
+            } else if let found = records[device.id] {
                 map[device.id] = .read(found)
-            } else if let notReached {
-                if !notReached.contains(device.id) { map[device.id] = .read([]) }
-            } else if used.part == nil {
+            } else if used.unread?.trusted == true || used.part == nil {
                 map[device.id] = .read([])
             }
         }
         for serial in order where map[serial] == nil { map[serial] = .read(records[serial] ?? []) }
         return (map, unattributed)
     }
+
+    /// Why a list that names devices outside the snapshot's own device list is not taken to name every miss.
+    nonisolated static let untrusted = "its list names devices this snapshot's device list doesn't hold, so it can't be trusted to name every miss"
+
+    /// Why a device the snapshot lists as missed shows as not read.
+    nonisolated static let missed = "the snapshot's sweep didn't read this device"
 
     // MARK: the live lists
 

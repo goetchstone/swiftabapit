@@ -30,7 +30,7 @@ struct SnapshotStoreTests {
             id: id, takenAt: "2026-11-18T11:06:40Z", orgID: "acme", orgName: "Example acme", orgScope: "business",
             clientID: "BUSINESSAPI.00000000-0000-0000-0000-000000000000", writtenBy: "swiftabapit 1.0 (7)",
             errors: ["applecare": "HTTP 429"], notes: ["devices": "showing 2 of at least 3: cut at the page cap"],
-            counts: ["devices": 2, "mdm_servers": 1], deviceCount: 2))
+            counts: ["devices": 2, "mdm_servers": 1], deviceCount: 2, unread: [:]))
         #expect(snapshot.summary.date == Scratch.noon)
         // Each resource's items by id, typed by the resource's name (abapit's `snapshot_resource`), attributes kept.
         #expect(snapshot.resources.keys.sorted() == ["devices", "mdm_servers"])
@@ -544,19 +544,19 @@ struct SnapshotStoreTests {
         let id = try await SnapshotStore(storage: .folder(folder), appVersion: "1")
             .record(org: org, takenAt: Scratch.noon, resources: ["devices": [Scratch.device("SERIAL0001")]])
         let file = Scratch.path(folder.appending(path: "history.sqlite"))
-        try Scratch.open(file).execute("PRAGMA user_version = 3")
+        try Scratch.open(file).execute("PRAGMA user_version = 4")
 
         let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-        #expect(store.access == .readOnly(version: 3))
-        #expect(Failure.readOnly(version: 3).message.contains("newer"))
-        await #expect(throws: Failure.readOnly(version: 3)) { try await store.record(org: org, takenAt: Scratch.noon, resources: [:]) }
-        await #expect(throws: Failure.readOnly(version: 3)) { try await store.prune(org: org, keep: 0) }
-        await #expect(throws: Failure.readOnly(version: 3)) { try await store.removeAll(org: org) }
+        #expect(store.access == .readOnly(version: 4))
+        #expect(Failure.readOnly(version: 4).message.contains("newer"))
+        await #expect(throws: Failure.readOnly(version: 4)) { try await store.record(org: org, takenAt: Scratch.noon, resources: [:]) }
+        await #expect(throws: Failure.readOnly(version: 4)) { try await store.prune(org: org, keep: 0) }
+        await #expect(throws: Failure.readOnly(version: 4)) { try await store.removeAll(org: org) }
         // Still read.
         #expect(try await store.snapshots(org: org).map(\.id) == [id])
         #expect(try await store.load(id, org: org).resources["devices"]?.count == 1)
         let check = try Scratch.open(file)
-        #expect(try check.userVersion() == 3)
+        #expect(try check.userVersion() == 4)
         #expect(try Scratch.count(check, "SELECT COUNT(*) FROM snapshots") == 1)
     }
 
