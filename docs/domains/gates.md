@@ -51,6 +51,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **Who makes a request.** The read and auth makers' needles, and `onlyARequestIsMadeWithAHost`: a call with
   `host:` first is made only on `ReadRequest`, `AuthRequest`, an `init` or `URL.make`, never on another name
   or a bracket (`[ReadRequest].Element(host:…)`, `(ReadRequest)(host:…)`).
+  No scan sees every way a request is made, and Apple's two maker files are not counted (`RouteTests.labelled`): what
+  holds is `HTTPClient`'s check of each request as it leaves ([http-core.md](http-core.md)).
 - **No second door.** Nothing starts a program (`Process`, `posix_spawn`, `execv…`, an AppleScript or a user
   script task): a child inherits the network entitlement and fetches past the transport.
 - **The Release gate's code checks** run on a stripped copy (`strip -D`, as an archive does) and then on the

@@ -113,6 +113,14 @@ struct ReadContractTests {
         }
     }
 
+    /// An Apple read is a GET with no body (invariant 2), every builder's: `everyReadIsADocumentedEndpoint…` matches a
+    /// builder to the contract by the builder's own method, so a DELETE builder matched Apple's DELETE (failure-log 2026-11-18).
+    @Test func everyAppleReadIsAGetWithNoBody() {
+        let reads = Self.reads(.business) + Self.reads(.school)
+        #expect(reads.count > 40)
+        for read in reads { #expect(read.method == .get && read.body == nil, "\(read.method.rawValue) \(read.template)") }
+    }
+
     @Test func everyReadGoesToItsScopesHost() {
         #expect(Self.reads(.business).allSatisfy { $0.host == .appleBusiness })
         #expect(Self.reads(.school).allSatisfy { $0.host == .appleSchool })

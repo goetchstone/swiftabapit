@@ -117,6 +117,7 @@ struct AcceptanceFailureTests {
             (HTTPFailure.transport(code: -1001), .error("error transport -1001"), nil),
             (HTTPFailure.tooLarge(limit: 10), .error("error too large"), nil),
             (HTTPFailure.refusedHost("example.com"), .error("error refused host"), nil),
+            (HTTPFailure.notARead("DELETE api-business.apple.com /v1/mdmServers/{id}"), .error("error not a read"), nil),
             (AppleAPIError.token(.status(500, "server_error")), .error("error token"), "500 server_error"),
             (AppleAPIError.token(.status(503, "TESTD0000001 revoked")), .error("error token"), "503"),
             (AppleAPIError.token(.invalidClient), .error("error token"), "invalid_client"),

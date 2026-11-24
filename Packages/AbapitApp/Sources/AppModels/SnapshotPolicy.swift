@@ -230,6 +230,7 @@ public enum SnapshotPolicy {
                 switch error.httpKind {
                 case .tooLarge?: "too large"
                 case .refusedHost?: "refused host"
+                case .notARead?: "not a read"
                 case .noAnswer?, nil: "transport"
                 }
             case .token: "token"

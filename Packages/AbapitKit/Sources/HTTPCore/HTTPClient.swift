@@ -51,6 +51,21 @@ public actor HTTPClient {
     public static let attempts = 5
     public static let longestWait: Duration = .seconds(60)
 
+    /// A read as it will be sent (invariant 2): Apple's are GETs with no body; Mosyle's are POSTs with a body and no
+    /// query (its session checks the operation); the token host takes no read. Checked as each request leaves, because
+    /// a builder scan can't see every way a request is made (failure-log 2026-11-18).
+    static func isReadShaped(_ request: ReadRequest) -> Bool {
+        switch request.host {
+        case .appleBusiness, .appleSchool: request.method == .get && request.body == nil
+        case .mosyle, .mosyleLogs: request.method == .post && request.body != nil && request.query.isEmpty
+        case .appleAccount: false
+        }
+    }
+
+    /// The only credential exchanges: Apple's token request and Mosyle's two logins. Unlabelled pairs, because
+    /// `RouteTests` counts the argument lists in this file that open with a host label.
+    static let logins: [(APIHost, String)] = [(.appleAccount, "/auth/oauth2/token"), (.mosyle, "/v1/login"), (.mosyleLogs, "/v1/login")]
+
     private let transport: any Transport
     private let limiter: RateLimiter
     private let bodyLimit: Int
@@ -71,6 +86,7 @@ public actor HTTPClient {
     public var learnedReadsPerMinute: Double { get async { await limiter.readsPerMinute } }
 
     package func read(_ request: ReadRequest, authorizer: any Authorizer) async throws -> HTTPResponse {
+        guard Self.isReadShaped(request) else { throw HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) \(request.template)") }
         guard let url = URL.make(host: request.host, path: request.path, query: request.query) else {
             throw HTTPFailure.refusedHost(request.host.rawValue)
         }
@@ -81,6 +97,7 @@ public actor HTTPClient {
     /// A next-page link Apple returned: followed only when it stays on `host`, under `/v1/`.
     package func read(next url: URL, on host: APIHost, template: String, keeping limit: String? = nil,
                       authorizer: any Authorizer) async throws -> HTTPResponse {
+        guard host == .appleBusiness || host == .appleSchool else { throw HTTPFailure.notARead("GET \(host.rawValue) \(template)") }
         let path = url.path(percentEncoded: true)
         // A dot segment in any spelling (`..`, `%2e%2E`, `.%2e`) or a bad escape is refused: decoded, it would climb
         // out of `/v1/`.
@@ -153,6 +170,12 @@ public actor HTTPClient {
     /// Apple's token request or Mosyle's `/login`: sent once, never retried (a credential exchange is
     /// rate-limited itself; plan §3.4.3). The body and the response are secrets; nothing of either is logged.
     package func authenticate(_ exchange: AuthRequest) async throws -> HTTPResponse {
+        // A login goes to a login endpoint and carries no header but Mosyle's access token: anything else would be a
+        // POST of any body, with any credential, past the read check above and the Executor.
+        guard Self.logins.contains(where: { $0.0 == exchange.host && $0.1 == exchange.path }),
+              exchange.headers.keys.allSatisfy({ $0 == "accessToken" }) else {
+            throw HTTPFailure.notARead("POST \(exchange.host.rawValue) \(exchange.path)")
+        }
         guard let url = URL.make(host: exchange.host, path: exchange.path) else { throw HTTPFailure.refusedHost(exchange.host.rawValue) }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
