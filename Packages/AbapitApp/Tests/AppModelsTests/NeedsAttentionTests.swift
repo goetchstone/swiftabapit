@@ -244,10 +244,12 @@ struct NeedsAttentionTests {
         #expect(setting.selected.isEmpty && setting.words.hasPrefix("Not set, so “missing from Mosyle” is skipped"))
         #expect(setting.options.map(\.id) == ["", "S1", "S2"] && setting.options.map(\.label) == ["Not set", "Old MDM (MDM)", "Mosyle (MDM)"])
         #expect(Self.isSkipped(Self.line(model, .missingFromMosyle))?.contains("isn't set") == true)
-        // Set: judged. ADEV0000001 is assigned to S2 and isn't in Mosyle.
+        // Set: judged. ADEV0000001 is assigned to S2 and isn't in Mosyle. Until the rules run again, the screen says what it shows is older.
+        #expect(model.updating == nil)
         model.setMosyleService("S2")
-        #expect(model.mosyleServiceID == "S2" && model.settingNote == nil)
+        #expect(model.mosyleServiceID == "S2" && model.settingNote == nil && model.updating?.hasPrefix("Judging again") == true)
         await model.evaluate()
+        #expect(model.updating == nil)
         #expect(Self.line(model, .missingFromMosyle).verdict == .judged && Self.subjects(model, .missingFromMosyle) == ["ADEV0000001"])
         setting = try #require(model.serviceSetting)
         #expect(setting.selected == "S2" && setting.words == "Set: Mosyle. Only its id is kept, on this Mac; its name is read from Apple each time.")

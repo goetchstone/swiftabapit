@@ -36,7 +36,7 @@ struct NeedsAttentionView: View {
     }
 
     @ViewBuilder private func header(_ lines: [NeedsAttentionModel.Line]) -> some View {
-        if let waiting = model.waiting {
+        if let waiting = model.waiting ?? model.updating {
             Label(waiting, systemImage: "hourglass").accessibilityIdentifier("attention.waiting")
         }
         if let summary = model.summary {
@@ -171,8 +171,9 @@ struct NeedsAttentionCard: View {
     }
 
     private var words: String? {
-        if let waiting = model.waiting { return waiting }
-        if let summary = model.summary, summary.rows.isEmpty {
+        if let waiting = model.waiting ?? model.updating { return waiting }
+        // With every rule skipped, the skipped line says it all: never "nothing open" over nothing judged.
+        if let summary = model.summary, summary.rows.isEmpty, summary.clear > 0 {
             return "Nothing open in the \(summary.clear.formatted()) rule\(summary.clear == 1 ? "" : "s") judged."
         }
         return model.recordNote

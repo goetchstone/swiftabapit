@@ -151,7 +151,8 @@ public final class NeedsAttentionModel {
     @ObservationIgnored package private(set) var sources: [String: ReportsModel.SweepSource] = [:]
     /// Bumped each time `sources` is set: part of the evaluation's key.
     private var sourcesStamp = 0
-    @ObservationIgnored private var evaluatedKey: InputKey?
+    /// What the last evaluation was made from; observed, so a screen says when what it shows is older than what is held.
+    private var evaluatedKey: InputKey?
     @ObservationIgnored private var loadToken = 0
     @ObservationIgnored private var evaluateToken = 0
     /// Loads and evaluations that have returned, kept or dropped: what the tests wait on.
@@ -597,6 +598,12 @@ public final class NeedsAttentionModel {
         let lines = self.lines
         let rows = lines.filter { !$0.open.isEmpty }.map { Summary.Row(rule: $0.rule, title: $0.title, open: $0.open.count, partial: $0.isPartial) }
         return Summary(rows: rows, skipped: lines.filter(\.isSkipped).map(\.title), clear: lines.filter { !$0.isSkipped && $0.open.isEmpty }.count)
+    }
+
+    /// Said while what is shown was judged over less than is held now (a list finished, the setting changed) and the rules are run
+    /// again; nil when it is current.
+    public var updating: String? {
+        evaluated.isEmpty || evaluatedKey == inputKey ? nil : "Judging again: what the rules read has changed since these were judged."
     }
 
     /// Why nothing is listed yet, in words; nil once there is an evaluation.
