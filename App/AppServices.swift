@@ -96,12 +96,19 @@ final class AppServices {
             MosyleClient(org: org, vault: vault, transport: mosyleStub)
         }
         let services = AppServices(orgs: model, isDemo: true)
-        // A few fake snapshots, so Activity › Changes draws a real-looking diff; its first read waits for them.
+        // A few fake snapshots, so Activity › Changes draws a real-looking diff; its first read waits for them. Needs attention's
+        // first-seen dates and a snooze go into the same store, in memory: the real history is never touched.
         if case .success(let history) = model.history {
-            let seeding = Task { await DemoHistory.seed(history, org: profile) }
+            let seeding = Task {
+                await DemoHistory.seed(history, org: profile)
+                await DemoHistory.seedAttention(history, org: profile)
+            }
             services.screens.changes.beforeFirstLoad = { await seeding.value }
             services.screens.reports.beforeFirstLoad = { await seeding.value }
+            services.screens.attention.beforeFirstLoad = { await seeding.value }
         }
+        // The demo's Mosyle service is set (in memory), so "missing from Mosyle" is judged in the picture.
+        if mosyle { services.screens.attention.setMosyleService(DemoMosyle.service) }
         return services
     }
     #endif

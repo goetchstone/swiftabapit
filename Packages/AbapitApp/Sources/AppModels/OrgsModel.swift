@@ -205,6 +205,10 @@ public final class OrgsModel {
 
     public var active: OrgProfile? { store.active }
 
+    /// The folder `orgs.json` lives in, where this Mac's other settings live too (`settings.json`); nil for the demo and the
+    /// tests, which keep them in memory and write nothing.
+    var folder: URL? { if case .folder(let folder) = storage { folder } else { nil } }
+
     /// The active org's Apple client, made once per account and generation; nil for a profile that can't be used.
     /// Keyed by the account itself, so an edited team ID or client ID never reuses the old account's client.
     public var appleClient: AppleClient? {

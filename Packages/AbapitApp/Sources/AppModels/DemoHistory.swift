@@ -97,5 +97,18 @@ public enum DemoHistory {
             return
         }
     }
+
+    /// The demo's Needs-attention history (the screen's screenshot shows first-seen dates and a snooze): two of the demo fleet's
+    /// quiet services first seen twelve days before `now`, one of them snoozed for a week. Into the demo's own store, in memory: the
+    /// real history is never touched. A store that refuses leaves them out.
+    public static func seedAttention(_ store: SnapshotStore, org: OrgProfile, now: Date = Date()) async {
+        let day = 86_400.0, rule = "quiet_service"
+        do {
+            try await store.seen(org: org, rule: rule, subjects: ["DEMOSVC0002", "DEMOSVC0003"], at: now - 12 * day)
+            try await store.snooze(org: org, rule: rule, subject: "DEMOSVC0003", until: now + 7 * day)
+        } catch {
+            return
+        }
+    }
 }
 #endif

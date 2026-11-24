@@ -194,4 +194,69 @@ struct LocalSettingsTests {
         #expect(throws: LocalSettings.Failure.notASettingsFile) { try settings.save(to: dir) }
         #expect(try Self.read(dir) == Data(text.utf8))
     }
+
+    // MARK: which service is each client's Mosyle org (the operator's Q7)
+
+    /// None by default; set per client, the id only; kept beside the thresholds and the keys this version doesn't know.
+    @Test func theMosyleServiceIsPerClientAndNoneByDefault() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Self.write(#"{"version": 1, "future": true, "attention": {"check_in_days": 45}}"#, in: dir)
+        var settings = LocalSettings.load(from: dir)
+        #expect(settings.mosyleServices.isEmpty && settings.mosyleService(for: "acme") == nil)
+        settings.setMosyleService("1F97349736CF4614A94F624E705841AD", for: "acme")
+        try settings.save(to: dir)
+        let root = try #require(JSONValue.parse(String(decoding: try Self.read(dir), as: UTF8.self))?.object)
+        #expect(root["mosyle_services"] == .object(["acme": .string("1F97349736CF4614A94F624E705841AD")]))
+        #expect(root["future"] == .bool(true) && root["attention"]?["check_in_days"]?.int == 45)
+        var again = LocalSettings.load(from: dir)
+        #expect(again.mosyleService(for: "acme") == "1F97349736CF4614A94F624E705841AD" && again.mosyleService(for: "other") == nil)
+        // Cleared: the key goes with its last entry.
+        again.setMosyleService(nil, for: "acme")
+        try again.save(to: dir)
+        let cleared = try #require(JSONValue.parse(String(decoding: try Self.read(dir), as: UTF8.self))?.object)
+        #expect(cleared["mosyle_services"] == nil && LocalSettings.load(from: dir).mosyleServices.isEmpty)
+    }
+
+    /// An entry this version can't read as an id reads as not set and is written back as it was; one set again replaces it.
+    @Test func anEntryThatIsNotAnIDReadsAsNotSetAndIsKept() throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Self.write(#"{"version": 1, "mosyle_services": {"acme": {"id": "S1"}, "beta": "", "gamma": "two words", "delta": "S4"}}"#, in: dir)
+        var settings = LocalSettings.load(from: dir)
+        #expect(settings.blocked == nil && settings.mosyleServices == ["delta": "S4"])
+        settings.setMosyleService("S1", for: "acme")
+        try settings.save(to: dir)
+        let services = try #require(JSONValue.parse(String(decoding: try Self.read(dir), as: UTF8.self))?["mosyle_services"]?.object)
+        #expect(services["acme"] == .string("S1") && services["beta"] == .string("") && services["gamma"] == .string("two words") && services["delta"] == .string("S4"))
+    }
+
+    /// `save` never writes a name or a line of words as an id, nor an entry with no client.
+    @Test(arguments: ["", "two words", "tab\tid", "rlo\u{202E}id", String(repeating: "x", count: 257)])
+    func saveRefusesAServiceThatIsNotAnID(id: String) throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try LocalSettings().save(to: dir)
+        let before = try Self.read(dir)
+        var settings = LocalSettings.load(from: dir)
+        settings.setMosyleService(id, for: "acme")
+        #expect(throws: LocalSettings.Failure.notAServiceID) { try settings.save(to: dir) }
+        settings.setMosyleService(nil, for: "acme")
+        settings.setMosyleService("S1", for: "")
+        #expect(throws: LocalSettings.Failure.notAServiceID) { try settings.save(to: dir) }
+        #expect(try Self.read(dir) == before)
+    }
+
+    @Test(arguments: ["1", "null", "[1]", "\"x\""])
+    func aServicesValueThatIsNotAnObjectBlocksTheFile(value: String) throws {
+        let dir = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let text = #"{"version": 1, "mosyle_services": \#(value)}"#
+        try Self.write(text, in: dir)
+        var settings = LocalSettings.load(from: dir)
+        #expect(settings.blocked == .notASettingsFile)
+        settings.setMosyleService("S1", for: "acme")
+        #expect(throws: LocalSettings.Failure.notASettingsFile) { try settings.save(to: dir) }
+        #expect(try Self.read(dir) == Data(text.utf8))
+    }
 }

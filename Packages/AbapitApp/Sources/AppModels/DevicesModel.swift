@@ -126,6 +126,9 @@ public final class DevicesModel {
     public private(set) var servicesStoppedAt: Date?
     /// Devices per service, for each service whose device list was read whole.
     public private(set) var deviceCount: [String: Int] = [:]
+    /// Each service's device ids as its read ended, by service id: whole, cut at the page limit, or not read and why. Set with
+    /// `deviceCount`, once every service's list was asked; empty before. Needs attention's "missing from Mosyle" reads it.
+    private(set) var serviceDevices: [String: (ids: [String], read: ListRead)] = [:]
     /// Why some devices' service shows as Unknown, in words, once the services read has ended.
     private var unknownNote: String?
     /// Said on the Services screen when Apple refused the services' field list and they were read with its default fields
@@ -329,6 +332,7 @@ public final class DevicesModel {
         services = []
         servicesTruncated = false
         deviceCount = [:]
+        serviceDevices = [:]
         unknownNote = nil
         servicesFieldsNote = nil
         servicesAbsent = []
@@ -396,30 +400,36 @@ public final class DevicesModel {
         guard current(token) else { return }
         // One service's device list failing costs only what it would have told (Phase 1b review M3).
         var names: [String: String] = [:], counts: [String: Int] = [:], unread: [String] = []
+        var lists: [String: (ids: [String], read: ListRead)] = [:]
         if servicesTruncated { unread.append("the list of services stopped at the page limit") }
         for service in list {
             // A service id that can't go in a path is never sent: the client would call a service Apple has just listed
             // "no such item" (Phase 2b verifier round 2: review L1's class in a fifth model).
             guard AppleRead.isPathSafe(service.id) else {
                 unread.append("\(service.name)'s id can't be sent to Apple, so its devices weren't asked for")
+                lists[service.id] = ([], .notRead("its id can't be sent to Apple, so its devices weren't asked for"))
                 continue
             }
-            var count = 0, cut = false
+            var count = 0, cut = false, ids: [String] = []
             do {
                 for try await page in client.serviceDeviceIDs(service.id) {
                     guard current(token) else { return }
                     for serial in page.items { names[serial] = service.name }
+                    ids += page.items
                     count += page.items.count
                     cut = cut || page.truncated
                 }
                 guard current(token) else { return }
                 if cut { unread.append("\(service.name)'s device list stopped at the page limit") } else { counts[service.id] = count }
+                lists[service.id] = (ids, cut ? .partly("stopped at the page limit after \(count.formatted()) devices") : .whole)
             } catch {
                 guard current(token) else { return }
                 unread.append("\(service.name)'s devices couldn't be read (\(Self.message(error)))")
+                lists[service.id] = ids.isEmpty ? ([], .notRead(Self.message(error))) : (ids, .partly("the read failed after \(ids.count.formatted()) devices: \(Self.message(error))"))
             }
         }
         deviceCount = counts
+        serviceDevices = lists
         assignments = .read(names: names, complete: unread.isEmpty)
         rows = rows.map { DeviceRow($0.device, assignment: assignment(of: $0.serial)) }
         unknownNote = unread.isEmpty ? nil

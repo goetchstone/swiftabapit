@@ -11,8 +11,8 @@ merged (PR #28); the diff, coverage and fleet-age ports are built (PR #31), and 
 (PR #32). The Apple collector merged in PR #34 ("The Apple collector", below), without its per-device sweeps; the Needs-attention
 rules merged in PR #35 ("Needs attention rules", below). The per-device sweeps merged in PR #37 ("The sweeps", below). The abapit import and the export of a
 copy merged in PR #36 ("Import and export", below). The Changes screen, "Snapshot now" and the question asked when an org is removed
-are the next PR (S4.7, "The Changes screen", below). The Mosyle collector, the Needs-attention screen and scheduled
-snapshots are still to do. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in phase 1b, and the audit
+are the next PR (S4.7, "The Changes screen", below). The Needs-attention screen is on branch `phase-3-attention-screen` ("The
+Needs-attention screen", below). The Mosyle collector and scheduled snapshots are still to do. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in phase 1b, and the audit
 digests and the dashboard's quiet services and recent events in phase 2a; their notes are below.
 
 ## Files
@@ -33,6 +33,8 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
 - `AppModels/ChangesModel.swift` (Activity › Changes; `ScreenModels.changes`), `AppModels/DemoHistory.swift` (the demo's fake
   snapshots, DEBUG only), `App/Screens/ChangesView.swift` (`ActivityScreen`: the toolbar's Audit Log / Changes, and `ChangesView`).
   Tests: `ChangesTests.swift`, `CollectorLowsTests.swift` (AppModelsTests), `ExportSnapshotDiffTests` (ReportsTests).
+- `AppModels/NeedsAttentionModel.swift` (the Needs-attention screen; `ScreenModels.attention`) and `App/Screens/NeedsAttentionView.swift`
+  (the screen and the Overview's `NeedsAttentionCard`). Tests: `NeedsAttentionTests.swift` (AppModelsTests); the setting's file: `OrgsTests/LocalSettingsTests`.
 - `AppModels/ReportsModel.swift` (the Reports screen; `ScreenModels.reports`) and `App/Screens/ReportsView.swift`. Tests: `ReportsTests.swift`, `UnreadReportsTests.swift`. The unread-devices tests: `HistoryTests/UnreadTests.swift` (migration, the column, import and export) and `AppModelsTests/UnreadSweepTests.swift` (the collector).
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
@@ -926,8 +928,8 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   firewall are named as nouns ("no firewall value"), each held by a test.
 - **Not read yet** (what the rules wait for): the AppleCare and Activation Lock sweeps, and every Apple MDM device's
   details (the Apple MDM screen reads 50 per load, `detailLimit`), come with the collectors; until then those rules are
-  skipped (nothing read) or partial (some read) and say how many devices weren't read. The Mosyle-service setting is an
-  input only: nothing stores it yet. Mosyle reads no FileVault or firewall value.
+  skipped (nothing read) or partial (some read) and say how many devices weren't read. The Mosyle-service setting is stored
+  per client in `settings.json` (the screen PR, below). Mosyle reads no FileVault or firewall value.
 - **Decisions, and who made them.**
   - The operator's build order (2026-11-07, plan §8.0): deterministic rules in Reports, a model never deciding what's
     overdue, the eight rules, and a rule needing Mosyle skipped and said for a client without it.
@@ -950,9 +952,93 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
     Reports; a sweep that read none of the devices a rule needs counts as not read (skipped), one that read some as
     partial; a service of a type this version doesn't know treated as one with no type; the partial line worded for its
     cause; "not in Apple" still skipped when no device has a serial; a gone device's coverage beside the fleet.
-- **Open, for the screen PR**: which org a client-level rule's findings are recorded under in `seen(org:)`. The rules
-  that compare Apple with Mosyle (`missing_from_mosyle`, `mosyle_not_in_apple`) belong to a client, not to one org, and
-  the store keys every finding by an org's id; whether they go under the Apple org, the Mosyle org or both is not decided.
+- **Decided in the screen PR**: which org a client-level rule's findings are recorded under in `seen(org:)`: the client's
+  Apple org (the coordinating session's decision; "The Needs-attention screen", below).
+
+### The Needs-attention screen (branch `phase-3-attention-screen`)
+
+Needs Attention (`App/Screens/NeedsAttentionView.swift` over `AppModels/NeedsAttentionModel.swift`, `ScreenModels.attention`): its own sidebar
+section and an Overview card (**the operator's Q6**). Every rule of "Needs attention rules" (above), in order, with its verdict, what it found,
+why it couldn't judge more, and where its data came from; Dismiss and Snooze; a CSV. `ABAPIT_SCREEN=needs-attention` draws it for the
+screenshot run.
+
+- **Where each rule reads** (`NeedsAttentionModel.source(of:)`): one source per rule, never a live list mixed with a snapshot's.
+  - **Live**: the lists the Devices and Mosyle screens read (`DevicesModel`'s devices, services and, new here, each service's own device list as
+    its read ended, `serviceDevices`; `MosyleModel`'s devices, a column Mosyle refused or wasn't asked for being `notSent`). Missing from Mosyle,
+    in Mosyle and not in Apple, Mosyle check-in, the quiet service, the migration deadline. Loading the screen asks those models for their
+    reads (the reads their own screens make); nothing new is read.
+  - **A sweep's snapshot**: AppleCare, Activation Lock and the Apple MDM details (check-in, FileVault, the firewall) read **the snapshot the Reports
+    screen's rule picks** (`ReportsModel.read`, now shared and keyed by resource: the newest attempt, used marked part when it read some, else the
+    newest that read any, with the newer failure said) with **that snapshot's own list** (`devices`, or `mdm_enrolled` for the details, as the
+    collector swept them). The per-device maps are the Reports screen's own (`ReportsModel.coverage`, and `lockReads` and `detailReads`, moved
+    out of `build` or added beside it): a device the snapshot names in `unread` is not read; in a whole copy, or a part read whose `unread` can be
+    trusted, a device with no item was read (no AppleCare record; Apple's "no details", `.read(nil)`); otherwise it isn't reached.
+  - **Apple MDM's list from a snapshot**: missing from Apple MDM and enrolled in Apple MDM but not in Apple read `mdm_enrolled` from the snapshot
+    the same rule picks, with that snapshot's own devices, services and service device lists (`assignments`, grouped by `serverId`: one read covers
+    every service, so a part read of it is every service's part read). **This screen never starts the Apple MDM screen's read**, whose 50 detail
+    reads it wouldn't use; an Apple MDM list compared with a live one would call a device enrolled since the snapshot missing (the executor's
+    decision). A School org's five Apple MDM rules are skipped: "Apple School Manager's API has no Apple MDM devices to read".
+  - No snapshot read the resource: the rule is skipped, "No snapshot has read AppleCare coverage, so this rule judges nothing. It isn't zero:
+    nothing was read." with how to take one; a history that won't open skips the snapshot rules with its words, and the live rules are still judged.
+  - **The screen never starts a sweep or a snapshot**, and asks Apple for no detail (`snapshotRulesReadTheirSnapshotsOwnListsAndNoSweepIsSent`).
+- **What is kept** (**the operator, 2026-11-20**): `SnapshotStore.seen` is called with a rule's `subjectsToRecord`, which is non-nil only when the
+  rule was **judged over a complete read**; a partial run's findings are shown, marked partial ("Found over a part read: not kept"), and never
+  kept; a skipped rule calls nothing, not even `seen([])`, which would age its findings (`aSkippedOrPartialRuleNeverAgesItsFindings`). `at` is
+  the evaluation's time, as the store's contract says.
+- **Which org a finding is kept under** (**the coordinating session's decision**): every rule under the client's **Apple org**, the rules that
+  span Apple and Mosyle included (every such rule needs the Apple org, and it is where the device lives); **Mosyle check-in**, which reads Mosyle
+  alone, under the **Mosyle org** (`NeedsAttentionModel.keeper(of:)`). The findings read back are the Apple org's for its rules and the Mosyle
+  org's for Mosyle check-in; another client's are never read or written.
+- **When it evaluates**: `load()` reads the history and evaluates; the screen and the Overview's card evaluate again whenever what the rules read
+  changes (`inputKey`: each list's state and count, the history's read, the setting, the thresholds). A list still being read is one key however
+  many pages have come, so the rules aren't run and recorded again for each page. Recording the same subjects again only moves `last_seen`.
+- **Dismiss and Snooze** (**the operator's Q10**): writes to the local history only (`SnapshotStore.dismiss`, `snooze`), under the finding's
+  keeper. A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
+  until its date (a week, 30 or 90 days on screen; a date not after now is refused in words). Both are off, with the reason, for a finding not kept
+  (found over a part read, an id the store can't keep, or a history that can't be written); a dismissed or snoozed finding is hidden, and shown
+  with "Show dismissed and snoozed (N)". No undo for a dismissal yet (the store has none).
+- **A history that can't be written** (`.readOnly`, `.notWritable`): what was found is shown, first seen from rows kept before is still read, and
+  the screen says "What was found isn't kept for later (first seen, Dismiss, Snooze): " and the store's own words; a Dismiss or Snooze says
+  "Not dismissed: " and the store's words (`anUnwritableHistoryIsSaidInItsOwnWords`, both cases).
+- **The Mosyle service setting** (**the operator's Q7**: a per-client local setting, none by default; **where it lives is the coordinating
+  session's proposal**): `settings.json`'s `mosyle_services`, client id to the Apple service's id, through `LocalSettings` (`mosyleService(for:)`,
+  `setMosyleService(_:for:)`; an entry that isn't an id reads as not set and is written back as it was; `save` refuses a name or words,
+  `notAServiceID`). Only the id is kept: the name is read from Apple each time. Settings shows it (a "Needs attention" section) only when the
+  active client has both an Apple org and a Mosyle org; the choices are the services Apple lists now, by name and type. Not set: "missing from
+  Mosyle" is skipped and says the setting isn't set. An id Apple no longer lists is said in Settings ("isn't among the services Apple lists now")
+  and the rule is skipped ("The service set as your Mosyle org isn't among the services Apple listed"), never judged against nothing. The demo
+  and the tests keep it in memory. Keyed by client id: a client id reused after a client was removed sees the old id, which no service of another
+  Apple org has, so it reads as stale and is said.
+- **Thresholds** (**the operator's Q8**: the defaults stay): read from `settings.json` (`LocalSettings.Thresholds`). Settings has no editor for
+  them yet.
+- **One client at a time**: a client or org switch clears everything at once (lines, kept findings, sources, notes, "show hidden"), and a read or
+  an evaluation that returns after a switch is dropped (its generation guard; `aReadOrAnEvaluationThatReturnsAfterASwitchIsDropped`, a hook at
+  each stage). A Mosyle org on screen says where Needs attention runs from; its sidebar is unchanged.
+- **The Overview's card**: counts only, no serial or name: each rule with open findings and how many ("(partial)" when not kept), and "N of 12
+  rules skipped: open Needs Attention to see why."; a dismissed or snoozed finding isn't counted. Its button opens the screen. To count, it
+  loads what the screen loads: the Devices read the Overview makes anyway, the history, and Mosyle's devices when the client has a Mosyle org
+  (the Mosyle screen's read, one more on the Overview than before).
+- **Caps** (invariant 7, 8): a rule lists at most 200 findings and says "Showing 200 of N: the rest are in the CSV export."
+- **CSV** (`ExportPolicy.needsAttention`: `verdict`, `rule`, `title`, `reason`, `status`, `firstSeen`, `dataFrom`, after the subject as `id`):
+  one row per finding, dismissed and snoozed ones included with their state, and one per rule that found none or wasn't judged, so the file is
+  never a bare header. `verdict` leads ("judged", "partial: <why>", "skipped: <why>"), so a partial row says so, as the reports' `listRead` does.
+  Every cell is this app's words, an identifier or a date: no attribute Apple or Mosyle sent is copied; cells go through the one writer and its
+  formula guard. The name is `needs attention <day>.csv` (UTC), led by the client's name only when the app shows clients (`ScreenWords.filename`).
+- **The demo** (DEBUG only): the demo fleet's own data gives the rules real findings (its quiet services, its migrations, Mosyle's devices); the
+  demo's Mosyle service is set in memory, so "missing from Mosyle" is judged; `DemoHistory.seedAttention` puts two quiet services first seen
+  twelve days back, one snoozed for a week, into the demo's memory store. Nothing is recorded in the real history: the demo's history is in memory.
+- **Screenshot**: `docs/screenshots/needs-attention.png` (CI's `needs-attention` run), and the refreshed Overview and Settings pictures.
+- **Decisions, and who made them.** The operator: its own section and an Overview card (Q6); the Mosyle service a per-client local setting, none
+  by default (Q7); the thresholds' defaults (Q8); a dismissal until the finding clears, a snooze until a date, forgotten after 30 days unseen
+  (Q10); recorded only when judged whole, shown partial, skipped said (2026-11-20). The coordinating session: the setting in `settings.json`,
+  keyed by client id, id only, shown for a client with both orgs, a stale id said and the rule skipped; a spanning rule kept under the Apple org,
+  a Mosyle-only rule under the Mosyle org. The executor's, for review: one source per rule, Apple MDM's list (both comparisons) from a snapshot
+  with that snapshot's own lists rather than the Apple MDM screen's live read; the details' map by the coverage rule; Snooze's three lengths;
+  `verdict` as the CSV's first column; a Mosyle org on screen not reaching the screen (its sidebar unchanged); the card's words; the section after
+  the Overview in the sidebar.
+- **Live checks** (for the operator, read-only, through `live-verify`): the screen over the real client after a snapshot with each sweep ticked:
+  each rule's verdict and source line; "missing from Mosyle" after setting the Mosyle service in Settings; a Dismiss and a Snooze surviving a
+  relaunch; the CSV's name and panel words with one and with several clients.
 
 ### Reports
 

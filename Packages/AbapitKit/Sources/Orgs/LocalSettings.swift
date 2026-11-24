@@ -11,6 +11,10 @@ import JSONAPI
 /// app couldn't parse, couldn't open, found to be a link, or that a newer version wrote (its values are read, never
 /// changed) stays exactly as it was until the operator deals with it. A file that isn't there yet is not blocked.
 /// Keys this version doesn't know are kept and written back, at the top level and among the thresholds.
+///
+/// It also holds, per client, which Apple device management service is that client's Mosyle Business org (the operator's
+/// Q7: a per-client local setting, none by default; where it lives is the coordinating session's proposal): the service's
+/// id only, never its name, which is read from Apple each time.
 public struct LocalSettings: Sendable, Equatable {
     public static let version = 1
     public static let fileName = "settings.json"
@@ -34,14 +38,38 @@ public struct LocalSettings: Sendable, Equatable {
     }
 
     public var thresholds = Thresholds()
+    /// Which Apple device management service is each client's Mosyle Business org, by client id: the service's id, nothing
+    /// else. A client with no entry has none set, the default. `save` refuses an id that isn't one (`isServiceID`).
+    public var mosyleServices: [String: String] = [:]
     /// The version the file said; above `version`, `save` refuses.
     public private(set) var fileVersion = LocalSettings.version
     /// Why `save` refuses, if it does: the file on disk was left as it was.
     public private(set) var blocked: Failure?
     private var extras = JSONObject()
     private var thresholdExtras = JSONObject()
+    /// Entries under `mosyle_services` this version can't read as a service id (another shape, an empty or overlong text):
+    /// written back as they were, and read as not set.
+    private var serviceExtras = JSONObject()
 
     public init() {}
+
+    /// The service set as `client`'s Mosyle org, or nil when none is.
+    public func mosyleService(for client: String) -> String? { mosyleServices[client] }
+
+    /// Sets (or, with nil, clears) the service that is `client`'s Mosyle org. An entry this version couldn't read for the
+    /// client is replaced. Nothing is written until `save`.
+    public mutating func setMosyleService(_ id: String?, for client: String) {
+        serviceExtras[client] = nil
+        mosyleServices[client] = id
+    }
+
+    /// Whether `text` can be stored as a service's id: 1 to 256 UTF-8 bytes, none of them whitespace, a control or a format
+    /// character. Apple's ids are opaque text; this keeps a name or a line of words out of the file, never judges the id.
+    public static func isServiceID(_ text: String) -> Bool {
+        !text.isEmpty && text.utf8.count <= 256 && text.unicodeScalars.allSatisfy { scalar in
+            !(scalar.properties.isWhitespace || scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format)
+        }
+    }
 
     public enum Failure: Error, Equatable, Sendable {
         /// The file couldn't be opened or read.
@@ -54,6 +82,8 @@ public struct LocalSettings: Sendable, Equatable {
         case unwritable(errno: Int32)
         /// A threshold outside `Thresholds.range`: nothing is written.
         case thresholdOutOfRange(String)
+        /// A Mosyle service setting whose client or id isn't one (`isServiceID`): nothing is written.
+        case notAServiceID
 
         public var message: String {
             switch self {
@@ -63,9 +93,13 @@ public struct LocalSettings: Sendable, Equatable {
             case .newerVersion(let version): "The settings file was written by a newer abapit (version \(version)); this one won't change it."
             case .unwritable(let code): "The settings file couldn't be saved (\(String(cString: strerror(code))))."
             case .thresholdOutOfRange(let key): "The setting \(key) must be between 1 and 3650 days; nothing was saved."
+            case .notAServiceID: "That isn't a device management service's id; nothing was saved."
             }
         }
     }
+
+    /// The top-level key of the per-client Mosyle service setting: an object, client id to service id.
+    static let servicesKey = "mosyle_services"
 
     private static var thresholdKeys: [(key: String, path: WritableKeyPath<Thresholds, Int>)] { [
         ("check_in_days", \.checkInDays), ("applecare_expiring_days", \.appleCareExpiringDays),
@@ -108,16 +142,21 @@ public struct LocalSettings: Sendable, Equatable {
         settings.fileVersion = version
         if version > Self.version { settings.blocked = .newerVersion(version) }
         // Present but not an object: the file isn't one this version can keep whole, so it is never replaced.
-        if let value = root["attention"], value.object == nil {
-            settings.blocked = .notASettingsFile
-            return settings
+        for key in ["attention", servicesKey] {
+            if let value = root[key], value.object == nil {
+                settings.blocked = .notASettingsFile
+                return settings
+            }
         }
         let attention = root["attention"]?.object ?? JSONObject()
         for (key, path) in thresholdKeys {
             if let days = attention[key]?.int, Thresholds.range.contains(days) { settings.thresholds[keyPath: path] = days }
         }
         for (key, value) in attention where !thresholdKeys.contains(where: { $0.key == key }) { settings.thresholdExtras[key] = value }
-        for (key, value) in root where !["version", "attention"].contains(key) { settings.extras[key] = value }
+        for (client, value) in root[servicesKey]?.object ?? JSONObject() {
+            if !client.isEmpty, let id = value.string, isServiceID(id) { settings.mosyleServices[client] = id } else { settings.serviceExtras[client] = value }
+        }
+        for (key, value) in root where !["version", "attention", servicesKey].contains(key) { settings.extras[key] = value }
         return settings
     }
 
@@ -136,6 +175,7 @@ public struct LocalSettings: Sendable, Equatable {
         for (key, path) in Self.thresholdKeys where !Thresholds.range.contains(thresholds[keyPath: path]) {
             throw .thresholdOutOfRange(key)
         }
+        for (client, id) in mosyleServices where client.isEmpty || !Self.isServiceID(id) { throw .notAServiceID }
         // The file as it is now (a missing one is fine). Not atomic with the rename below: another program writing in
         // that window is out of scope, as for `orgs.json`.
         if let onDisk = Self.load(from: folder).blocked { throw onDisk }
@@ -156,6 +196,9 @@ public struct LocalSettings: Sendable, Equatable {
         var root = extras
         root["version"] = .number(String(Self.version))
         root["attention"] = .object(attention)
+        var services = serviceExtras
+        for (client, id) in mosyleServices { services[client] = .string(id) }
+        if !services.isEmpty { root[Self.servicesKey] = .object(services) }
         let bytes = Array((JSONValue.dumps(.object(root)) + "\n").utf8)
         let temporary = folder.appending(path: ".\(Self.fileName).\(UUID().uuidString)")
         let fd = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)

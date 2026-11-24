@@ -788,3 +788,11 @@ private struct Judge {
         return judged(found, notes: notes, takenAt: [devices.takenAt], partial: [part("Apple's device list", devices)].compactMap { $0 })
     }
 }
+
+extension ExportPolicy {
+    /// The Needs-attention screen's export: one row per finding, and one for each rule that found none or wasn't judged, so the
+    /// file is never a bare header. `verdict` leads ("judged", "partial: <why>" or "skipped: <why>"), so a partial row says so in
+    /// the file as the reports' `listRead` does. The `id` is the finding's subject, a serial number or an id; every other cell
+    /// is this app's own words or a date: no attribute Apple or Mosyle sent is copied.
+    public static let needsAttention = Columns(["verdict", "rule", "title", "reason", "status", "firstSeen", "dataFrom"])
+}

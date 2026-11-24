@@ -17,7 +17,7 @@ public enum DemoMosyle {
     public static let name = "Example Mosyle (demo)"
     public static let account = MosyleStub.Account(accessToken: "demo-mosyle-access-token", email: "admin@example.com", password: "demo-password")
     /// The Apple fleet's service whose devices Mosyle enrolls (`DemoFleet`).
-    static let service = "DEMOSVC0001"
+    public static let service = "DEMOSVC0001"
     /// Devices Mosyle lists that Apple Business doesn't: bought outside it, or enrolled by hand.
     static let mosyleOnly = ["DEMOM0000001", "DEMOM0000002", "DEMOM0000003", "DEMOM0000004"]
 

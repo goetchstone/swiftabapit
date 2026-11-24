@@ -113,7 +113,7 @@ struct ClientScreenTests {
         let world = try await World.make(profiles: [World.profile("a", scope: .school)], mosyle: true)
         world.mosyleStub.add(devices: [MosyleScreenTests.device("ADEV0000000")], os: "mac")
         #expect(world.orgs.activeClient?.orgs == ["a", "m"] && world.orgs.mosyleOrg?.id == "m" && world.orgs.reconciles)
-        #expect(SidebarItem.shown(for: world.orgs.active) == [.overview, .devices, .services, .activity, .mosyle, .reconciliation, .reports, .settings])
+        #expect(SidebarItem.shown(for: world.orgs.active) == [.overview, .needsAttention, .devices, .services, .activity, .mosyle, .reconciliation, .reports, .settings])
         #expect(world.orgs.unverifiedNote == ScreenWords.schoolUnverified)
         world.reconciliation.load()
         await eventually("both reads") { world.devices.devicesReadWhole && world.mosyle.devices.isWhole }
