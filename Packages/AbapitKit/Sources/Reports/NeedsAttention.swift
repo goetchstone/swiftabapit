@@ -792,7 +792,10 @@ private struct Judge {
 extension ExportPolicy {
     /// The Needs-attention screen's export: one row per finding, and one for each rule that found none or wasn't judged, so the
     /// file is never a bare header. `verdict` leads ("judged", "partial: <why>" or "skipped: <why>"), so a partial row says so in
-    /// the file as the reports' `listRead` does. The `id` is the finding's subject, a serial number or an id; every other cell
-    /// is this app's own words or a date: no attribute Apple or Mosyle sent is copied.
+    /// the file as the reports' `listRead` does. The `id` is the finding's subject, a serial number or an id. The other cells are
+    /// this app's words and dates, carrying what the rules' words carry from what was read: a service's name as Apple sent it
+    /// (`serverName`), and a check-in or connection stamp this app couldn't read, as sent (through `shownJSON`, so a value under a
+    /// secret's name is withheld). `dataFrom` names the reads. Every cell goes through the CSV writer's formula guard, and a column
+    /// whose name looks like a secret's is never written.
     public static let needsAttention = Columns(["verdict", "rule", "title", "reason", "status", "firstSeen", "dataFrom"])
 }

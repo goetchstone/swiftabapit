@@ -62,7 +62,7 @@ struct SettingsView: View {
             .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
 
             Form {
-                if let message = orgs.problem ?? problem {
+                if let message = orgs.problem ?? problem ?? orgs.settingsProblem {
                     Label(message, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
                 }
                 if isDemo {
@@ -205,6 +205,7 @@ struct SettingsView: View {
                 Picker("Mosyle Business in Apple", selection: Binding(get: { setting.selected }, set: { attention.setMosyleService($0) })) {
                     ForEach(setting.options) { Text($0.label).tag($0.id) }
                 }
+                .disabled(!setting.isEditable)
                 .accessibilityIdentifier("settings.attention.service")
                 Text(setting.words).foregroundStyle(.secondary).accessibilityIdentifier("settings.attention.words")
                 if let note = attention.settingNote ?? attention.settingsBlocked {

@@ -40,10 +40,11 @@ struct NeedsAttentionView: View {
             Label(waiting, systemImage: "hourglass").accessibilityIdentifier("attention.waiting")
         }
         if let summary = model.summary {
-            Text("\(summary.open.formatted()) open finding\(summary.open == 1 ? "" : "s") in \(summary.rows.count.formatted()) of \(lines.count.formatted()) rules"
-                 + (summary.skipped.isEmpty ? "." : "; \(summary.skipped.count.formatted()) skipped."))
-                .font(.headline)
-                .accessibilityIdentifier("attention.summary")
+            Text(summary.headline).font(.headline).accessibilityIdentifier("attention.summary")
+            ForEach(summary.screenWords, id: \.self) { Text($0).font(.callout).foregroundStyle(.secondary) }
+        }
+        if let note = model.settingsNote {
+            Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).accessibilityIdentifier("attention.settingsnote")
         }
         if let note = model.recordNote {
             Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).accessibilityIdentifier("attention.recordnote")
@@ -160,9 +161,10 @@ struct NeedsAttentionCard: View {
                     }
                     .accessibilityIdentifier("overview.attention.rows")
                 }
-                if let skipped = summary.skippedWords {
-                    Text(skipped).font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("overview.attention.skipped")
+                ForEach(summary.words, id: \.self) {
+                    Text($0).font(.callout).foregroundStyle(.secondary)
                 }
+                .accessibilityIdentifier("overview.attention.words")
             }
             Button("Open Needs Attention", action: open).accessibilityIdentifier("overview.attention.open")
         }
@@ -170,12 +172,6 @@ struct NeedsAttentionCard: View {
         .task(id: model.inputKey) { await model.evaluate() }
     }
 
-    private var words: String? {
-        if let waiting = model.waiting ?? model.updating { return waiting }
-        // With every rule skipped, the skipped line says it all: never "nothing open" over nothing judged.
-        if let summary = model.summary, summary.rows.isEmpty, summary.clear > 0 {
-            return "Nothing open in the \(summary.clear.formatted()) rule\(summary.clear == 1 ? "" : "s") judged."
-        }
-        return model.recordNote
-    }
+    /// The card's first line: still judging, judging again, or why nothing is kept; the counts' own words come from the model's summary.
+    private var words: String? { model.waiting ?? model.updating ?? model.recordNote }
 }

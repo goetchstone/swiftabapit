@@ -59,7 +59,7 @@ struct World {
     /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, moved into the client of the first org (`a`).
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap,
-                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil) async throws -> World {
+                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil, folder: URL? = nil) async throws -> World {
         // One store, opened once: the orgs ask again only after a failure.
         let opened = Self.history()
         let history = history ?? { opened }
@@ -94,7 +94,8 @@ struct World {
         let routes = gates, stall = Stall()
         // The limiter's sleeps move its own clock, and the client's retry sleeps return at once: nothing here
         // waits on real time but the gates and the stall.
-        let orgs = OrgsModel(storage: .memory, vault: vault, store: orgStore, history: history) { account, rate in
+        // `folder`: the orgs' folder on disk, where `settings.json` is read and written (the store is given, so `orgs.json` is only written).
+        let orgs = OrgsModel(storage: folder.map { .folder($0) } ?? .memory, vault: vault, store: orgStore, history: history) { account, rate in
             let clock = ManualClock(), clientID = account.clientID
             // An org a test adds is served by org a's stub, where the test registers its account.
             return AppleClient(account: account, vault: vault, transport: routes[account.org] ?? routes["a"]!,

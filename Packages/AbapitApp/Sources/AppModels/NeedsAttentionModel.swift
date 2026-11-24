@@ -84,6 +84,9 @@ public final class NeedsAttentionModel {
         public let isHidden: Bool
         /// Why Dismiss and Snooze can't act on it, in words; nil when they can.
         public let actionsBlocked: String?
+        /// The id of the org it is kept under, as it was evaluated: Dismiss and Snooze act only while that org is still the active
+        /// client's (`keeper(of:)`).
+        public let keeperOrg: String
     }
 
     /// One rule: its verdict, what it found and why it couldn't judge more, and where its data came from.
@@ -95,8 +98,10 @@ public final class NeedsAttentionModel {
         public let findings: [Finding]
         /// The rule's own words: what it found or why it was skipped, what a partial run left out, its notes.
         public let words: [String]
-        /// Where its data came from, and how old it is.
+        /// Where its data came from, and how old it is: only the reads this rule reads.
         public let source: [String]
+        /// Skipped only because a list it reads was still being read when it was judged.
+        public let isReading: Bool
         public var id: String { rule.rawValue }
 
         /// The findings not dismissed or snoozed.
@@ -122,6 +127,8 @@ public final class NeedsAttentionModel {
         /// Why the rule wasn't run, when `result` is nil.
         let skip: String?
         let source: [String]
+        /// A list the rule reads was still being read (or the history was): a skip then is "reading", not a verdict.
+        let pending: Bool
     }
 
     /// The findings kept for later, by rule and subject (by bytes, as the store keys them).
@@ -165,7 +172,8 @@ public final class NeedsAttentionModel {
     @ObservationIgnored package var now: @MainActor () -> Date = { Date() }
     @ObservationIgnored package var dates = ReportsModel.DateWords(timeZone: .autoupdatingCurrent, locale: .autoupdatingCurrent)
 
-    private var settings: LocalSettings
+    /// The orgs a finding was kept under at the last evaluation: the Apple org's id, and the Mosyle org's when there is one.
+    private var evaluatedOrgs: (apple: String, mosyle: String?) = ("", nil)
     private let orgs: OrgsModel
     private let devices: DevicesModel
     private let mosyle: MosyleModel
@@ -176,7 +184,6 @@ public final class NeedsAttentionModel {
         self.orgs = orgs
         self.devices = devices
         self.mosyle = mosyle
-        settings = orgs.folder.map(LocalSettings.load(from:)) ?? LocalSettings()
         orgs.onSwitch { [weak self] in self?.switched() }
     }
 
@@ -224,6 +231,8 @@ public final class NeedsAttentionModel {
             return
         }
         readLive()
+        // The settings as the file holds them now: a hand edit, or a file that can no longer be read, is seen and said.
+        orgs.reloadSettings()
         state = .loading(count: 0)
         let outcome: Result<[String: ReportsModel.SweepSource], SnapshotStore.Failure>
         switch orgs.openHistory() {
@@ -282,7 +291,7 @@ public final class NeedsAttentionModel {
         let (mosyleState, mosyleRows) = settled(mosyle.devices.state, mosyle.devices.rows.count)
         return InputKey(generation: orgs.generation, history: state.isLoading ? .loading(count: 0) : state, sources: sourcesStamp, devices: apple,
                         deviceRows: rows, services: services, serviceRows: serviceRows, serviceLists: devices.serviceDevices.count,
-                        mosyle: mosyleState, mosyleRows: mosyleRows, setting: mosyleServiceID, thresholds: settings.thresholds)
+                        mosyle: mosyleState, mosyleRows: mosyleRows, setting: String(describing: serviceState), thresholds: orgs.settings.thresholds)
     }
 
     /// Runs the rules over what is held now, records what was judged whole (`SnapshotStore.seen`, under each rule's keeper), and reads the
@@ -322,6 +331,7 @@ public final class NeedsAttentionModel {
         await afterAwait?("evaluate")
         guard token == evaluateToken, generation == orgs.generation else { return }
         evaluated = made
+        evaluatedOrgs = (apple.id, mosyleOrg?.id)
         stored = kept
         recordNote = problem
         evaluatedAt = now
@@ -343,23 +353,42 @@ public final class NeedsAttentionModel {
     }
 
     var thresholds: NeedsAttention.Thresholds {
-        let t = settings.thresholds
+        let t = orgs.settings.thresholds
         return NeedsAttention.Thresholds(checkInDays: t.checkInDays, appleCareExpiringDays: t.appleCareExpiringDays,
                                          migrationDeadlineDays: t.migrationDeadlineDays, quietServiceDays: t.quietServiceDays)
     }
 
-    /// Every rule over its own source, in the rules' order.
+    /// Every rule over its own source, in the rules' order, each with the source lines of only what it reads.
     func evaluations(now: Date) -> [Evaluated] {
         let thresholds = self.thresholds
         var runs: [Source: (input: NeedsAttention.Input?, skip: String?, source: [String])] = [:]
-        runs[.live] = (liveInput(), nil, liveWords(now: now))
+        runs[.live] = (liveInput(), nil, [])
         for sweep in Sweep.allCases { runs[.sweep(sweep)] = sweepInput(sweep, now: now) }
         runs[.appleMDM] = appleMDMInput(now: now)
         var judged: [Source: NeedsAttention] = [:]
         for (source, run) in runs { if let input = run.input { judged[source] = NeedsAttention(input, thresholds: thresholds, now: now) } }
+        let live = liveWords(now: now)
+        let history = state == .idle || state.isLoading
+        func pending(_ state: LoadState) -> Bool { state == .idle || state.isLoading }
+        let lists = (devices: pending(devices.state), services: pending(devices.servicesState),
+                     mosyle: orgs.mosyleOrg != nil && pending(mosyle.devices.state))
         return Rule.allCases.map { rule in
             let source = Self.source(of: rule), run = runs[source]
-            return Evaluated(rule: rule, result: judged[source]?.result(rule), skip: run?.skip, source: run?.source ?? [])
+            guard source == .live else {
+                return Evaluated(rule: rule, result: judged[source]?.result(rule), skip: run?.skip, source: run?.source ?? [], pending: history)
+            }
+            let (lines, waiting): ([String?], Bool) = switch rule {
+            case .missingFromMosyle: ([live.services, live.mosyle], lists.services || lists.mosyle)
+            case .mosyleNotInApple: ([live.devices, live.mosyle], lists.devices || lists.mosyle)
+            case .mosyleCheckIn: ([live.mosyle], lists.mosyle)
+            case .quietService: ([live.services], lists.services)
+            default: ([live.devices], lists.devices)
+            }
+            // The setting "missing from Mosyle" needs, when it can't be used: said, and the rule not run on a guess.
+            if rule == .missingFromMosyle, orgs.mosyleOrg != nil, let why = serviceState.unusable {
+                return Evaluated(rule: rule, result: nil, skip: why, source: lines.compactMap { $0 }, pending: false)
+            }
+            return Evaluated(rule: rule, result: judged[.live]?.result(rule), skip: nil, source: lines.compactMap { $0 }, pending: waiting)
         }
     }
 
@@ -503,18 +532,20 @@ public final class NeedsAttentionModel {
         return lines
     }
 
-    /// Where the live rules' data comes from, in words.
-    private func liveWords(now: Date) -> [String] {
-        var lines = [ReportsModel.liveDevices(devices).words(now: now, dates: dates), ReportsModel.liveServices(devices).words(now: now, dates: dates)]
-        if orgs.mosyleOrg != nil {
-            let listing = mosyle.devices
-            switch listing.state {
-            case .loaded(let at): lines.append("Mosyle's devices read live on \(dates.dayTime(at)), \(ReportsModel.age(since: at, now: now)).")
-            case .idle, .loading: lines.append("Mosyle's devices: not read yet.")
-            default: lines.append("Mosyle's devices: \(listing.state == .forbidden ? "refused" : "not read in full").")
-            }
+    /// Where the live rules' data comes from, in words, a line per list: Apple's devices, the services (with each one's device list),
+    /// and Mosyle's devices when the client has a Mosyle org.
+    private func liveWords(now: Date) -> (devices: String, services: String, mosyle: String?) {
+        let apple = ReportsModel.liveDevices(devices).words(now: now, dates: dates), services = ReportsModel.liveServices(devices).words(now: now, dates: dates)
+        guard orgs.mosyleOrg != nil, case .devices(let listed) = mosyleInput() else { return (apple, services, nil) }
+        let what = "Mosyle's devices. No snapshot is used."
+        let mosyleLine: String = switch (mosyle.devices.state, listed.read) {
+        case (.loaded(let at), .whole): "Read live from Mosyle on \(dates.dayTime(at)), \(ReportsModel.age(since: at, now: now)): \(what)"
+        case (.loaded(let at), .partly(let how)): "Read live from Mosyle in part on \(dates.dayTime(at)), \(ReportsModel.age(since: at, now: now)): \(how). \(what)"
+        case (_, .partly(let how)): "Read live from Mosyle in part, at a time that isn't kept: \(how). \(what)"
+        case (_, .notRead(let why)): "Not read from Mosyle: \(why). \(what)"
+        case (_, .whole): "Read live from Mosyle: \(what)"
         }
-        return lines
+        return (apple, services, mosyleLine)
     }
 
     static let schoolWords = "Apple School Manager's API has no Apple MDM devices to read, so this rule doesn't apply to this organization"
@@ -548,11 +579,13 @@ public final class NeedsAttentionModel {
                 } else {
                     nil
                 }
+                let keeper = Self.keeper(of: item.rule) == .apple ? evaluatedOrgs.apple : evaluatedOrgs.mosyle ?? ""
                 return Finding(id: "\(item.rule.rawValue)|\(index)", rule: item.rule, subject: found.subject, reason: found.reason, isPartial: found.isPartial,
                                firstSeen: kept?.firstSeen, dismissedAt: kept?.dismissedAt, snoozedUntil: kept?.snoozedUntil,
-                               isHidden: kept?.isHidden(at: now) ?? false, actionsBlocked: blocked)
+                               isHidden: kept?.isHidden(at: now) ?? false, actionsBlocked: blocked, keeperOrg: keeper)
             }
-            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source)
+            let reading = item.pending && { if case .skipped = verdict { true } else { false } }()
+            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source, isReading: reading)
         }
     }
 
@@ -567,7 +600,9 @@ public final class NeedsAttentionModel {
         return (shown, cap)
     }
 
-    /// What the Overview's card counts: the rules with open findings and how many, the rules skipped, and the rules with none open.
+    /// What the Overview's card and the screen's head count: the rules with open findings and how many; the rules judged whole with
+    /// none open; the rules judged in part; the rules skipped; and the rules still waiting for a list. Never "nothing open" over a
+    /// part read or over nothing judged (invariant 8).
     public struct Summary: Sendable {
         public struct Row: Identifiable, Sendable {
             public let rule: Rule
@@ -579,17 +614,42 @@ public final class NeedsAttentionModel {
         }
 
         public let rows: [Row]
-        /// The rules skipped, by title.
+        /// The rules skipped, by title (not those only waiting for a list).
         public let skipped: [String]
-        /// The rules judged (whole or in part) with no open finding.
+        /// The rules judged over a whole read with no open finding.
         public let clear: Int
+        /// The rules judged over a part read, with or without findings.
+        public let partial: Int
+        /// The rules skipped only because a list they read is still being read.
+        public let reading: Int
+        public let total: Int
         /// Open findings in all.
         public var open: Int { rows.reduce(0) { $0 + $1.open } }
 
-        /// The line under the counts: how many rules were skipped, and where to see why; nil when none was.
-        public var skippedWords: String? {
-            skipped.isEmpty ? nil : "\(skipped.count) of \(NeedsAttention.Rule.allCases.count) rules skipped: open Needs Attention to see why."
+        /// What the card says beneath its rows, in order.
+        public var words: [String] { lines(skipped: "open Needs Attention to see why.") }
+
+        /// What the screen says beneath its headline.
+        public var screenWords: [String] { lines(skipped: "each says why below.") }
+
+        /// The screen's first line: the open findings, or that the lists are still being read.
+        public var headline: String {
+            if rows.isEmpty, clear + partial + skipped.count == 0, reading > 0 { return "Reading what the rules need…" }
+            return "\(Self.count(open, "open finding")) in \(rows.count.formatted()) of \(total.formatted()) rules."
         }
+
+        private func lines(skipped tail: String) -> [String] {
+            var lines: [String] = []
+            if reading > 0 { lines.append("Reading: \(reading.formatted()) of \(total.formatted()) rules wait for a list that is still being read.") }
+            if rows.isEmpty, clear > 0 { lines.append("Nothing open in the \(Self.count(clear, "rule")) judged over a whole read.") }
+            if partial > 0 {
+                lines.append("\(Self.count(partial, "rule")) judged in part: not every device was read, so \(partial == 1 ? "it" : "they") may have missed some, and what \(partial == 1 ? "it" : "they") found isn't kept.")
+            }
+            if !skipped.isEmpty { lines.append("\(skipped.count.formatted()) of \(total.formatted()) rules skipped: \(tail)") }
+            return lines
+        }
+
+        static func count(_ n: Int, _ noun: String) -> String { "\(n.formatted()) \(noun)\(n == 1 ? "" : "s")" }
     }
 
     /// Nil until the first evaluation.
@@ -597,7 +657,9 @@ public final class NeedsAttentionModel {
         guard !evaluated.isEmpty else { return nil }
         let lines = self.lines
         let rows = lines.filter { !$0.open.isEmpty }.map { Summary.Row(rule: $0.rule, title: $0.title, open: $0.open.count, partial: $0.isPartial) }
-        return Summary(rows: rows, skipped: lines.filter(\.isSkipped).map(\.title), clear: lines.filter { !$0.isSkipped && $0.open.isEmpty }.count)
+        return Summary(rows: rows, skipped: lines.filter { $0.isSkipped && !$0.isReading }.map(\.title),
+                       clear: lines.filter { $0.verdict == .judged && $0.open.isEmpty }.count, partial: lines.filter(\.isPartial).count,
+                       reading: lines.filter(\.isReading).count, total: lines.count)
     }
 
     /// Said while what is shown was judged over less than is held now (a list finished, the setting changed) and the rules are run
@@ -640,6 +702,9 @@ public final class NeedsAttentionModel {
         await snooze(finding, until: now().addingTimeInterval(Double(days) * 86_400))
     }
 
+    /// The org `rule`'s findings are kept under for the active client now, if there is one.
+    private func keeperOrg(of rule: Rule) -> OrgProfile? { Self.keeper(of: rule) == .apple ? appleOrg : appleOrg.flatMap { _ in orgs.mosyleOrg } }
+
     private func choose(_ finding: Finding, verb: String,
                         _ write: @escaping (SnapshotStore, OrgProfile, Rule, Date) async throws(SnapshotStore.Failure) -> Void) async {
         let generation = orgs.generation
@@ -647,8 +712,11 @@ public final class NeedsAttentionModel {
             actionNote = "Not \(verb): \(blocked)"
             return
         }
-        guard let apple = appleOrg, let org = Self.keeper(of: finding.rule) == .apple ? apple : orgs.mosyleOrg else {
-            actionNote = "Not \(verb): this organization isn't the one it was found for."
+        // Bound to the org it was evaluated under, checked last before the write: a finding held from before a switch, or a switch
+        // while this waits, is never written under the org on screen now.
+        await afterAwait?("choose")
+        guard let apple = appleOrg, let org = keeperOrg(of: finding.rule), org.id == finding.keeperOrg else {
+            actionNote = "Not \(verb): it was found for an organization that isn't the active client's now, so nothing was changed."
             return
         }
         let store: SnapshotStore
@@ -673,8 +741,56 @@ public final class NeedsAttentionModel {
 
     // MARK: the Mosyle service setting (the operator's Q7)
 
-    /// The service set as the active client's Mosyle org, by id; nil when none is (the default).
-    public var mosyleServiceID: String? { orgs.activeClient.flatMap { settings.mosyleService(for: $0.id) } }
+    /// The active client's Mosyle service setting, as the rules can use it.
+    enum ServiceState: Sendable, Equatable, CustomStringConvertible {
+        /// The client has no Apple org and Mosyle org both, or nothing is set (the default).
+        case none
+        case set(String)
+        /// Set for another Mosyle org than the client's now (its Mosyle org was replaced).
+        case otherMosyleOrg(String)
+        /// Saved without the Mosyle org it was set for.
+        case earlierShape(String)
+        /// The settings file, `mosyle_services` or the entry couldn't be read.
+        case unreadable(String)
+
+        var description: String {
+            switch self {
+            case .none: "none"
+            case .set(let id): "set \(id)"
+            case .otherMosyleOrg(let id): "other \(id)"
+            case .earlierShape(let id): "earlier \(id)"
+            case .unreadable(let why): "unreadable \(why)"
+            }
+        }
+
+        /// Why "missing from Mosyle" can't use it, in words; nil when it can (or none is set, which the rule says itself).
+        var unusable: String? {
+            switch self {
+            case .none, .set: nil
+            case .otherMosyleOrg: "The Mosyle service setting was made for another Mosyle organization than this client's now, so it may name the wrong service: choose it again in Settings"
+            case .earlierShape: "The Mosyle service setting was saved without the Mosyle organization it was made for, so it can't be told to be this client's: choose it again in Settings"
+            case .unreadable(let why): "The Mosyle service setting couldn't be read: \(why)"
+            }
+        }
+    }
+
+    var serviceState: ServiceState {
+        guard let client = orgs.activeClient, client.apple != nil, let mdm = client.mdm else { return .none }
+        let settings = orgs.settings
+        switch settings.mosyleService(for: client.id) {
+        case .none: return .none
+        case .set(let service, let mosyleOrg): return mosyleOrg.utf8.elementsEqual(mdm.utf8) ? .set(service) : .otherMosyleOrg(service)
+        case .earlierShape(let service): return .earlierShape(service)
+        case .unreadable:
+            return .unreadable(settings.mosyleServicesUnreadable || settings.blocked == nil
+                               ? "it was left as it is in the settings file; fix or remove it there, then choose again"
+                               : settings.blocked?.message ?? "the settings file couldn't be read")
+        }
+    }
+
+    /// The service set as the active client's Mosyle org, by id, when the rules can use it; nil otherwise (none set, the default, or
+    /// one that can't be used, which `serviceState` says).
+    public var mosyleServiceID: String? { if case .set(let id) = serviceState { id } else { nil } }
 
     /// The setting as Settings shows it; nil unless the active client has an Apple org and a Mosyle org.
     public struct ServiceSetting: Sendable {
@@ -685,14 +801,15 @@ public final class NeedsAttentionModel {
         }
 
         public let options: [Option]
-        /// The stored id, or empty when none is set.
+        /// The stored id, or empty when none is set or it can't be used.
         public let selected: String
         public let words: String
+        /// Whether choosing can change it: not while the setting couldn't be read (it is never written over).
+        public let isEditable: Bool
     }
 
     public var serviceSetting: ServiceSetting? {
         guard let client = orgs.activeClient, client.apple != nil, let mdm = client.mdm, orgs.store[mdm]?.provider == .known(.mosyle) else { return nil }
-        let id = settings.mosyleService(for: client.id)
         // The services are read from Apple each time: only the active Apple org's own read names them.
         let readable = orgs.active?.id == client.apple
         let services = readable ? ReportsModel.liveServices(devices) : nil
@@ -700,27 +817,32 @@ public final class NeedsAttentionModel {
         for service in services?.services ?? [] {
             options.append(.init(id: service.id, label: service.type.map { "\(service.name) (\($0.rawValue))" } ?? service.name))
         }
-        let found = services?.services.first { $0.id.utf8.elementsEqual((id ?? "").utf8) }
-        let words: String
-        if let id {
-            if let found {
-                words = "Set: \(found.name). Only its id is kept, on this Mac; its name is read from Apple each time."
-            } else if let services, services.list == .whole {
-                options.append(.init(id: id, label: "Not among Apple's services: \(id)"))
-                words = "The service set (id \(id)) isn't among the services Apple lists now, so “missing from Mosyle” is skipped. Choose another, or Not set."
-            } else {
-                options.append(.init(id: id, label: "Set: \(id)"))
-                let why: String = switch services?.list {
-                case .partly(let how)?: how
-                case .notRead(let why)?: why
-                default: "the client's Apple organization isn't the active one"
-                }
-                words = "Set to the service with id \(id). Its name isn't known until Apple's services are read whole: \(why)."
+        let state = serviceState
+        guard case .set(let id) = state else {
+            let words = switch state {
+            case .none, .set: "Not set, so “missing from Mosyle” is skipped. Choose the device management service in Apple that is this customer's Mosyle Business organization."
+            case .otherMosyleOrg, .earlierShape, .unreadable: "\(state.unusable ?? ""). Until then “missing from Mosyle” is skipped."
             }
-        } else {
-            words = "Not set, so “missing from Mosyle” is skipped. Choose the device management service in Apple that is this customer's Mosyle Business organization."
+            if case .unreadable = state { return ServiceSetting(options: options, selected: "", words: words, isEditable: false) }
+            return ServiceSetting(options: options, selected: "", words: words, isEditable: true)
         }
-        return ServiceSetting(options: options, selected: id ?? "", words: words)
+        let found = services?.services.first { $0.id.utf8.elementsEqual(id.utf8) }
+        let words: String
+        if let found {
+            words = "Set: \(found.name). Only its id is kept, on this Mac, with its Mosyle organization's; its name is read from Apple each time."
+        } else if let services, services.list == .whole {
+            options.append(.init(id: id, label: "Not among Apple's services: \(id)"))
+            words = "The service set (id \(id)) isn't among the services Apple lists now, so “missing from Mosyle” is skipped. Choose another, or Not set."
+        } else {
+            options.append(.init(id: id, label: "Set: \(id)"))
+            let why: String = switch services?.list {
+            case .partly(let how)?: how
+            case .notRead(let why)?: why
+            default: "the client's Apple organization isn't the active one"
+            }
+            words = "Set to the service with id \(id). Its name isn't known until Apple's services are read whole: \(why)."
+        }
+        return ServiceSetting(options: options, selected: id, words: words, isEditable: true)
     }
 
     /// Reads the services Settings names the choices by (the Devices screen's read), when the setting is shown.
@@ -729,29 +851,32 @@ public final class NeedsAttentionModel {
         devices.load()
     }
 
-    /// Sets the active client's Mosyle service (`id`, or none with nil or ""), and saves it (`settings.json`; in memory for the demo
-    /// and the tests). Only the id is kept. A file that can't be written leaves the setting as it was, and says why.
+    /// Sets the active client's Mosyle service (`id`, or none with nil or ""), for the client's Mosyle org, and saves it
+    /// (`OrgsModel.changeSettings`: the file read again, so a hand edit is kept; in memory for the demo and the tests). Only ids
+    /// are kept. A file or an entry that can't be read is never written over, and why is said.
     public func setMosyleService(_ id: String?) {
-        guard let client = orgs.activeClient?.id else { return }
-        var changed = settings
-        changed.setMosyleService(id.flatMap { $0.isEmpty ? nil : $0 }, for: client)
-        if let folder = orgs.folder {
-            do {
-                try changed.save(to: folder)
-            } catch {
-                settingNote = error.message
-                return
+        guard let client = orgs.activeClient, let mdm = client.mdm else { return }
+        do {
+            try orgs.changeSettings { (settings: inout LocalSettings) throws(LocalSettings.Failure) in
+                try settings.setMosyleService(id.flatMap { $0.isEmpty ? nil : $0 }, mosyleOrg: mdm, for: client.id)
             }
-        } else if changed.mosyleServices.values.contains(where: { !LocalSettings.isServiceID($0) }) {
-            settingNote = LocalSettings.Failure.notAServiceID.message
-            return
+            settingNote = nil
+        } catch {
+            settingNote = error.message
         }
-        settings = changed
-        settingNote = nil
     }
 
     /// Why the settings file can't be changed, when it can't (it was left as it is).
-    public var settingsBlocked: String? { settings.blocked?.message }
+    public var settingsBlocked: String? { orgs.settings.blocked?.message }
+
+    /// Said on the screen when the settings file couldn't be read beyond the Mosyle services (which their rule says itself): the
+    /// thresholds are then the defaults.
+    public var settingsNote: String? {
+        let settings = orgs.settings
+        guard let blocked = settings.blocked, !settings.mosyleServicesUnreadable else { return nil }
+        if case .newerVersion = blocked { return nil }
+        return "\(blocked.message) The default thresholds are used."
+    }
 
     // MARK: the CSV
 
@@ -781,7 +906,7 @@ public final class NeedsAttentionModel {
             case .partial(let why): "partial: \(why)"
             case .skipped(let why): "skipped: \(why)"
             }
-            let from = line.source.first ?? ""
+            let from = line.source.joined(separator: " ")
             let base: JSONObject = ["verdict": .string(verdict), "rule": .string(line.rule.rawValue), "title": .string(line.title), "dataFrom": .string(from)]
             if line.findings.isEmpty {
                 let none = line.isSkipped ? "not judged" : "none found"

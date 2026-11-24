@@ -153,6 +153,11 @@ public final class OrgsModel {
     public private(set) var generation = 0
     /// Why `orgs.json` couldn't be read or saved, in words; shown in Settings.
     public private(set) var problem: String?
+    /// This Mac's settings (`settings.json`, beside `orgs.json`): the Needs-attention thresholds and each client's Mosyle service.
+    /// In memory for the demo and the tests, which write nothing. Changed only through `changeSettings`.
+    public private(set) var settings = LocalSettings()
+    /// Why a client's Mosyle service setting couldn't be dropped when the client lost an org, in words; shown in Settings.
+    public private(set) var settingsProblem: String?
 
     public let vault: Vault
     /// The snapshot history (plan Phase 3), or why it couldn't be opened. A new org's id avoids every id it holds
@@ -184,6 +189,7 @@ public final class OrgsModel {
         self.history = history()
         self.makeClient = makeClient
         self.makeMosyleClient = makeMosyleClient
+        if case .folder(let folder) = storage { settings = LocalSettings.load(from: folder) }
         if let store {
             self.store = store
         } else if case .folder(let folder) = storage {
@@ -208,6 +214,51 @@ public final class OrgsModel {
     /// The folder `orgs.json` lives in, where this Mac's other settings live too (`settings.json`); nil for the demo and the
     /// tests, which keep them in memory and write nothing.
     var folder: URL? { if case .folder(let folder) = storage { folder } else { nil } }
+
+    /// Reads `settings.json` again (a screen about to judge by it), so a hand edit, or a file that can no longer be read, is seen.
+    public func reloadSettings() {
+        if let folder { settings = LocalSettings.load(from: folder) }
+    }
+
+    /// Changes one setting without losing another: the file is read again, so a hand edit since the last read is kept; `change`
+    /// is made to that; it is saved, and what was saved is read back and adopted. A file that can't be read is never written over
+    /// (its state is adopted, so a screen says why) and a change that is refused changes nothing. In memory for the demo and the
+    /// tests, checked as a save would check it. A change that changes nothing writes nothing.
+    public func changeSettings(_ change: (inout LocalSettings) throws(LocalSettings.Failure) -> Void) throws(LocalSettings.Failure) {
+        guard let folder else {
+            var changed = settings
+            try change(&changed)
+            try changed.check()
+            settings = changed
+            return
+        }
+        var fresh = LocalSettings.load(from: folder)
+        if let blocked = fresh.blocked {
+            settings = fresh
+            throw blocked
+        }
+        let before = fresh
+        try change(&fresh)
+        if fresh != before { try fresh.save(to: folder) }
+        settings = LocalSettings.load(from: folder)
+    }
+
+    /// A client lost an org (removed, or moved out of it) or gained one: its Mosyle service setting, made for the client as it was, is
+    /// dropped (the coordinating session's decision). It runs after the org change, which is whole or not at all on its own, and
+    /// only when that change was made. A settings file that can't be written keeps the entry, said here; an entry left that names
+    /// another Mosyle org still reads as stale on the Needs-attention screen, and one whose service Apple no longer lists, too.
+    private func dropMosyleServices(of clients: [String]) {
+        let clients = clients.filter { !$0.isEmpty }
+        guard !clients.isEmpty else { return }
+        do {
+            try changeSettings { (settings: inout LocalSettings) throws(LocalSettings.Failure) in
+                for client in clients { settings.dropMosyleService(for: client) }
+            }
+            settingsProblem = nil
+        } catch {
+            settingsProblem = "The Mosyle service setting of the customer whose organizations changed couldn't be removed: \(error.message)"
+        }
+    }
 
     /// The active org's Apple client, made once per account and generation; nil for a profile that can't be used.
     /// Keyed by the account itself, so an edited team ID or client ID never reuses the old account's client.
@@ -292,6 +343,7 @@ public final class OrgsModel {
     /// Moves an org to another client (nil: a client of its own). When it changes what the screens read, they read again.
     public func move(_ org: String, toClient target: String?) throws(SaveFailure) {
         let before = (activeClient?.id, mosyleOrg?.id)
+        let from = store.client(of: org)?.id
         do {
             try store.move(org, to: target)
         } catch {
@@ -301,6 +353,9 @@ public final class OrgsModel {
         // org is in already changes nothing, and clears nothing).
         if before.0 != activeClient?.id || before.1 != mosyleOrg?.id { bump() }
         save()
+        // The client it left and the one it joined each changed: their Mosyle service settings go.
+        let to = store.client(of: org)?.id
+        if from != to { dropMosyleServices(of: [from, target].compactMap { $0 }) }
     }
 
     /// The add sheet's question for a new org of `slot`'s kind, given the sheet's `answer` so far; nil when no client has room
@@ -694,9 +749,12 @@ public final class OrgsModel {
         if deleteSecrets { try await vault.remove(org: id) }
         // The Mosyle org the active Apple org is paired with is on screen too: removing it clears what was read from it.
         let wasShown = store.active?.id == id || mosyleOrg?.id == id
+        let client = store.client(of: id)?.id
         store.remove(id)
         if wasShown { bump() }
         save()
+        // The client lost an org, or is gone: its Mosyle service setting goes with it.
+        dropMosyleServices(of: [client].compactMap { $0 })
     }
 
     /// What Settings' removal says of the org's snapshot history: that it is kept unless the operator deletes it too, and that

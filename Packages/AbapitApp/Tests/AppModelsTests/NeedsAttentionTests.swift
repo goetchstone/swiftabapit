@@ -41,8 +41,8 @@ struct NeedsAttentionTests {
     /// Org `a` (with Mosyle org `m` in its client) holding, live: a quiet service S1 and the Mosyle service S2; a migration due in five
     /// days (MIG0001, on S1); ADEV0000000 and ADEV0000001 on S2. Mosyle lists ADEV0000000 (checked in yesterday), ADEV0000002 (silent for
     /// sixty days) and MOSONLY1, which Apple doesn't have.
-    static func world(mosyle: Bool = true, history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil) async throws -> World {
-        let world = try await World.make(mosyle: mosyle, history: history)
+    static func world(mosyle: Bool = true, history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil, folder: URL? = nil) async throws -> World {
+        let world = try await World.make(mosyle: mosyle, history: history, folder: folder)
         let stub = world.stubs["a"]!
         stub.add(devices: [migrating("MIG0001", deadlineInDays: 5)])
         stub.add(services: [service("S1", name: "Old MDM", connectedDaysAgo: 90), service("S2", name: "Mosyle", connectedDaysAgo: 1)])
@@ -252,7 +252,7 @@ struct NeedsAttentionTests {
         #expect(model.updating == nil)
         #expect(Self.line(model, .missingFromMosyle).verdict == .judged && Self.subjects(model, .missingFromMosyle) == ["ADEV0000001"])
         setting = try #require(model.serviceSetting)
-        #expect(setting.selected == "S2" && setting.words == "Set: Mosyle. Only its id is kept, on this Mac; its name is read from Apple each time.")
+        #expect(setting.selected == "S2" && setting.words == "Set: Mosyle. Only its id is kept, on this Mac, with its Mosyle organization's; its name is read from Apple each time.")
         // Stale: an id Apple doesn't list any more is said, and the rule skipped, never judged against nothing.
         model.setMosyleService("GONE1")
         await model.evaluate()
@@ -419,7 +419,8 @@ struct NeedsAttentionTests {
         _ = await Self.ready(world)
         var summary = try #require(model.summary)
         #expect(summary.rows.map(\.rule) == [.mosyleNotInApple, .mosyleCheckIn, .quietService, .migrationDeadline] && summary.open == 4, "\(summary.rows.map(\.rule))")
-        #expect(summary.skipped.count == 8 && summary.skippedWords == "8 of 12 rules skipped: open Needs Attention to see why.")
+        #expect(summary.skipped.count == 8 && summary.words == ["8 of 12 rules skipped: open Needs Attention to see why."], "\(summary.words)")
+        #expect(summary.headline == "4 open findings in 4 of 12 rules." && summary.screenWords == ["8 of 12 rules skipped: each says why below."])
         await model.dismiss(Self.line(model, .quietService).findings[0])
         summary = try #require(model.summary)
         #expect(!summary.rows.contains { $0.rule == .quietService } && summary.open == 3)
@@ -446,5 +447,176 @@ struct NeedsAttentionTests {
         let shown = model.shown(Self.line(model, .quietService))
         #expect(shown.findings.count == 2 && shown.capNote == "Showing 2 of 6: the rest are in the CSV export.")
         #expect(model.csv().split(separator: "\r\n").filter { $0.contains(",quiet_service,") }.count == 6)
+    }
+
+    // MARK: fix round 1 (the review of PR 43)
+
+    /// The reviewer's probe: no services, and an AppleCare sweep that read D1 (no record) and missed D2. "Nothing open" counts only the
+    /// rules judged whole, and the part-judged rule is said apart: never "nothing open" over a part read (invariant 8).
+    @Test func nothingOpenIsNeverSaidOverAPartRead() async throws {
+        let world = try await World.make()
+        try await world.history!.record(org: world.orgs.store["a"]!, takenAt: Self.now - Self.day,
+                                        resources: ["devices": [ReportsTests.device("D1"), ReportsTests.device("D2")], "applecare": []],
+                                        errors: ["applecare": "HTTP 500"], unread: ["applecare": ["D2"]])
+        let model = await Self.ready(world)
+        #expect(Self.line(model, .appleCareExpiring).isPartial && Self.line(model, .appleCareExpiring).findings.isEmpty)
+        let summary = try #require(model.summary)
+        #expect(summary.rows.isEmpty && summary.clear == 2 && summary.partial == 1, "\(summary)")
+        #expect(summary.words == ["Nothing open in the 2 rules judged over a whole read.",
+                                  "1 rule judged in part: not every device was read, so it may have missed some, and what it found isn't kept.",
+                                  "9 of 12 rules skipped: open Needs Attention to see why."], "\(summary.words)")
+    }
+
+    /// On first paint, while the lists and the history are still being read, the rules waiting for them are "reading", never "skipped".
+    @Test func whileTheListsAreReadNothingIsCalledSkipped() async throws {
+        let world = try await Self.world()
+        let model = world.screens.attention
+        model.now = { Self.now }
+        model.readLive()
+        await model.evaluate()
+        let summary = try #require(model.summary)
+        #expect(summary.reading == 12 && summary.skipped.isEmpty && summary.rows.isEmpty, "\(summary)")
+        #expect(summary.headline == "Reading what the rules need…" && summary.words == ["Reading: 12 of 12 rules wait for a list that is still being read."])
+        #expect(model.lines.allSatisfy { $0.isReading })
+        // Once read, what is still skipped is said as skipped.
+        await model.load()
+        await Self.settle(world, model)
+        let read = try #require(model.summary)
+        #expect(read.reading == 0 && !read.skipped.isEmpty)
+    }
+
+    /// Each rule's source lines are those of what it reads, and the CSV's `dataFrom` joins them: a Mosyle rule names Mosyle's read, the
+    /// quiet service the services read, never the Apple device list's.
+    @Test func eachRuleNamesOnlyWhatItReads() async throws {
+        let world = try await Self.world()
+        let model = await Self.ready(world)
+        let checkIn = Self.line(model, .mosyleCheckIn).source, quiet = Self.line(model, .quietService).source
+        #expect(checkIn.count == 1 && checkIn[0].hasPrefix("Read live from Mosyle on ") && checkIn[0].hasSuffix("Mosyle's devices. No snapshot is used."), "\(checkIn)")
+        #expect(quiet.count == 1 && quiet[0].contains("the services list the Services screen holds"), "\(quiet)")
+        #expect(Self.line(model, .mosyleNotInApple).source.count == 2 && Self.line(model, .migrationDeadline).source[0].contains("the device list the Devices screen holds"))
+        let rows = model.csv().split(separator: "\r\n").map(String.init)
+        let mosyleRow = try #require(rows.first { $0.hasPrefix("ADEV0000002,judged,mosyle_check_in,") })
+        #expect(mosyleRow.contains("Read live from Mosyle on ") && !mosyleRow.contains("device list the Devices screen holds"), "\(mosyleRow)")
+        // A rule that reads two lists names both.
+        let bothRow = try #require(rows.first { $0.hasPrefix("MOSONLY1,judged,mosyle_not_in_apple,") })
+        #expect(bothRow.contains("the device list the Devices screen holds") && bothRow.contains("Read live from Mosyle on "), "\(bothRow)")
+        let quietRow = try #require(rows.first { $0.hasPrefix("S1,judged,quiet_service,") })
+        #expect(quietRow.contains("the services list the Services screen holds") && !quietRow.contains("Mosyle"), "\(quietRow)")
+        // A Mosyle list that isn't read in full says so in its own line.
+        let cut = try await World.make(mosyle: true, mosylePageCap: 1)
+        cut.mosyleStub.add(devices: (0..<60).map { MosyleScreenTests.device(String(format: "MAC%03d", $0), beat: Self.now - Self.day) }, os: "mac")
+        let partly = await Self.ready(cut)
+        #expect(Self.line(partly, .mosyleCheckIn).source[0].hasPrefix("Read live from Mosyle in part on "), "\(Self.line(partly, .mosyleCheckIn).source)")
+    }
+
+    /// Choosing the Mosyle service reads the file again first, so a hand edit since is kept, and adopts what was saved.
+    @Test func settingTheServiceKeepsAHandEdit() async throws {
+        let folder = try CollectorTests.folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let world = try await Self.world(folder: folder)
+        let model = await Self.ready(world)
+        model.setMosyleService("S2")
+        #expect(model.settingNote == nil && model.mosyleServiceID == "S2")
+        // By hand, after the app read it: another client's entry and a threshold.
+        let path = folder.appending(path: LocalSettings.fileName), client = world.orgs.activeClient!.id
+        let edited = #"{"version": 1, "attention": {"check_in_days": 45}, "mosyle_services": {"\#(client)": {"service": "S2", "mosyle_org": "m"}, "other": {"service": "S9", "mosyle_org": "M9"}}}"#
+        try Data(edited.utf8).write(to: path)
+        model.setMosyleService("S1")
+        let after = LocalSettings.load(from: folder)
+        #expect(after.mosyleService(for: "other") == .set(service: "S9", mosyleOrg: "M9") && after.thresholds.checkInDays == 45)
+        #expect(after.mosyleService(for: world.orgs.activeClient!.id) == .set(service: "S1", mosyleOrg: "m") && world.orgs.settings.thresholds.checkInDays == 45)
+    }
+
+    /// A `mosyle_services` that isn't an object, or this client's entry of another shape, couldn't be read: the screen says so (the rule
+    /// is skipped with why, never "isn't set"), Settings can't choose, a choice is refused, and the file is left as it was.
+    @Test(arguments: [#"{"version": 1, "attention": {"check_in_days": 45}, "mosyle_services": [1]}"#,
+                      #"{"version": 1, "attention": {"check_in_days": 45}, "mosyle_services": {"CLIENT": {"id": "S2"}}}"#])
+    func aSettingThatCouldntBeReadIsSaidAndNeverWrittenOver(text: String) async throws {
+        let folder = try CollectorTests.folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let world = try await Self.world(folder: folder)
+        let written = text.replacingOccurrences(of: "CLIENT", with: world.orgs.activeClient!.id)
+        try Data(written.utf8).write(to: folder.appending(path: LocalSettings.fileName))
+        let model = await Self.ready(world)
+        let why = try #require(Self.isSkipped(Self.line(model, .missingFromMosyle)))
+        #expect(why.hasPrefix("The Mosyle service setting couldn't be read: "), "\(why)")
+        #expect(world.orgs.settings.thresholds.checkInDays == 45, "the thresholds are read either way")
+        #expect(model.serviceSetting?.isEditable == false && model.serviceSetting?.words.hasPrefix("The Mosyle service setting couldn't be read") == true)
+        model.setMosyleService("S2")
+        #expect(model.settingNote != nil && model.mosyleServiceID == nil)
+        #expect(try Data(contentsOf: folder.appending(path: LocalSettings.fileName)) == Data(written.utf8))
+    }
+
+    /// The setting names the Mosyle org it was made for: an entry for another Mosyle org (the client's was replaced), and one in the
+    /// earlier shape (no Mosyle org), are stale, said, and not used. A skipped rule's old kept rows are never shown as findings.
+    @Test func aStaleSettingIsSaidAndNotUsed() async throws {
+        let world = try await Self.world()
+        let client = world.orgs.activeClient!.id
+        try await world.history!.seen(org: world.orgs.store["a"]!, rule: "missing_from_mosyle", subjects: ["ADEV0000001"], at: Self.now - Self.day)
+        try world.orgs.changeSettings { (settings: inout LocalSettings) throws(LocalSettings.Failure) in
+            try settings.setMosyleService("S2", mosyleOrg: "an-earlier-mosyle-org", for: client)
+        }
+        let model = await Self.ready(world)
+        #expect(model.mosyleServiceID == nil)
+        let line = Self.line(model, .missingFromMosyle)
+        #expect(Self.isSkipped(line)?.hasPrefix("The Mosyle service setting was made for another Mosyle organization") == true && line.findings.isEmpty,
+                "a skipped rule shows no kept row as a finding: \(line.findings.map(\.subject))")
+        #expect(model.serviceSetting?.selected == "" && model.serviceSetting?.words.hasPrefix("The Mosyle service setting was made for another Mosyle organization") == true)
+        // Chosen again: for the client's Mosyle org now, and judged.
+        model.setMosyleService("S2")
+        await model.evaluate()
+        #expect(Self.line(model, .missingFromMosyle).verdict == .judged)
+        // The earlier shape, by hand in a file.
+        let folder = try CollectorTests.folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let earlier = try await Self.world(folder: folder)
+        try Data(#"{"version": 1, "mosyle_services": {"\#(earlier.orgs.activeClient!.id)": "S2"}}"#.utf8).write(to: folder.appending(path: LocalSettings.fileName))
+        let old = await Self.ready(earlier)
+        #expect(Self.isSkipped(Self.line(old, .missingFromMosyle))?.hasPrefix("The Mosyle service setting was saved without the Mosyle organization") == true)
+        #expect(old.mosyleServiceID == nil && old.serviceSetting?.isEditable == true)
+    }
+
+    /// A client's setting goes when the client loses an org (removed or separated) or is removed: never inherited by what it becomes.
+    @Test(arguments: ["remove the Mosyle org", "remove the Apple org", "separate the Mosyle org", "separate the Apple org", "remove the client"])
+    func aClientsSettingGoesWithItsOrgs(change: String) async throws {
+        let world = try await Self.world()
+        let client = world.orgs.activeClient!.id
+        world.screens.attention.setMosyleService("S2")
+        #expect(world.orgs.settings.mosyleService(for: client) == .set(service: "S2", mosyleOrg: "m"))
+        switch change {
+        case "remove the Mosyle org": try await world.orgs.remove("m", deleteSecrets: true)
+        case "remove the Apple org": try await world.orgs.remove("a", deleteSecrets: true)
+        case "separate the Mosyle org": try world.orgs.move("m", toClient: nil)
+        case "separate the Apple org": try world.orgs.move("a", toClient: nil)
+        default:
+            try await world.orgs.remove("m", deleteSecrets: true)
+            try await world.orgs.remove("a", deleteSecrets: true)
+        }
+        #expect(world.orgs.settings.mosyleService(for: client) == .none, "\(change)")
+        #expect(world.orgs.settingsProblem == nil)
+    }
+
+    /// Dismiss and Snooze act only under the org a finding was evaluated for: one held from before a switch, or a switch between the
+    /// click and the write, is refused in words and nothing is written under either org.
+    @Test func dismissAndSnoozeAreBoundToTheirOrg() async throws {
+        let world = try await Self.world()
+        let model = await Self.ready(world)
+        let held = Self.line(model, .quietService).findings[0], mosyleHeld = Self.line(model, .mosyleCheckIn).findings[0]
+        #expect(held.keeperOrg == "a" && mosyleHeld.keeperOrg == "m")
+        world.orgs.select("b")
+        await model.dismiss(held)
+        #expect(model.actionNote == "Not dismissed: it was found for an organization that isn't the active client's now, so nothing was changed.")
+        await model.snooze(mosyleHeld, days: 7)
+        #expect(model.actionNote?.hasPrefix("Not snoozed: it was found for an organization") == true)
+        // A switch between the click and the write.
+        world.orgs.select("a")
+        await model.load()
+        await Self.settle(world, model)
+        model.afterAwait = { stage in if stage == "choose" { world.orgs.select("b") } }
+        await model.dismiss(Self.line(model, .quietService).findings[0])
+        #expect(model.actionNote?.hasPrefix("Not dismissed: it was found for an organization") == true)
+        for org in ["a", "b", "m"] {
+            #expect(try await world.history!.state(org: world.orgs.store[org]!).allSatisfy { $0.dismissedAt == nil && $0.snoozedUntil == nil }, "\(org)")
+        }
     }
 }

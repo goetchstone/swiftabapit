@@ -11,7 +11,7 @@ merged (PR #28); the diff, coverage and fleet-age ports are built (PR #31), and 
 (PR #32). The Apple collector merged in PR #34 ("The Apple collector", below), without its per-device sweeps; the Needs-attention
 rules merged in PR #35 ("Needs attention rules", below). The per-device sweeps merged in PR #37 ("The sweeps", below). The abapit import and the export of a
 copy merged in PR #36 ("Import and export", below). The Changes screen, "Snapshot now" and the question asked when an org is removed
-are the next PR (S4.7, "The Changes screen", below). The Needs-attention screen is on branch `phase-3-attention-screen` ("The
+merged in PR #38 ("The Changes screen", below); the Reports screen in PR #39, and the sweeps' unread devices in PR #42. The Needs-attention screen is on branch `phase-3-attention-screen` ("The
 Needs-attention screen", below). The Mosyle collector and scheduled snapshots are still to do. The Reports module (CSV, the export policy, Find, the dashboard's stats) shipped in phase 1b, and the audit
 digests and the dashboard's quiet services and recent events in phase 2a; their notes are below.
 
@@ -989,13 +989,24 @@ screenshot run.
   span Apple and Mosyle included (every such rule needs the Apple org, and it is where the device lives); **Mosyle check-in**, which reads Mosyle
   alone, under the **Mosyle org** (`NeedsAttentionModel.keeper(of:)`). The findings read back are the Apple org's for its rules and the Mosyle
   org's for Mosyle check-in; another client's are never read or written.
+- **Where each line's source words come from**: a rule's source lines are those of only the reads it makes (Apple's devices, the services with their
+  device lists, Mosyle's devices; or its snapshot's lines), never another list's. Mosyle's line says when it was read and how old it is, or that it
+  was read in part or not at all, and why.
+- **The counts, never "nothing open" over less than a whole read** (the review of PR 43, invariant 8): `Summary` (the card's and the screen's words,
+  held by `nothingOpenIsNeverSaidOverAPartRead`) counts as clear only the rules judged over a whole read; the rules judged in part are said apart
+  ("1 rule judged in part: not every device was read, so it may have missed some, and what it found isn't kept."); the skipped ones are counted;
+  and a rule skipped only because a list it reads, or the history, was still being read is "reading", never "skipped" ("Reading: 12 of 12 rules wait
+  for a list that is still being read."; the first paint said "12 of 12 rules skipped").
 - **When it evaluates**: `load()` reads the history and evaluates; the screen and the Overview's card evaluate again whenever what the rules read
   changes (`inputKey`: each list's state and count, the history's read, the setting, the thresholds). A list still being read is one key however
   many pages have come, so the rules aren't run and recorded again for each page. Recording the same subjects again only moves `last_seen`.
   While what is shown was judged over less than is held now, the screen and the card say "Judging again: …" (`updating`), never the older
   counts as current (the first CI picture of the card said "12 of 12 rules skipped" beside a device list already read).
 - **Dismiss and Snooze** (**the operator's Q10**): writes to the local history only (`SnapshotStore.dismiss`, `snooze`), under the finding's
-  keeper. A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
+  keeper. **Bound to the org it was evaluated under** (the review of PR 43): each finding carries its keeper's org id (`Finding.keeperOrg`), and a
+  Dismiss or Snooze whose keeper is no longer the active client's org, a finding held from before a switch or a switch between the click and the
+  write, is refused in words ("it was found for an organization that isn't the active client's now, so nothing was changed") and writes nothing
+  (`dismissAndSnoozeAreBoundToTheirOrg`). A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
   until its date (a week, 30 or 90 days on screen; a date not after now is refused in words). Both are off, with the reason, for a finding not kept
   (found over a part read, an id the store can't keep, or a history that can't be written); a dismissed or snoozed finding is hidden, and shown
   with "Show dismissed and snoozed (N)". No undo for a dismissal yet (the store has none).
@@ -1003,29 +1014,44 @@ screenshot run.
   the screen says "What was found isn't kept for later (first seen, Dismiss, Snooze): " and the store's own words; a Dismiss or Snooze says
   "Not dismissed: " and the store's words (`anUnwritableHistoryIsSaidInItsOwnWords`, both cases).
 - **The Mosyle service setting** (**the operator's Q7**: a per-client local setting, none by default; **where it lives is the coordinating
-  session's proposal**): `settings.json`'s `mosyle_services`, client id to the Apple service's id, through `LocalSettings` (`mosyleService(for:)`,
-  `setMosyleService(_:for:)`; an entry that isn't an id reads as not set and is written back as it was; `save` refuses a name or words,
-  `notAServiceID`). Only the id is kept: the name is read from Apple each time. Settings shows it (a "Needs attention" section) only when the
+  session's proposal**): `settings.json`'s `mosyle_services`, client id to `{"service": <the Apple service's id>, "mosyle_org": <the Mosyle org's
+  id>}` (**the Mosyle org's id is the coordinating session's decision**, from the review of PR 43), through `LocalSettings` (`mosyleService(for:)`,
+  `setMosyleService(_:mosyleOrg:for:)`, which refuses a name or words, `notAServiceID`). Only ids are kept: the name is read from Apple each time.
+  - **Stale, said, never used**: an entry made for another Mosyle org than the client's now (its Mosyle org was replaced), and an entry in the shape an
+    earlier build of this branch wrote (the service's id alone: whose it was can't be told), skip "missing from Mosyle" with why and ask for it to
+    be chosen again (`aStaleSettingIsSaidAndNotUsed`).
+  - **Dropped with the client's orgs**: removing the client, or removing or separating its Apple or Mosyle org, drops its entry
+    (`OrgsModel.dropMosyleServices`), after the org change, which stays whole or not at all on its own and drops nothing when refused; a settings
+    file that can't be written keeps the entry and Settings says so (`settingsProblem`); such an entry still reads as stale where its Mosyle org
+    differs, and as "isn't among the services" where Apple doesn't list its service (`aClientsSettingGoesWithItsOrgs`, five cases).
+  - **Couldn't be read, never written over**: a `mosyle_services` that isn't an object, or this client's entry of another shape, reads as
+    "couldn't be read". The screen says so in the rule's skip, never "isn't set"; Settings can't choose, a choice is refused, and the file is left as
+    it was (`aSettingThatCouldntBeReadIsSaidAndNeverWrittenOver`). The thresholds are read either way: a bad `mosyle_services` no longer costs them.
+  - **A hand edit is kept**: a choice goes through `OrgsModel.changeSettings`, which reads the file again, makes the one change, saves and adopts what
+    was saved (`settingTheServiceKeepsAHandEdit`); `LocalSettings.save` writes its value whole, and its comment now says so. The screen reads the
+    file again at each load (`OrgsModel.reloadSettings`), and says when the file couldn't be read and the default thresholds are used. Settings shows it (a "Needs attention" section) only when the
   active client has both an Apple org and a Mosyle org; the choices are the services Apple lists now, by name and type. Not set: "missing from
   Mosyle" is skipped and says the setting isn't set. An id Apple no longer lists is said in Settings ("isn't among the services Apple lists now")
   and the rule is skipped ("The service set as your Mosyle org isn't among the services Apple listed"), never judged against nothing. The demo
-  and the tests keep it in memory. Keyed by client id: a client id reused after a client was removed sees the old id, which no service of another
-  Apple org has, so it reads as stale and is said.
+  and the tests keep it in memory.
 - **Thresholds** (**the operator's Q8**: the defaults stay): read from `settings.json` (`LocalSettings.Thresholds`). Settings has no editor for
   them yet.
 - **One client at a time**: a client or org switch clears everything at once (lines, kept findings, sources, notes, "show hidden"), and a read or
   an evaluation that returns after a switch is dropped (its generation guard; `aReadOrAnEvaluationThatReturnsAfterASwitchIsDropped`, a hook at
   each stage). A Mosyle org on screen says where Needs attention runs from; its sidebar is unchanged.
 - **The Overview's card**: counts only, no serial or name: each rule with open findings and how many ("(partial)" when not kept), and "N of 12
-  rules skipped: open Needs Attention to see why."; a dismissed or snoozed finding isn't counted. Its button opens the screen. To count, it
+  rules skipped: open Needs Attention to see why.", with `Summary.words` above; a dismissed or snoozed finding isn't counted. Its button opens the screen. To count, it
   loads what the screen loads: the Devices read the Overview makes anyway, the history, and Mosyle's devices when the client has a Mosyle org
   (the Mosyle screen's read, one more on the Overview than before).
 - **Caps** (invariant 7, 8): a rule lists at most 200 findings and says "Showing 200 of N: the rest are in the CSV export."
 - **CSV** (`ExportPolicy.needsAttention`: `verdict`, `rule`, `title`, `reason`, `status`, `firstSeen`, `dataFrom`, after the subject as `id`):
   one row per finding, dismissed and snoozed ones included with their state, and one per rule that found none or wasn't judged, so the file is
   never a bare header. `verdict` leads ("judged", "partial: <why>", "skipped: <why>"), so a partial row says so, as the reports' `listRead` does.
-  Every cell is this app's words, an identifier or a date: no attribute Apple or Mosyle sent is copied; cells go through the one writer and its
-  formula guard. The name is `needs attention <day>.csv` (UTC), led by the client's name only when the app shows clients (`ScreenWords.filename`).
+  The other cells are this app's words and dates, and carry what the rules' words carry from what was read: a service's name as Apple sent it
+  (`serverName`) and a check-in or connection stamp this app couldn't read, as sent (through `shownJSON`, so a value under a secret's name is
+  withheld). `dataFrom` joins the source lines of only what that rule reads (a Mosyle check-in row names Mosyle's read and its age, a quiet
+  service the services read; `eachRuleNamesOnlyWhatItReads`). Cells go through the one writer and its formula guard, and the denylist drops a
+  column whose name looks like a secret's. The name is `needs attention <day>.csv` (UTC), led by the client's name only when the app shows clients (`ScreenWords.filename`).
 - **The demo** (DEBUG only): the demo fleet's own data gives the rules real findings (its quiet services, its migrations, Mosyle's devices); the
   demo's Mosyle service is set in memory, so "missing from Mosyle" is judged; `DemoHistory.seedAttention` puts two quiet services first seen
   twelve days back, one snoozed for a week, into the demo's memory store. Nothing is recorded in the real history: the demo's history is in memory.
@@ -1033,8 +1059,10 @@ screenshot run.
 - **Decisions, and who made them.** The operator: its own section and an Overview card (Q6); the Mosyle service a per-client local setting, none
   by default (Q7); the thresholds' defaults (Q8); a dismissal until the finding clears, a snooze until a date, forgotten after 30 days unseen
   (Q10); recorded only when judged whole, shown partial, skipped said (2026-11-20). The coordinating session: the setting in `settings.json`,
-  keyed by client id, id only, shown for a client with both orgs, a stale id said and the rule skipped; a spanning rule kept under the Apple org,
-  a Mosyle-only rule under the Mosyle org. The executor's, for review: one source per rule, Apple MDM's list (both comparisons) from a snapshot
+  keyed by client id, ids only, shown for a client with both orgs, a stale id said and the rule skipped; a spanning rule kept under the Apple org,
+  a Mosyle-only rule under the Mosyle org; from the review of PR 43, the Mosyle org's id kept in each entry, an entry for another Mosyle org or in
+  the earlier shape stale and said, and an entry dropped with its client's orgs (replacing the executor's "a reused client id reads as stale").
+  The review kept every other executor's decision below. The executor's, for review: one source per rule, Apple MDM's list (both comparisons) from a snapshot
   with that snapshot's own lists rather than the Apple MDM screen's live read; the details' map by the coverage rule; Snooze's three lengths;
   `verdict` as the CSV's first column; a Mosyle org on screen not reaching the screen (its sidebar unchanged); the card's words; the section after
   the Overview in the sidebar.
