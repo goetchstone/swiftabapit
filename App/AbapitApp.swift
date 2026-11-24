@@ -42,7 +42,7 @@ struct AbapitApp: App {
         }
 
         Settings {
-            SettingsView(orgs: services.orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)
+            SettingsView(orgs: services.orgs, transfer: services.screens.historyTransfer, attention: services.screens.attention, isDemo: services.isDemo)
                 .frame(minWidth: 760, minHeight: 480)
         }
     }
@@ -59,6 +59,7 @@ extension SidebarItem {
     var symbol: String {
         switch self {
         case .overview: "gauge.with.dots.needle.33percent"
+        case .needsAttention: "exclamationmark.triangle"
         case .devices: "laptopcomputer.and.iphone"
         case .services: "server.rack"
         case .appleMDM: "ipad.and.iphone"
@@ -176,7 +177,9 @@ struct ContentView: View {
         } else {
             switch section {
             case .overview:
-                OverviewView(model: services.dashboard, hasOrg: orgs.active != nil, note: orgs.unverifiedNote) { self.section = .settings }
+                OverviewView(model: services.dashboard, attention: services.screens.attention, hasOrg: orgs.active != nil, note: orgs.unverifiedNote,
+                             openAttention: { self.section = .needsAttention }) { self.section = .settings }
+            case .needsAttention: NeedsAttentionView(model: services.screens.attention)
             case .devices: DevicesView(model: services.devices, detail: services.detail, selection: $selection)
             case .services: ServicesView(model: services.devices)
             case .appleMDM: AppleMDMView(model: services.appleMDM)
@@ -185,7 +188,7 @@ struct ContentView: View {
             case .activity: ActivityScreen(activity: services.activity, changes: services.screens.changes)
             case .mosyle: MosyleView(model: services.screens.mosyle)
             case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
-            case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, isDemo: services.isDemo)
+            case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, attention: services.screens.attention, isDemo: services.isDemo)
             case .reports: ReportsView(model: services.screens.reports)
             }
         }

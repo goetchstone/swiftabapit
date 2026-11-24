@@ -87,7 +87,7 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
             narrow-mosyle-detail:mosyle:first:smallest narrow-reconciliation:reconciliation::smallest \
             clients-overview:overview:::clients clients-settings:settings:::clients \
             add-mosyle-asks:settings:::apple:add-mosyle clients-add-apple:settings:::clients:add-apple \
-            changes:activity:::::changes reports:reports; do
+            changes:activity:::::changes reports:reports needs-attention:needs-attention; do
   IFS=: read -r name section selected window demo sheet pane <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"

@@ -26,6 +26,8 @@ public final class ScreenModels {
     public let reports: ReportsModel
     /// Imports abapit's history into the snapshot store and exports a copy of it (Settings, "History").
     public let historyTransfer: HistoryTransfer
+    /// Needs attention: the active client's rules over the live lists and the latest snapshots, and Dismiss and Snooze.
+    public let attention: NeedsAttentionModel
 
     public init(orgs: OrgsModel) {
         let devices = DevicesModel(orgs: orgs), people = PeopleModel(orgs: orgs)
@@ -44,6 +46,7 @@ public final class ScreenModels {
         changes = ChangesModel(orgs: orgs, collector: snapshots)
         reports = ReportsModel(orgs: orgs, devices: devices)
         historyTransfer = HistoryTransfer(orgs: orgs)
+        attention = NeedsAttentionModel(orgs: orgs, devices: devices, mosyle: mosyle)
         let collector = snapshots, importer = historyTransfer
         orgs.historyBusy = { [weak collector, weak importer] in
             if collector?.isRunning == true { return "A snapshot is being taken, and it could write to the history after it was deleted. Wait for it to finish, or remove the organization and keep its history." }
@@ -55,7 +58,8 @@ public final class ScreenModels {
     /// Refresh (⌘R, the toolbar) on `section`: that section's model reads again from Apple. The Overview reads its devices
     /// and its audit log; services are part of the Devices read; Settings has no read of its own and refreshes the devices, as
     /// every section did in Phase 1. Reports reads the devices again when the report on screen is a live one (migration, service health, fleet age with no AppleCare
-    /// snapshot) and its snapshots from the local history, which asks Apple for nothing and never starts a sweep.
+    /// snapshot) and its snapshots from the local history, which asks Apple for nothing and never starts a sweep. Needs attention
+    /// reads its live lists again (the Devices screen's, and the Mosyle screen's devices when the client has Mosyle) and its history.
     public func refresh(_ section: SidebarItem) {
         switch section {
         case .overview: dashboard.load(force: true)
@@ -73,6 +77,10 @@ public final class ScreenModels {
             // forced Apple read nor starts a sweep.
             if reports.usesLiveList(reports.report) { devices.load(force: true) }
             reports.refresh()
+        case .needsAttention:
+            // The live lists the rules read, again, and the history; never a sweep or a snapshot.
+            attention.readLive(force: true)
+            attention.refresh()
         case .devices, .services, .settings: devices.load(force: true)
         }
     }

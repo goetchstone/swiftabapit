@@ -9,6 +9,8 @@ import Orgs
 public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     /// The Dashboard (Appendix B: "Overview › Dashboard").
     case overview
+    /// Work that should have been done and hasn't (plan §8.0, "Needs attention"; the operator's Q6: its own section).
+    case needsAttention = "needs-attention"
     case devices
     /// Device management services: Phase 1 gave them a row of their own.
     case services
@@ -28,6 +30,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .appleMDM: "Apple MDM"
+        case .needsAttention: "Needs Attention"
         default: rawValue.capitalized
         }
     }
@@ -41,6 +44,8 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
     /// Reports lists none for the same reason: four of its six reports read the local history's snapshots, so a role refused
     /// the devices or the services still has them; the two live ones (MDM migration, service health) say "your role can't read
     /// this" themselves. Every read a report makes is devices or services, which School's API has (`ReportsModel.refusal`).
+    /// Needs attention lists none either: its rules read the local history's snapshots and the Devices and Mosyle screens' lists,
+    /// and each rule says "skipped" with the reason when its list was refused.
     public var reads: [AppleSection] {
         switch self {
         case .overview: [.devices, .mdmServers, .auditEvents]
@@ -50,7 +55,7 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Sendable {
         case .people: [.users, .userGroups, .orgUnits]
         case .content: [.apps, .packages, .blueprints, .configurations]
         case .activity: []
-        case .mosyle, .reconciliation, .reports, .settings: []
+        case .mosyle, .reconciliation, .reports, .settings, .needsAttention: []
         }
     }
 

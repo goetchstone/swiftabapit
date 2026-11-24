@@ -2,23 +2,30 @@ import AppModels
 import SwiftUI
 
 /// Overview › Dashboard (plan §8 Phase 2; Appendix B): the fleet's counts, by family, by status and added per month;
-/// devices per service and the unassigned ones; services not connected in N days; the last seven days' audit events.
+/// devices per service and the unassigned ones; services not connected in N days; the last seven days' audit events; and the
+/// Needs-attention counts (the operator's Q6: an Overview card), which open that screen.
 /// Thin over `DashboardModel`, which decides what each card may count and says why when it can't (invariant 8): a dash
 /// or words, never a zero nobody counted. An org that can't be read says why instead of showing zeros (Phase 1b review,
 /// LOW). The cards are in Screens/DashboardCards.swift.
 struct OverviewView: View {
     let dashboard: DashboardModel
+    /// Needs attention's counts (its card), which open its screen.
+    let attention: NeedsAttentionModel
     let hasOrg: Bool
     /// A sentence the org's screens carry (`OrgsModel.unverifiedNote`: a School org isn't verified on a live tenant yet).
     let note: String?
+    let openAttention: () -> Void
     let addOrg: () -> Void
 
     private var model: DevicesModel { dashboard.devices }
 
-    init(model: DashboardModel, hasOrg: Bool, note: String? = nil, addOrg: @escaping () -> Void) {
+    init(model: DashboardModel, attention: NeedsAttentionModel, hasOrg: Bool, note: String? = nil, openAttention: @escaping () -> Void,
+         addOrg: @escaping () -> Void) {
         dashboard = model
+        self.attention = attention
         self.hasOrg = hasOrg
         self.note = note
+        self.openAttention = openAttention
         self.addOrg = addOrg
     }
 
@@ -67,6 +74,7 @@ struct OverviewView: View {
                         Tile(title: "Not assigned to a service", id: "unassigned", value: model.unassignedCount)
                         Tile(title: "Services", id: "services", value: model.serviceCount)
                     }
+                    NeedsAttentionCard(model: attention, open: openAttention)
                     MonthsCard(dashboard: dashboard, stats: stats)
                     // Two columns in the smallest window (its pane is about 790 pt wide), more in a wider one.
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {

@@ -12,6 +12,8 @@ import Vault
 struct SettingsView: View {
     let orgs: OrgsModel
     let transfer: HistoryTransfer
+    /// The Needs-attention setting: which Apple service is the active client's Mosyle org.
+    let attention: NeedsAttentionModel
     let isDemo: Bool
     @State private var selected: String?
     @State private var editing: OrgEditor.Mode?
@@ -60,7 +62,7 @@ struct SettingsView: View {
             .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
 
             Form {
-                if let message = orgs.problem ?? problem {
+                if let message = orgs.problem ?? problem ?? orgs.settingsProblem {
                     Label(message, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
                 }
                 if isDemo {
@@ -125,6 +127,7 @@ struct SettingsView: View {
                     ContentUnavailableView("No organization selected", systemImage: "building.2",
                                            description: Text("Add an Apple Business or Apple School Manager API account."))
                 }
+                attentionSection
                 historySection
             }
             .formStyle(.grouped)
@@ -190,6 +193,31 @@ struct SettingsView: View {
             guard asking == profile.id else { return }
             removalSnapshots = count
             removing = profile
+        }
+    }
+
+    /// Which device management service in Apple is the active client's Mosyle Business org (the operator's Q7: a local setting per
+    /// client, none by default), shown only when the client has both. Its choices are the services Apple lists now, by name; only the
+    /// chosen one's id is kept. The thresholds have no editor here: they keep the operator's defaults.
+    @ViewBuilder private var attentionSection: some View {
+        if let setting = attention.serviceSetting {
+            Section {
+                Picker("Mosyle Business in Apple", selection: Binding(get: { setting.selected }, set: { attention.setMosyleService($0) })) {
+                    ForEach(setting.options) { Text($0.label).tag($0.id) }
+                }
+                .disabled(!setting.isEditable)
+                .accessibilityIdentifier("settings.attention.service")
+                Text(setting.words).foregroundStyle(.secondary).accessibilityIdentifier("settings.attention.words")
+                if let note = attention.settingNote ?? attention.settingsBlocked {
+                    Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+            } header: {
+                Text("Needs attention")
+            } footer: {
+                Text("The device management service in Apple that is this customer's Mosyle Business organization: “missing from Mosyle” looks for the devices Apple assigns to it in Mosyle.")
+                    .foregroundStyle(.secondary)
+            }
+            .onAppear { attention.readServicesForSetting() }
         }
     }
 
