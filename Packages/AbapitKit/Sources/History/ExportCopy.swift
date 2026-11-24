@@ -71,8 +71,8 @@ extension SnapshotStore {
         try Self.guarded {
             // A newer file is opened `query_only`, which refuses even this: `VACUUM INTO` writes the new file and nothing in
             // this one, so the pragma is lifted for that one statement and put back.
-            if case .readOnly = access { try database.execute("PRAGMA query_only = OFF") }
-            defer { if case .readOnly = access { try? database.execute("PRAGMA query_only = ON") } }
+            if access != .readWrite { try database.execute("PRAGMA query_only = OFF") }
+            defer { if access != .readWrite { try? database.execute("PRAGMA query_only = ON") } }
             try database.run("VACUUM INTO ?", [.text(work)])
         }
         if let keep { try Self.narrow(work, to: keep) }
@@ -99,7 +99,9 @@ extension SnapshotStore {
             try copy.execute("PRAGMA foreign_keys = ON")
             let list = StoredJSON.text(.array(keep.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }.map { .string($0) }))
             try copy.run("DELETE FROM snapshots WHERE org_id NOT IN (SELECT value FROM json_each(?))", [.text(list)])
-            try copy.run("DELETE FROM attention WHERE org_id NOT IN (SELECT value FROM json_each(?))", [.text(list)])
+            if try copy.rows("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'attention'") { $0.integer(0) }.first != nil {
+                try copy.run("DELETE FROM attention WHERE org_id NOT IN (SELECT value FROM json_each(?))", [.text(list)])
+            }
             // AUTOINCREMENT's counter would say how many snapshots the other orgs had: it is set to the highest id kept. The ids
             // that remain keep their numbers (renumbering would break nothing here, but is not needed), so gaps show.
             try copy.execute("UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id), 0) FROM snapshots) WHERE name = 'snapshots'")

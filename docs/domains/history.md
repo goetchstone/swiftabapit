@@ -76,8 +76,11 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   write). The version is read again under the write lock and **decided on there**: a version after this one (another build migrated it meanwhile) is
   read-only, this one is left as it is, an older one is migrated from where it stands, so two stores opening one file migrate it once (`foundVersion2`).
   **A file this process can't write** (mode 0400, a read-only volume: SQLITE_READONLY at the lock) is not migrated and still opens, **read-only at the
-  version it has**, `access` `.readOnly(version:)`; its snapshots read with `unread` as `{}`, "not recorded" (the column isn't there: `hasUnread`), and
-  `record` throws `.readOnly`. **The migration is one-way**: a build from before version 3 opens a version-3 file read-only. A file from a version after
+  version it has**, `access` `.notWritable(version:)` (not `.readOnly`, which is a newer file: its message would be false here): "The snapshot history
+  can't be written; it is read and never changed. Check the file's permissions or the volume." Its snapshots read with `unread` as `{}`, "not recorded"
+  (the column isn't there: `hasUnread`); a version-1 file has no `attention` table, which reads as empty (`hasAttention`: `state(org:)`, `orgIDs()`, so Add
+  organization still works) since such a file never held a finding; every write throws `.notWritable`; an export copy still works. A file at version 0
+  that another store fills between the look and the lock is decided afresh on the version then found, as the main path is. **The migration is one-way**: a build from before version 3 opens a version-3 file read-only. A file from a version after
   this one stays read-only, as below. A failed script rolls the whole migration back (`aFailedMigrationIsRolledBackWhole`). The value is JSON, keys sorted: `{"<sweep resource name>": ["<device id>", ...]}`, the ids of the devices the sweep
   didn't read, **sorted by bytes, each once** (`SnapshotStore.unreadText`). **`{}`, or a missing key, means "not recorded"** (a row from before version 3, an
   imported one, a sweep that wasn't run): it **never means "every device was read"**; an empty list means "the sweep ran and missed none".
@@ -266,7 +269,7 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
 - **Which devices a sweep didn't read** (the coordinating session's design, 2026-11-24, for the operator; schema version 3). For each sweep that
   ran, the collector records `unread[<resource>]`: the ids of every device it didn't read. They are the devices the note's "N of M not read" counts (failed
   twice, an id that can't be sent, not asked because the sweep stopped: `Swept.notReadIDs`), **plus the devices whose own coverage list the page cap cut**
-  (`Swept.cutIDs`: read in part, so not wholly read, and counted in the note's other line, "the page limit cut N devices' records"), **plus the device of each AppleCare record whose id its list holds twice** (the store keeps one of the two, so which one is chance; the sweep is already a part read, "duplicate id"; counted in the note's "N records had the id of another read", which counts records, so one device is one record there and a device with three copies is two). So `unread.count`
+  (`Swept.cutIDs`: read in part, so not wholly read, and counted in the note's other line, "the page limit cut N devices' records"), **plus both devices of each AppleCare record pair sharing an id** (one device whose list holds the id twice, or two devices when a rekeyed `serial:id` meets another's own id; the store keeps the last of the two, so the earlier device lost a record) (the store keeps one of the two, so which one is chance; the sweep is already a part read, "duplicate id"; counted in the note's "N records had the id of another read", which counts records, so one device is one record there and a device with three copies is two). So `unread.count`
   equals the note's N, plus the cut devices and the duplicated-id devices (`UnreadSweepTests`). The ids are the covering list's own: Apple's device ids for AppleCare and Activation
   Lock, Apple MDM's ids for the details. **Ids only**: nothing that isn't already an item id of the snapshot, no name or attribute, and nothing a policy
   withholds (`SnapshotPolicy` is unchanged). **Bounded** (invariant 7): the list can't be longer than the list the sweep covers, so it can't exceed the

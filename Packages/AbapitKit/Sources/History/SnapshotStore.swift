@@ -38,6 +38,9 @@ public actor SnapshotStore {
         case readWrite
         /// The file was written by a newer version of the app (its schema `version`): read, never written.
         case readOnly(version: Int32)
+        /// The file is this app's, at `version` (before the current one), but this process can't write it (its mode, a read-only
+        /// volume), so it wasn't migrated: read at the version it has, never written.
+        case notWritable(version: Int32)
     }
 
     public enum Failure: Error, Equatable, Sendable {
@@ -54,6 +57,8 @@ public actor SnapshotStore {
         case database(code: Int32, message: String)
         /// Written by a newer version: this one doesn't change it.
         case readOnly(version: Int32)
+        /// The file can't be written by this process (its mode, a read-only volume): read, never changed.
+        case notWritable(version: Int32)
         /// The org has no id, so its rows couldn't be told from another's.
         case noOrg
         /// No snapshot with that id for that org (there may be one for another org: it isn't said).
@@ -81,6 +86,8 @@ public actor SnapshotStore {
             case .database(_, let message): "The snapshot history couldn't be read or written (\(message))."
             case .readOnly(let version):
                 "The snapshot history was written by a newer abapit (schema version \(version)); this one reads it and won't change it."
+            case .notWritable:
+                "The snapshot history can't be written; it is read and never changed. Check the file's permissions or the volume."
             case .noOrg: "The organization has no id, so its snapshots can't be kept apart from another's."
             case .noSnapshot(let id): "There's no snapshot \(id) for this organization."
             case .noFinding: "That finding isn't in the list any more, so it can't be changed."
@@ -155,6 +162,8 @@ public actor SnapshotStore {
     private let writer: String
     /// Whether `snapshots` has the `unread` column (version 3): a file that couldn't be migrated lacks it, and reads as "not recorded".
     private let hasUnread: Bool
+    /// Whether the file has the `attention` table (version 2): one that couldn't be migrated from version 1 hasn't, and holds no finding.
+    let hasAttention: Bool
     let hook: Hook?
     /// The store's own folder, which only this user can enter: where an export's working copy is made. Nil in memory.
     let home: String?
@@ -209,6 +218,7 @@ public actor SnapshotStore {
         writer = "swiftabapit \(appVersion)"
         self.hook = hook
         hasUnread = try Self.guarded { try opened.database.rows("PRAGMA table_info(snapshots)") { try $0.text(1) ?? "" } }.contains("unread")
+        hasAttention = try Self.guarded { try opened.database.rows("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'attention'") { try $0.text(0) ?? "" } }.count == 1
     }
 
     // MARK: writing
@@ -333,7 +343,8 @@ public actor SnapshotStore {
     public func orgIDs() throws(Failure) -> [String] {
         try Self.guarded {
             // Findings count too: an org with dismissals and no snapshots must not be reused either.
-            try database.rows("SELECT org_id FROM snapshots UNION SELECT org_id FROM attention ORDER BY 1") { try $0.text(0) ?? "" }
+            // A file that couldn't be migrated has no attention table: it never held a finding.
+            try database.rows("SELECT org_id FROM snapshots" + (hasAttention ? " UNION SELECT org_id FROM attention" : "") + " ORDER BY 1") { try $0.text(0) ?? "" }
         }
     }
 
@@ -587,7 +598,7 @@ public actor SnapshotStore {
                     // A file this process can't write (mode 0400, a read-only volume) can't be migrated: it is read at the version it has,
                     // and never written (the version-1 and version-2 columns this build reads are there; `unread` reads as `{}`).
                     try database.execute("PRAGMA query_only = ON")
-                    return .readOnly(version: found)
+                    return .notWritable(version: found)
                 }
                 if let newer {
                     try database.execute("PRAGMA query_only = ON")
@@ -599,13 +610,19 @@ public actor SnapshotStore {
             // Looked at before any write lock is taken on a file that may not be this app's.
             guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
             try hook?(.foundEmpty(path: path))
+            var changed = false
             try database.transaction {
                 // Read again under the write lock: another store may have made it meanwhile.
-                guard try database.userVersion() == 0 else { return }
+                guard try database.userVersion() == 0 else {
+                    changed = true
+                    return
+                }
                 guard try isEmpty() else { throw Failure.notThisAppsFile(path: path) }
                 try database.execute(Schema.newDatabase)
             }
-            return .readWrite
+            // Another store took the file past version 0 between the look and the lock: decided afresh on the version now there (a newer
+            // one is read-only, a current one is as it is, an older one is migrated from where it stands), never assumed writable.
+            return changed ? try prepare(database, path: path, hook: hook) : .readWrite
         }
     }
 
@@ -764,7 +781,11 @@ public actor SnapshotStore {
     // MARK: helpers
 
     func writable() throws(Failure) {
-        if case .readOnly(let version) = access { throw .readOnly(version: version) }
+        switch access {
+        case .readWrite: return
+        case .readOnly(let version): throw .readOnly(version: version)
+        case .notWritable(let version): throw .notWritable(version: version)
+        }
     }
 
     static func id(of org: OrgProfile) throws(Failure) -> String {

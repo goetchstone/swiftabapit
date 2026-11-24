@@ -169,13 +169,62 @@ struct UnreadTests {
             #expect(chmod(path, 0o400) == 0)
             let before = try Data(contentsOf: URL(filePath: path))
             let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-            #expect(store.access == .readOnly(version: version), "version \(version)")
+            #expect(store.access == .notWritable(version: version), "version \(version)")
             let snapshots = try await store.snapshots(org: Self.acme)
             #expect(snapshots.count == 1 && snapshots[0].unread == [:] && snapshots[0].counts["applecare"] == 1, "version \(version): \(snapshots)")
             #expect(try await store.load(snapshots[0].id, org: Self.acme).resources["devices"]?.count == 2)
-            await #expect(throws: SnapshotStore.Failure.readOnly(version: version)) { try await store.record(org: Self.acme, takenAt: Scratch.noon, resources: [:]) }
+            await #expect(throws: SnapshotStore.Failure.notWritable(version: version)) { try await store.record(org: Self.acme, takenAt: Scratch.noon, resources: [:]) }
+            // The words say what is true: not that a newer abapit wrote it.
+            do { try await store.record(org: Self.acme, takenAt: Scratch.noon, resources: [:]) } catch {
+                #expect(error.message == "The snapshot history can't be written; it is read and never changed. Check the file's permissions or the volume." && !error.message.contains("newer"), "\(error.message)")
+            }
             #expect(try Data(contentsOf: URL(filePath: path)) == before && Scratch.mode(path) == 0o400)
             #expect(try Scratch.open(path).userVersion() == version)
+        }
+    }
+
+    /// An unwritable version-1 file has no `attention` table, and never held a finding: `orgIDs()` and `state(org:)` read what the snapshots
+    /// hold (so Add organization is not refused), and a dismissal or a snooze says the file can't be written.
+    @Test func anUnwritableVersionOneFileReadsAttentionAsEmpty() async throws {
+        let root = try Scratch.folder()
+        defer { Scratch.remove(root) }
+        let folder = root.appending(path: "store")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let path = Scratch.path(folder.appending(path: "history.sqlite"))
+        #expect(FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]))
+        let file = try Scratch.open(path)
+        try file.execute(Schema.toVersion1)
+        try file.execute("""
+            INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors, org_id, notes, counts) \
+            VALUES ('2026-01-01T00:00:00Z', 'BUSINESSAPI.x', 'Example', 'business', 'swiftabapit 1', '{}', 'acme', '{}', '{}');
+            """)
+        #expect(chmod(path, 0o400) == 0)
+        let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
+        #expect(store.access == .notWritable(version: 1))
+        #expect(try await store.orgIDs() == ["acme"])
+        #expect(try await store.state(org: Self.acme).isEmpty)
+        let words = "The snapshot history can't be written; it is read and never changed. Check the file's permissions or the volume."
+        await #expect(throws: SnapshotStore.Failure.notWritable(version: 1)) { try await store.dismiss(org: Self.acme, rule: "r", subject: "A", at: Scratch.noon) }
+        do { try await store.snooze(org: Self.acme, rule: "r", subject: "A", until: Scratch.noon) } catch { #expect(error.message == words) }
+        do { try await store.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon) } catch { #expect(error.message == words) }
+        // A copy of it can still be made.
+        try await store.exportCopy(to: URL(filePath: Scratch.path(root) + "/copy.sqlite"))
+    }
+
+    /// An empty file another store fills between the look and the lock is decided on the version found there, never assumed writable: a
+    /// newer one is read-only; an older one (version 1) is migrated from where it stands.
+    @Test func anEmptyFileFilledUnderTheLockIsDecidedOnItsVersion() async throws {
+        for (fill, expect) in [("CREATE TABLE other (a); PRAGMA user_version = 4;", SnapshotStore.Access.readOnly(version: 4)),
+                               (Schema.toVersion1, SnapshotStore.Access.readWrite)] {
+            let root = try Scratch.folder()
+            defer { Scratch.remove(root) }
+            let folder = root.appending(path: "store")
+            let store = try SnapshotStore(storage: .folder(folder), appVersion: "1") { step throws(SnapshotStore.Failure) in
+                if case .foundEmpty(let path) = step { try? Scratch.open(path).execute(fill) }
+            }
+            #expect(store.access == expect, "\(fill)")
+            let version = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite"))).userVersion()
+            #expect(version == (expect == .readWrite ? 3 : 4), "\(fill)")
         }
     }
 

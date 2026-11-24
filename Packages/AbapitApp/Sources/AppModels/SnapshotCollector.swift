@@ -422,12 +422,18 @@ public final class SnapshotCollector {
         if sweep == .appleCare { (items, shared) = Sweep.keyedBySerialWhereShared(items) }
         // Two records with one id left (one device's list holding it twice): the store keeps the last, so a record could go
         // unseen. Said, and a part read.
-        // The device whose list holds the id twice is not wholly read either: the store keeps one of the two records, so which one
-        // it kept is chance. Its id goes to `unread` (the serial the record was read for is the device list's id).
-        var ids: Set<[UInt8]> = [], duplicates = 0, duplicated: [String] = []
-        for item in items where !ids.insert(Array(item.id.utf8)).inserted {
+        // A device whose record shares its id with another read isn't wholly read: the store keeps the last of the two, so the device
+        // that lost a record is the earlier one, and which of the two it keeps is chance. Both devices' ids go to `unread` (the serial the
+        // record was read for is the device list's id): one device twice, or two devices when a rekeyed `serial:id` meets another's own id.
+        var ids: [[UInt8]: String] = [:], duplicates = 0, duplicated: [String] = []
+        for item in items {
+            let serial = item.attributes["serialNumber"]?.string ?? ""
+            guard let first = ids[Array(item.id.utf8)] else {
+                ids[Array(item.id.utf8)] = serial
+                continue
+            }
             duplicates += 1
-            if let serial = item.attributes["serialNumber"]?.string, !serial.isEmpty { duplicated.append(serial) }
+            duplicated += [first, serial].filter { !$0.isEmpty }
         }
         let error = stop ?? swept.failed.first ?? (swept.unsendable > 0 ? "unsendable id" : nil) ?? (duplicates > 0 ? "duplicate id" : nil)
             ?? (source.cut || swept.cut > 0 ? SnapshotPolicy.pageCap : nil) ?? (swept.notAsked > 0 ? "not asked" : nil)

@@ -117,6 +117,23 @@ struct UnreadSweepTests {
         #expect(by[SweepTests.serial(2)] == "not-read" && by[SweepTests.serial(0)] == "active" && by[SweepTests.serial(1)] == "no-record", "\(by)")
     }
 
+    /// Two devices that come to share one id after the rekeying (one's own id is another's `serial:id`): the store keeps the last, so the earlier
+    /// device lost a record. Both are recorded and shown as not read; a third is unaffected.
+    @Test func twoDevicesMeetingOnOneIdAreBothRecorded() async throws {
+        let world = try await SweepTests.world()
+        let a = world.stubs["a"]!
+        a.setCoverage(SweepTests.serial(1), [SweepTests.coverage("\(SweepTests.serial(2)):SHARED", "AppleCare+", payment: "SUBSCRIPTION")])
+        a.setCoverage(SweepTests.serial(2), [SweepTests.coverage("SHARED", "AppleCare+", payment: "SUBSCRIPTION")])
+        a.setCoverage(SweepTests.serial(3), [SweepTests.coverage("SHARED", "AppleCare+", payment: "SUBSCRIPTION")])
+        let snapshot = try await SweepTests.recorded(world, [.appleCare])
+        #expect(snapshot.summary.errors["applecare"] == "duplicate id")
+        #expect(Set(snapshot.summary.unread["applecare"] ?? []) == [SweepTests.serial(1), SweepTests.serial(2)], "\(snapshot.summary.unread)")
+        let model = world.screens.reports
+        await model.load()
+        let by = Dictionary(uniqueKeysWithValues: model.build(.outOfWarranty, tokens: [:]).lines.map { ($0.title, $0.group ?? "") })
+        #expect(by[SweepTests.serial(1)] == "not-read" && by[SweepTests.serial(2)] == "not-read" && by[SweepTests.serial(3)] != "not-read" && by[SweepTests.serial(0)] == "active", "\(by)")
+    }
+
     /// A sweep that wasn't run has no key; one that ran and missed none has an empty list, so "none missed" is told from "not recorded".
     @Test func aSweepNotRunHasNoKeyAndOneThatMissedNoneHasAnEmptyList() async throws {
         let world = try await SweepTests.world()

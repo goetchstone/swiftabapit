@@ -105,6 +105,7 @@ extension SnapshotStore {
     /// Every finding stored for `org`, by rule and then subject (by bytes). Another org's are never here.
     public func state(org: OrgProfile) throws(Failure) -> [Finding] {
         let orgID = try Self.id(of: org)
+        guard hasAttention else { return [] }
         return try Self.guarded {
             try database.rows("""
                 SELECT rule, subject, first_seen, last_seen, dismissed_at, snoozed_until FROM attention WHERE org_id = ? \
