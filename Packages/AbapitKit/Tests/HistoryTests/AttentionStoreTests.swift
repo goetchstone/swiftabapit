@@ -54,7 +54,7 @@ struct AttentionStoreTests {
         #expect(store.access == .readWrite)
         #expect(try dump() == before)
         let file = try Scratch.open(path)
-        #expect(try file.userVersion() == 2)
+        #expect(try file.userVersion() == 3)
         #expect(try Scratch.count(file, "SELECT COUNT(*) FROM attention") == 0)
         #expect(Scratch.mode(path) == 0o600)
         #expect(Scratch.mode(Scratch.path(folder)) == 0o700)
@@ -138,7 +138,7 @@ struct AttentionStoreTests {
         #expect(first.access == .readWrite)
         try await second.value?.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon)
         #expect(try await first.state(org: Self.acme).map(\.subject) == ["A"])
-        #expect(try Scratch.open(path).userVersion() == 2)
+        #expect(try Scratch.open(path).userVersion() == 3)
     }
 
     // MARK: first seen
@@ -394,10 +394,10 @@ struct AttentionStoreTests {
         defer { Scratch.remove(root) }
         let folder = root.appending(path: "store")
         _ = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-        try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite"))).execute("PRAGMA user_version = 3")
+        try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite"))).execute("PRAGMA user_version = 4")
         let store = try SnapshotStore(storage: .folder(folder), appVersion: "1")
-        await #expect(throws: SnapshotStore.Failure.readOnly(version: 3)) { try await store.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon) }
-        await #expect(throws: SnapshotStore.Failure.readOnly(version: 3)) { try await store.dismiss(org: Self.acme, rule: "r", subject: "A", at: Scratch.noon) }
+        await #expect(throws: SnapshotStore.Failure.readOnly(version: 4)) { try await store.seen(org: Self.acme, rule: "r", subjects: ["A"], at: Scratch.noon) }
+        await #expect(throws: SnapshotStore.Failure.readOnly(version: 4)) { try await store.dismiss(org: Self.acme, rule: "r", subject: "A", at: Scratch.noon) }
         #expect(try await store.state(org: Self.acme).isEmpty)
     }
 }

@@ -33,7 +33,7 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
 - `AppModels/ChangesModel.swift` (Activity › Changes; `ScreenModels.changes`), `AppModels/DemoHistory.swift` (the demo's fake
   snapshots, DEBUG only), `App/Screens/ChangesView.swift` (`ActivityScreen`: the toolbar's Audit Log / Changes, and `ChangesView`).
   Tests: `ChangesTests.swift`, `CollectorLowsTests.swift` (AppModelsTests), `ExportSnapshotDiffTests` (ReportsTests).
-- `AppModels/ReportsModel.swift` (the Reports screen; `ScreenModels.reports`) and `App/Screens/ReportsView.swift`. Tests: `ReportsTests.swift`.
+- `AppModels/ReportsModel.swift` (the Reports screen; `ScreenModels.reports`) and `App/Screens/ReportsView.swift`. Tests: `ReportsTests.swift`, `UnreadReportsTests.swift`. The unread-devices tests: `HistoryTests/UnreadTests.swift` (migration, the column, import and export) and `AppModelsTests/UnreadSweepTests.swift` (the collector).
 - `Packages/AbapitKit/Sources/Reports/`: `CSV.swift` (the writer, the formula guard, `ExportPolicy`),
   `Find.swift` (⌘L), `DeviceStats.swift` (the Overview's counts, the assignment summary), `AuditDigest.swift`
   (the `AuditView` sets, `AuditDigest`, `newestFirst`, `recent`), `QuietServices.swift` (services not connected
@@ -57,7 +57,7 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   runs first, unchanged (`SchemaTests` pins its SHA-256 to abapit's text at the pin); then version 1's additions:
   `org_id`, `notes` and `counts` on `snapshots`, an index on `(org_id, id)`, and `activation_lock_view` (serial,
   `is_locked`, `lock_type`) over the items recorded as `SnapshotStore.activationLockResource` (`activation_lock`). The
-  plan's `schema_version` is `PRAGMA user_version` (2: version 2 adds the `attention` table, below), set in the same transaction, which reads the version and checks
+  plan's `schema_version` is `PRAGMA user_version` (3: version 2 adds the `attention` table, below; version 3 adds `snapshots.unread`, "Schema version 3"), set in the same transaction, which reads the version and checks
   the file is empty again under the write lock. Foreign keys are on for every connection the store opens, so a
   snapshot's items go with it.
 - **Only a file this app made** (coordinating session's proposal, 2026-11-20, for the operator): a file at version 0 that
@@ -68,6 +68,16 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   link) is refused before SQLite opens it (`.hardLinked`). Either is left as it was, bytes and mode: a file's mode is
   narrowed only once it is accepted. The import (a later PR) reads abapit's file read-only and copies its rows, as the
   plan says; nothing here changes abapit's file.
+- **Schema version 3: `snapshots.unread`** (the coordinating session's design, 2026-11-24, for the operator). One column,
+  `ALTER TABLE snapshots ADD COLUMN unread TEXT NOT NULL DEFAULT '{}'`, and `PRAGMA user_version = 3`: `Schema.toVersion3`, one script, one transaction,
+  and nothing else touched. A version-2 file migrates by that script alone; a version-1 file by version 2's and then version 3's in the same
+  transaction; a new file is made by version 1's, 2's and 3's. The migration decides a file is this app's as version 1 did: `snapshots` has `org_id` and
+  `counts`, and at version 2 also the `attention` table and no `unread` column yet (a foreign file at version 2 is refused, `.notThisAppsFile`, before any
+  write). The version is read again under the write lock, so two stores opening one file migrate it once (`foundVersion2`). A file from a version after
+  this one stays read-only, as below. The value is JSON, keys sorted: `{"<sweep resource name>": ["<device id>", ...]}`, the ids of the devices the sweep
+  didn't read, **sorted by bytes, each once** (`SnapshotStore.unreadText`). **`{}`, or a missing key, means "not recorded"** (a row from before version 3, an
+  imported one, a sweep that wasn't run): it **never means "every device was read"**; an empty list means "the sweep ran and missed none".
+  `Summary.unread` hands it to every reader (`snapshots`, `load`, `latest`, `newestRead`); a value that isn't an object of lists of strings is `.corrupt`.
 - **A file from a newer version is read, never written**: a `user_version` above `Schema.version` opens with `PRAGMA
   query_only`, `access` is `.readOnly(version:)`, and `record`, `prune` and `removeAll` throw `.readOnly`, whose message
   says a newer abapit wrote it.
@@ -249,6 +259,17 @@ digests and the dashboard's quiet services and recent events in phase 2a; their 
   sweeps to run, none by default (each is one read per device, at the org's rate: a large fleet takes long). They run after
   the lists, one after another: AppleCare coverage and Activation Lock over Apple's device list, then the details of each
   device in Apple MDM's list (Business only: a School org's run doesn't try them).
+- **Which devices a sweep didn't read** (the coordinating session's design, 2026-11-24, for the operator; schema version 3). For each sweep that
+  ran, the collector records `unread[<resource>]`: the ids of every device it didn't read. They are the devices the note's "N of M not read" counts (failed
+  twice, an id that can't be sent, not asked because the sweep stopped: `Swept.notReadIDs`), **plus the devices whose own coverage list the page cap cut**
+  (`Swept.cutIDs`: read in part, so not wholly read, and counted in the note's other line, "the page limit cut N devices' records"). So `unread.count`
+  equals the note's N, plus the cut devices (`UnreadSweepTests`). The ids are the covering list's own: Apple's device ids for AppleCare and Activation
+  Lock, Apple MDM's ids for the details. **Ids only**: nothing that isn't already an item id of the snapshot, no name or attribute, and nothing a policy
+  withholds (`SnapshotPolicy` is unchanged). **Bounded** (invariant 7): the list can't be longer than the list the sweep covers, so it can't exceed the
+  snapshot's device count (`counts[devices]`, or `counts[mdm_enrolled]` for the details), and the store keeps each id once. **A sweep that wasn't run has no
+  key**, and one that never asked for a device (its list failed: "not read: devices failed", or the run stopped first: "not asked after HTTP 401") has
+  none either; **a sweep that ran records its list, empty when it missed none**, so "ran, missed none" is told from "not recorded". A 403 that stopped
+  the sweep names every device it didn't ask. Nothing is recorded for a run that is cancelled or switched away (nothing is written at all).
 - **Bounds** (invariant 7):
   - At most `Sweep.inFlight` (4) reads at once per sweep (the sweeps run one after another, so 4 for the run; the screens'
     reads share the org's limiter, not this bound), in a task group. Every send waits on the org's rate limiter, the
@@ -444,7 +465,7 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
   sweep, and how long each took against its estimate; Cancel mid-sweep (nothing written); Compare the first real snapshot with an imported
   abapit one (the imported counts omit empty resources); and the CSV's file name and panel words with one and with several clients.
 
-### The Reports screen (branch `phase-3-reports-screen`)
+### The Reports screen (merged in PR #39)
 
 Reports (`App/Screens/ReportsView.swift` over `AppModels/ReportsModel.swift`, `ScreenModels.reports`): the six reports of the active
 Apple org in a list, the chosen one's filters, source, summary counts, rows and CSV beside it. Everything it says comes from
@@ -471,16 +492,26 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     failed with HTTP 500: <note>, so this is the last good copy, from Sep 21, 2026", or "… so the newest snapshot that read any of it is used, and that
     read was only in part, from …"; a run-level code reads "didn't read it (not asked after HTTP 401)", never "failed with not asked…"). The report
     judges nothing only when **no snapshot read any of the sweep**, and says "No snapshot has read AppleCare coverage". A newest part read beats an
-    older whole copy however little it read (the coordinating session's decision; the follow-up that has the collector record which devices a sweep
-    missed will revisit it). A per-device failure isn't advised away with "take another snapshot". If the part read's own device list wasn't read, the
+    older whole copy however little it read (the coordinating session's decision; it stays now that the snapshot records which devices were missed). A per-device failure isn't advised away with "take another snapshot". If the part read's own device list wasn't read, the
     source says nothing is judged, not "what it read is used".
   - **Devices without an entry.** In a **whole** AppleCare copy a device with no record was read and has none (`.read([])`, "no coverage
-    record (may mean no AppleCare, not expired)"). In a **part** read a device with no record can't be told from one the sweep didn't
-    reach, so it is left out of the map and the reports count it as not read; the screen and the CSV's `listRead` say so ("in a part read a
-    device with no record counts as not read"). When the collector records which devices a sweep didn't read (a later change),
-    `ReportsModel.coverage(_:notReached:)` is the seam: those get `.notRead`, the rest `.read([])`. In an Activation Lock copy (one item per
-    device) a device with no item is not read in either case (`ActivationLockReport`'s "the sweep didn't reach this device"), never
-    unlocked. An AppleCare record with no serial number can't be given to a device: counted and said on screen ("N coverage records have no
+    record (may mean no AppleCare, not expired)"). A **part** read has two cases, by whether **the snapshot used** records `unread` for the sweep
+    (its own, never another snapshot's: `Used.unread`, built from the summary of the snapshot the items came from):
+    - **With the sweep's key** (the coordinating session's decision, 2026-11-24): a device named in it is `.notRead` (even one with records: its own
+      list was cut), and every other device of that snapshot's own device list was read, so one with no record is `.read([])`, "no record". The report
+      is still marked part; the first summary line says "…; the devices it missed count as not read, and the rest are judged", and the source says
+      "It records which devices it missed: the N devices it missed count as not read, and the rest are judged (a device with no record is shown as
+      having none)." An empty list judges every device of the list.
+    - **Without it** (an older snapshot, an imported abapit one, `{}`, or a key for another sweep only): today's conservative rule. A device with no
+      record can't be told from one the sweep didn't reach, so it is left out of the map and counts as not read, and the words say why: "in a part read a
+      device with no record counts as not read: this snapshot doesn't record which devices it missed". A missing key is never "all read".
+    - **Bounds** (the executor's decision): an id in `unread` that isn't in the snapshot's own device list (a list longer than its devices, another
+      fleet's ids) is **ignored** for judging, **counted and said** in the source ("That snapshot lists N ids as not read that aren't in its own
+      device list: left out, never matched to a device"), and never shown. Ids are compared by bytes.
+    - In an Activation Lock copy (one item per device) a device with no item is not read in either case (`ActivationLockReport`'s "the sweep didn't
+      reach this device"), never unlocked: a device the sweep read always has its status, so with `unread` the named devices are not read and a device
+      with no item that isn't named still is (`activationLockWithUnreadNeverTakesNoItemForUnlocked`). Its words add only that the missed devices count
+      as not read and the rest are judged. An AppleCare record with no serial number can't be given to a device: counted and said on screen ("N coverage records have no
     serial number … counted here and left out of the report"), left out of the report.
   - **The snapshot's device list** is `.whole`, `.partly` when its `counts` and `errors` both have `devices` ("the snapshot's device list
     was cut: page cap (stopped at the page limit: 3 of 5 read, more not read)"), or `.notRead` (not in `counts`). The report's first
@@ -705,6 +736,11 @@ sandbox's `files.user-selected.read-write`); nothing is read from `~/.local/shar
   passed (`everyWriterWritesFixedWidthTimes`). `anOlderImportNeverOutranksANewerNativeSnapshot` and
   `twoFilesImportedNewerFirstAreStillOrderedByTime` hold it; `history.json`'s reads and prunes are unchanged by it. The old advice to
   import before an org's first native snapshot is gone.
+- **`unread` in an import and an export** (schema version 3): an imported snapshot writes `{}` (`recordImported` passes none: abapit never recorded
+  which devices a sweep missed), so a report over an imported part read keeps the conservative rule. `AbapitHistory` still refuses this app's own
+  file, now version 3, as "written by this app or a newer one" (`aFileThisAppWroteIsRefused`). An export copy is `VACUUM INTO`, so the column and its
+  values are in it, and the narrowing to the active client's orgs deletes whole `snapshots` rows and leaves every column of the rest as it was
+  (`anExportCopyKeepsUnread`: whole and narrowed). The copy opens as a store of its own.
 - **Export a copy** (`SnapshotStore.exportCopy(to:orgs:)`) is **the active client's only** (the plan's clients rule: no export mixes
   clients; the coordinating session's decision): `VACUUM INTO` a private working file in the store's own `0700` folder (a new
   `0700` folder under the temporary folder for an in-memory store), every other org's snapshots (items go with them) and

@@ -31,10 +31,10 @@ struct SchemaTests {
         let file = try Scratch.open(Scratch.path(folder.appending(path: "history.sqlite")))
 
         #expect(try file.userVersion() == Schema.version)
-        #expect(Schema.version == 2)
+        #expect(Schema.version == 3)
         let columns = { (table: String) in try file.rows("PRAGMA table_info(\(table))") { try $0.text(1) ?? "" } }
         #expect(try columns("snapshots") == ["id", "taken_at", "org_client_id", "org_name", "org_scope", "abapit_version", "errors",
-                                             "org_id", "notes", "counts"])
+                                             "org_id", "notes", "counts", "unread"])
         #expect(try columns("items") == ["snapshot_id", "resource", "item_id", "attributes"])
         // items → snapshots, deleted with it.
         let keys = try file.rows("PRAGMA foreign_key_list(items)") { try [$0.text(2) ?? "", $0.text(3) ?? "", $0.text(4) ?? "", $0.text(6) ?? ""] }

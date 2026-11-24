@@ -112,6 +112,10 @@ public actor SnapshotStore {
         public let counts: [String: Int]
         /// Items recorded as `devices`, as abapit's list counts them.
         public let deviceCount: Int
+        /// Per per-device sweep that ran, the ids of the devices in the list it covers that it did not read, sorted by bytes (`Schema.unread`).
+        /// A sweep with no key was not run, or the snapshot doesn't record it (a row from before version 3, one imported from abapit):
+        /// never "every device was read". An empty list is a sweep that ran and missed none.
+        public let unread: [String: [String]]
 
         public var date: Date? { ISODate.parse(takenAt)?.date }
     }
@@ -168,7 +172,9 @@ public actor SnapshotStore {
         case recording(items: Int)
         /// A file at version 1 was found and checked as this app's; the write lock is taken next and the version read again.
         case foundVersion1(path: String)
-        /// Inside the migration's transaction, the version confirmed as still 1: the attention table is made next.
+        /// A file at version 2 was found and checked as this app's; the write lock is taken next and the version read again.
+        case foundVersion2(path: String)
+        /// Inside the migration's transaction, the version confirmed as still the one found: the next version's script runs next.
         case migrating(path: String)
         /// An export's bytes are written and synced; the path is checked next.
         case copied(path: String)
@@ -209,13 +215,14 @@ public actor SnapshotStore {
     /// none). Every resource in `resources` is counted as read (`counts`), an empty list included; one that failed goes in
     /// `errors`. Whole or not at all: a failure part way leaves no row. Two items of a resource with one id keep the last
     /// (abapit's `INSERT OR REPLACE`). An attribute whose name looks like a secret's, at any depth, is left out, and the
-    /// resource's note says how many were (`Self.leftOut`). Returns the snapshot's id.
+    /// resource's note says how many were (`Self.leftOut`). `unread` is, per per-device sweep that ran, the ids of the devices it
+    /// did not read (`Summary.unread`); kept sorted by bytes, each id once; a sweep not in it is "not recorded". Returns the snapshot's id.
     @discardableResult
     public func record(org: OrgProfile, takenAt: Date, resources: [String: [Resource]], errors: [String: String] = [:],
-                       notes: [String: String] = [:]) throws(Failure) -> Int64 {
+                       notes: [String: String] = [:], unread: [String: [String]] = [:]) throws(Failure) -> Int64 {
         // Never nil: only an import skips a duplicate.
         guard let id = try insert(org: org, takenAt: takenAt, writtenBy: writer, resources: resources, errors: errors, notes: notes,
-                                  skippingDuplicate: false) else { throw .noSnapshot(0) }
+                                  unread: unread, skippingDuplicate: false) else { throw .noSnapshot(0) }
         return id
     }
 
@@ -227,11 +234,13 @@ public actor SnapshotStore {
     @discardableResult
     public func recordImported(org: OrgProfile, takenAt: Date, writtenBy: String, resources: [String: [Resource]], errors: [String: String] = [:],
                                notes: [String: String] = [:], skippingDuplicate: Bool = true) throws(Failure) -> Int64? {
-        try insert(org: org, takenAt: takenAt, writtenBy: writtenBy, resources: resources, errors: errors, notes: notes, skippingDuplicate: skippingDuplicate)
+        // abapit never recorded which devices a sweep missed: `{}`, "not recorded".
+        try insert(org: org, takenAt: takenAt, writtenBy: writtenBy, resources: resources, errors: errors, notes: notes, unread: [:],
+                   skippingDuplicate: skippingDuplicate)
     }
 
     private func insert(org: OrgProfile, takenAt: Date, writtenBy: String, resources: [String: [Resource]], errors: [String: String],
-                        notes: [String: String], skippingDuplicate: Bool) throws(Failure) -> Int64? {
+                        notes: [String: String], unread: [String: [String]], skippingDuplicate: Bool) throws(Failure) -> Int64? {
         try writable()
         let orgID = try Self.id(of: org)
         let names = resources.keys.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
@@ -250,6 +259,7 @@ public actor SnapshotStore {
         }
         let scope = org.provider == .known(.apple) ? org.scope.rawValue : org.provider.rawValue
         let taken = Schema.takenAt(takenAt)
+        let unreadText = Self.unreadText(unread)
         return try Self.guarded {
             try database.transaction {
                 if skippingDuplicate, try database.rows("SELECT 1 FROM snapshots WHERE org_id = ? AND taken_at = ? AND abapit_version = ? LIMIT 1",
@@ -257,10 +267,11 @@ public actor SnapshotStore {
                     return nil
                 }
                 try database.run("""
-                    INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors, org_id, notes, counts) \
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO snapshots (taken_at, org_client_id, org_name, org_scope, abapit_version, errors, org_id, notes, counts, unread) \
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, [.text(taken), .text(org.clientID), .text(org.name), .text(scope), .text(writtenBy),
-                          .text(Self.words(errors)), .text(orgID), .text(Self.words(notes)), .text(StoredJSON.text(.object(counts)))])
+                          .text(Self.words(errors)), .text(orgID), .text(Self.words(notes)), .text(StoredJSON.text(.object(counts))),
+                          .text(unreadText)])
                 let snapshot = database.lastInsertRowID
                 var written = 0
                 try hook?(.recording(items: written))
@@ -537,21 +548,29 @@ public actor SnapshotStore {
                 return .readOnly(version: found)
             }
             guard found < Schema.version else { return .readWrite }
-            if found == 1 {
-                // This app's own version-1 file (a foreign file can carry `user_version` 1 too: its `snapshots` must have
-                // the columns this app added), then the attention table is added; the snapshots are not touched. Read
-                // again under the write lock, so two stores opening at once migrate it once.
-                func isThisApps() throws -> Bool {
+            if found >= 1 {
+                // This app's own file at version 1 or 2 (a foreign file can carry `user_version` 1 or 2 too: its `snapshots` must have
+                // the columns this app added, and at version 2 the `attention` table), then each later version's script is run, in one
+                // transaction: version 2 adds the attention table and version 3 the `unread` column; the snapshots' rows are not touched.
+                // Read again under the write lock, so two stores opening at once migrate it once.
+                func isThisApps(_ version: Int32) throws -> Bool {
                     let columns = try database.rows("PRAGMA table_info(snapshots)") { try $0.text(1) ?? "" }
-                    return columns.contains("org_id") && columns.contains("counts")
+                    guard columns.contains("org_id"), columns.contains("counts") else { return false }
+                    if version == 2 {
+                        let tables = try database.rows("SELECT name FROM sqlite_master WHERE type = 'table'") { try $0.text(0) ?? "" }
+                        return tables.contains("attention") && !columns.contains("unread")
+                    }
+                    return true
                 }
-                guard try isThisApps() else { throw Failure.notThisAppsFile(path: path) }
-                try hook?(.foundVersion1(path: path))
+                guard try isThisApps(found) else { throw Failure.notThisAppsFile(path: path) }
+                try hook?(found == 1 ? .foundVersion1(path: path) : .foundVersion2(path: path))
                 try database.transaction {
-                    guard try database.userVersion() == 1 else { return }
-                    guard try isThisApps() else { throw Failure.notThisAppsFile(path: path) }
+                    let now = try database.userVersion()
+                    guard now == found else { return }
+                    guard try isThisApps(now) else { throw Failure.notThisAppsFile(path: path) }
                     try hook?(.migrating(path: path))
-                    try database.execute(Schema.toVersion2)
+                    if now == 1 { try database.execute(Schema.toVersion2) }
+                    try database.execute(Schema.toVersion3)
                 }
                 return .readWrite
             }
@@ -573,7 +592,7 @@ public actor SnapshotStore {
 
     /// A snapshot's row and abapit's `device_count`; a `WHERE` follows.
     private static let summarySQL = "SELECT s.id, s.taken_at, s.org_id, s.org_name, s.org_scope, s.org_client_id, s.abapit_version, "
-        + "s.errors, s.notes, s.counts, "
+        + "s.errors, s.notes, s.counts, s.unread, "
         + "(SELECT COUNT(*) FROM items i WHERE i.snapshot_id = s.id AND i.resource = 'devices') AS device_count "
         + "FROM snapshots s "
 
@@ -582,7 +601,7 @@ public actor SnapshotStore {
                 orgScope: try row.text(4) ?? "", clientID: try row.text(5) ?? "", writtenBy: try row.text(6) ?? "",
                 errors: try words(row.text(7), "a snapshot's errors", column: "errors"),
                 notes: try words(row.text(8), "a snapshot's notes", column: "notes"),
-                counts: try counts(row.text(9)), deviceCount: Int(row.integer(10)))
+                counts: try counts(row.text(9)), deviceCount: Int(row.integer(11)), unread: try unread(row.text(10)))
     }
 
     /// An item from `item_id` and `attributes` at `column` and the next.
@@ -646,6 +665,31 @@ public actor SnapshotStore {
         guard let object = try json(text, column: column)?.object else { throw Failure.corrupt(what) }
         var found: [String: String] = [:]
         for (key, value) in object { found[key] = value.string ?? value.jsonText }
+        return found
+    }
+
+    /// `unread` as it is stored: per sweep the ids, sorted by bytes, each once; keys sorted like the other JSON columns.
+    static func unreadText(_ unread: [String: [String]]) -> String {
+        var object = JSONObject()
+        for (name, ids) in unread {
+            var seen: Set<[UInt8]> = []
+            let sorted = ids.filter { seen.insert(Array($0.utf8)).inserted }.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+            object[name] = .array(sorted.map { .string($0) })
+        }
+        return StoredJSON.text(.object(object))
+    }
+
+    /// `unread` read back: a JSON object of lists of ids. Anything else was changed outside the app.
+    private static func unread(_ text: String?) throws -> [String: [String]] {
+        guard let object = try json(text, column: "unread")?.object else { throw Failure.corrupt("a snapshot's unread devices") }
+        var found: [String: [String]] = [:]
+        for (key, value) in object {
+            guard case .array(let items) = value else { throw Failure.corrupt("a snapshot's unread devices") }
+            found[key] = try items.map { item in
+                guard let id = item.string else { throw Failure.corrupt("a snapshot's unread devices") }
+                return id
+            }
+        }
         return found
     }
 

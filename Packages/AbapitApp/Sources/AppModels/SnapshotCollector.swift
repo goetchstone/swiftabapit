@@ -180,6 +180,10 @@ public final class SnapshotCollector {
         var resources: [String: [Resource]] = [:]
         var errors: [String: String] = [:]
         var notes: [String: [String]] = [:]
+        /// Per sweep that ran, the ids of the devices it didn't read (`SnapshotStore.Summary.unread`): those its note counts as
+        /// "not read", and those whose own list the page cap cut. A sweep that wasn't run, or never asked for a device (its list
+        /// failed, or the run stopped before it), has no key.
+        var unread: [String: [String]] = [:]
         /// The code of the failure that stopped the asking (the key, the token, the account); nil while reads go on.
         var stopped: String?
 
@@ -221,13 +225,14 @@ public final class SnapshotCollector {
         reading = nil
         guard current(run) else { return .cancelled }
         let notes = collected.notes.mapValues { $0.joined(separator: "; ") }
+        let unread = collected.unread
         // The last check: from here the write goes on under the org the run started for, even if a switch comes while the
         // store writes (what was read is that org's), and `finish` keeps its outcome off the new org.
         if let beforeWrite { await beforeWrite() }
         do {
             // Under the profile captured at the start, never `orgs.active`.
             return .recorded(try await store.record(org: run.org, takenAt: run.takenAt, resources: collected.resources,
-                                                    errors: collected.errors, notes: notes))
+                                                    errors: collected.errors, notes: notes, unread: unread))
         } catch {
             return .notRecorded(error.message)
         }
@@ -432,6 +437,10 @@ public final class SnapshotCollector {
         if swept.unsendable > 0 { why.append("\(swept.unsendable) \(swept.unsendable == 1 ? "has an id" : "have ids") Apple can't be asked for") }
         if swept.notAsked > 0 { why.append(stop.map { "\(swept.notAsked) left when the sweep stopped at \($0)" } ?? "\(swept.notAsked) not asked") }
         let total = swept.read + swept.failed.count + swept.unsendable + swept.notAsked, missing = total - swept.read
+        // The devices behind the note's count, and the ones whose own list was cut: ids only, never a name. A sweep that ran and missed
+        // none records an empty list ("recorded: none missed"), so the key is "not recorded" only when it wasn't run. The list can't be
+        // longer than the list the sweep covers, so no longer than the snapshot's devices (Apple's device list, or Apple MDM's).
+        collected.unread[rule.name] = swept.notReadIDs + swept.cutIDs
         if missing > 0 { collected.note(rule, "\(missing) of \(Sweep.devices(total)) not read: \(why.joined(separator: "; "))") }
         if source.cut { collected.note(rule, "covers only the devices listed: \(list.name) stopped at the page limit") }
         if swept.cut > 0 {

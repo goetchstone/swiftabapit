@@ -14,6 +14,8 @@ import JSONAPI
 ///   can't read it, so every other device would be refused too), `transportBreaker` transport failures in a row stop it
 ///   (the network is down, not a device), a failure of the key, the token or the account stops the run, and a switch or a
 ///   cancel stops it at once: no read starts after it, and the reads in flight are cancelled.
+/// - **Which devices** (`Swept.notReadIDs`, `cutIDs`): a snapshot records the ids of the devices a sweep didn't read
+///   (`SnapshotStore.Summary.unread`), so a report can tell "no record" from "not reached".
 /// - **Never silent** (invariant 8): a device not read (its read failed twice, its id can't be sent, the sweep stopped, the
 ///   device list was cut, its own coverage list was cut) makes the sweep a part read, its items with an error, so `latest`
 ///   never takes it for a whole one; the note counts the devices not read and why. In a whole sweep, a device with no item
@@ -212,6 +214,11 @@ public enum Sweep: String, CaseIterable, Sendable {
         var cut = 0
         /// Devices read whose answer was a 404 read as "nothing on record" (the details).
         var notFound = 0
+        /// The ids of the devices not read, in the order asked: those that failed twice, whose id can't be sent, and not asked
+        /// (`failed.count + unsendable + notAsked` of them: the collector's note counts the same devices).
+        var notReadIDs: [String] = []
+        /// The ids of the devices read whose own list the page cap cut (`cut` of them): read in part, so not wholly read.
+        var cutIDs: [String] = []
         /// The failure that stopped the sweep: a 403 or the transport breaker (this sweep), or a failure of the key, the token
         /// or the account (the run).
         var stop: (any Error)?
@@ -232,6 +239,7 @@ public enum Sweep: String, CaseIterable, Sendable {
         // An id that can't go in a path is never sent: the client would call a device Apple has just listed "no such item".
         let sendable = unique.filter(AppleRead.isPathSafe)
         var swept = Swept(unsendable: unique.count - sendable.count)
+        swept.notReadIDs = unique.filter { !AppleRead.isPathSafe($0) }
         var done = swept.unsendable
         answered(done, unique.count)
         var states: [Device] = Array(repeating: .notAsked, count: sendable.count)
@@ -288,15 +296,22 @@ public enum Sweep: String, CaseIterable, Sendable {
                 guard going(), take(index, result, last: true) else { break }
             }
         }
-        for state in states {
+        for (index, state) in states.enumerated() {
             switch state {
             case .read(let answer):
                 swept.items += answer.items
                 swept.read += 1
-                if answer.cut { swept.cut += 1 }
+                if answer.cut {
+                    swept.cut += 1
+                    swept.cutIDs.append(sendable[index])
+                }
                 if answer.notFound { swept.notFound += 1 }
-            case .failed(let code): swept.failed.append(code)
-            case .notAsked: swept.notAsked += 1
+            case .failed(let code):
+                swept.failed.append(code)
+                swept.notReadIDs.append(sendable[index])
+            case .notAsked:
+                swept.notAsked += 1
+                swept.notReadIDs.append(sendable[index])
             }
         }
         return swept
