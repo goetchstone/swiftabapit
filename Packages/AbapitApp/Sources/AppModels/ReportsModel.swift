@@ -725,8 +725,10 @@ public final class ReportsModel {
             } else {
                 if let unread = used.unread {
                     // The snapshot says which devices the sweep missed: those count as not read, every other device of its list was read.
-                    lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). It records which devices it missed: the "
-                                 + "\(unread.ids.count.formatted()) \(unread.ids.count == 1 ? "device" : "devices") it missed count\(unread.ids.count == 1 ? "s" : "") as not read, and the rest are judged"
+                    let n = unread.ids.count
+                    let missed = n == 0 ? "none, so every device in its list was read and is judged"
+                        : "the \(n.formatted()) \(n == 1 ? "device" : "devices") it missed count\(n == 1 ? "s" : "") as not read, and the rest are judged"
+                    lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). It records which devices it missed: \(missed)"
                                  + (sweep == .appleCare ? " (a device with no record is shown as having none)." : "."))
                 } else {
                     lines.append("That snapshot read \(sweep.title) only in part: \(cutWords(part, sweep: sweep)). What it read is used; a device it didn't read counts as not read"

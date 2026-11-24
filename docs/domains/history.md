@@ -501,7 +501,7 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
       list was cut), and every other device of that snapshot's own device list was read, so one with no record is `.read([])`, "no record". The report
       is still marked part; the first summary line says "…; the devices it missed count as not read, and the rest are judged", and the source says
       "It records which devices it missed: the N devices it missed count as not read, and the rest are judged (a device with no record is shown as
-      having none)." An empty list judges every device of the list.
+      having none)." An empty list judges every device of the list, and the source says "It records which devices it missed: none, so every device in its list was read and is judged".
     - **Without it** (an older snapshot, an imported abapit one, `{}`, or a key for another sweep only): today's conservative rule. A device with no
       record can't be told from one the sweep didn't reach, so it is left out of the map and counts as not read, and the words say why: "in a part read a
       device with no record counts as not read: this snapshot doesn't record which devices it missed". A missing key is never "all read".

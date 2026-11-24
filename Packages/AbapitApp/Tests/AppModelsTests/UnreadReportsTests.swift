@@ -95,7 +95,7 @@ struct UnreadReportsTests {
         try await Self.record(world, days: 0, resources, errors: ["applecare": "page cap"], unread: ["applecare": []])
         let warranty = await R.model(world).build(.outOfWarranty, tokens: [:])
         #expect(Self.groups(warranty) == ["D1": "active", "D2": "no-record"], "\(warranty.lines)")
-        #expect(warranty.source.contains { $0.contains("the 0 devices it missed count as not read") }, "\(warranty.source)")
+        #expect(warranty.source.contains { $0.contains("It records which devices it missed: none, so every device in its list was read and is judged") }, "\(warranty.source)")
     }
 
     /// A device the snapshot names as missed is not read even when it has records (its own list was cut): never "active" from a part.
