@@ -11,7 +11,7 @@
   verifier had named the credential door (attack S9); it was handed off and not picked up.
 - **Fix** — `HTTPClient` refuses, as each request leaves, anything that isn't a read (an Apple GET with no body, a Mosyle POST
   with a body and no query) or one of the three logins with no header beyond Mosyle's access token (`HTTPFailure.notARead`).
-  the PR that adds this file
+  https://github.com/goetchstone/swiftabapit/pull/44
 - **Prevention** — `HTTPCoreTests` (`aRequestThatIsNotAReadIsNeverSent`, `aNextLinkIsFollowedOnlyOnAnAppleAPIHost`,
   `aCredentialExchangeGoesOnlyToALogin`, and their controls), `ReadContractTests.everyAppleReadIsAGetWithNoBody`, and `RouteTests.appleReadBuildersNameNoMethodOrBody` (AppleRead.swift
   names no method and no body). Eleven
