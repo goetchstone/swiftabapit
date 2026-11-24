@@ -992,6 +992,8 @@ screenshot run.
 - **When it evaluates**: `load()` reads the history and evaluates; the screen and the Overview's card evaluate again whenever what the rules read
   changes (`inputKey`: each list's state and count, the history's read, the setting, the thresholds). A list still being read is one key however
   many pages have come, so the rules aren't run and recorded again for each page. Recording the same subjects again only moves `last_seen`.
+  While what is shown was judged over less than is held now, the screen and the card say "Judging again: …" (`updating`), never the older
+  counts as current (the first CI picture of the card said "12 of 12 rules skipped" beside a device list already read).
 - **Dismiss and Snooze** (**the operator's Q10**): writes to the local history only (`SnapshotStore.dismiss`, `snooze`), under the finding's
   keeper. A dismissal holds until the finding clears (the store keeps it while the finding is seen, and forgets it 30 days unseen); a snooze holds
   until its date (a week, 30 or 90 days on screen; a date not after now is refused in words). Both are off, with the reason, for a finding not kept
