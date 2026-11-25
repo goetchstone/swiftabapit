@@ -80,24 +80,66 @@ struct SampleFileTests {
         #expect(!dev.contains { $0.groups.contains("lock:NONE") })
     }
 
+    /// A fixed-window rule fits a request only when the request names no window or the rule's own (AppleCare ending: 90 days; a
+    /// quiet service: 30), and the migration rule only where the request is for the past-due ones, which is all its findings are.
+    /// A request for another window, for every date, or for all the deadlines is answered by the report alone.
+    @Test func aRuleIsAcceptedOnlyForTheWindowItHas() throws {
+        let t = Samples.thresholds
+        let ownWindow: [String: (days: Int, words: [String])] = [
+            "rule:applecare_expiring": (min(t.appleCareExpiringDays, 1825), ["quarter"]),
+            "rule:quiet_service": (t.quietServiceDays, ["month"]),
+        ]
+        var checked = 0
+        for sample in try Samples.dev() + Samples.heldOut() where sample.choices.first?.hasPrefix("rule:") == false {
+            let text = sample.text.lowercased()
+            for rule in sample.choices.dropFirst() where rule.hasPrefix("rule:") {
+                checked += 1
+                if let own = ownWindow[rule] {
+                    for match in text.matches(of: /(\d+)\s*days?/) { #expect(Int(match.1) == own.days, Comment(rawValue: "\(sample.id) names \(match.1) days for \(rule)")) }
+                    for word in ["week", "month", "year", "quarter", "summer", "winter"] where text.contains(word) {
+                        #expect(own.words.contains(word), Comment(rawValue: "\(sample.id) names a \(word) for \(rule)"))
+                    }
+                    #expect(!text.contains("each") && !text.contains("first") && !text.contains("end date"), Comment(rawValue: "\(sample.id) asks for every date"))
+                } else if rule == "rule:migration_deadline" {
+                    #expect(sample.groups == ["past-due"] || text.contains("by now"), Comment(rawValue: "\(sample.id): the rule is past-due only"))
+                }
+            }
+        }
+        #expect(checked > 20, "the pairs were found")
+        // The ones the review named stay report-only.
+        let dev = try Samples.dev()
+        for id in ["d-coverage-20", "d-coverage-25", "d-coverage-28", "d-coverage-19", "d-coverage-14", "d-coverage-22", "d-service-health-25"] {
+            #expect(dev.first { $0.id == id }?.choices.count == 1, Comment(rawValue: id))
+        }
+        #expect(dev.first { $0.id == "d-coverage-07" }?.choices == ["report:out-of-warranty"])
+    }
+
     // MARK: the held-out file stays out of everything but the shape test
 
-    func swiftFiles(under path: String) throws -> [URL] {
+    func files(under path: String, ext: String) throws -> [URL] {
         var found: [URL] = []
-        for case let url as URL in FileManager.default.enumerator(at: Fixtures.repoRoot.appending(path: path), includingPropertiesForKeys: nil)!
-        where url.pathExtension == "swift" && !url.path.contains("/.build/") { found.append(url) }
+        let root = Fixtures.repoRoot.appending(path: path)
+        guard FileManager.default.fileExists(atPath: root.path) else { return [] }
+        for case let url as URL in FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)!
+        where url.pathExtension == ext && !url.path.contains("/.build/") { found.append(url) }
         return found
     }
 
-    /// No held-out sentence appears in any Swift file under Packages/ (a test, the rule's word lists, a comment): what a fixer reads
-    /// is never what the held-out run is scored on.
-    @Test func noHeldOutSentenceIsInAnySwiftFile() throws {
+    /// No held-out sentence appears in any Swift file under Packages/ or App/, or any Markdown file under docs/ (a test, the rule's
+    /// word lists, a comment, a runbook): what a fixer reads is never what the held-out run is scored on. A paraphrase of a
+    /// sentence, or one word of it, can't be caught by a scan: the rest is discipline, and the held-out file's isolation.
+    @Test func noHeldOutSentenceIsInAnySourceOrDoc() throws {
         let held = try Samples.heldOut().map { $0.text.lowercased() }
         #expect(held.count > 50)
-        for url in try swiftFiles(under: "Packages") {
-            let text = try String(contentsOf: url, encoding: .utf8).lowercased()
-            for sentence in held { #expect(!text.contains(sentence), Comment(rawValue: "\(url.lastPathComponent) holds a held-out sentence")) }
+        var scanned = 0
+        for (root, ext) in [("Packages", "swift"), ("App", "swift"), ("docs", "md")] {
+            for url in try files(under: root, ext: ext) {
+                let text = try String(contentsOf: url, encoding: .utf8).lowercased()
+                scanned += 1
+                for sentence in held { #expect(!text.contains(sentence), Comment(rawValue: "\(url.lastPathComponent) holds a held-out sentence")) }
+            }
         }
+        #expect(scanned > 100, "the scan found the sources")
     }
 
     /// Only this test names the file: no other source, script or workflow has the path, and only the loader and the flagged run
@@ -106,16 +148,19 @@ struct SampleFileTests {
         let name = "held" + "out.json"
         var roots = ["Packages", "scripts", ".github"]
         roots = roots.filter { FileManager.default.fileExists(atPath: Fixtures.repoRoot.appending(path: $0).path) }
-        var namers: [String] = [], readers: [String] = []
+        let quoted = "\"held" + "out\""
+        var namers: [String] = [], readers: [String] = [], quotedBy: [String] = []
         for root in roots {
             for case let url as URL in FileManager.default.enumerator(at: Fixtures.repoRoot.appending(path: root), includingPropertiesForKeys: [.isRegularFileKey])!
             where !url.path.contains("/.build/") && (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
                 guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
                 if text.contains(name) { namers.append(url.lastPathComponent) }
                 if url.pathExtension == "swift", text.contains("heldOut()") { readers.append(url.lastPathComponent) }
+                if url.pathExtension == "swift", url.lastPathComponent != "Samples.swift", text.contains(quoted) { quotedBy.append(url.lastPathComponent) }
             }
         }
         #expect(namers.isEmpty, Comment(rawValue: "\(namers)"))
+        #expect(quotedBy.isEmpty, Comment(rawValue: "the quoted name is only in the loader: \(quotedBy)"))
         #expect(Set(readers).isSubset(of: ["SampleFileTests.swift", "Samples.swift", "ModelEvaluations.swift"]), Comment(rawValue: "\(readers)"))
     }
 }

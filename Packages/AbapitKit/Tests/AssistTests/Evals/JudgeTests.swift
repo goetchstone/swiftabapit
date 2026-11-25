@@ -36,10 +36,21 @@ struct JudgeTests {
         #expect(Judge.group(either, .choice("report:migration", group: nil), choices: choices) == true)
         #expect(Judge.group(either, .choice("report:migration", group: "status:SUCCESS"), choices: choices) == true)
         #expect(Judge.group(either, .choice("report:migration", group: "status:FAILED"), choices: choices) == false)
-        // A rule answered where a report fits too has no group to judge.
+        // A rule answered where a report fits too is credited the group it stands for, and only when that group is accepted.
         let both = sample("choice", ["report:activation-lock", "rule:activation_lock_user"], ["lock:USER"])
         #expect(Judge.group(both, .choice("rule:activation_lock_user", group: nil), choices: choices) == true)
         #expect(Judge.group(both, .choice("report:activation-lock", group: nil), choices: choices) == false)
+        let other = sample("choice", ["report:activation-lock", "rule:activation_lock_user"], ["unlocked"])
+        #expect(Judge.group(other, .choice("rule:activation_lock_user", group: nil), choices: choices) == false, "the rule is lock:USER, not unlocked")
+        let everyGroup = sample("choice", ["report:service-health", "rule:quiet_service"], [nil])
+        #expect(Judge.group(everyGroup, .choice("rule:quiet_service", group: nil), choices: choices) == false, "a rule is not all of a report's groups")
+        let quiet = sample("choice", ["report:service-health", "rule:quiet_service"], ["quiet"])
+        #expect(Judge.group(quiet, .choice("rule:quiet_service", group: nil), choices: choices) == true)
+        let late = sample("choice", ["report:migration", "rule:migration_deadline"], ["past-due"])
+        #expect(Judge.group(late, .choice("rule:migration_deadline", group: nil), choices: choices) == true)
+        #expect(Judge.group(sample("choice", ["report:migration", "rule:migration_deadline"], ["status:FAILED"]), .choice("rule:migration_deadline", group: nil), choices: choices) == false)
+        // A rule with no group of its own (here one that isn't a report's group) is wrong for the group.
+        #expect(Judge.group(sample("choice", ["report:migration", "rule:firewall_off"], ["past-due"]), .choice("rule:firewall_off", group: nil), choices: choices) == false)
         // A first choice with no groups, and the samples that aren't choices, aren't asked.
         #expect(Judge.group(sample("choice", ["report:coverage"], [nil]), .refuse, choices: choices) == nil)
         #expect(Judge.group(sample("choice", ["attention"], [nil]), .refuse, choices: choices) == nil)

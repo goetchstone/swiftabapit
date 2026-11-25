@@ -58,7 +58,6 @@ struct WordRuleTests {
         let dev = try Samples.dev().filter { $0.expect == "change" }.map(\.text)
         let verbs = Set(dev.flatMap { WordRule.words($0) })
         #expect(WordRule.changeWords.isSubset(of: verbs), "every change word is in a dev change sample")
-        for word in ["release", "reassign", "enroll", "erase", "change", "create"] { #expect(!WordRule.changeWords.contains(word), Comment(rawValue: word)) }
     }
 
     @Test func theStopWordsDoNotCarryAPick() {

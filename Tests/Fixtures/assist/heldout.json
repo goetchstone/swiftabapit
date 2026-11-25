@@ -18,8 +18,7 @@
    "text": "List AppleCare expirations, soonest first",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -42,8 +41,7 @@
    "text": "Upcoming AppleCare end dates please",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -54,8 +52,7 @@
    "text": "Are any of our devices going to lose AppleCare before summer?",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -66,8 +63,7 @@
    "text": "Which laptops need their coverage renewed this year",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -90,8 +86,7 @@
    "text": "check AppleCare end dates for the fleet",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -370,8 +365,7 @@
    "text": "days left until each migration deadline",
    "expect": "choice",
    "choices": [
-    "report:migration",
-    "rule:migration_deadline"
+    "report:migration"
    ],
    "groups": [
     null
@@ -405,8 +399,7 @@
    "text": "which devices have a migration deadline coming up",
    "expect": "choice",
    "choices": [
-    "report:migration",
-    "rule:migration_deadline"
+    "report:migration"
    ],
    "groups": [
     null
@@ -440,8 +433,7 @@
    "text": "check on the migration deadlines",
    "expect": "choice",
    "choices": [
-    "report:migration",
-    "rule:migration_deadline"
+    "report:migration"
    ],
    "groups": [
     null

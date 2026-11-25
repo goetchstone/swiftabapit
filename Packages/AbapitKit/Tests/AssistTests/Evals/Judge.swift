@@ -12,14 +12,21 @@ enum Judge {
         return false
     }
 
-    /// The right group, nil standing for "all". Applies to samples whose first accepted choice has groups. An answer that is
-    /// another accepted choice (a rule where a report fits too) has no group to judge and counts right: the report evaluator
-    /// already judged it.
+    /// The group each rule's findings are, in the report that holds them: a rule answered where a report fits too is credited a
+    /// group only when its own is accepted (the rule *is* that group's rows, over its fixed window). A rule with no entry here
+    /// has no group, so an answer with it is wrong for the group.
+    static let ruleGroup: [String: String] = [
+        "rule:activation_lock_user": "lock:USER", "rule:quiet_service": "quiet", "rule:migration_deadline": "past-due",
+    ]
+
+    /// The right group, nil standing for "all". Applies to samples whose first accepted choice has groups. Another accepted
+    /// choice (a rule) is right only when the group the rule stands for is accepted (`ruleGroup`).
     static func group(_ sample: Sample, _ answer: WordRule.Answer, choices: [Choices.Choice]) -> Bool? {
         guard sample.expect == "choice", let first = sample.first, let want = choices.first(where: { $0.id == first }),
               !want.groups.isEmpty else { return nil }
         guard case .choice(let id, let group) = answer, sample.choices.contains(id) else { return false }
-        return id != first || sample.groups.contains { $0 == group }
+        if id != first { return ruleGroup[id].map { stands in sample.groups.contains { $0 == stands } } ?? false }
+        return sample.groups.contains { $0 == group }
     }
 
     /// A request to change something is told so, and an off-topic one is refused: never a report. Applies to those samples.

@@ -48,5 +48,5 @@ import Testing
 
 /// The recorded dev score of `WordRule` (docs/domains/assist-intents.md, "Choices and the word rule").
 enum WordRuleScore {
-    static let dev = "report 112/188, group 32/81, refusal 24/24"
+    static let dev = "report 108/188, group 30/81, refusal 24/24"
 }

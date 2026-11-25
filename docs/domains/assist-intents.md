@@ -52,15 +52,16 @@ samples to score both; the model's own pick is a later change.
   the operator, not a decision: the in-app Ask uses `WordRule` until the model beats it on the held-out samples.
 - **Samples**: 212 dev and 106 held out (a third of each category), in `Tests/Fixtures/assist/`. About 30 per report and for the
   summary, 6 per Needs-attention rule, and 18 write-shaped and 18 off-topic. Invented; no tenant terms. A sample lists every
-  accepted answer (a report and a rule can both fit), and the accepted groups of its first. Note `lock:NONE` is "locked, with a
+  accepted answer (a report and a rule can both fit, but a fixed-window rule only when the request names no window or the
+  rule's own), and the accepted groups of its first. Note `lock:NONE` is "locked, with a
   lock type of NONE", not "no lock": a request for no lock expects `unlocked`. The held-out file is read by the shape test and
   by the flagged model run only: no fast test scores, prints or quotes it, no Swift file holds one of its sentences, and nobody
   tunes against it.
-- **Evaluators** (`Judge`): report (any accepted answer), group (an accepted group; another accepted choice has none to judge)
+- **Evaluators** (`Judge`): report (any accepted answer), group (an accepted group; a rule answered where a report fits too is credited only the group it stands for, by a small table)
   and refusal (a change request told as one, an off-topic sentence refused), each over only the samples it applies to.
   `PickEvaluation` runs them through Apple's `Evaluations`, which works under plain `swift test` here; the model's picker will
   take the same evaluation.
-- **WordRule on dev (fast run)**: report 112 of 188, group 32 of 81, refusal 24 of 24. Printed as `EVAL wordrule dev` and pinned
+- **WordRule on dev (fast run)**: report 108 of 188, group 30 of 81, refusal 24 of 24. Printed as `EVAL wordrule dev` and pinned
   in `WordRuleEvaluations`; a change to the rule, the list or the dev file moves it, and the pin says so.
 - **The model half** runs only with `ABAPIT_MODEL_EVALS=1`, and never when `CI` or `GITHUB_ACTIONS` is set. It is a placeholder
   until the model picker exists: skipped with that reason, and failing if the flag is set, so it can't pass by doing nothing.

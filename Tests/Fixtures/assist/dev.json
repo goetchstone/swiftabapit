@@ -30,8 +30,7 @@
    "text": "Show me the coverage that expires in the next few months",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -54,8 +53,7 @@
    "text": "How many machines have no AppleCare at all?",
    "expect": "choice",
    "choices": [
-    "report:out-of-warranty",
-    "report:coverage"
+    "report:out-of-warranty"
    ],
    "groups": [
     null
@@ -114,8 +112,7 @@
    "text": "soonest coverage expiry first",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -150,8 +147,7 @@
    "text": "How long until each device's AppleCare is over?",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -162,8 +158,7 @@
    "text": "devices that will be uncovered in six months",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -174,8 +169,7 @@
    "text": "What AppleCare ends in the next 30 days?",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -198,8 +192,7 @@
    "text": "which Apple care plans end before next year",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -210,8 +203,7 @@
    "text": "Report on coverage expiring in the coming weeks",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -222,8 +214,7 @@
    "text": "Any Macs whose AppleCare ends within a year?",
    "expect": "choice",
    "choices": [
-    "report:coverage",
-    "rule:applecare_expiring"
+    "report:coverage"
    ],
    "groups": [
     null
@@ -1040,8 +1031,7 @@
    "text": "any service that's been dead for weeks",
    "expect": "choice",
    "choices": [
-    "report:service-health",
-    "rule:quiet_service"
+    "report:service-health"
    ],
    "groups": [
     "quiet"
@@ -1096,8 +1086,7 @@
    "text": "silent for 60 days, which services",
    "expect": "choice",
    "choices": [
-    "report:service-health",
-    "rule:quiet_service"
+    "report:service-health"
    ],
    "groups": [
     "quiet"
