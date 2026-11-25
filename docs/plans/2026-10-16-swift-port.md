@@ -1514,7 +1514,9 @@ Live checks wait for the operator.
 
 ### Phase 9: Assist, App Intents, Spotlight
 
-**Status:** not started.
+**Status:** the read-only step began 2026-11-24 (operator's Q1, "Six reports + more": the six reports, the Needs-attention
+summary and serial lookup). Merged: `ReportCatalog` lists all six reports with bounded number filters and a `holds` line
+each, and is the only resolver of report tokens (S9.1). No intent, model pick or answer is built yet.
 
 **Owns:** `Assist/`, `App/Intents/`.
 

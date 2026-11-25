@@ -5,7 +5,7 @@ import Testing
 struct ReportCatalogTests {
     @Test func everyIdHasOneEntryWithTitleAndInputs() {
         #expect(ReportCatalog.entries.map(\.id) == ReportCatalog.ID.allCases)
-        #expect(ReportCatalog.ID.allCases.map(\.rawValue) == ["activation-lock", "migration", "service-health", "out-of-warranty"])
+        #expect(ReportCatalog.ID.allCases.map(\.rawValue) == ["coverage", "fleet-age", "activation-lock", "migration", "service-health", "out-of-warranty"])
         for entry in ReportCatalog.entries {
             #expect(!entry.title.isEmpty && !entry.summary.isEmpty && !entry.inputs.isEmpty && !entry.csvColumns.isEmpty, "\(entry.id)")
         }
@@ -79,5 +79,69 @@ struct ReportCatalogTests {
         for columns in [ExportPolicy.activationLockReport, ExportPolicy.migrationReport, ExportPolicy.serviceHealth, ExportPolicy.warrantyReport] {
             #expect(Set(columns.names).count == columns.names.count)
         }
+    }
+
+    // MARK: the six, bounds and the holds lines (S9.1)
+
+    /// Every token the Reports screen makes today (its steppers' defaults and bounds, and each group the picker lists) resolves to
+    /// the same canonical tokens it did when the model resolved coverage and fleet age itself.
+    @Test func everyTokenTheScreenMakesResolvesAsItDidBefore() {
+        var table: [(ReportCatalog.ID, [String: String], [String: String])] = [
+            (.coverage, ["days": "90"], ["days": "90"]), (.coverage, ["days": "1"], ["days": "1"]), (.coverage, ["days": "1825"], ["days": "1825"]),
+            (.coverage, ["days": " 45 "], ["days": "45"]),
+            (.fleetAge, ["years": "4"], ["years": "4"]), (.fleetAge, ["years": "1"], ["years": "1"]), (.fleetAge, ["years": "10"], ["years": "10"]),
+            (.serviceHealth, ["days": "30"], ["days": "30"]), (.serviceHealth, ["days": "1825"], ["days": "1825"]),
+            (.coverage, [:], [:]), (.fleetAge, [:], [:]), (.activationLock, [:], [:]),
+        ]
+        for id in [ReportCatalog.ID.activationLock, .migration, .serviceHealth, .outOfWarranty] {
+            for group in ReportCatalog.entry(id).filters.first(where: { $0.name == "group" })!.values { table.append((id, ["group": group], ["group": group])) }
+        }
+        table.append((.serviceHealth, ["group": "quiet", "days": "7"], ["group": "quiet", "days": "7"]))
+        for (id, tokens, expected) in table {
+            let result = ReportCatalog.resolve(id, tokens: tokens)
+            #expect(result.tokens == expected && result.problems.isEmpty, "\(id) \(tokens): \(result)")
+        }
+    }
+
+    @Test func aProblemIsSaidInWordsForEveryReport() {
+        for entry in ReportCatalog.entries {
+            let unknown = ReportCatalog.resolve(entry.id, tokens: ["colour": "red"])
+            #expect(unknown.problems == ["\(entry.title) has no filter named colour"] && unknown.tokens.isEmpty, "\(entry.id)")
+            for filter in entry.filters {
+                let twice = ReportCatalog.resolve(entry.id, tokens: [filter.name: filter.bounds.map { String($0.lowerBound) } ?? filter.values[0], filter.name.uppercased(): filter.bounds.map { String($0.lowerBound) } ?? filter.values[0]])
+                #expect(twice.problems.count == 1 && twice.problems.first?.contains("given twice") == true, "\(entry.id) \(filter.name)")
+                if let bounds = filter.bounds {
+                    let words = "\(filter.name) must be a whole number of \(filter.name) from \(bounds.lowerBound) to \(bounds.upperBound)"
+                    for bad in ["soon", "", "1.5", "0x10", String(bounds.lowerBound - 1), String(bounds.upperBound + 1), "-3", "99999999999999999999"] {
+                        let result = ReportCatalog.resolve(entry.id, tokens: [filter.name: bad])
+                        #expect(result.problems == [words] && result.tokens[filter.name] == nil, "\(entry.id) \(filter.name)=\(bad): \(result)")
+                    }
+                    for good in [bounds.lowerBound, bounds.upperBound] { #expect(ReportCatalog.resolve(entry.id, tokens: [filter.name: String(good)]).tokens == [filter.name: String(good)]) }
+                }
+            }
+        }
+    }
+
+    @Test func theBoundsAreTheReportTypes() throws {
+        func bounds(_ id: ReportCatalog.ID, _ name: String) throws -> ClosedRange<Int> { try #require(ReportCatalog.entry(id).filters.first { $0.name == name }?.bounds) }
+        #expect(try bounds(.coverage, "days") == 1...1825 && CoverageReport.maximumDays == 1825)
+        #expect(try bounds(.fleetAge, "years") == 1...10 && FleetAgeReport.maximumYears == 10)
+        #expect(try bounds(.serviceHealth, "days") == 1...1825)
+        #expect(ReportCatalog.entries.flatMap(\.filters).filter(\.isNumber).count == 3)
+    }
+
+    @Test func holdsLinesAreBuiltFromTheGroupValuesAndHoldNoListData() throws {
+        #expect(ReportCatalog.entry(.coverage).holds == "AppleCare coverage ending: days is a whole number from 1 to 1825.")
+        #expect(ReportCatalog.entry(.fleetAge).holds == "Fleet age: years is a whole number from 1 to 10.")
+        for entry in ReportCatalog.entries {
+            #expect(entry.holds.hasPrefix(entry.title + ": "), "\(entry.id)")
+            for filter in entry.filters where filter.bounds == nil { for value in filter.values { #expect(entry.holds.contains(value), "\(entry.id) \(value)") } }
+        }
+        // Canary list data, as the report types' own fixtures carry: none of it can be in a line.
+        let canaries = (ActivationLockReportTests.report.rows.map(\.token) + WarrantyReportTests.report.rows.map(\.group))
+        let allowed = Set(ReportCatalog.entries.flatMap(\.filters).flatMap(\.values))
+        for token in canaries { #expect(allowed.contains(token), "\(token) is a group value, not list data") }
+        let words = ReportCatalog.entries.map(\.holds).joined(separator: " ")
+        for canary in ["serial", "C02", "iPad", "MacBook"] { #expect(!words.contains(canary), Comment(rawValue: canary)) }
     }
 }

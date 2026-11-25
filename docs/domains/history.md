@@ -479,8 +479,8 @@ own layout; `ABAPIT_PANE=changes` opens it for the screenshot run (`scripts/scre
 Reports (`App/Screens/ReportsView.swift` over `AppModels/ReportsModel.swift`, `ScreenModels.reports`): the six reports of the active
 Apple org in a list, the chosen one's filters, source, summary counts, rows and CSV beside it. Everything it says comes from
 `ReportsModel`; the report types are Reports' own (`CoverageReport`, `FleetAgeReport`, `ActivationLockReport`, `MigrationReport`,
-`ServiceHealth`, `WarrantyReport`). Coverage and fleet age aren't in `ReportCatalog`; they are titled "AppleCare coverage ending" and
-"Fleet age" and their one number each is resolved by the model, with the catalog's rules.
+`ServiceHealth`, `WarrantyReport`). Coverage and fleet age are catalog entries too ("AppleCare coverage ending", "Fleet age"); the catalog resolves
+every report's tokens, their one number each included.
 
 - **Where each report's data comes from** (the coordinating session's rule).
   - **The sweep reports** (Coverage, Out of warranty, Activation Lock, and Fleet age's coverage column) read `SnapshotStore.latest` for
@@ -548,7 +548,7 @@ Apple org in a list, the chosen one's filters, source, summary counts, rows and 
     a sweep report asks Apple for nothing.
 - **Filters** are the catalog's `group` and `days` (service health's quiet days), coverage's `days` (1...1825) and fleet age's `years`
   (1...10): each is a token, resolved by `ReportsModel.build(_:tokens:)`, the one function a later Siri intent calls (plan §5; "build report
-  X with tokens T from the active org's data"; intents are not built). `ReportCatalog.resolve` normalizes the catalog's values and its
+  X with tokens T from the active org's data"; intents are not built). `ReportCatalog.resolve` (the only resolver) normalizes the catalog's values and its
   `problems` are shown in words; a number out of bounds (service health's days too: 1...1825, the executor's bound) is a problem, never
   clamped, and **a report with a problem isn't run** ("The filters weren't understood, so the report wasn't run."). The screen's controls
   (steppers, a group picker) are tokens through the same function. **A missing token takes the report's default** (coverage 90 days, fleet age 4

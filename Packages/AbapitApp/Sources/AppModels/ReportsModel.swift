@@ -38,32 +38,12 @@ public final class ReportsModel {
 
         public var id: Self { self }
 
-        /// The catalog's entry, for the four it lists.
-        public var catalogID: ReportCatalog.ID? {
-            switch self {
-            case .coverage, .fleetAge: nil
-            case .activationLock: .activationLock
-            case .migration: .migration
-            case .serviceHealth: .serviceHealth
-            case .outOfWarranty: .outOfWarranty
-            }
-        }
+        /// The catalog's entry: the one list of every report, its filters and its words.
+        public var catalogID: ReportCatalog.ID { ReportCatalog.ID(rawValue: rawValue)! }
 
-        public var title: String {
-            switch self {
-            case .coverage: "AppleCare coverage ending"
-            case .fleetAge: "Fleet age"
-            default: ReportCatalog.entry(catalogID!).title
-            }
-        }
+        public var title: String { ReportCatalog.entry(catalogID).title }
 
-        public var summary: String {
-            switch self {
-            case .coverage: "Active AppleCare coverage that ends within a number of days, soonest first, and how many devices have none."
-            case .fleetAge: "Devices by age from their order date, and the refresh candidates: the devices a number of years old or more."
-            default: ReportCatalog.entry(catalogID!).summary
-            }
-        }
+        public var summary: String { ReportCatalog.entry(catalogID).summary }
 
         /// The Apple reads the report makes live or reads from a snapshot of: what a School org can't read is refused in words.
         public var reads: [AppleSection] {
@@ -324,7 +304,7 @@ public final class ReportsModel {
             group = nil
             return
         }
-        guard let id = report.catalogID, ReportCatalog.entry(id).filters.contains(where: { $0.name == "group" && $0.values.contains(key) }) else { return }
+        guard ReportCatalog.entry(report.catalogID).filters.contains(where: { $0.name == "group" && $0.values.contains(key) }) else { return }
         group = key
     }
 
@@ -493,15 +473,16 @@ public final class ReportsModel {
     // MARK: building a report
 
     /// Builds `report` with `tokens` from the active org's data: the one function the screen and, later, a Siri intent call
-    /// (plan §5). Tokens are resolved by the catalog (`ReportCatalog.resolve`) for the four it lists, and by the same rules for
-    /// coverage (`days`, 1...1825) and fleet age (`years`, 1...10); a token that doesn't resolve is a problem in words and the
+    /// (plan §5). Tokens are resolved by the catalog alone (`ReportCatalog.resolve`: coverage's `days` is 1...1825,
+    /// fleet age's `years` 1...10); a token that doesn't resolve is a problem in words and the
     /// report isn't run. Never reads Apple or starts a sweep: it builds over what the history and the Devices model hold now.
     /// A missing token is the report's default (`defaultCoverageDays`, `defaultFleetYears`, `defaultQuietDays`), never the screen's value;
     /// the screen passes its own explicitly (`tokens`). **A live report built before the Devices model has read says "Not read from Apple
     /// yet"**: an intent will need a way to await that read (not built; `build` starts none).
     public func build(_ report: Report, tokens: [String: String]) -> Output {
         builds += 1
-        let (resolved, problems) = Self.resolve(report, tokens)
+        let resolution = ReportCatalog.resolve(report.catalogID, tokens: tokens)
+        let (resolved, problems) = (resolution.tokens, resolution.problems)
         let title = report.title
         func nothing(_ why: String, source: [String] = [], filters: [String] = []) -> Output {
             Output(report: report, title: title, filters: filters, source: source, problems: problems, judgesNothing: why, summary: [], groups: [], lines: [],
@@ -655,43 +636,6 @@ public final class ReportsModel {
         return Output(report: report, title: report.title, filters: filters, source: source, problems: [], judgesNothing: nil, summary: summary, groups: groups,
                       lines: shown, matching: all.count, capNote: cap, estimateNote: report == .outOfWarranty ? WarrantyReport.assumption : nil,
                       exportNote: note, fileBase: base, built: built)
-    }
-
-    // MARK: tokens
-
-    /// The tokens as the report takes them, and what's wrong with the rest. The catalog resolves the four it lists; coverage and
-    /// fleet age have one number each, held to the report type's bounds. A number out of bounds is a problem, never clamped.
-    nonisolated static func resolve(_ report: Report, _ tokens: [String: String]) -> (tokens: [String: String], problems: [String]) {
-        if let id = report.catalogID {
-            let resolution = ReportCatalog.resolve(id, tokens: tokens)
-            var resolved = resolution.tokens, problems = resolution.problems
-            if let days = resolved["days"].flatMap(Int.init), !daysRange.contains(days) {
-                problems.append("days must be a whole number of days from \(daysRange.lowerBound) to \(daysRange.upperBound)")
-                resolved["days"] = nil
-            }
-            return (resolved, problems)
-        }
-        let name = report == .coverage ? "days" : "years"
-        let range = report == .coverage ? daysRange : yearsRange
-        var resolved: [String: String] = [:], problems: [String] = []
-        var seen: Set<String> = []
-        for (rawName, rawValue) in tokens.sorted(by: { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }) {
-            let key = rawName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard key == name else {
-                problems.append("\(report.title) has no filter named \(rawName)")
-                continue
-            }
-            guard seen.insert(key).inserted else {
-                problems.append("\(report.title) filter \(name) is given twice")
-                continue
-            }
-            if let number = Int(rawValue.trimmingCharacters(in: .whitespacesAndNewlines)), range.contains(number) {
-                resolved[name] = String(number)
-            } else {
-                problems.append("\(name) must be a whole number of \(name) from \(range.lowerBound) to \(range.upperBound)")
-            }
-        }
-        return (resolved, problems)
     }
 
     /// Why a School org can't run a report: a read it needs that Apple School Manager's API doesn't have, in words. Nil when

@@ -412,7 +412,7 @@ struct ReportsTests {
         for (report, tokens, problem) in [
             (ReportsModel.Report.activationLock, ["group": "lock:bogus"], "lock:bogus isn't a group this report accepts"),
             (.activationLock, ["colour": "red"], "Activation Lock has no filter named colour"),
-            (.serviceHealth, ["days": "soon"], "days must be a whole number of days"),
+            (.serviceHealth, ["days": "soon"], "days must be a whole number of days from 1 to 1825"),
             (.serviceHealth, ["days": "5000"], "days must be a whole number of days from 1 to 1825"),
             (.coverage, ["days": "0"], "days must be a whole number of days from 1 to 1825"),
             (.coverage, ["days": "1826"], "days must be a whole number of days from 1 to 1825"),
