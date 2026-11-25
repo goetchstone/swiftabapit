@@ -57,9 +57,12 @@ struct World {
     static func mosyleProfile(_ id: String = "m") -> OrgProfile { OrgProfile(id: id, name: "Mosyle \(id)", provider: .mosyle) }
 
     /// `mosyle`: org `m`, a Mosyle Business org whose secrets are in the Vault, moved into the client of the first org (`a`).
+    /// `appleSleep`: the Apple clients' retry waits (a 429's `Retry-After`, a transport failure's backoff); by default they return
+    /// at once.
     static func make(devices: [String: Int] = ["a": 3, "b": 2], rates: [String: Double] = [:], pageCap: Int = AppleClient.defaultPageCap,
                      profiles: [OrgProfile]? = nil, mosyle: Bool = false, mosylePageCap: Int = MosyleClient.defaultPageCap,
-                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil, folder: URL? = nil) async throws -> World {
+                     history: (@MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>)? = nil, folder: URL? = nil,
+                     appleSleep: @escaping @Sendable (Duration) async throws -> Void = { _ in }) async throws -> World {
         // One store, opened once: the orgs ask again only after a failure.
         let opened = Self.history()
         let history = history ?? { opened }
@@ -101,7 +104,7 @@ struct World {
             return AppleClient(account: account, vault: vault, transport: routes[account.org] ?? routes["a"]!,
                                limiter: RateLimiter(readsPerMinute: rate ?? 600, now: { stall.pass(clientID); return clock.now },
                                                     sleep: { clock.advance($0) }),
-                               pageCap: pageCap, sleep: { _ in })
+                               pageCap: pageCap, sleep: appleSleep)
         } makeMosyleClient: { org in
             let clock = ManualClock()
             return MosyleClient(org: org, vault: vault, transport: mosyleStub,
