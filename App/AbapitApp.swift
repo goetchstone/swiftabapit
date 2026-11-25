@@ -20,7 +20,14 @@ enum Launch {
 
 struct AbapitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var services = AppServices.make()
+    @State private var services: AppServices
+
+    init() {
+        let services = AppServices.make()
+        _services = State(initialValue: services)
+        // The intents reach the screen models' answers only (invariant 9).
+        services.registerIntents()
+    }
 
     var body: some Scene {
         WindowGroup("abapit") {

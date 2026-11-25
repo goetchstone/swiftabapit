@@ -131,9 +131,64 @@ release_code() {  # binary, what to call it, what a hit means beyond itself
 release_code "$copy/abapit" "the stripped binary" ""
 release_code "$BINARY" "the binary" " (only its symbol table shows this: an archive build strips it and would ship the code unseen)"
 
+# App Intents (Phase 9, adapted from SwiftGamGui scripts/check_app.sh @ e8560f2): the built metadata is what Siri and Shortcuts
+# read, and Xcode checks its rules only while it builds, so it is read here.
+# - exactly these intents, each read-only (`App/Intents/`; SourceScanTests' `noIntentReachesAWrite` holds the source): a new
+#   intent is a reviewed change to this list. Each runs in the background only (supportedModes 1: never opens a window) and asks
+#   for the Mac's own authentication first (authenticationPolicy 2, requiresLocalDeviceAuthentication, set in the code);
+# - every phrase names the app, and every phrase is in the phrase catalog the build ships (`en.lproj/AppShortcuts.strings`, from
+#   App/AppShortcuts.xcstrings): without it Siri never matched a phrase by voice (SwiftGamGui failure-log 2026-10-10);
+# - no app entity at all, so none is indexed for Spotlight (the operator, 2026-11-24, Q2 "Out for now": no device serial or name in
+#   the system index), and the binary imports no Spotlight index.
+INTENTS="$APP/Contents/Resources/Metadata.appintents/extract.actionsdata"
+PHRASES="$APP/Contents/Resources/en.lproj/AppShortcuts.strings"
+[ -f "$INTENTS" ] && [ ! -L "$INTENTS" ] || fail "no App Intents metadata"
+[ -f "$PHRASES" ] && [ ! -L "$PHRASES" ] || fail "no App Shortcuts phrase catalog (App/AppShortcuts.xcstrings)"
+catalog="$(plutil -convert json -o - "$PHRASES" 2>/dev/null)" || fail "the phrase catalog can't be read"
+intents_checker='
+import json, sys
+actions = {"RunReportIntent", "NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent", "CoverageEndingIntent",
+           "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent"}
+with open(sys.argv[1], encoding="utf-8") as f:
+    text = f.read()
+d = json.loads(text)
+catalog = json.load(sys.stdin)
+got = d.get("actions", {})
+if set(got) != actions:
+    sys.exit(f"the intents are {sorted(got)}; expected exactly {sorted(actions)}")
+for name, action in sorted(got.items()):
+    modes, policy = action.get("supportedModes"), action.get("authenticationPolicy")
+    if type(modes) is not int or modes != 1:
+        sys.exit(f"{name} runs in modes {modes!r}, not the background alone (1)")
+    if type(policy) is not int or policy != 2 or action.get("isAuthPolExplicit") is not True:
+        sys.exit(f"{name} asks authentication policy {policy!r}, not requiresLocalDeviceAuthentication (2) set in the code")
+    if action.get("openAppWhenRun") is not False:
+        sys.exit(f"{name} opens the app when run")
+phrases = [p.get("key", "") if isinstance(p, dict) else str(p)
+           for s in d.get("autoShortcuts", []) for p in s.get("phraseTemplates", [])]
+if not phrases:
+    sys.exit("no Siri phrases")
+unnamed = [p for p in phrases if "${applicationName}" not in p]
+if unnamed:
+    sys.exit(f"phrases without the app name: {unnamed}")
+missing = [p for p in phrases if catalog.get(p) != p]
+if missing:
+    sys.exit(f"phrases not in the built phrase catalog: {missing}")
+shortcuts = {s.get("actionIdentifier") for s in d.get("autoShortcuts", [])}
+if not shortcuts <= actions or not {"NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent"} <= shortcuts:
+    sys.exit(f"the App Shortcuts are for {sorted(map(str, shortcuts))}")
+if d.get("entities") or d.get("assistantEntities") or d.get("queries") or "Indexed" in text or "indexingKey" in text:
+    sys.exit("the metadata holds an app entity, a query or an indexed type (Spotlight is out: the operator, 2026-11-24, Q2)")
+'
+python3 -I -c "$intents_checker" "$INTENTS" <<<"$catalog" || fail "App Intents metadata (above)"
+imports="$(nm -u "$BINARY" 2>/dev/null)" || fail "can't read the binary's imported symbols"
+if hits="$(grep -E 'CSSearchableIndex|CSSearchableItem|IndexedEntity' <<<"$imports")"; then
+  fail "the binary imports a Spotlight index (Spotlight is out: the operator, 2026-11-24, Q2): $(tr '\n' ' ' <<<"$hits")"
+fi
+
 [ "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "$BUNDLE_ID" ] || fail "bundle identifier"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "$(basename "$APP" .app)" ] \
   || fail "the display name isn't the bundle's name, so macOS shows the file name"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "abapit" ] || fail "display name"
 [ "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "27.0" ] || fail "minimum macOS"
-echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or host routes, or debug code, stripped or not)"
+echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or host routes, or debug code, stripped or not; read-only background intents, every phrase named and in the catalog, no Spotlight index)"

@@ -1,3 +1,4 @@
+import AppIntents
 import AppleBusiness
 import AppModels
 import Foundation
@@ -31,6 +32,14 @@ final class AppServices {
         self.orgs = orgs
         screens = ScreenModels(orgs: orgs)
         self.isDemo = isDemo
+    }
+
+    /// What the App Intents reach (`App/Intents/`): the screen models, whose `Answers` each intent calls and nothing else, never a
+    /// write (SourceScanTests' `noIntentReachesAWrite`). As SwiftGamGui's `SiriIntents.register`; once, at launch, before an intent
+    /// can run.
+    func registerIntents() {
+        let screens = screens
+        AppDependencyManager.shared.add(dependency: screens)
     }
 
     /// The folder the app keeps its files in: inside the sandbox container. Injected everywhere, never read
