@@ -24,18 +24,19 @@ public enum WordRule {
         "have", "has", "had", "there", "them", "than", "more", "not", "but", "out", "up", "no", "by", "if", "so",
     ]
 
-    /// A sentence that starts or contains one of these asks for a change, not a read.
+    /// A sentence that has one of these asks for a change, not a read. The list is the verbs of the dev samples only (the
+    /// coordinating session's decision, 2026-11-25), so the held-out requests to change something use verbs it hasn't seen.
     static let changeWords: Set<String> = [
-        "assign", "unassign", "reassign", "move", "release", "delete", "remove", "wipe", "erase", "enroll", "unenroll", "rename",
-        "change", "disable", "enable", "install", "reset", "restart", "create",
+        "assign", "unassign", "move", "delete", "remove", "wipe", "rename", "disable", "install", "reset", "restart",
     ]
 
-    /// Lowercased whole words, split on anything that isn't a letter or digit, a plural's trailing s dropped, the ignored dropped.
+    /// Lowercased whole words, split on anything that isn't a letter or digit, a plural's trailing s dropped, the ignored and the
+    /// one-letter ones dropped (the s of "what's" is not a word that "org's" has).
     static func words(_ text: String) -> [String] {
         text.lowercased().split { !($0.isLetter || $0.isNumber) }.map { word -> String in
             let word = String(word)
             return word.count > 3 && word.hasSuffix("s") && !word.hasSuffix("ss") ? String(word.dropLast()) : word
-        }.filter { !ignored.contains($0) }
+        }.filter { $0.count >= 2 && !ignored.contains($0) }
     }
 
     public static func answer(_ sentence: String, choices: [Choices.Choice]) -> Answer {

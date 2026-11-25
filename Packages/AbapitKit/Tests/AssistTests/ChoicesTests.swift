@@ -112,4 +112,23 @@ struct ChoicesTests {
             for canary in canaries { #expect(!(choice.label + (choice.holds ?? "")).contains(canary), Comment(rawValue: "\(choice.id) \(canary)")) }
         }
     }
+
+    /// After a whole demo fleet is made (its serials, order numbers and service names), no label or holds line of any scope holds
+    /// one of them: the list is built from code's words, and the fleet is there to show it.
+    @Test func noFixtureSerialOrNameReachesALabel() {
+        let fleet = DemoFleet.make()
+        let text = String(describing: fleet)
+        // The demo's serials, order numbers and MAC addresses, found in the fleet's own dump so the test can't go stale.
+        let found = text.matches(of: /DEMO[A-Z0-9]{4,}/).map { String($0.output) }
+        #expect(Set(found).count >= 84, "the fleet's identifiers were found: \(Set(found).count)")
+        let names = ["Jamf Pro (old)", "Apple Configurator", "Mosyle Business"]
+        for scope in [Choices.Scope.business, .school] {
+            for mosyle in [true, false] {
+                for choice in Choices.build(scope: scope, hasMosyle: mosyle, thresholds: Self.thresholds) {
+                    let words = choice.label + " " + (choice.holds ?? "") + " " + choice.groups.joined(separator: " ")
+                    for token in Array(Set(found)) + names { #expect(!words.contains(token), Comment(rawValue: "\(choice.id) \(token)")) }
+                }
+            }
+        }
+    }
 }

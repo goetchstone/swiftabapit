@@ -42,9 +42,23 @@ struct WordRuleTests {
 
     @Test func aChangeWordIsAChangeRequestAndNothingElseIsRefused() {
         #expect(answer("Assign these Macs to the Sales service") == .changeRequest)
-        #expect(answer("release the devices that are out of warranty") == .changeRequest)
-        #expect(answer("tell me a joke") == .refuse)
+        #expect(answer("wipe every device with an expired lock") == .changeRequest)
+        #expect(answer("write me a poem about autumn") == .refuse)
         #expect(answer("") == .refuse)
+    }
+
+    @Test func aOneLetterWordIsNotAWord() {
+        #expect(WordRule.words("org's what's x y") == ["org"])
+        // The s of "what's" used to match the s of "org's" in a rule's title.
+        #expect(answer("What's the weather like tomorrow?") == .refuse)
+        #expect(answer("what's pending for me") == .refuse)
+    }
+
+    @Test func theChangeWordsAreTheDevVerbsOnly() throws {
+        let dev = try Samples.dev().filter { $0.expect == "change" }.map(\.text)
+        let verbs = Set(dev.flatMap { WordRule.words($0) })
+        #expect(WordRule.changeWords.isSubset(of: verbs), "every change word is in a dev change sample")
+        for word in ["release", "reassign", "enroll", "erase", "change", "create"] { #expect(!WordRule.changeWords.contains(word), Comment(rawValue: word)) }
     }
 
     @Test func theStopWordsDoNotCarryAPick() {

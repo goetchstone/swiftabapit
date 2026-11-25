@@ -9,7 +9,7 @@ struct PickCase: Codable, Sendable {
     var answered = ""
 }
 
-/// Apple's `Evaluations` over a picker: any `(sentence) -> Answer`, so `WordRule` runs it in the fast run and S9.6's model picker
+/// Apple's `Evaluations` over a picker: any `(sentence) -> Answer`, so `WordRule` runs it in the fast run and the model picker
 /// runs the same evaluation behind `ABAPIT_MODEL_EVALS=1`. Three code evaluators, one metric each (`Evaluators`); a sample a
 /// metric doesn't apply to isn't in that metric's dataset.
 struct PickEvaluation: Evaluation {

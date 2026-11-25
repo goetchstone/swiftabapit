@@ -2,21 +2,24 @@ import Foundation
 @testable import Assist
 
 /// The code evaluators (shared lessons: code first): each judges one thing about an answer and returns nil when the sample
-/// doesn't ask about it, so a score counts only the samples it applies to. Written once, so the model's run (S9.6) is judged
+/// doesn't ask about it, so a score counts only the samples it applies to. Written once, so the model's run, when there is one, is judged
 /// by the same code as `WordRule`.
 enum Judge {
-    /// The report (or summary, or rule) is the expected one. Applies to samples that expect a choice.
+    /// The report (or summary, or rule) is an accepted one. Applies to samples that expect a choice.
     static func report(_ sample: Sample, _ answer: WordRule.Answer) -> Bool? {
         guard sample.expect == "choice" else { return nil }
-        if case .choice(let id, _) = answer { return id == sample.choice }
+        if case .choice(let id, _) = answer { return sample.choices.contains(id) }
         return false
     }
 
-    /// The right choice and the right group, nil standing for "all". Applies to samples whose choice has groups.
+    /// The right group, nil standing for "all". Applies to samples whose first accepted choice has groups. An answer that is
+    /// another accepted choice (a rule where a report fits too) has no group to judge and counts right: the report evaluator
+    /// already judged it.
     static func group(_ sample: Sample, _ answer: WordRule.Answer, choices: [Choices.Choice]) -> Bool? {
-        guard sample.expect == "choice", let want = choices.first(where: { $0.id == sample.choice }), !want.groups.isEmpty else { return nil }
-        if case .choice(let id, let group) = answer { return id == sample.choice && group == sample.group }
-        return false
+        guard sample.expect == "choice", let first = sample.first, let want = choices.first(where: { $0.id == first }),
+              !want.groups.isEmpty else { return nil }
+        guard case .choice(let id, let group) = answer, sample.choices.contains(id) else { return false }
+        return id != first || sample.groups.contains { $0 == group }
     }
 
     /// A request to change something is told so, and an off-topic one is refused: never a report. Applies to those samples.

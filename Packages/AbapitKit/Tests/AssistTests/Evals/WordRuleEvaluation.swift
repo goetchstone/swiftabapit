@@ -6,7 +6,7 @@ import Testing
 /// `WordRule` scored on the dev samples in the fast run: through Apple's `Evaluations` (it runs under plain `swift test`; no
 /// model is called), and again by `Judge.score` so the two agree. The numbers are printed on a line starting `EVAL wordrule dev`
 /// and pinned below: a change to the rule, the choices or the dev samples moves them, and the pin says so. Held out is not
-/// scored here (S9.8 runs it beside the model).
+/// scored here (a later run scores it beside the model's).
 @Suite(.serialized) struct WordRuleEvaluations {
     static let choices = Samples.choices
 
@@ -48,5 +48,5 @@ import Testing
 
 /// The recorded dev score of `WordRule` (docs/domains/assist-intents.md, "Choices and the word rule").
 enum WordRuleScore {
-    static let dev = "report 63/140, group 22/80, refusal 23/24"
+    static let dev = "report 112/188, group 32/81, refusal 24/24"
 }
