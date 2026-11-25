@@ -55,6 +55,11 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   holds is `HTTPClient`'s check of each request as it leaves ([http-core.md](http-core.md)).
 - **No second door.** Nothing starts a program (`Process`, `posix_spawn`, `execv…`, an AppleScript or a user
   script task): a child inherits the network entitlement and fetches past the transport.
+- **No fetch around the transport.** Nothing names `Data(contentsOf:)` and its kin, `AsyncImage`,
+  `NSImage(byReferencing:)` or `Stream.getStreamsToHost`, and nothing hands a URL to another app (`NSWorkspace`,
+  `openURL`, `OpenURLIntent`, SwiftUI's `Link`), in the package or the app. The phase that opens an activity's
+  `downloadUrl` in the browser names the one file that may, with an https-only check and its test, as a reviewed change
+  to `RouteTests.nothingFetchesOutsideTheTransport`.
 - **The Release gate's code checks** run on a stripped copy (`strip -D`, as an archive does) and then on the
   binary as built. Both must be clean. A hit only the second pass finds is in the symbol table alone: the gate
   says so, because an archive would ship that code unseen. It refuses the reads by their selectors and imports:
@@ -117,6 +122,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   store was picked unnamed: `Vault(store: .init(), now: …)` resolves to the only initializer that takes `now:`.
   Compiled out, that is a Release compile error, and the gate refuses its name. A package test needs a debug
   build (`swift test`, not `swift test -c release`).
+- **A needle matches across whitespace, in a string too.** The words `open URL` in a button's title read as `openURL`
+  and fail the fetch scan: word the title another way.
 
 ## Testing / verification status
 - Offline: `scripts/test.sh` (all four suites). Gate changes are proven by building mutant Release apps from
@@ -126,7 +133,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   (no Release code imports TestSupport, `PackageGraphTests`), and CI's unstripped Release build would show it.
   A request initializer taken unapplied through a generic type whose last argument isn't the request
   (`Box<ReadRequest, Int>.Inner.init`, then called without labels): `ReadRequest>.` and `].` catch the rest.
-  LaunchServices (`NSWorkspace`), which opens a URL in the browser by design. `sed …q` and `awk … exit` after a
+  A Foundation, AppKit or SwiftUI call that fetches or opens a URL and is on neither `RouteTests.fetches` nor `linkName`:
+  the lists hold the routes found so far (failure-log 2026-11-18). `sed …q` and `awk … exit` after a
   pipe, which no script uses.
 - On a new Xcode, re-run the environment-read mutants (an `ABAPIT_DEMO` read, a `getenv`, a `CommandLine`
   read, a `UserDefaults` read, `@AppStorage`). The check reads ObjC selector names and C imports, which a

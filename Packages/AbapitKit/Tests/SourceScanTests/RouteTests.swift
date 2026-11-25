@@ -48,7 +48,14 @@ struct RouteTests {
     static let requestExtensions = ["extensionReadRequest", "extensionWire.ReadRequest", "extensionAuthRequest", "extensionWire.AuthRequest"]
     /// The Keychain's item, key and access-control calls, and the legacy `SecKeychain…` family.
     static let keychain = ["SecItem", "SecKeyCreate", "kSecClass", "SecAccessControl", "SecKeychain"]
-    static let fetches = ["contentsOf:", "NSData(", "dataTask(", "downloadTask(", "uploadTask(", "WKWebView", "CFReadStream"]
+    /// What reads or opens a URL without naming `URLSession`: Foundation's and the session's fetches, and (failure-log
+    /// 2026-11-18) SwiftUI's `AsyncImage`, AppKit's `NSImage(byReferencing:)`, Foundation's `Stream.getStreamsToHost`, and
+    /// what hands a URL to another app: `NSWorkspace`, SwiftUI's `openURL` (its `OpenURLAction`, App Intents' `OpenURLIntent`).
+    static let fetches = ["contentsOf:", "NSData(", "dataTask(", "downloadTask(", "uploadTask(", "WKWebView", "CFReadStream",
+                          "AsyncImage", "byReferencing:", "getStreamsToHost", "NSWorkspace", "openURL", "OpenURL"]
+    /// SwiftUI's `Link`, which opens its destination in another app: a whole name, since `NavigationLink` and
+    /// `ShareLink` hold it and open nothing.
+    static let linkName = ["Link"]
     static let casts = ["unsafeBitCast", "unsafeDowncast", "withMemoryRebound", "assumingMemoryBound", "bindMemory"]
     /// Code found by name at run time: a class or selector from a string, a symbol from the loader, a private
     /// property read through reflection or key-value coding (`URLSessionTransport`'s session).
@@ -572,8 +579,16 @@ struct RouteTests {
     /// Nothing reads a URL outside the transport: `Data(contentsOf:)` and friends would fetch past the host allowlist
     /// (Phase 1a's review added one to AppleClient and the scans passed). Test fixtures are read in TestSupport only.
     @Test func nothingFetchesOutsideTheTransport() throws {
-        #expect(try SourceScan.files(in: Self.sources, matching: Self.fetches) == ["\(Self.sources)/TestSupport/Fixtures.swift"])
-        for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.fetches).isEmpty, "\(root)") }
+        let inPackage = try SourceScan.files(in: Self.sources, matching: Self.fetches)
+        #expect(inPackage == ["\(Self.sources)/TestSupport/Fixtures.swift"], "\(inPackage.sorted())")
+        for root in Self.appSide {
+            let found = try SourceScan.files(in: root, matching: Self.fetches)
+            #expect(found.isEmpty, "\(found.sorted())")
+        }
+        for root in [Self.sources] + Self.appSide {
+            let links = try SourceScan.files(in: root, naming: Self.linkName)
+            #expect(links.isEmpty, "\(links.sorted())")
+        }
     }
 
     /// A name scan holds only if code can't be found by a name it never spells: `objc_getClass("NSURL" + "Session")`

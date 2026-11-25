@@ -142,9 +142,33 @@ struct ScannerTests {
         "let data = try Data(`contentsOf`: url)",
         "let data = try `Data`(`contentsOf` : url)",
         "let task = session.`dataTask`(with: request)",
+        // failure-log 2026-11-18: each of these fetched or opened an API-supplied URL from a screen, every scan green.
+        "AsyncImage(url: url)",
+        "AsyncImage (url: url) { image in image }",
+        "let image = NSImage(byReferencing: url)",
+        "let image = NSImage(byReferencing : url)",
+        "Stream.getStreamsToHost(withName: host, port: 443, inputStream: &input, outputStream: &output)",
+        "NSWorkspace.shared.open(url)",
+        "let workspace = `NSWorkspace`.shared",
+        "@Environment(\\.openURL) private var open",
+        "EnvironmentValues().openURL(url)",
+        "let action = OpenURLAction { _ in .handled }",
+        "let intent = OpenURLIntent(url)",
     ])
     func theFetchNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.fetches))
+    }
+
+    /// SwiftUI's `Link` is a whole name: `NavigationLink`, `ShareLink` and a `link` aren't it; a comment or a string isn't.
+    @Test func theLinkNameIsWhole() {
+        for code in ["Link(\"Open\", destination: url)", "SwiftUI.Link(destination: url) { Text(title) }", "let view = `Link`(title, destination: url)",
+                     "Link (title, destination: url)"] {
+            #expect(Self.named(code, RouteTests.linkName), "\(code)")
+        }
+        for code in ["NavigationLink(value: item) { Text(title) }", "ShareLink(item: text)", "let link = url", "let Linked = 1", "// Link(title, destination: url)",
+                     "let name = \"Link\""] {
+            #expect(!Self.named(code, RouteTests.linkName), "\(code)")
+        }
     }
 
     @Test(arguments: [
