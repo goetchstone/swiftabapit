@@ -170,7 +170,9 @@ Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active client, named".
   entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source: `App/Intents`,
   `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`), the intents import only AppIntents, SwiftUI
   and AppModels, the one dialog is `answer.spoken`, and the report choices are the catalog's titles. `scripts/intents_test.sh`
-  (CI only) reads the definitions from outside the app with `AppIntentsTesting`.
+  (CI only) registers the Release build and reads the nine definitions and their parameters from outside the app with
+  `AppIntentsTesting`. Running an intent there (the no-key answer) ended "transport cancelled" on the runner, so it isn't run:
+  the local-authentication policy is the likely cause (L6), unconfirmed.
 - Gotcha: an App Shortcut can't preset a parameter (`AppShortcut(intent: RunReportIntent(report: .outOfWarranty), …)` builds,
   but the metadata keeps only the intent's name, so Siri would ask which report). Hence one intent per report.
 - Gotcha: `Answers.attention()` keeps the input key its evaluation read and answers nothing when the evaluation recorded is

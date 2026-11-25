@@ -1,5 +1,8 @@
 // The App Intents as the system sees them, from outside the app (AppIntentsTesting, by bundle ID): CI only, through
-// scripts/intents_test.sh, against the Release build it registered. Never run on the operator's Mac: `--run` launches abapit.
+// scripts/intents_test.sh, against the Release build it registered. It reads definitions and makes an intent; it runs none.
+// Running one (`run()`) launches abapit, so never here on the operator's Mac; on CI's runner it ended "Underlying session was
+// cancelled (transport cancelled)" for NeedsAttentionIntent (PR 52's first run), so the no-key answer isn't run: the intents ask
+// for local device authentication, which the runner may refuse (the operator's live check L6).
 import AppIntentsTesting
 import Foundation
 
@@ -17,10 +20,5 @@ for name in names {
 let report = definitions.enums["ReportChoice"].makeCase("out-of-warranty")
 let run = definitions.intents["RunReportIntent"].makeIntent(report: report, group: "no-record", number: 3)
 print("intents_probe: \(names.count) intents defined; made \(run)")
-if CommandLine.arguments.contains("--run") {
-    // No organization on the runner: the no-key answer is the screens' own words, said, never a crash or a hang.
-    let result = try await definitions.intents["NeedsAttentionIntent"].makeIntent().run()
-    let value: String = try result.value
-    print("intents_probe: Needs attention answered: \(value)")
-    guard value.contains("organization") else { exit(1) }
-}
+let lookUp = definitions.intents["LookUpSerialIntent"].makeIntent(serial: "C02EXAMPLE01")
+print("intents_probe: made \(lookUp)")
