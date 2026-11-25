@@ -1,0 +1,2185 @@
+{
+ "about": "Invented phrasings, one per request, for scoring a pick of a report or rule. No tenant terms; example.com only. expect is choice, change (a request to change something) or refuse (off topic). choices lists every accepted answer, the first being the one the groups belong to; groups lists the accepted group values for the first (null is all of them).",
+ "samples": [
+  {
+   "id": "d-coverage-01",
+   "text": "Which devices lose their AppleCare soon?",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-02",
+   "text": "AppleCare coverage ending this quarter",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-04",
+   "text": "Show me the coverage that expires in the next few months",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-05",
+   "text": "devices whose protection plan is almost over",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-07",
+   "text": "How many machines have no AppleCare at all?",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-08",
+   "text": "coverage ending within 90 days",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-10",
+   "text": "Which iPads are close to the end of their AppleCare?",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-11",
+   "text": "what's about to lapse on the coverage side",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-13",
+   "text": "anything with expiring care plans",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-14",
+   "text": "soonest coverage expiry first",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-16",
+   "text": "expiring AppleCare",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-17",
+   "text": "give me a renewal list for AppleCare",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-19",
+   "text": "How long until each device's AppleCare is over?",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-20",
+   "text": "devices that will be uncovered in six months",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-22",
+   "text": "What AppleCare ends in the next 30 days?",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-23",
+   "text": "tell me about warranty plans that finish soon",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-25",
+   "text": "which Apple care plans end before next year",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-26",
+   "text": "Report on coverage expiring in the coming weeks",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-28",
+   "text": "Any Macs whose AppleCare ends within a year?",
+   "expect": "choice",
+   "choices": [
+    "report:coverage"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-coverage-29",
+   "text": "which are the next to lose coverage",
+   "expect": "choice",
+   "choices": [
+    "report:coverage",
+    "rule:applecare_expiring"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-01",
+   "text": "How old is our fleet?",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-02",
+   "text": "Which devices are due for a refresh?",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-04",
+   "text": "Refresh candidates please",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-05",
+   "text": "which machines are four years old or more",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-07",
+   "text": "age breakdown of all the devices",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-08",
+   "text": "List the devices we should replace this year",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-10",
+   "text": "fleet age report",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-11",
+   "text": "which laptops have been around the longest",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-13",
+   "text": "I'm planning a hardware refresh, what's aging out?",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-14",
+   "text": "order dates of our oldest devices",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-16",
+   "text": "how many devices were ordered in each year",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-17",
+   "text": "Which of our iPads are getting old?",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-19",
+   "text": "older than three years, which ones",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-20",
+   "text": "devices that are past their useful life",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-22",
+   "text": "who has the oldest computers",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-23",
+   "text": "Which units should be retired for age?",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-25",
+   "text": "What is due for replacement",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-26",
+   "text": "break the fleet down by years since order",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-28",
+   "text": "tell me what needs a refresh based on age",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-fleet-age-29",
+   "text": "year-by-year count of our devices",
+   "expect": "choice",
+   "choices": [
+    "report:fleet-age"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-01",
+   "text": "Which devices have Activation Lock on?",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-02",
+   "text": "Show Activation Lock by who holds it",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-04",
+   "text": "devices locked by a person's Apple Account",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-05",
+   "text": "Activation Lock held by our MDM",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "lock:MDM"
+   ]
+  },
+  {
+   "id": "d-activation-lock-07",
+   "text": "devices with no Activation Lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "unlocked"
+   ]
+  },
+  {
+   "id": "d-activation-lock-08",
+   "text": "show the unlocked machines",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "unlocked"
+   ]
+  },
+  {
+   "id": "d-activation-lock-10",
+   "text": "Activation Lock report",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-11",
+   "text": "Can we release these devices, or does someone's lock block it?",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-13",
+   "text": "Activation Lock status wasn't read for which devices",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "not-read"
+   ]
+  },
+  {
+   "id": "d-activation-lock-14",
+   "text": "Where is the lock status unclear?",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "unclear"
+   ]
+  },
+  {
+   "id": "d-activation-lock-16",
+   "text": "any devices stuck behind a user's lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-17",
+   "text": "lock type we don't recognise",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "lock:other"
+   ]
+  },
+  {
+   "id": "d-activation-lock-19",
+   "text": "Find Macs that can't be redeployed because of the lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-20",
+   "text": "breakdown of Activation Lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-22",
+   "text": "devices with an MDM lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "lock:MDM"
+   ]
+  },
+  {
+   "id": "d-activation-lock-23",
+   "text": "list the locks held by employees",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-25",
+   "text": "see Activation Lock for the whole organization",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-activation-lock-26",
+   "text": "Which devices would block a release because of a lock?",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock",
+    "rule:activation_lock_user"
+   ],
+   "groups": [
+    "lock:USER"
+   ]
+  },
+  {
+   "id": "d-activation-lock-28",
+   "text": "how many carry no lock",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    "unlocked"
+   ]
+  },
+  {
+   "id": "d-activation-lock-29",
+   "text": "Activation Lock overview",
+   "expect": "choice",
+   "choices": [
+    "report:activation-lock"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-01",
+   "text": "What's the state of the MDM migration?",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-02",
+   "text": "Which devices are past the migration deadline?",
+   "expect": "choice",
+   "choices": [
+    "report:migration",
+    "rule:migration_deadline"
+   ],
+   "groups": [
+    "past-due"
+   ]
+  },
+  {
+   "id": "d-migration-04",
+   "text": "how many devices finished moving to the new MDM",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:SUCCESS"
+   ]
+  },
+  {
+   "id": "d-migration-05",
+   "text": "migrations that failed",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:FAILED"
+   ]
+  },
+  {
+   "id": "d-migration-07",
+   "text": "Which migrations are underway?",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:STARTED"
+   ]
+  },
+  {
+   "id": "d-migration-08",
+   "text": "Anything overdue on the migration?",
+   "expect": "choice",
+   "choices": [
+    "report:migration",
+    "rule:migration_deadline"
+   ],
+   "groups": [
+    "past-due"
+   ]
+  },
+  {
+   "id": "d-migration-10",
+   "text": "devices with no migration status",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "no-status"
+   ]
+  },
+  {
+   "id": "d-migration-11",
+   "text": "MDM migration report",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-13",
+   "text": "which devices are late, and we can't tell what their status is",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "past-due-status-unknown"
+   ]
+  },
+  {
+   "id": "d-migration-14",
+   "text": "how's the move to our new management service going",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-16",
+   "text": "devices that never got a migration request",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "no-status"
+   ]
+  },
+  {
+   "id": "d-migration-17",
+   "text": "show me the ones still in progress",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:STARTED"
+   ]
+  },
+  {
+   "id": "d-migration-19",
+   "text": "migration status breakdown",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-20",
+   "text": "did the migration work for everything?",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:SUCCESS",
+    null
+   ]
+  },
+  {
+   "id": "d-migration-22",
+   "text": "devices requested to migrate but not yet begun",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:REQUESTED"
+   ]
+  },
+  {
+   "id": "d-migration-23",
+   "text": "no migration data for which devices",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "no-data"
+   ]
+  },
+  {
+   "id": "d-migration-25",
+   "text": "status of devices switching MDM",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-migration-26",
+   "text": "which have a migration status this app doesn't know",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:other"
+   ]
+  },
+  {
+   "id": "d-migration-28",
+   "text": "how many migrations succeeded",
+   "expect": "choice",
+   "choices": [
+    "report:migration"
+   ],
+   "groups": [
+    "status:SUCCESS"
+   ]
+  },
+  {
+   "id": "d-migration-29",
+   "text": "devices that should have migrated by now",
+   "expect": "choice",
+   "choices": [
+    "report:migration",
+    "rule:migration_deadline"
+   ],
+   "groups": [
+    "past-due"
+   ]
+  },
+  {
+   "id": "d-service-health-01",
+   "text": "Are our device management services healthy?",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-02",
+   "text": "Which services have gone quiet?",
+   "expect": "choice",
+   "choices": [
+    "report:service-health",
+    "rule:quiet_service"
+   ],
+   "groups": [
+    "quiet"
+   ]
+  },
+  {
+   "id": "d-service-health-04",
+   "text": "show service health",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-05",
+   "text": "any MDM server that hasn't checked in lately",
+   "expect": "choice",
+   "choices": [
+    "report:service-health",
+    "rule:quiet_service"
+   ],
+   "groups": [
+    "quiet"
+   ]
+  },
+  {
+   "id": "d-service-health-07",
+   "text": "Which services are inactive?",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "inactive"
+   ]
+  },
+  {
+   "id": "d-service-health-08",
+   "text": "deleted management services",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "deleted"
+   ]
+  },
+  {
+   "id": "d-service-health-10",
+   "text": "services silent for more than a month",
+   "expect": "choice",
+   "choices": [
+    "report:service-health",
+    "rule:quiet_service"
+   ],
+   "groups": [
+    "quiet"
+   ]
+  },
+  {
+   "id": "d-service-health-11",
+   "text": "list the services that are fine",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "healthy"
+   ]
+  },
+  {
+   "id": "d-service-health-13",
+   "text": "last connection time for our MDM servers",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-14",
+   "text": "device management service report",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-16",
+   "text": "what services do we have and what state are they in",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-17",
+   "text": "any service that's been dead for weeks",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "quiet"
+   ]
+  },
+  {
+   "id": "d-service-health-19",
+   "text": "overview of the management servers",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-20",
+   "text": "healthy services only",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "healthy"
+   ]
+  },
+  {
+   "id": "d-service-health-22",
+   "text": "which services are turned off",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "inactive"
+   ]
+  },
+  {
+   "id": "d-service-health-23",
+   "text": "check the connection status of every MDM",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-25",
+   "text": "silent for 60 days, which services",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "quiet"
+   ]
+  },
+  {
+   "id": "d-service-health-26",
+   "text": "services we can't assess",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "cannot-judge"
+   ]
+  },
+  {
+   "id": "d-service-health-28",
+   "text": "is the Apple MDM service still connecting",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-service-health-29",
+   "text": "deactivated services",
+   "expect": "choice",
+   "choices": [
+    "report:service-health"
+   ],
+   "groups": [
+    "inactive"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-01",
+   "text": "Which devices are out of warranty?",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-02",
+   "text": "Show me devices with no active AppleCare",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-04",
+   "text": "devices with no coverage record at all",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-record"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-05",
+   "text": "which machines are still under warranty",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "active"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-07",
+   "text": "out of warranty report",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-08",
+   "text": "devices we couldn't check coverage for",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "not-read"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-10",
+   "text": "how many devices have no warranty",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-11",
+   "text": "coverage status unknown for which devices",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "status-unknown"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-13",
+   "text": "anything older than the warranty limit by purchase date",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "estimated-past-limit"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-14",
+   "text": "which Macs have no AppleCare on file",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-record"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-16",
+   "text": "warranty lapsed, show them",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-17",
+   "text": "devices whose coverage wasn't read",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "not-read"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-19",
+   "text": "show devices without protection plans",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-20",
+   "text": "who is uncovered",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-22",
+   "text": "warranty situation across the fleet",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-23",
+   "text": "which ones have no record of a plan",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-record"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-25",
+   "text": "out-of-warranty devices by estimate",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "estimated-past-limit"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-26",
+   "text": "list devices with lapsed AppleCare",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-28",
+   "text": "we need repair quotes, which devices have no warranty",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-out-of-warranty-29",
+   "text": "expired warranties",
+   "expect": "choice",
+   "choices": [
+    "report:out-of-warranty"
+   ],
+   "groups": [
+    "no-active-coverage"
+   ]
+  },
+  {
+   "id": "d-attention-01",
+   "text": "What needs my attention?",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-02",
+   "text": "Is anything overdue?",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-04",
+   "text": "show everything that needs attention",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-05",
+   "text": "what work has been left undone",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-07",
+   "text": "give me the to-do list for the fleet",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-08",
+   "text": "what's wrong across all our devices",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-10",
+   "text": "summary of things that need fixing",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-11",
+   "text": "Which checks found something?",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-13",
+   "text": "overview of open issues",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-14",
+   "text": "Is there anything I've missed?",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-16",
+   "text": "list the findings",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-17",
+   "text": "needs attention summary",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-19",
+   "text": "run all the checks",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-20",
+   "text": "what should I look at first",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-22",
+   "text": "tell me what's overdue across Apple and Mosyle",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-23",
+   "text": "what's pending for me",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-25",
+   "text": "morning check: what's wrong",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-26",
+   "text": "Which rules found problems?",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-28",
+   "text": "open items list",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-attention-29",
+   "text": "what do I need to deal with",
+   "expect": "choice",
+   "choices": [
+    "attention"
+   ],
+   "groups": [
+    null
+   ]
+  },
+  {
+   "id": "d-change-01",
+   "text": "Assign these Macs to the Sales service",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-02",
+   "text": "move all the iPads to our Mosyle service",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-04",
+   "text": "Delete the quiet services",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-05",
+   "text": "wipe every device with an expired lock",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-07",
+   "text": "rename the devices to their serial numbers",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-08",
+   "text": "remove the failed migrations",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-10",
+   "text": "Disable Activation Lock on all of them",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-11",
+   "text": "install the update on the whole fleet",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-13",
+   "text": "assign unassigned devices to the default server",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-14",
+   "text": "unassign the devices that haven't checked in",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-16",
+   "text": "reset the lost iPads",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-change-17",
+   "text": "restart all the stale devices",
+   "expect": "change",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-01",
+   "text": "What's the weather like tomorrow?",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-02",
+   "text": "write me a poem about autumn",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-04",
+   "text": "who won the game last night",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-05",
+   "text": "Translate this sentence into French",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-07",
+   "text": "what is the capital of Australia",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-08",
+   "text": "summarize this email from bob@example.com",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-10",
+   "text": "what time is it in Tokyo",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-11",
+   "text": "hello",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-13",
+   "text": "Explain how photosynthesis works",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-14",
+   "text": "set a timer for ten minutes",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-16",
+   "text": "recommend a good book",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-refuse-17",
+   "text": "draft a reply to the team about lunch",
+   "expect": "refuse",
+   "choices": [],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_apple_mdm-01",
+   "text": "Which devices does Apple say belong in Apple MDM but never enrolled?",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_apple_mdm"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_apple_mdm-02",
+   "text": "Macs assigned to our Apple MDM service that haven't shown up in it",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_apple_mdm"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_apple_mdm-04",
+   "text": "assigned to the Apple MDM server but not enrolled yet, which ones",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_apple_mdm"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_apple_mdm-05",
+   "text": "who didn't enroll after being assigned to Apple MDM",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_apple_mdm"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_mosyle-01",
+   "text": "Which devices are assigned to our Mosyle service in Apple but absent from Mosyle?",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_mosyle"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_mosyle-02",
+   "text": "Apple says these go to Mosyle, but Mosyle doesn't have them: which",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_mosyle"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_mosyle-04",
+   "text": "assigned to Mosyle in Apple but not in Mosyle itself",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_mosyle"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-missing_from_mosyle-05",
+   "text": "what hasn't arrived in Mosyle yet from Apple's assignments",
+   "expect": "choice",
+   "choices": [
+    "rule:missing_from_mosyle"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_not_in_apple-01",
+   "text": "devices enrolled in Apple MDM that Apple's list doesn't have",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_not_in_apple-02",
+   "text": "Which Apple MDM devices are not in Apple's device list?",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_not_in_apple-04",
+   "text": "Apple MDM has devices that Apple doesn't list, which",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_not_in_apple-05",
+   "text": "stray devices in Apple MDM outside Apple's inventory",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_not_in_apple-01",
+   "text": "devices in Mosyle that are not in Apple's device list",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_not_in_apple-02",
+   "text": "Which Mosyle devices does Apple not know about?",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_not_in_apple-04",
+   "text": "things we manage in Mosyle but not bought through Apple",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_not_in_apple-05",
+   "text": "Mosyle-only devices",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_not_in_apple"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-applecare_expiring-01",
+   "text": "Which AppleCare plans are about to end according to our settings?",
+   "expect": "choice",
+   "choices": [
+    "rule:applecare_expiring",
+    "report:coverage"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-applecare_expiring-02",
+   "text": "AppleCare ending soon, the attention check",
+   "expect": "choice",
+   "choices": [
+    "rule:applecare_expiring",
+    "report:coverage"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-applecare_expiring-04",
+   "text": "are there warranties expiring soon that I should act on",
+   "expect": "choice",
+   "choices": [
+    "rule:applecare_expiring",
+    "report:coverage"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-applecare_expiring-05",
+   "text": "anything about to lose AppleCare that needs action",
+   "expect": "choice",
+   "choices": [
+    "rule:applecare_expiring",
+    "report:coverage"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_check_in-01",
+   "text": "Which Mosyle devices haven't checked in for a month?",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_check_in-02",
+   "text": "devices not reporting to Mosyle lately",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_check_in-04",
+   "text": "stale Mosyle devices",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-mosyle_check_in-05",
+   "text": "which devices have gone silent in Mosyle",
+   "expect": "choice",
+   "choices": [
+    "rule:mosyle_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_check_in-01",
+   "text": "Which devices haven't checked in to Apple MDM in a long time?",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_check_in-02",
+   "text": "stale devices in Apple MDM",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_check_in-04",
+   "text": "no recent check-in to our Apple MDM, which ones",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-apple_mdm_check_in-05",
+   "text": "devices that went quiet with Apple MDM",
+   "expect": "choice",
+   "choices": [
+    "rule:apple_mdm_check_in"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-filevault_off-01",
+   "text": "Which Macs have FileVault turned off?",
+   "expect": "choice",
+   "choices": [
+    "rule:filevault_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-filevault_off-02",
+   "text": "disk encryption disabled on any Mac",
+   "expect": "choice",
+   "choices": [
+    "rule:filevault_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-filevault_off-04",
+   "text": "Macs without FileVault",
+   "expect": "choice",
+   "choices": [
+    "rule:filevault_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-filevault_off-05",
+   "text": "is FileVault on everywhere",
+   "expect": "choice",
+   "choices": [
+    "rule:filevault_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-firewall_off-01",
+   "text": "Which Macs have the firewall off?",
+   "expect": "choice",
+   "choices": [
+    "rule:firewall_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-firewall_off-02",
+   "text": "firewall disabled on any machine",
+   "expect": "choice",
+   "choices": [
+    "rule:firewall_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-firewall_off-04",
+   "text": "Macs with the firewall turned off",
+   "expect": "choice",
+   "choices": [
+    "rule:firewall_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-firewall_off-05",
+   "text": "is the firewall on everywhere",
+   "expect": "choice",
+   "choices": [
+    "rule:firewall_off"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-activation_lock_user-01",
+   "text": "Which devices are held by a person's Apple Account lock and block release?",
+   "expect": "choice",
+   "choices": [
+    "rule:activation_lock_user",
+    "report:activation-lock"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-activation_lock_user-02",
+   "text": "devices someone's Apple Account locked so we can't redeploy",
+   "expect": "choice",
+   "choices": [
+    "rule:activation_lock_user",
+    "report:activation-lock"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-activation_lock_user-04",
+   "text": "Activation Lock held by a user, what's blocked",
+   "expect": "choice",
+   "choices": [
+    "rule:activation_lock_user",
+    "report:activation-lock"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-activation_lock_user-05",
+   "text": "which devices can't be released because of a personal lock",
+   "expect": "choice",
+   "choices": [
+    "rule:activation_lock_user",
+    "report:activation-lock"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-quiet_service-01",
+   "text": "Which device management services have been silent too long?",
+   "expect": "choice",
+   "choices": [
+    "rule:quiet_service",
+    "report:service-health"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-quiet_service-02",
+   "text": "services that haven't connected in over a month",
+   "expect": "choice",
+   "choices": [
+    "rule:quiet_service",
+    "report:service-health"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-quiet_service-04",
+   "text": "any management service gone silent",
+   "expect": "choice",
+   "choices": [
+    "rule:quiet_service",
+    "report:service-health"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-quiet_service-05",
+   "text": "which service stopped talking to Apple",
+   "expect": "choice",
+   "choices": [
+    "rule:quiet_service",
+    "report:service-health"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-migration_deadline-01",
+   "text": "Which migrations aren't done and are near their deadline?",
+   "expect": "choice",
+   "choices": [
+    "rule:migration_deadline",
+    "report:migration"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-migration_deadline-02",
+   "text": "MDM migrations still unfinished with the deadline close or passed",
+   "expect": "choice",
+   "choices": [
+    "rule:migration_deadline",
+    "report:migration"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-migration_deadline-04",
+   "text": "devices not migrated whose deadline is near",
+   "expect": "choice",
+   "choices": [
+    "rule:migration_deadline",
+    "report:migration"
+   ],
+   "groups": []
+  },
+  {
+   "id": "d-rule-migration_deadline-05",
+   "text": "what migration work is due soon",
+   "expect": "choice",
+   "choices": [
+    "rule:migration_deadline",
+    "report:migration"
+   ],
+   "groups": []
+  }
+ ]
+}

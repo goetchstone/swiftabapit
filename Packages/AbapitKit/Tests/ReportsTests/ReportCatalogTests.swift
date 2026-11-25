@@ -131,8 +131,16 @@ struct ReportCatalogTests {
     }
 
     @Test func holdsLinesAreBuiltFromTheGroupValuesAndHoldNoListData() throws {
-        #expect(ReportCatalog.entry(.coverage).holds == "AppleCare coverage ending: days is a whole number from 1 to 1825.")
-        #expect(ReportCatalog.entry(.fleetAge).holds == "Fleet age: years is a whole number from 1 to 10.")
+        let exact: [ReportCatalog.ID: String] = [
+            .coverage: "AppleCare coverage ending: days is a whole number from 1 to 1825.",
+            .fleetAge: "Fleet age: years is a whole number from 1 to 10.",
+            .activationLock: "Activation Lock: group is one of: lock:USER, lock:MDM, lock:NONE, lock:other, unlocked, unclear, not-read.",
+            .migration: "MDM migration: group is one of: status:REQUESTED, status:STARTED, status:SUCCESS, status:FAILED, status:other, no-status, no-data, past-due, past-due-status-unknown.",
+            .serviceHealth: "Device management service health: group is one of: healthy, quiet, inactive, deleted, other-status, cannot-judge; days is a whole number from 1 to 1825.",
+            .outOfWarranty: "Out of warranty: group is one of: active, no-active-coverage, no-record, status-unknown, not-read, estimated-past-limit.",
+        ]
+        #expect(exact.count == ReportCatalog.ID.allCases.count)
+        for (id, line) in exact { #expect(ReportCatalog.entry(id).holds == line, Comment(rawValue: id.rawValue)) }
         for entry in ReportCatalog.entries {
             #expect(entry.holds.hasPrefix(entry.title + ": "), "\(entry.id)")
             for filter in entry.filters where filter.bounds == nil { for value in filter.values { #expect(entry.holds.contains(value), "\(entry.id) \(value)") } }
