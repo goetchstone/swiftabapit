@@ -66,6 +66,7 @@ public final class Answers {
         package static func sweepFailed(_ title: String) -> String {
             "The newest snapshot that read \(title) didn't read it, and no earlier one did, so this report judges nothing. Abapit says why."
         }
+        package static let historyStillReading = "The snapshot history was still being read after 25 seconds, so nothing is answered. Ask again."
         package static let attentionChanged = "What the rules read changed while this was being answered, so nothing is answered. Ask again."
         /// After a list that can't be counted: a report judges nothing; Needs attention skips the rules that read it.
         package static let nothingJudged = "Nothing was judged."
@@ -120,7 +121,12 @@ public final class Answers {
         if reports.isMosyle { return said(title, ReportsModel.mosyleWords) }
         guard !Task.isCancelled else { return said(title, Phrase.cancelled) }
         let generation = orgs.generation
-        await reports.loadHistory()
+        // Superseded by the screen's own read of the history: that read's result is the one to use, once it has ended.
+        if await !reports.loadHistory(), orgs.generation == generation, !Task.isCancelled {
+            guard await settle({ [reports] in !reports.state.isLoading }) else {
+                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading)
+            }
+        }
         if Task.isCancelled { return said(title, Phrase.cancelled) }
         guard orgs.generation == generation else { return said(title, Phrase.switched) }
         let key = resolution.tokens["group"]
@@ -163,29 +169,44 @@ public final class Answers {
         case .answered(let got): ends = got
         case .stopped(let phrase): return said(title, phrase)
         }
-        await attentionModel.load()
+        // The history as the screen reads it; superseded by the screen's own read, once that read has ended.
+        if await !attentionModel.loadHistory(), orgs.generation == generation, !Task.isCancelled {
+            guard await settle({ [attentionModel] in !attentionModel.state.isLoading }) else {
+                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading)
+            }
+        }
         if Task.isCancelled { return said(title, Phrase.cancelled) }
         guard orgs.generation == generation else { return said(title, Phrase.switched) }
-        // The lists as the wait saw them, and the evaluation over what is held now; else nothing is answered.
+        // The lists must be as the wait saw them before anything is judged or recorded: the evaluation reads them as it starts,
+        // with nothing run between this check and that read.
         let read = liveWords(wanted, ends, tail: Phrase.rulesSkipped)
         if read.changed { return said(title, read.words.joined(separator: " ")) }
+        await attentionModel.evaluate(force: true)
+        if Task.isCancelled { return said(title, Phrase.cancelled) }
+        guard orgs.generation == generation else { return said(title, Phrase.switched) }
         guard attentionModel.updating == nil, let summary = attentionModel.summary else { return said(title, Phrase.attentionChanged) }
         var words = read.words
         words += notSent(wanted, ends)
         if let at = attentionModel.evaluatedAt { words.append("Judged on \(reports.dates.dayTime(at)).") }
+        // The snapshot rules' data: the oldest snapshot any of them used (invariant 8: its age is said).
+        if let oldest = attentionModel.lines.compactMap(\.takenAt).min() {
+            words.append("The oldest snapshot used is from \(reports.dates.day(oldest)), \(ReportsModel.age(since: oldest, now: now())).")
+        } else {
+            words.append("No snapshot was used.")
+        }
         words.append(summary.headline)
         words += summary.rows.map { "\($0.title): \(Self.count($0.open, "open finding"))" + ($0.partial ? ", found over a part read and not kept." : ".") }
         words += summary.words
         return said(title, words.joined(separator: " "))
     }
 
-    /// The devices in Apple's device list whose serial number or other identifier matches `serial` (the Devices screen's Find).
-    /// The serial is never said back.
+    /// The devices in Apple's device list whose serial number or other identifier (IMEI, MEID, EID, order number, MAC address)
+    /// matches `serial`, exactly or else in part (the Devices screen's Find), and which of the two. The identifier is never said back.
     public func lookUp(serial: String) async -> Answer {
         let title = "Serial lookup"
         guard let active = orgs.active else { return said(title, ScreenWords.noOrganization) }
         guard active.provider == .known(.apple) else { return said(title, Self.mosyleLookUp) }
-        guard serial.contains(where: { !$0.isWhitespace }) else { return said(title, "No serial number was given, so nothing was looked up.") }
+        guard serial.contains(where: { !$0.isWhitespace }) else { return said(title, "No identifier was given, so nothing was looked up.") }
         let ends: [LiveWait.List: LiveWait.End]
         switch await waitFor([.appleDevices]) {
         case .answered(let got): ends = got
@@ -193,15 +214,18 @@ public final class Answers {
         }
         let read = liveWords([.appleDevices], ends)
         guard read.counts else { return said(title, read.words.joined(separator: " ")) }
-        let found = Find.matches(serial, in: devices.rows.map(\.device))
+        // Find matches a serial, an IMEI, an MEID, an EID, an order number or a MAC address, exactly, else inside one.
+        let (found, exact) = Find.search(serial, in: devices.rows.map(\.device))
         var words = read.words
         let whole = if case .whole? = ends[.appleDevices] { true } else { false }
-        switch found.count {
-        case 0:
-            words.append("No device matches that serial number among the \(Self.count(devices.rows.count, "device")) read."
+        switch (found.count, exact) {
+        case (0, _):
+            words.append("No device matches that identifier among the \(Self.count(devices.rows.count, "device")) read."
                          + (whole ? "" : " The list was read in part, so it may be among the devices not read."))
-        case 1: words.append("1 device matches that serial number.")
-        default: words.append("\(found.count.formatted()) devices match that serial number.")
+        case (1, true): words.append("1 device matches that identifier exactly.")
+        case (let n, true): words.append("\(n.formatted()) devices match that identifier exactly.")
+        case (1, false): words.append("No device matches that identifier exactly; 1 device has it as part of an identifier.")
+        case (let n, false): words.append("No device matches that identifier exactly; \(n.formatted()) devices have it as part of an identifier.")
         }
         let rows = found.map { Answer.Row(serial: $0.serialNumber, model: Self.sent($0.deviceModel, "model"), state: Self.sent($0.status?.rawValue, "status")) }
         return said(title, words.joined(separator: " "), rows: rows)
@@ -235,6 +259,8 @@ public final class Answers {
             let name = Self.name(list)
             switch end {
             case .stillReading(let after):
+                // Still being read now, or it ended since: what is held now isn't what was said, so nothing is answered.
+                guard isLoading(list) else { return ([Phrase.changed(name)], false, true) }
                 words.append(Phrase.stillReading(name, after: after))
                 counts = false
                 continue
@@ -256,6 +282,40 @@ public final class Answers {
             }
         }
         return (words, counts, false)
+    }
+
+    /// Whether `list`'s read is under way now.
+    private func isLoading(_ list: LiveWait.List) -> Bool {
+        switch list {
+        case .appleDevices: devices.state.isLoading
+        case .appleServices: devices.servicesState.isLoading
+        case .mosyleDevices: orgs.mosyleOrg != nil && mosyle.devices.state.isLoading
+        }
+    }
+
+    /// Waits, up to `LiveWait.bound` on the injected clock, until `done` holds; false when the bound passed or the task was cancelled.
+    private func settle(_ done: @escaping @MainActor () -> Bool) async -> Bool {
+        if done() { return true }
+        let sleep = sleep, seen = Settled()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await Self.watch(done, into: seen) }
+            group.addTask { try? await sleep(LiveWait.bound) }
+            await group.next()
+            group.cancelAll()
+        }
+        return seen.done && !Task.isCancelled
+    }
+
+    @MainActor private final class Settled {
+        var done = false
+    }
+
+    private static func watch(_ done: @escaping @MainActor () -> Bool, into seen: Settled) async {
+        let changes = Observations { done() }
+        for await held in changes where held {
+            seen.done = true
+            return
+        }
     }
 
     /// Why a list was read only in part, from its model's state: numbers and fixed words, never the error's own text.
@@ -397,20 +457,28 @@ public final class Answers {
             rows = report.candidates.map { Answer.Row(serial: $0.serial, model: Self.sent($0.model.string, "model"), state: "\(String(format: "%.1f", $0.ageYears)) years") }
         case .activationLock(let report)?:
             rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group) }
+            // A lock type this version doesn't know is counted, never said: Apple's raw value stays on the screen and in the rows.
+            let unknown = report.rows.compactMap { row -> String? in
+                if case .otherLock(let raw) = row.kind, raw != "NONE", raw != "not sent" { raw } else { nil }
+            }
+            counts.removeAll { line in Set(unknown).contains { line.hasPrefix("Locked, lock type \($0): ") } }
+            if !unknown.isEmpty { counts.append("\(unknown.count.formatted()) locked with a lock type this version doesn't know: can't say whether it blocks release.") }
         case .outOfWarranty(let report)?:
             rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group + ($0.estimatedPast ? ", estimated past" : "")) }
             counts.removeAll { $0.contains(WarrantyReport.assumption) }
-            let unknown = Set(report.rows.flatMap { row -> [String] in if case .statusUnknown(let raw) = row.kind { raw } else { [] } })
-            if !unknown.isEmpty { counts.append("The coverage statuses this version doesn't know: \(unknown.sorted().joined(separator: ", ")).") }
             let estimated = report.rows(group: WarrantyReport.estimatedPastToken).count, undated = report.rows.filter(\.lacksReadableOrderDate).count
             counts.append("\(estimated.formatted()) estimated from the order date to be past an assumed one-year warranty: an estimate only. "
                           + "\(undated.formatted()) without active coverage have no readable order date, so no estimate.")
         case .migration(let report)?:
             rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group) }
+            // A status this version doesn't know is counted, never said.
+            let unknown = report.rows.compactMap { row -> String? in if case .unknown(let raw)? = row.status { raw } else { nil } }
+            counts.removeAll { line in Set(unknown).contains { line.hasPrefix("Status \($0): ") } }
+            if !unknown.isEmpty { counts.append("\(unknown.count.formatted()) with a migration status this version doesn't know.") }
         case .serviceHealth(let report)?:
-            // Services are known by name: none is shown here, only counted.
-            let unknown = Set(report.rows.compactMap { row -> String? in if case .otherStatus(let raw) = row.health { raw } else { nil } })
-            if !unknown.isEmpty { counts.append("The service statuses this version doesn't know: \(unknown.sorted().joined(separator: ", ")).") }
+            // Services are known by name: none is shown here, only counted; a status this version doesn't know is counted in the
+            // report's own line, never said.
+            break
         case nil: break
         }
         // A report's line that is a label and a count ("Status FAILED: 2") ends as a sentence when said.

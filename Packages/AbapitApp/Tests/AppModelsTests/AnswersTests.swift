@@ -64,7 +64,7 @@ struct AnswersTests {
         for canary in canaries {
             #expect(!answer.spoken.contains(canary) && !answer.lead.contains(canary), "\(what) said \(canary): \(answer.spoken)", sourceLocation: sourceLocation)
         }
-        #expect(!answer.rows.contains { "\($0.model) \($0.state)".contains("ZQX") || $0.serial.contains("ZQXNAME") || $0.serial.contains("ZQXMAC") },
+        #expect(!answer.rows.contains { $0.model.contains("ZQX") || $0.serial.contains("ZQXNAME") || $0.serial.contains("ZQXMAC") },
                 "\(what) showed a name: \(answer.rows)", sourceLocation: sourceLocation)
     }
 
@@ -104,10 +104,10 @@ struct AnswersTests {
         #expect(attention.spoken.contains("Mosyle's device list was read in full"), "\(attention.spoken)")
         let found = await answers.lookUp(serial: " adev0000001\t")
         Self.expectNoCanary(found, "lookUp")
-        #expect(found.rows == [Answers.Answer.Row(serial: "ADEV0000001", model: "MacBook Air", state: "ASSIGNED")] && found.spoken.contains("1 device matches"))
+        #expect(found.rows == [Answers.Answer.Row(serial: "ADEV0000001", model: "MacBook Air", state: "ASSIGNED")] && found.spoken.hasSuffix("1 device matches that identifier exactly."))
         let none = await answers.lookUp(serial: "ZQXNOSUCH")
         Self.expectNoCanary(none, "lookUp none")
-        #expect(none.rows.isEmpty && none.spoken.contains("No device matches that serial number among the 3 devices read."), "\(none.spoken)")
+        #expect(none.rows.isEmpty && none.spoken.contains("No device matches that identifier among the 3 devices read."), "\(none.spoken)")
         // Only the lists' own reads, never a device's.
         #expect(Set(Self.paths(world)).isSubset(of: ["/auth/oauth2/token", "/v1/orgDevices", "/v1/mdmServers", "/v1/mdmServers/S1/relationships/devices",
                                                      "/v1/mdmServers/S2/relationships/devices"]), "\(Self.paths(world))")
@@ -419,7 +419,7 @@ struct AnswersTests {
         let one = await answers.answer(report: .outOfWarranty, tokens: ["group": "active"])
         #expect(one.rows.isEmpty && one.capNote == nil && one.spoken.contains("The group active holds 0."))
         let found = await answers.lookUp(serial: "dev")
-        #expect(found.rows.count == 3 && found.capNote == nil && found.spoken.contains("3 devices match that serial number."), "\(found.spoken)")
+        #expect(found.rows.count == 3 && found.capNote == nil && found.spoken.contains("No device matches that identifier exactly; 3 devices have it as part of an identifier."), "\(found.spoken)")
         Self.expectNoCanary(warranty, "warranty")
     }
 
@@ -427,11 +427,11 @@ struct AnswersTests {
     @Test func anEstimateIsCalledOne() async throws {
         let world = try await Self.world()
         try await ReportsTests.record(world, days: 0, ["devices": [Self.device("ZQXSER1"), Self.device("ZQXSER2"), ReportsTests.device("ZQXSER3", order: nil)],
-                                                       "applecare": [ReportsTests.care("ZQXSER2", status: "LAPSED_NEW")]])
+                                                       "applecare": [ReportsTests.care("ZQXSER2", status: "ZQXLAPSED")]])
         let answer = await Self.answers(world, fixed: true).answer(report: .outOfWarranty, tokens: [:])
         #expect(answer.spoken.contains("1 estimated from the order date to be past an assumed one-year warranty: an estimate only. 1 without active coverage have no readable order date, so no estimate."),
                 "\(answer.spoken)")
-        #expect(answer.spoken.contains("The coverage statuses this version doesn't know: LAPSED_NEW."), "\(answer.spoken)")
+        #expect(answer.spoken.contains("1 have coverage records whose status this version doesn't know"), "\(answer.spoken)")
         #expect(answer.estimateNote == WarrantyReport.assumption && !answer.spoken.contains(WarrantyReport.assumption))
         #expect(answer.rows.contains { $0.serial == "ZQXSER1" && $0.state == "no-record, estimated past" })
         Self.expectNoCanary(answer, "warranty")
@@ -474,5 +474,134 @@ struct AnswersTests {
         let none = try await part.history!.state(org: part.orgs.store["a"]!)
         #expect(!none.contains { $0.rule == NeedsAttention.Rule.mosyleNotInApple.rawValue }, "\(none)")
         Self.expectNoCanary(partial, "partial")
+    }
+
+    // MARK: the review's fixes
+
+    /// A list still being read at the bound that ends during the history read (the review's case): nothing is answered, and nothing
+    /// is judged or recorded over it.
+    @Test func aListThatEndsAfterTheBoundAnswersNothingAndRecordsNothing() async throws {
+        let world = try await Self.world()
+        let timer = ManualTimer()
+        let answers = Self.answers(world, timer)
+        world.gates["a"]!.hold("devices", Gate.devicePages)
+        world.screens.attention.afterAwait = { stage in
+            guard stage == "load" else { return }
+            world.screens.attention.afterAwait = nil
+            world.gates["a"]!.release("devices")
+            await eventually("Apple's devices read") { LiveWaitTests.loadedAt(world.devices.state) != nil }
+        }
+        let request = Task { await answers.attention() }
+        await eventually("held, the bound's sleep") { world.gates["a"]!.held == 1 && timer.sleeping == 1 }
+        timer.advance(.seconds(25))
+        let answer = await request.value
+        #expect(answer.spoken.hasSuffix(Answers.Phrase.changed("Apple's device list")), "\(answer.spoken)")
+        #expect(!answer.spoken.contains("open finding"), "\(answer.spoken)")
+        let kept = try await world.history!.state(org: world.orgs.store["a"]!)
+        #expect(kept.isEmpty, "recorded over a list said not counted: \(kept)")
+    }
+
+    /// Needs attention says how old the snapshots behind its snapshot rules are: the oldest, once; with none, that none was used.
+    @Test func attentionSaysTheOldestSnapshotUsed() async throws {
+        let world = try await Self.world()
+        try await Self.snapshot(world)
+        let answer = await Self.answers(world, fixed: true).attention()
+        #expect(answer.spoken.contains("The oldest snapshot used is from Sep 21, 2026, 20 days old."), "\(answer.spoken)")
+        let none = try await Self.world()
+        let bare = await Self.answers(none, fixed: true).attention()
+        #expect(bare.spoken.contains("No snapshot was used.") && !bare.spoken.contains("oldest snapshot"), "\(bare.spoken)")
+    }
+
+    @MainActor final class Flag {
+        var on = false
+    }
+
+    /// The screen's own history read replaced the answer's: the answer waits for it (bounded), never says "Reading the snapshot history…".
+    @Test func anAnswerWhoseHistoryReadWasReplacedWaitsForTheScreens() async throws {
+        for released in [true, false] {
+            let world = try await Self.world()
+            try await Self.snapshot(world)
+            let timer = ManualTimer()
+            let answers = Self.answers(world, timer, fixed: true)
+            let reports = world.screens.reports
+            let (held, release) = AsyncStream<Void>.makeStream()
+            let screenHeld = Flag()
+            reports.afterRead = { _ in
+                // The answer's read: the screen's own read starts now, and waits at its own hook.
+                reports.afterRead = { _ in
+                    screenHeld.on = true
+                    for await _ in held { break }
+                }
+                Task { await reports.load() }
+                await eventually("the screen's read held") { screenHeld.on }
+            }
+            let request = Task { await answers.answer(report: .activationLock, tokens: [:]) }
+            await eventually("the answer waits on the screen's read") { timer.sleeping == 1 }
+            if released { release.yield() } else { timer.advance(.seconds(25)) }
+            let answer = await request.value
+            if released {
+                #expect(answer.spoken.contains("From the snapshot of Sep 21, 2026") && !answer.spoken.contains("Reading the snapshot history"), "\(answer.spoken)")
+            } else {
+                #expect(answer.spoken.hasSuffix(Answers.Phrase.historyStillReading), "\(answer.spoken)")
+                release.yield()
+            }
+        }
+    }
+
+    /// An answer's history read that replaced the screen's still asks for the live lists the screen's report needs.
+    @Test func anAnswersHistoryReadHonoursTheScreensLiveRead() async throws {
+        let world = try await Self.world(mosyle: false)
+        let reports = world.screens.reports
+        // Fleet age with no snapshot reads the live list, but only once the history says so.
+        reports.select(.fleetAge)
+        #expect(world.devices.state == .idle)
+        reports.afterRead = { _ in
+            reports.afterRead = nil
+            await reports.loadHistory()
+        }
+        await reports.load()
+        #expect(world.devices.state != .idle, "the screen's live read was dropped")
+        // A history read alone, with no screen's read waiting, asks for nothing live.
+        let quiet = try await Self.world(mosyle: false)
+        quiet.screens.reports.select(.fleetAge)
+        await quiet.screens.reports.loadHistory()
+        #expect(quiet.devices.state == .idle)
+    }
+
+    /// A value this version doesn't know (a migration status, a lock type, a service status) is counted, never said; it stays in rows.
+    @Test func aRawValueIsCountedNeverSaid() async throws {
+        let world = try await Self.world(mosyle: false)
+        let stub = world.stubs["a"]!
+        stub.add(devices: [Resource(type: "orgDevices", id: "ADEV0000007", attributes: ["serialNumber": .string("ADEV0000007"), "deviceModel": .string("Mac mini"),
+                                                                                         "mdmMigrationStatus": .string("ZQXSTATUS")])])
+        stub.add(services: [Resource(type: "mdmServers", id: "S3", attributes: ["serverName": .string("ZQXNAME-Three"), "serverType": .string("MDM"),
+                                                                              "status": .string("ZQXSVC"), "lastConnectedDateTime": .string(ReportsTests.iso(Date()))])])
+        try await ReportsTests.record(world, days: 0, ["devices": [Self.device("ZQXSER1"), Self.device("ZQXSER2")],
+                                                       "activation_lock": [ReportsTests.lock("ZQXSER1", locked: true, type: "ZQXLOCK"),
+                                                                           ReportsTests.lock("ZQXSER2", locked: true, type: "NONE")]])
+        let answers = Self.answers(world)
+        let migration = await answers.answer(report: .migration, tokens: [:])
+        #expect(migration.spoken.contains("1 with a migration status this version doesn't know."), "\(migration.spoken)")
+        #expect(migration.rows.contains { $0.serial == "ADEV0000007" && $0.state == "status:ZQXSTATUS" })
+        let lock = await answers.answer(report: .activationLock, tokens: [:])
+        #expect(lock.spoken.contains("1 locked with a lock type this version doesn't know: can't say whether it blocks release.")
+                && lock.spoken.contains("lock type NONE"), "\(lock.spoken)")
+        #expect(lock.rows.contains { $0.state == "lock:ZQXLOCK" })
+        let health = await answers.answer(report: .serviceHealth, tokens: [:])
+        #expect(health.spoken.contains("A status this version doesn't know, and not quiet: 1."), "\(health.spoken)")
+        for answer in [migration, lock, health] { Self.expectNoCanary(answer, answer.lead) }
+    }
+
+    /// Find matches any identifier, exactly or in part, and the answer says which: an IMEI exactly, a serial's start in part.
+    @Test func aLookUpSaysExactOrPart() async throws {
+        let world = try await Self.world(mosyle: false)
+        world.stubs["a"]!.add(devices: [Resource(type: "orgDevices", id: "ADEV0000008", attributes: ["serialNumber": .string("ADEV0000008"),
+                                                                                                      "imei": .array([.string("356938035643809")])])])
+        let answers = Self.answers(world)
+        let imei = await answers.lookUp(serial: "356938035643809")
+        #expect(imei.spoken.hasSuffix("1 device matches that identifier exactly.") && imei.rows.map(\.serial) == ["ADEV0000008"], "\(imei.spoken)")
+        let part = await answers.lookUp(serial: "0000008")
+        #expect(part.spoken.hasSuffix("No device matches that identifier exactly; 1 device has it as part of an identifier."), "\(part.spoken)")
+        #expect(!imei.spoken.contains("356938035643809") && !part.spoken.contains("0000008"))
     }
 }

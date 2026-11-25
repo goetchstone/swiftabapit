@@ -259,6 +259,8 @@ public final class ReportsModel {
     /// The time zone and locale dates are worded in: the user's, as Changes shows them.
     @ObservationIgnored package var dates = DateWords(timeZone: .autoupdatingCurrent, locale: .autoupdatingCurrent)
     @ObservationIgnored private var loadToken = 0
+    /// A screen's `load` is waiting to ask for the live lists once the history is read (`readLiveIfWanted`).
+    @ObservationIgnored private var liveWanted = false
 
     private let orgs: OrgsModel
     private let devices: DevicesModel
@@ -288,6 +290,7 @@ public final class ReportsModel {
         coverageDays = Self.defaultCoverageDays
         fleetYears = Self.defaultFleetYears
         quietDays = Self.defaultQuietDays
+        liveWanted = false
         if wasShowing { refresh() }
     }
 
@@ -334,11 +337,13 @@ public final class ReportsModel {
     /// Reads the active org's history for the latest snapshot of each sweep, and its device list: the local file, never Apple.
     /// Then asks the Devices model for its lists if the report on screen needs them live.
     public func load() async {
-        if await loadHistory() { readLive() }
+        liveWanted = true
+        await loadHistory()
     }
 
     /// `load` without asking the Devices model for its lists: what an answer awaits (`Answers`), which reads a live list through
-    /// `LiveWait` or none. True when `load` goes on to `readLive`.
+    /// `LiveWait` or none. True when it wasn't superseded. Whichever read of the history wins honours a screen's `load` it
+    /// superseded (`liveWanted`): an answer's read that replaced the screen's still asks for the screen's live lists.
     @discardableResult
     package func loadHistory() async -> Bool {
         if let first = beforeFirstLoad {
@@ -363,6 +368,7 @@ public final class ReportsModel {
         case .failure(let failure):
             sources = [:]
             state = .failed(failure.message)
+            readLiveIfWanted()
             return true
         }
         let outcome: Result<[Sweep: SweepSource], SnapshotStore.Failure>
@@ -382,7 +388,15 @@ public final class ReportsModel {
             sources = [:]
             state = .failed(failure.message)
         }
+        readLiveIfWanted()
         return true
+    }
+
+    /// A screen's `load` asked for the live lists: read them once, whichever read of the history ended it.
+    private func readLiveIfWanted() {
+        guard liveWanted else { return }
+        liveWanted = false
+        readLive()
     }
 
     /// Asks the Devices model for its lists when the report on screen reads them live: the migration and service health reports,

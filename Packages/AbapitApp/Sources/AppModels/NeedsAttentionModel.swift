@@ -102,6 +102,8 @@ public final class NeedsAttentionModel {
         public let source: [String]
         /// Skipped only because a list it reads was still being read when it was judged.
         public let isReading: Bool
+        /// When the oldest snapshot among its inputs was taken; nil when it read only live lists, or was skipped.
+        public let takenAt: Date?
         public var id: String { rule.rawValue }
 
         /// The findings not dismissed or snoozed.
@@ -215,6 +217,13 @@ public final class NeedsAttentionModel {
     /// Asks the Devices and Mosyle models for the lists the rules read live (the reads their screens make, never a sweep), reads the
     /// active org's history for the sweeps and Apple MDM's list, then evaluates.
     public func load() async {
+        if await loadHistory() { await evaluate(force: true) }
+    }
+
+    /// `load` without its evaluation: what an answer awaits (`Answers`), which checks the live lists are as its wait saw them and
+    /// then evaluates. True when `load` goes on to evaluate (not superseded, the org unchanged).
+    @discardableResult
+    package func loadHistory() async -> Bool {
         if let first = beforeFirstLoad {
             beforeFirstLoad = nil
             await first()
@@ -224,11 +233,11 @@ public final class NeedsAttentionModel {
         defer { loadsFinished += 1 }
         guard let profile = orgs.active else {
             state = .unusable(ScreenWords.noOrganization)
-            return
+            return false
         }
         guard profile.provider == .known(.apple) else {
             state = .unusable(Self.mosyleWords)
-            return
+            return false
         }
         readLive()
         // The settings as the file holds them now: a hand edit, or a file that can no longer be read, is seen and said.
@@ -246,7 +255,7 @@ public final class NeedsAttentionModel {
             outcome = .failure(failure)
         }
         await afterAwait?("load")
-        guard token == loadToken, generation == orgs.generation else { return }
+        guard token == loadToken, generation == orgs.generation else { return false }
         switch outcome {
         case .success(let read):
             sources = read
@@ -256,7 +265,7 @@ public final class NeedsAttentionModel {
             state = .failed(failure.message)
         }
         sourcesStamp += 1
-        await evaluate(force: true)
+        return true
     }
 
     /// The live lists the rules read: the Devices screen's, and the Mosyle screen's devices when the client has a Mosyle org.
@@ -596,7 +605,8 @@ public final class NeedsAttentionModel {
                                isHidden: kept?.isHidden(at: now) ?? false, actionsBlocked: blocked, keeperOrg: keeper)
             }
             let reading = item.pending && { if case .skipped = verdict { true } else { false } }()
-            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source, isReading: reading)
+            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source, isReading: reading,
+                        takenAt: item.result?.takenAt)
         }
     }
 

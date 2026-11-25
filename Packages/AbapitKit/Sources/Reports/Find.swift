@@ -14,13 +14,16 @@ import Foundation
 /// What it matches: the device's id and its `identifiers`, abapit's `id` and eight fields. Never a model, a
 /// family, a status or any other attribute (verifier round 2: adding one kept every test green).
 public enum Find {
-    public static func matches(_ query: String, in devices: [OrgDevice]) -> [OrgDevice] {
+    public static func matches(_ query: String, in devices: [OrgDevice]) -> [OrgDevice] { search(query, in: devices).devices }
+
+    /// `matches`, and whether they are exact matches (else each holds the query inside one of its identifiers).
+    public static func search(_ query: String, in devices: [OrgDevice]) -> (devices: [OrgDevice], exact: Bool) {
         let needle = lower(strip(query))
-        guard !needle.isEmpty else { return [] }
+        guard !needle.isEmpty else { return ([], false) }
         let identified = devices.map { (device: $0, values: ([$0.id] + $0.identifiers).map(lower)) }
         let exact = identified.filter { $0.values.contains(needle) }
-        let hits = exact.isEmpty ? identified.filter { $0.values.contains { $0.firstRange(of: needle) != nil } } : exact
-        return hits.map(\.device)
+        guard exact.isEmpty else { return (exact.map(\.device), true) }
+        return (identified.filter { $0.values.contains { $0.firstRange(of: needle) != nil } }.map(\.device), false)
     }
 
     /// Python's whitespace (`str.isspace()`, which abapit's `q.strip()` trims), as the serials golden lists it.
