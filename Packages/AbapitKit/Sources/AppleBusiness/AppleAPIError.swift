@@ -43,9 +43,10 @@ public enum AppleAPIError: Error, Equatable, Sendable {
     }
 
     /// What a transport-level failure (`.http`) was, for callers that don't import HTTPCore: no answer at all, an answer
-    /// past the body cap, or a host this app refused. The last two had an answer (or never asked), so they aren't "transport".
+    /// past the body cap, a host this app refused, or a request that isn't a read or a login, refused before it was sent. The last
+    /// three had an answer (or never asked), so they aren't "transport".
     public enum HTTPKind: Sendable, Equatable {
-        case noAnswer, tooLarge, refusedHost
+        case noAnswer, tooLarge, refusedHost, notARead
     }
 
     public var httpKind: HTTPKind? {
@@ -54,6 +55,7 @@ public enum AppleAPIError: Error, Equatable, Sendable {
         case .transport: return .noAnswer
         case .tooLarge: return .tooLarge
         case .refusedHost: return .refusedHost
+        case .notARead: return .notARead
         }
     }
 

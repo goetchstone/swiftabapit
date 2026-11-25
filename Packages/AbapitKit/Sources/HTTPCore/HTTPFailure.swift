@@ -9,6 +9,8 @@ public enum HTTPFailure: Error, Equatable, Sendable {
     case refusedHost(String)
     /// A body past the cap (invariant 7).
     case tooLarge(limit: Int)
+    /// A request that isn't a read or a login as it would be sent (invariants 1 and 2): refused before it left.
+    case notARead(String)
 
     public var message: String {
         switch self {
@@ -23,6 +25,7 @@ public enum HTTPFailure: Error, Equatable, Sendable {
             }
         case .refusedHost(let host): "A request to \(host) was refused: it isn't one of the hosts this app talks to."
         case .tooLarge(let limit): "The server sent more than \(limit / 1_048_576) MB, so the response was dropped."
+        case .notARead(let what): "\(what) isn't a read or a login this app makes, so it wasn't sent."
         }
     }
 }

@@ -160,6 +160,19 @@ struct RouteTests {
         for root in Self.appSide { #expect(try SourceScan.files(in: root, matching: Self.readMakers + Self.authMakers).isEmpty, "\(root)") }
     }
 
+    /// An Apple read is a GET with no body (invariant 2), so its builders name neither: the initializer's default is
+    /// the GET. A `releaseDevices(_:)` built in AppleRead.swift with `method: .post` and a `RELEASE_DEVICES` body
+    /// passed every scan and test (failure-log 2026-11-18). `HTTPClient` refuses one as it leaves; this says so
+    /// before anything calls it. An initializer taken unapplied (`ReadRequest.init`) would be called without labels.
+    @Test func appleReadBuildersNameNoMethodOrBody() throws {
+        let file = try #require(SourceScan.swiftFiles(in: "\(Self.sources)/AppleBusiness").first { $0.path.hasSuffix("/AppleRead.swift") })
+        let code = String(SourceScan.code(file.text, strings: false).filter { !$0.isWhitespace && $0 != "`" })
+        #expect(code.contains("ReadRequest(host:"), "the scan doesn't see the builders")
+        for refused in ["method:", "body:", ".post", ".patch", ".delete", "ReadRequest.init", "ReadRequest.self", "HTTPMethod"] {
+            #expect(!code.contains(refused), "AppleRead.swift holds \(refused): an Apple read is a GET with no body")
+        }
+    }
+
     /// A credential exchange carries a secret: only Apple's token broker and Mosyle's session build one.
     @Test func onlyTheBrokersMakeACredentialExchange() throws {
         let makers = try SourceScan.files(in: Self.sources, matching: Self.authMakers)

@@ -20,6 +20,121 @@ struct HTTPCoreTests {
         #expect(wait >= .zero && wait <= HTTPClient.longestWait, "\(value)")
     }
 
+    /// Records what reaches it and answers 204: nothing may reach it from a refused request.
+    final class Recorder: Transport, Sendable {
+        let seen = Mutex<[String]>([])
+        func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+            let url = try #require(request.url)
+            seen.withLock { $0.append("\(request.httpMethod ?? "?") \(url.absoluteString)") }
+            return (Data("{}".utf8), try #require(HTTPURLResponse(url: url, statusCode: 204, httpVersion: "HTTP/2", headerFields: [:])))
+        }
+    }
+
+    static let notReads: [ReadRequest] = [
+        ReadRequest(host: .appleBusiness, method: .post, path: "/v1/orgDeviceActivities", body: Data("{}".utf8)),
+        ReadRequest(host: .appleBusiness, method: .post, path: "/v1/orgDeviceActivities"),
+        ReadRequest(host: .appleBusiness, method: .patch, path: "/v1/mdmServers/S1", body: Data("{}".utf8)),
+        ReadRequest(host: .appleBusiness, method: .delete, path: "/v1/mdmServers/S1"),
+        ReadRequest(host: .appleSchool, method: .post, path: "/v1/orgDeviceActivities", body: Data("{}".utf8)),
+        ReadRequest(host: .appleSchool, method: .patch, path: "/v1/mdmServers/S1"),
+        ReadRequest(host: .appleSchool, method: .delete, path: "/v1/mdmServers/S1"),
+        ReadRequest(host: .appleBusiness, method: .get, path: "/v1/orgDevices", body: Data("{}".utf8)),
+        ReadRequest(host: .appleAccount, method: .get, path: "/auth/oauth2/token"),
+        ReadRequest(host: .appleAccount, method: .post, path: "/auth/oauth2/token", body: Data("{}".utf8)),
+        ReadRequest(host: .mosyle, method: .get, path: "/v1/devices"),
+        ReadRequest(host: .mosyle, method: .post, path: "/v1/devices"),
+        ReadRequest(host: .mosyle, method: .delete, path: "/v1/devices", body: Data("{}".utf8)),
+        ReadRequest(host: .mosyle, method: .post, path: "/v1/devices", query: [QueryItem("a", "b")], body: Data("{}".utf8)),
+        ReadRequest(host: .mosyleLogs, method: .get, path: "/v1/logsstream"),
+    ]
+
+    /// Invariants 1 and 2 as each request leaves: an Apple read is a GET with no body, a Mosyle read a POST with a body
+    /// and no query, and the token host takes no read. Anything else built as a read is refused and nothing is sent
+    /// (failure-log 2026-11-18: a DELETE built in AppleRead.swift went out with the bearer token, every gate green).
+    @Test(arguments: notReads.indices)
+    func aRequestThatIsNotAReadIsNeverSent(index: Int) async throws {
+        let request = Self.notReads[index], recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        await #expect(throws: HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) a path with no template")) {
+            _ = try await client.read(request, authorizer: NoAuth())
+        }
+        #expect(recorder.seen.withLock { $0 }.isEmpty)
+    }
+
+    /// A refusal names the template, never an identifier in a raw path.
+    @Test func aRefusalNamesNoIdentifier() async throws {
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        let bare = ReadRequest(host: .appleBusiness, method: .delete, path: "/v1/orgDevices/C02SERIAL1")
+        let templated = ReadRequest(host: .appleBusiness, method: .delete, path: "/v1/orgDevices/C02SERIAL1", template: "/v1/orgDevices/{id}")
+        for (request, said) in [(bare, "DELETE api-business.apple.com a path with no template"),
+                                (templated, "DELETE api-business.apple.com /v1/orgDevices/{id}")] {
+            do { _ = try await client.read(request, authorizer: NoAuth()); Issue.record("sent") } catch {
+                let message = (error as? HTTPFailure)?.message ?? ""
+                #expect(error as? HTTPFailure == .notARead(said))
+                #expect(!message.contains("C02SERIAL1"), "\(message)")
+            }
+        }
+        #expect(recorder.seen.withLock { $0 }.isEmpty)
+    }
+
+    /// The control: a read of each shape is sent.
+    @Test func aReadOfEachShapeIsSent() async throws {
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        _ = try await client.read(ReadRequest(host: .appleBusiness, path: "/v1/orgDevices"), authorizer: NoAuth())
+        _ = try await client.read(ReadRequest(host: .appleSchool, path: "/v1/orgDevices"), authorizer: NoAuth())
+        _ = try await client.read(ReadRequest(host: .mosyle, method: .post, path: "/v1/devices", body: Data("{}".utf8)), authorizer: NoAuth())
+        _ = try await client.read(ReadRequest(host: .mosyleLogs, method: .post, path: "/v1/logsstream", body: Data("{}".utf8)), authorizer: NoAuth())
+        #expect(recorder.seen.withLock { $0 } == ["GET https://api-business.apple.com/v1/orgDevices", "GET https://api-school.apple.com/v1/orgDevices",
+                                                  "POST https://businessapi.mosyle.com/v1/devices", "POST https://businessapilogs.mosyle.com/v1/logsstream"])
+    }
+
+    /// A next link is an Apple read: on any other host nothing is sent.
+    @Test(arguments: [APIHost.appleAccount, .mosyle, .mosyleLogs])
+    func aNextLinkIsFollowedOnlyOnAnAppleAPIHost(host: APIHost) async throws {
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        await #expect(throws: HTTPFailure.notARead("GET \(host.rawValue) /v1/x")) {
+            _ = try await client.read(next: try #require(URL(string: "https://\(host.rawValue)/v1/x")), on: host, template: "/v1/x", authorizer: NoAuth())
+        }
+        #expect(recorder.seen.withLock { $0 }.isEmpty)
+    }
+
+    static let notLogins: [(APIHost, String, [String: String])] = [
+        (.appleBusiness, "/v1/orgDeviceActivities", [:]), (.appleSchool, "/v1/orgDeviceActivities", [:]),
+        (.appleSchool, "/auth/oauth2/token", [:]), (.appleAccount, "/auth/oauth2/v2/token", [:]), (.appleAccount, "/auth/oauth2/token/", [:]),
+        (.mosyle, "/v1/devices", [:]), (.mosyle, "/v1/login/../devices", [:]), (.mosyleLogs, "/v1/logsstream", [:]),
+        (.appleAccount, "/auth/oauth2/token", ["Authorization": "Bearer x"]), (.mosyle, "/v1/login", ["Authorization": "Bearer x"]),
+        (.mosyle, "/v1/login", ["accessToken": "t", "Authorization": "Bearer x"]),
+        (.appleAccount, "/auth/oauth2/token", ["accessToken": "MOSYLE-SECRET"]),
+    ]
+
+    /// A credential exchange goes to a login endpoint only, with no header but Mosyle's access token: any other would
+    /// be a POST of any body, with any credential, past the read check and the Executor (Phase 7a verifier S9).
+    @Test(arguments: notLogins.indices)
+    func aCredentialExchangeGoesOnlyToALogin(index: Int) async throws {
+        let (host, path, headers) = Self.notLogins[index], recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        await #expect(throws: HTTPFailure.notARead("POST \(host.rawValue) \(path)")) {
+            _ = try await client.authenticate(AuthRequest(host: host, path: path, contentType: "application/json", headers: headers, body: Data("{}".utf8)))
+        }
+        #expect(recorder.seen.withLock { $0 }.isEmpty)
+    }
+
+    /// The control: the three logins are sent, and the list is exactly those three.
+    @Test func theThreeLoginsAreSent() async throws {
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        _ = try await client.authenticate(AuthRequest(host: .appleAccount, path: "/auth/oauth2/token", contentType: "application/x-www-form-urlencoded", body: Data()))
+        _ = try await client.authenticate(AuthRequest(host: .mosyle, path: "/v1/login", contentType: "application/json", headers: ["accessToken": "t"], body: Data()))
+        _ = try await client.authenticate(AuthRequest(host: .mosyleLogs, path: "/v1/login", contentType: "application/json", headers: ["accessToken": "t"], body: Data()))
+        #expect(recorder.seen.withLock { $0 } == ["POST https://account.apple.com/auth/oauth2/token", "POST https://businessapi.mosyle.com/v1/login",
+                                                  "POST https://businessapilogs.mosyle.com/v1/login"])
+        #expect(HTTPClient.logins.map { "\($0.0.rawValue)\($0.1)" } == ["account.apple.com/auth/oauth2/token", "businessapi.mosyle.com/v1/login",
+                                                                         "businessapilogs.mosyle.com/v1/login"])
+    }
+
     @Test func aNextLinkOffTheHostIsRefused() async throws {
         let client = HTTPClient(transport: AppleStub(), limiter: RateLimiter(sleep: { _ in }))
         for link in ["https://evil.example.com/v1/orgDevices", "http://api-business.apple.com/v1/orgDevices",

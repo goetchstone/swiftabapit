@@ -670,6 +670,7 @@ extension AppleClient {
         case .transport(let code): "error transport \(code)"
         case .refusedHost: "error refused host"
         case .tooLarge: "error too large"
+        case .notARead: "error not a read"
         }
     }
 

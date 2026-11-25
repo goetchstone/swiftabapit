@@ -512,6 +512,8 @@ struct SweepTests {
         #expect(SnapshotPolicy.code(AppleAPIError.http(.tooLarge(limit: 1 << 25))) == "too large")
         #expect(SnapshotPolicy.code(HTTPFailure.refusedHost("evil.example.com")) == "refused host")
         #expect(SnapshotPolicy.code(AppleAPIError.http(.refusedHost("evil.example.com"))) == "refused host")
+        #expect(SnapshotPolicy.code(HTTPFailure.notARead("DELETE api-business.apple.com /v1/mdmServers/{id}")) == "not a read")
+        #expect(SnapshotPolicy.code(AppleAPIError.http(.notARead("DELETE api-business.apple.com /v1/mdmServers/{id}"))) == "not a read")
     }
 
     /// A School org has no Apple MDM: its run tries AppleCare and Activation Lock only.

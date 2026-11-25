@@ -7,7 +7,7 @@ rate limiter, bounded retries and progressive paging (plan §3.3).
 
 **Enforcement home:** `APIHost` (the allowlist, an enum), `ReadRequest`/`AuthRequest` `package` inits,
 `RouteTests` (only `Transport.swift` names `URLSession`; only the read builders make a read; only the token
-broker makes a credential exchange), `HTTPCoreTests`, `scripts/check_app.sh` (no listener symbol). How the scans
+broker makes a credential exchange), `HTTPClient`'s check of each request as it leaves (`isReadShaped`, `logins`; `HTTPCoreTests`), `scripts/check_app.sh` (no listener symbol). How the scans
 and the gate read code, and how they failed: [gates.md](gates.md).
 
 ## Files
@@ -62,6 +62,11 @@ and the gate read code, and how they failed: [gates.md](gates.md).
 - A rate read from `orgs.json` that isn't finite is the default: a NaN rate never waits.
 - An ID typed into Find goes into a path: `AppleRead.isPathSafe` refuses anything but `[A-Za-z0-9._-]`, not
   starting with `.`, at most 128 characters, before a request exists.
+- **A request is checked as it leaves, not only where it is built.** `HTTPClient.read` refuses anything that isn't
+  read-shaped (an Apple GET with no body; a Mosyle POST with a body and no query; nothing to the token host), and
+  `authenticate` anything but the three logins, with no header beyond Mosyle's `accessToken`, and that only to a Mosyle host (`HTTPFailure.notARead`). A
+  `method: .delete` built in `AppleRead.swift` passed every source scan (failure-log 2026-11-18). Phase 4's write door is
+  a method of its own; it does not loosen these two.
 
 ## Testing / live-verification status
 - Offline: `HTTPCoreTests`, `AppleClientTests`, `AppleClientFailureTests` (transport failures, a revoked
