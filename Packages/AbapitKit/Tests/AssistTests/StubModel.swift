@@ -4,11 +4,13 @@ import Testing
 @testable import Assist
 
 /// A strict stand-in for the on-device model (invariant 5: the stub fails like the API). Each call takes the next scripted
-/// reply; a call with none scripted fails the test. A `.json` reply is held to what guided generation can return: a field
-/// the schema requires and the reply leaves out is thrown as `GeneratedContent.ParsingError`, as the SDK throws it ("does not
-/// contain a property", the shared lessons), and a value off a listed `anyOf` fails the test, since constrained decoding can't
-/// write one. `.unchecked` skips both, for the defence code keeps against an answer the SDK isn't meant to give. `.error`
-/// throws the SDK's own error values (`LanguageModelError`'s cases are built with their public initializers).
+/// reply; a call with none scripted fails the test. A `.json` reply is held to what guided generation can return: a field the
+/// schema requires and the reply leaves out is thrown as `GeneratedContent.ParsingError` ("does not contain a property"), and
+/// a value off a listed `anyOf` fails the test, since constrained decoding can't write one. Which way the real SDK reports a
+/// dropped field isn't settled: SwiftGamGui saw the ParsingError, but it may also come back as content without the property
+/// (code's `.noPick` fault, scripted with `.unchecked`). Both are tested; the next flagged run should count which occurs.
+/// `.unchecked` skips both checks, for the defence code keeps against an answer the SDK isn't meant to give. `.error` throws
+/// the SDK's own error values (`LanguageModelError`'s cases are built with their public initializers).
 final class StubModel: Picker.Asking, @unchecked Sendable {
     enum Reply {
         case json(String)

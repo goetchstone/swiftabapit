@@ -10,7 +10,8 @@ import Reports
 ///    only to a question, so a question never lands on a change.
 /// 2. the report, summary or rule, from `Choices` (at most 19 labels, one pick: the lessons narrow in steps past about 40), or
 ///    none. A report's holds line follows the list, in the catalog's words.
-/// 3. for a report with groups, the group, from that report's values plus "all", its filter's summary after the list.
+/// 3. for a report with groups, when the sentence shares a word with a group's plain label, the group, from those labels plus
+///    "all" (code maps the label back to the catalog's token); a sentence naming no group is "all" with no call.
 ///
 /// The prompt holds the sentence and the catalog's words only, with no example sentence. The answer's committing field (the
 /// pick) is first; a second field copies the words of the request that point to it, so code can tell an answer that read the
@@ -80,7 +81,6 @@ public enum ModelPicker {
     /// The frame around the lists and the sentence, every word of it here.
     static let choicesHeading = "Choices:"
     static let reportHeading = "Report:"
-    static let groupsHeading = "Groups:"
     static let requestHeading = "Request:"
     static let faultLead = "Your last answer can't be used:"
     static let faultTail = "Answer again."
@@ -104,12 +104,42 @@ public enum ModelPicker {
             chosen = choice
         }
         guard !chosen.groups.isEmpty else { return .picked(chosen.id, group: nil) }
+        // A sentence that names no group asks for all of them: code decides it, so the pick can't drift to the first group
+        // (the coordinating session's decision, 2026-11-25).
+        guard namesAGroup(request, chosen) else { return .picked(chosen.id, group: nil) }
 
-        switch try await ask(request, labels: chosen.groups + [all], step: .group, about: chosen.label, holds: groupHolds(chosen), using: model) {
+        let labels = chosen.groups.map(groupLabel)
+        switch try await ask(request, labels: labels + [all], step: .group, about: chosen.label, using: model) {
         case .refused(let why): return .refused(why)
         case .picked(all): return .picked(chosen.id, group: nil)
-        case .picked(let group): return .picked(chosen.id, group: group)
+        case .picked(let label):
+            guard let index = labels.firstIndex(of: label) else { return .refused(.notOnTheList) }
+            return .picked(chosen.id, group: chosen.groups[index])
         }
+    }
+
+    /// Each group's plain words, which the group pick lists in place of the catalog's token (code maps the answer back). A
+    /// token missing here is listed as it is; a test holds every group of every report to a label of its own.
+    static let groupLabels: [String: String] = [
+        "lock:USER": "user lock", "lock:MDM": "MDM lock", "lock:NONE": "lock type none", "lock:other": "unknown lock type",
+        "unlocked": "unlocked", "unclear": "unclear",
+        "status:REQUESTED": "requested", "status:STARTED": "started", "status:SUCCESS": "succeeded", "status:FAILED": "failed",
+        "status:other": "unknown status", "no-status": "no status", "no-data": "no data", "past-due": "past the deadline",
+        "past-due-status-unknown": "past the deadline with unknown status",
+        "healthy": "healthy", "quiet": "quiet", "inactive": "inactive", "deleted": "deleted", "other-status": "unknown status",
+        "cannot-judge": "cannot judge",
+        "active": "active coverage", "no-active-coverage": "no active coverage", "no-record": "no coverage record",
+        "status-unknown": "unknown coverage status", "estimated-past-limit": "estimated past the limit",
+        "not-read": "not read",
+    ]
+
+    static func groupLabel(_ token: String) -> String { groupLabels[token] ?? token }
+
+    /// Whether the sentence shares a word with any group's plain label, beyond the words of the report's own label ("lock" names
+    /// Activation Lock, not a group of it). Words as `WordRule` reads them.
+    static func namesAGroup(_ request: String, _ choice: Choices.Choice) -> Bool {
+        let said = Set(WordRule.words(request)).subtracting(WordRule.words(choice.label))
+        return choice.groups.contains { !said.isDisjoint(with: WordRule.words(groupLabel($0))) }
     }
 
     /// The lines after the choices: each report's holds line, from the catalog. The summary's would repeat the rules' labels,
@@ -121,13 +151,6 @@ public enum ModelPicker {
         }
     }
 
-    /// The line after a report's groups: its group filter's summary, from the catalog.
-    static func groupHolds(_ choice: Choices.Choice) -> [String] {
-        guard case .report(let id) = choice.kind,
-              let filter = ReportCatalog.entry(id).filters.first(where: { $0.name == "group" }) else { return [] }
-        return ["\(groupsHeading) \(filter.summary)."]
-    }
-
     enum Asked: Equatable {
         case picked(String)
         case refused(Refusal)
@@ -136,7 +159,9 @@ public enum ModelPicker {
     /// One pick of `labels`, and one re-ask naming the fault if code finds one; a thrown error is not understood at once.
     static func ask(_ request: String, labels: [String], step: Step, about subject: String? = nil, holds: [String] = [],
                     using model: some Picker.Asking) async throws -> Asked {
-        let schema = try schema(labels)
+        // A schema the SDK won't build (`SchemaError`, as for an empty list) is not understood: `pick` throws only cancellation.
+        let schema: GenerationSchema
+        do { schema = try Self.schema(labels) } catch { return .refused(.notUnderstood(.other)) }
         var fault: String?
         for _ in 0..<2 {
             try Task.checkCancellation()

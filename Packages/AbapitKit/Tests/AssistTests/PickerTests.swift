@@ -83,23 +83,56 @@ struct PickerTests {
     }
 
     @Test func aReportWithGroupsTakesThreePicks() async throws {
-        let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:activation-lock")), StubModel.pick("lock:USER")])
+        let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:activation-lock")), StubModel.pick("user lock", words: "user")])
         let outcome = try await Picker.pick("devices with a user's Activation Lock", for: Self.full, using: model)
         let choice = Self.full.choices.first { $0.id == "report:activation-lock" }!
-        #expect(outcome == .picked(Picker.Pick(choice: choice, group: "lock:USER", tokens: ["group": "lock:USER"], problems: [])))
+        #expect(outcome == .picked(Picker.Pick(choice: choice, group: "lock:USER", tokens: ["group": "lock:USER"])))
         #expect(model.calls.count == 3)
         let schemas = try model.calls.map { try StubModel.shape($0.schema) }
         #expect(schemas[1].enums["pick"] == Self.full.choices.map(\.label) + [ModelPicker.none])
-        #expect(schemas[2].enums["pick"] == choice.groups + [ModelPicker.all])
+        // The group pick lists plain words, "all" last, and code maps the answer back to the catalog's token.
+        #expect(schemas[2].enums["pick"] == choice.groups.map(ModelPicker.groupLabel) + [ModelPicker.all])
+        #expect(!schemas[2].enums["pick"]!.contains("lock:USER"))
         #expect(schemas.allSatisfy { $0.required == ["pick", "words"] })
+    }
+
+    /// Every group of every report has plain words of its own, none of them "all" or a token.
+    @Test func everyGroupHasPlainWords() {
+        for scope in [Choices.Scope.business, .school] {
+            for choice in Choices.build(scope: scope, hasMosyle: true, thresholds: Self.thresholds) where !choice.groups.isEmpty {
+                let labels = choice.groups.map(ModelPicker.groupLabel)
+                #expect(Set(labels).count == labels.count, Comment(rawValue: choice.id))
+                for (group, label) in zip(choice.groups, labels) {
+                    #expect(ModelPicker.groupLabels[group] != nil, Comment(rawValue: group))
+                    #expect(label != ModelPicker.all && !label.contains(":"), Comment(rawValue: group))
+                }
+            }
+        }
+    }
+
+    /// A sentence that shares no word with any group's plain words is every group, decided by code with no third call (the
+    /// group pick leaned to the first group listed when a sentence named none).
+    @Test func aSentenceNamingNoGroupIsEveryGroupWithNoCall() async throws {
+        for (sentence, id) in [("the MDM migration report", "report:migration"), ("Activation Lock report", "report:activation-lock"),
+                               ("show service health", "report:service-health"), ("devices out of warranty", "report:out-of-warranty")] {
+            let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)])
+            guard case .picked(let pick) = try await Picker.pick(sentence, for: Self.full, using: model) else { Issue.record(Comment(rawValue: sentence)); continue }
+            #expect(pick.choice.id == id && pick.group == nil && pick.tokens.isEmpty, Comment(rawValue: sentence))
+            #expect(model.calls.count == 2, Comment(rawValue: sentence))
+        }
+        let choice = Self.full.choices.first { $0.id == "report:migration" }!
+        #expect(ModelPicker.namesAGroup("which migrations failed", choice))
+        #expect(ModelPicker.namesAGroup("devices past the deadline", choice))
+        #expect(!ModelPicker.namesAGroup("all of the MDM migration", choice), "the report's own words name no group")
     }
 
     @Test func allIsEveryGroup() async throws {
         let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:migration")), StubModel.pick(ModelPicker.all)])
-        guard case .picked(let pick) = try await Picker.pick("the migration of the devices", for: Self.full, using: model) else {
+        guard case .picked(let pick) = try await Picker.pick("failed or started migration of the devices", for: Self.full, using: model) else {
             Issue.record("no pick"); return
         }
-        #expect(pick.choice.id == "report:migration" && pick.group == nil && pick.tokens.isEmpty && pick.problems.isEmpty)
+        #expect(pick.choice.id == "report:migration" && pick.group == nil && pick.tokens.isEmpty)
+        #expect(model.calls.count == 3)
     }
 
     @Test func aRuleOrTheSummaryTakesTwoPicks() async throws {
@@ -113,25 +146,76 @@ struct PickerTests {
         }
     }
 
+    func outcome(_ sentence: String, _ id: String) async throws -> Picker.Outcome {
+        let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)])
+        return try await Picker.pick(sentence, for: Self.full, using: model)
+    }
+
+    func problems(_ outcome: Picker.Outcome) -> [String] {
+        if case .refused(.numbers(let problems)) = outcome { return problems }
+        return []
+    }
+
     /// Numbers come from code's parse of the sentence, and the catalog takes or refuses them; the model is never asked one.
     @Test func numbersComeFromTheSentence() async throws {
-        func picked(_ sentence: String, _ id: String) async throws -> Picker.Pick? {
-            let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label(id))])
-            if case .picked(let pick) = try await Picker.pick(sentence, for: Self.full, using: model) { return pick }
+        func tokens(_ sentence: String, _ id: String) async throws -> [String: String]? {
+            if case .picked(let pick) = try await outcome(sentence, id) { return pick.tokens }
             return nil
         }
-        #expect(try await picked("devices whose AppleCare ends within 45 days", "report:coverage")?.tokens == ["days": "45"])
-        #expect(try await picked("devices whose AppleCare ends in 2 weeks", "report:coverage")?.tokens == ["days": "14"])
-        #expect(try await picked("devices 4 years old or more", "report:fleet-age")?.tokens == ["years": "4"])
-        #expect(try await picked("devices 4 years old", "report:coverage")?.tokens == [:], "years are no filter of coverage")
-        let far = try await picked("devices whose AppleCare ends within 4000 days", "report:coverage")
-        #expect(far?.tokens == [:] && far?.problems == ["days must be a whole number of days from 1 to 1825"])
-        let twice = try await picked("devices ending in 30 days or 60 days", "report:coverage")
-        #expect(twice?.tokens == [:] && twice?.problems.first?.contains("more than once") == true)
-        #expect(try await picked("devices ending in 30 days, so 30 days", "report:coverage")?.tokens == ["days": "30"])
-        #expect(try await picked("devices with rules for 12 days", "rule:firewall_off")?.tokens == [:], "a rule's window is its own")
-        // The model's schemas never hold a number.
-        #expect(Picker.numbers(in: "in 3 months, 10 devices, 90-day, 1 year") == ["days": [90], "years": [1]])
+        #expect(try await tokens("devices whose AppleCare ends within 45 days", "report:coverage") == ["days": "45"])
+        #expect(try await tokens("devices whose AppleCare ends in 2 weeks", "report:coverage") == ["days": "14"])
+        #expect(try await tokens("devices 4 years old or more", "report:fleet-age") == ["years": "4"])
+        #expect(try await tokens("devices on a 90-day AppleCare window", "report:coverage") == ["days": "90"])
+        #expect(try await tokens("devices ending in 30 days, so 30 days.", "report:coverage") == ["days": "30"])
+        #expect(try await tokens("devices with firewall off", "rule:firewall_off") == [:], "a rule with no window takes no number")
+        #expect(try await tokens("devices with firewall off for 12 days", "rule:firewall_off") == [:])
+        #expect(try await tokens("the Activation Lock of 10 devices this year", "report:activation-lock") == [:], "a report with no number filter ignores them")
+    }
+
+    /// A number that can't be taken as said refuses the pick, in words: never a value read from part of it, never dropped so the
+    /// default window runs (the review's cases, each proved wrong before this).
+    @Test(arguments: [
+        ("devices 1.5 years old", "report:fleet-age", "1.5 years"),
+        ("devices whose AppleCare ends in -30 days", "report:coverage", "-30 days"),
+        ("devices whose AppleCare ends in 30-60 days", "report:coverage", "30-60 days"),
+        ("devices whose AppleCare ends in 1,000 days", "report:coverage", "1,000 days"),
+        ("devices whose AppleCare ends in 30\u{2212}60 days", "report:coverage", "60 days"),
+        ("devices whose AppleCare ends in 1000000 days", "report:coverage", "from 1 to 1825"),
+        ("devices whose AppleCare ends in 99999999999999999999999 days", "report:coverage", "from 1 to 1825"),
+        ("devices whose AppleCare ends within 4000 days", "report:coverage", "from 1 to 1825"),
+        ("devices ending in 30 days or 60 days", "report:coverage", "more than once"),
+        ("devices whose AppleCare ends in 3 months", "report:coverage", "months"),
+        ("devices whose AppleCare ends in two weeks", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        ("devices whose AppleCare ends in 90d", "report:coverage", "90d"),
+        ("devices 4 years old", "report:coverage", "not years"),
+        ("devices more than a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("AppleCare ending in 60 days", "rule:applecare_expiring", "window of 90 days"),
+        ("devices not checked in to Mosyle for 2 years", "rule:mosyle_check_in", "2 years"),
+        ("services quiet for days", "rule:quiet_service", "no number"),
+    ])
+    func aNumberThatCantBeTakenRefusesThePick(_ sentence: String, _ id: String, _ said: String) async throws {
+        let outcome = try await outcome(sentence, id)
+        let problems = problems(outcome)
+        #expect(!problems.isEmpty, Comment(rawValue: "\(outcome)"))
+        #expect(problems.contains { $0.contains(said) }, Comment(rawValue: "\(problems)"))
+        if case .refused(let refusal) = outcome { #expect(refusal.words.hasSuffix("Nothing was picked.")) }
+    }
+
+    @Test func aRulesOwnWindowIsTaken() async throws {
+        for (sentence, id) in [("AppleCare ending in 90 days", "rule:applecare_expiring"), ("no Mosyle check-in for 30 days", "rule:mosyle_check_in"),
+                               ("services silent 30 days", "rule:quiet_service"), ("migration deadline in 2 weeks", "rule:migration_deadline")] {
+            guard case .picked(let pick) = try await outcome(sentence, id) else { Issue.record(Comment(rawValue: sentence)); continue }
+            #expect(pick.choice.id == id && pick.tokens.isEmpty)
+        }
+    }
+
+    @Test func theParseReadsPlainDigitsBeforeAUnit() {
+        #expect(Picker.numbers(in: "in 10 devices, 90-day, 1 year").values == ["days": ["90"], "years": ["1"]])
+        #expect(Picker.numbers(in: "in 10 devices, 90-day, 1 year").problems.isEmpty)
+        #expect(Picker.numbers(in: "for 45days").values == ["days": ["45"]])
+        #expect(Picker.numbers(in: "today, 2024-05-01, version 1.5").values.isEmpty)
+        #expect(Picker.numbers(in: "today, 2024-05-01, version 1.5").problems.isEmpty, "a number with no unit is no filter")
+        #expect(Picker.numbers(in: "in 1.5 years").values.isEmpty)
     }
 
     @Test func noneIsNotOnTheList() async throws {
@@ -177,14 +261,16 @@ struct PickerTests {
         let lead: [[StubModel.Reply]] = [[], [StubModel.pick(Self.see)], [StubModel.pick(Self.see), StubModel.pick(label("report:migration"))]]
         for replies in lead {
             let model = StubModel(replies + [.error(error)])
-            let outcome = try await Picker.pick("migration of the devices", for: Self.full, using: model)
+            let outcome = try await Picker.pick("failed migration of the devices", for: Self.full, using: model)
             #expect(outcome == .refused(.notUnderstood(why)), Comment(rawValue: "\(error) at pick \(replies.count + 1)"))
             #expect(model.calls.count == replies.count + 1, "no re-ask after an error")
             if case .refused(let refusal) = outcome { #expect(!refusal.words.contains("CANARY")) }
         }
     }
 
-    /// Every case of `LanguageModelError` in this SDK is in the table above, so a new one fails here first.
+    /// The table above names every case of `LanguageModelError` in the macOS 27.2 SDK, checked against a hand list read from its
+    /// `.swiftinterface` (it can't reflect over the SDK's cases). A case a later SDK adds falls to `@unknown default`, whose
+    /// words are fixed ("the model failed"); add it here and to the list when the SDK grows.
     @Test func theTableHasEveryLanguageModelError() {
         let named = Set(Self.errors.compactMap { ($0.0 as? LanguageModelError).flatMap { Mirror(reflecting: $0).children.first?.label } })
         #expect(named == ["contextSizeExceeded", "rateLimited", "guardrailViolation", "refusal", "unsupportedCapability",
@@ -233,14 +319,22 @@ struct PickerTests {
         #expect(try await Picker.pick("devices out of warranty", for: Self.full, using: model) == .refused(.notUnderstood(.faultTwice)))
         #expect(model.calls[2].prompt.contains(ModelPicker.Fault.offList.words))
         let choices = Self.full.choices
-        #expect(Picker.check("report:not-a-report", group: nil, sentence: "x", against: choices) == .refused(.notOnTheList))
-        #expect(Picker.check("report:activation-lock", group: "lock:SOMEONE", sentence: "x", against: choices) == .refused(.notOnTheList))
-        #expect(Picker.check("rule:mosyle_check_in", group: nil, sentence: "x", against: Self.noMosyle.choices) == .refused(.notOnTheList))
-        #expect(Picker.check("report:coverage", group: "lock:USER", sentence: "x", against: choices) == .refused(.notOnTheList))
+        #expect(Picker.check("report:not-a-report", group: nil, sentence: "x", against: choices, thresholds: Self.thresholds) == .refused(.notOnTheList))
+        #expect(Picker.check("report:activation-lock", group: "lock:SOMEONE", sentence: "x", against: choices, thresholds: Self.thresholds) == .refused(.notOnTheList))
+        #expect(Picker.check("rule:mosyle_check_in", group: nil, sentence: "x", against: Self.noMosyle.choices, thresholds: Self.thresholds) == .refused(.notOnTheList))
+        #expect(Picker.check("report:coverage", group: "lock:USER", sentence: "x", against: choices, thresholds: Self.thresholds) == .refused(.notOnTheList))
         // An off-list group from the model is the same fault.
         let group = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:migration")),
                                .unchecked(#"{"pick": "status:LOST", "words": "devices"}"#), .unchecked(#"{"pick": "status:LOST", "words": "devices"}"#)])
-        #expect(try await Picker.pick("migration of the devices", for: Self.full, using: group) == .refused(.notUnderstood(.faultTwice)))
+        #expect(try await Picker.pick("failed migration of the devices", for: Self.full, using: group) == .refused(.notUnderstood(.faultTwice)))
+    }
+
+    /// A schema the SDK refuses to build (an empty list) is "not understood", with no call: `pick` throws only cancellation.
+    @Test func aSchemaTheSDKWontBuildIsNotUnderstood() async throws {
+        #expect(throws: (any Error).self) { try ModelPicker.schema([]) }
+        let model = StubModel()
+        #expect(try await ModelPicker.ask("devices", labels: [], step: .choice, using: model) == .refused(.notUnderstood(.other)))
+        #expect(model.calls.isEmpty)
     }
 
     // MARK: what the model is given
@@ -250,15 +344,15 @@ struct PickerTests {
     @Test func thePromptIsTheSentenceAndTheCatalogOnly() async throws {
         let sentence = "CANARY-7Q which devices have a user lock"
         let fault = StubModel.Reply.unchecked(#"{"pick": "elsewhere", "words": "devices"}"#)
-        let model = StubModel([fault, StubModel.pick(Self.see), StubModel.pick(label("report:activation-lock")), StubModel.pick("lock:USER")])
+        let model = StubModel([fault, StubModel.pick(Self.see), StubModel.pick(label("report:activation-lock")), StubModel.pick("user lock", words: "user")])
         _ = try await Picker.pick(sentence, for: Self.full, using: model)
         #expect(model.calls.count == 4)
-        var known = [ModelPicker.choicesHeading, ModelPicker.reportHeading, ModelPicker.groupsHeading, ModelPicker.requestHeading,
+        var known = [ModelPicker.choicesHeading, ModelPicker.reportHeading, ModelPicker.requestHeading,
                      ModelPicker.faultLead, ModelPicker.faultTail, ModelPicker.none, ModelPicker.all]
         known += ModelPicker.Step.allCases.map(\.task) + ModelPicker.Asks.allCases.map(\.rawValue)
         known += [ModelPicker.Fault.noPick, .offList, .noWords, .echoed, .notFromRequest].map(\.words)
         for choice in Self.full.choices { known += [choice.label] + (choice.holds.map { [$0] } ?? []) + choice.groups }
-        for entry in ReportCatalog.entries { known += entry.filters.map(\.summary) }
+        known += ModelPicker.groupLabels.values
         // Longest first, so a label inside a holds line is taken out with its line.
         known = known.sorted { $0.count > $1.count }
         for call in model.calls {
@@ -306,7 +400,7 @@ struct PickerTests {
         return [
             try call("asks", ModelPicker.Asks.allCases.map(\.rawValue), .asks),
             try call("choice", choices.map(\.label) + [ModelPicker.none], .choice, holds: ModelPicker.holds(choices)),
-            try call("group", groupChoice.groups + [ModelPicker.all], .group, about: groupChoice.label, holds: ModelPicker.groupHolds(groupChoice)),
+            try call("group", groupChoice.groups.map(ModelPicker.groupLabel) + [ModelPicker.all], .group, about: groupChoice.label),
         ]
     }
 

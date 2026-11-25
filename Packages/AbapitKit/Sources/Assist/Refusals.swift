@@ -21,6 +21,9 @@ public enum Refusal: Sendable, Equatable {
     case notUnderstood(NotUnderstood)
     /// The model said none of the reports or checks fits.
     case notOnTheList
+    /// The sentence's number can't be taken as said for the choice picked (each problem in words): refused, so a caller can
+    /// never run the pick with the default window instead (the coordinating session's decision, 2026-11-25).
+    case numbers([String])
 
     /// `SystemLanguageModel.Availability.UnavailableReason`, as Assist words it (and one for a reason this version doesn't know).
     public enum Unavailable: Sendable, Equatable {
@@ -50,6 +53,7 @@ public enum Refusal: Sendable, Equatable {
         case .unsupportedLocale: "The on-device model doesn't support this Mac's language, so questions in words are off."
         case .notUnderstood(let why): "That wasn't understood: \(why.words). Nothing was picked."
         case .notOnTheList: "That isn't one of the reports or Needs-attention checks abapit answers. Nothing was picked."
+        case .numbers(let problems): (problems + ["Nothing was picked."]).joined(separator: " ")
         }
     }
 }

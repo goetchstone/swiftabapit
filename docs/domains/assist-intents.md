@@ -80,26 +80,40 @@ on-device only, never Private Cloud Compute).
   built at run time, the pick field first and then the request's own words that point to it: (1) see or list something, or
   change something; a change request is answered by code, "This version only reads; nothing was drafted." (2) one of the
   client's choices (at most 19, one list: the shared lessons narrow in steps past about 40) or "None of these", the reports'
-  holds lines after the list; (3) for a report with groups, a group or "all", the group filter's summary after the list.
+  holds lines after the list; (3) for a report with groups whose sentence names one, a group's plain label or "all".
 - **The prompt** holds the sentence and the catalog's words only: no example sentence, no list data. A test takes each call
   apart and finds nothing else.
 - **Code checks every answer**: a pick off the list, a missing pick, empty words, the words field's description echoed back, or
   words the request doesn't hold is asked about once, the fault named; a second fault is "not understood". A thrown error (each
   `LanguageModelError` case, a parsing error, assets not ready, a concurrent request) is "not understood" at once, worded by
   kind, never the error's own text. Code checks the final id and group against the list again (`Picker.check`).
-- **Numbers** come from code's parse of the sentence (days, weeks as seven days, years), resolved by `ReportCatalog.resolve`;
-  a number given twice differently, or out of bounds, is a problem in words. A rule keeps its own window.
+- **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) (seven days each) or year(s), "90-day"
+  too, passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
+  minus sign ("1.5 years", "-30 days", "30-60 days", "1,000 days"), glued to letters that aren't a unit ("90d"), in months, or
+  a unit word with no digits ("two weeks", "a year") is a problem; so is a unit the report doesn't take, two different values,
+  and, for a rule with a window (AppleCare ending, check-in, quiet service, migration deadline), a number other than its window.
+  **Any problem refuses the pick** (`Refusal.numbers`, the problems as its words; the coordinating session's decision,
+  2026-11-25), so no caller runs a pick past a refused number into the default window. A choice that takes no number ignores one.
+- **The group** (the coordinating session's decision, 2026-11-25): a sentence that shares no word with any group's plain label,
+  beyond the report's own label's words, is every group, decided by code with no call. Otherwise the group pick lists plain
+  labels ("user lock", "requested", "no coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it), "all"
+  last, and code maps the answer back to the catalog's token.
 - **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
-  operator's Mac: 379, 1,018 and 534 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
+  operator's Mac: 379, 1,018 and 456 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
   (characters / 3 plus the cap) to the same budget.
-- **Dev score** (one flagged run on the operator's Mac, 2026-11-25): report 134 of 188, group 35 of 81, refusal 22 of 24;
-  `WordRule` beside it 108, 30, 24. Mean 1.45 s a sentence, at most 2.59 s. Of 212 dev sentences, 3 hit a guardrail and 7 were
-  refused by the model (each "not understood"). Held out is a later step's single run.
-- Gotcha: the group pick leans to the first group listed when the sentence names none ("status:REQUESTED", "lock:USER",
-  "healthy" for a request of every group); "all" is last on the list. Not tuned here: dev is one run, and a fix is a later
-  change measured on several runs.
-- Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError`, as the SDK does, and fails
-  a test that scripts a value guided generation can't write; `.unchecked` replies test code's own defence.
+- **Dev score** (flagged runs on the operator's Mac, 2026-11-25; `WordRule` beside it 108 of 188, 30 of 81, 24 of 24):
+  - first run: report 134 of 188, group 35 of 81, refusal 22 of 24; mean 1.45 s a sentence, at most 2.59 s. The group pick
+    leaned to the first group listed when the sentence named none (`lock:USER`, `status:REQUESTED`, `healthy`; 13 times).
+  - after the number refusals and the group decision: report 122, group 41, refusal 22; mean 1.34 s, at most 2.68 s. 16 dev
+    sentences are now refused for their numbers ("this year", "a month", "in two weeks", a window other than the rule's), which
+    is most of the report drop; the group pre-check also sends a few named groups to every group where the sentence's word
+    isn't the label's ("request" against "requested").
+  - In both, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). Held out is a
+    later step's single run.
+- Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError` (what SwiftGamGui saw) and
+  fails a test that scripts a value guided generation can't write; `.unchecked` replies test code's own defence. Whether the SDK
+  throws a dropped field or returns content without it (code's `.noPick` fault, asked about once) isn't settled: both paths are
+  tested, and the next flagged run should count which one occurs.
 
 ## Invariants & failure history
 
