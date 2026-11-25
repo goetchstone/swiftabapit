@@ -35,8 +35,8 @@ enum ReportChoice: String, AppEnum {
 
 /// One of the six reports over the active client, as the Reports screen builds it (the operator, 2026-11-24: Q1 "Six reports +
 /// more", Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active client, named"). It reads only: `Answers` and nothing else,
-/// whose words are spoken and whose rows are shown. In the background, never opening a window; the Mac's own authentication
-/// before it answers (pending the operator's live check of what that does on a Mac).
+/// whose words are spoken and whose rows are shown. Declared background only, with the Mac's own authentication before it
+/// answers; whether a cold launch opens a window, and what the policy does on a Mac, are unverified (the operator's live checks).
 struct RunReportIntent: AppIntent {
     static let title: LocalizedStringResource = "Run a Report"
     static let description = IntentDescription(

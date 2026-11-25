@@ -2,7 +2,7 @@
 // scripts/intents_test.sh, against the Release build it registered. It reads definitions and makes an intent; it runs none.
 // Running one (`run()`) launches abapit, so never here on the operator's Mac; on CI's runner it ended "Underlying session was
 // cancelled (transport cancelled)" for NeedsAttentionIntent (PR 52's first run), so the no-key answer isn't run: the intents ask
-// for local device authentication, which the runner may refuse (the operator's live check L6).
+// for local device authentication, which the runner may refuse (unconfirmed: what that policy does on a Mac is a live check).
 import AppIntentsTesting
 import Foundation
 

@@ -1,8 +1,9 @@
 import AppIntents
 import AppModels
 
-/// The Needs-attention summary over the active client (the operator, 2026-11-24: Q1 "Six reports + more"): the screen's own
-/// evaluation, through `Answers` and nothing else. In the background; the Mac's own authentication first (pending its live check).
+/// The Needs-attention summary over the active client (the operator, 2026-11-24: Q1 "Six reports + more"): the screen's rules,
+/// judged and said through `Answers` and nothing else, and never recorded (the operator, 2026-11-25: "Don't record (Recommended)").
+/// Declared background only, with the Mac's own authentication; what both do on a Mac is unverified (a live check).
 struct NeedsAttentionIntent: AppIntent {
     static let title: LocalizedStringResource = "What Needs Attention"
     static let description = IntentDescription(

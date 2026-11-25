@@ -3,7 +3,8 @@ import AppModels
 
 /// A serial number (or IMEI, MEID, EID, order number, MAC address) looked up in Apple's device list for the active client, as
 /// the Devices screen's Find does, through `Answers` and nothing else. The identifier is never said back; the devices found are
-/// shown, at most 10. In the background; the Mac's own authentication first (pending its live check).
+/// shown, at most 10. Declared background only, with the Mac's own authentication;
+/// what both do on a Mac is unverified (a live check).
 struct LookUpSerialIntent: AppIntent {
     static let title: LocalizedStringResource = "Look Up a Serial Number"
     static let description = IntentDescription(
