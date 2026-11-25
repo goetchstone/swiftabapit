@@ -95,7 +95,7 @@ public enum ReportCatalog {
         Entry(id: .serviceHealth, title: "Device management service health",
               summary: "Each service's last connection, status and device count, and whether it is healthy, quiet (the Overview's rule), inactive or deleted.",
               filters: [Filter(name: "group", values: ServiceHealth.fixedGroups, summary: "healthy, quiet, inactive, deleted, other-status or cannot-judge"),
-                        Filter(name: "days", values: [], bounds: 1...CoverageReport.maximumDays, summary: "quiet means silent for more than this many days (30)")],
+                        Filter(name: "days", values: [], bounds: 1...QuietServices.maximumDays, summary: "quiet means silent for more than this many days (30)")],
               inputs: [Input(resource: "mdmServers", note: "the services list, and which attributes Apple didn't send"),
                        Input(resource: "mdmServers/{id}/relationships/devices", note: "each service's device count, when read")],
               csvColumns: ExportPolicy.serviceHealth.names),

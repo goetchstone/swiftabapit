@@ -28,6 +28,8 @@ public final class ScreenModels {
     public let historyTransfer: HistoryTransfer
     /// Needs attention: the active client's rules over the live lists and the latest snapshots, and Dismiss and Snooze.
     public let attention: NeedsAttentionModel
+    /// The questions an intent or the in-app Ask can put, each answered in code's words from the screens' own data.
+    public let answers: Answers
 
     public init(orgs: OrgsModel) {
         let devices = DevicesModel(orgs: orgs), people = PeopleModel(orgs: orgs)
@@ -47,6 +49,7 @@ public final class ScreenModels {
         reports = ReportsModel(orgs: orgs, devices: devices)
         historyTransfer = HistoryTransfer(orgs: orgs)
         attention = NeedsAttentionModel(orgs: orgs, devices: devices, mosyle: mosyle)
+        answers = Answers(orgs: orgs, devices: devices, mosyle: mosyle, reports: reports, attention: attention)
         let collector = snapshots, importer = historyTransfer
         orgs.historyBusy = { [weak collector, weak importer] in
             if collector?.isRunning == true { return "A snapshot is being taken, and it could write to the history after it was deleted. Wait for it to finish, or remove the organization and keep its history." }

@@ -264,8 +264,11 @@ public final class ReportsModel {
     private let devices: DevicesModel
 
     public static let mosyleWords = "This is a Mosyle Business organization. These reports read Apple Business and Apple School Manager data, and nothing was read from Mosyle."
-    /// The tokens' bounds: the report types hold them too (`CoverageReport.maximumDays`, `FleetAgeReport.maximumYears`).
+    /// The tokens' bounds: the report types hold them too (`CoverageReport.maximumDays`, `FleetAgeReport.maximumYears`,
+    /// `QuietServices.maximumDays`).
     public nonisolated static let daysRange = 1...CoverageReport.maximumDays
+    /// Service health's quiet days: the quiet-service rule's own bound (`QuietServices.maximumDays`).
+    public nonisolated static let quietDaysRange = 1...QuietServices.maximumDays
     public nonisolated static let yearsRange = 1...FleetAgeReport.maximumYears
 
     public init(orgs: OrgsModel, devices: DevicesModel) {
@@ -331,6 +334,13 @@ public final class ReportsModel {
     /// Reads the active org's history for the latest snapshot of each sweep, and its device list: the local file, never Apple.
     /// Then asks the Devices model for its lists if the report on screen needs them live.
     public func load() async {
+        if await loadHistory() { readLive() }
+    }
+
+    /// `load` without asking the Devices model for its lists: what an answer awaits (`Answers`), which reads a live list through
+    /// `LiveWait` or none. True when `load` goes on to `readLive`.
+    @discardableResult
+    package func loadHistory() async -> Bool {
         if let first = beforeFirstLoad {
             beforeFirstLoad = nil
             await first()
@@ -340,11 +350,11 @@ public final class ReportsModel {
         defer { loadsFinished += 1 }
         guard let profile = orgs.active else {
             state = .unusable(ScreenWords.noOrganization)
-            return
+            return false
         }
         guard !isMosyle else {
             state = .unusable(Self.mosyleWords)
-            return
+            return false
         }
         state = .loading(count: 0)
         let store: SnapshotStore
@@ -353,8 +363,7 @@ public final class ReportsModel {
         case .failure(let failure):
             sources = [:]
             state = .failed(failure.message)
-            readLive()
-            return
+            return true
         }
         let outcome: Result<[Sweep: SweepSource], SnapshotStore.Failure>
         do {
@@ -364,7 +373,7 @@ public final class ReportsModel {
             outcome = .failure(error)
         }
         await afterRead?("load")
-        guard token == loadToken, generation == orgs.generation else { return }
+        guard token == loadToken, generation == orgs.generation else { return false }
         switch outcome {
         case .success(let read):
             sources = read
@@ -373,7 +382,7 @@ public final class ReportsModel {
             sources = [:]
             state = .failed(failure.message)
         }
-        readLive()
+        return true
     }
 
     /// Asks the Devices model for its lists when the report on screen reads them live: the migration and service health reports,

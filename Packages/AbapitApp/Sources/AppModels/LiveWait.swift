@@ -180,8 +180,8 @@ public final class LiveWait {
     // MARK: how each list ended
 
     /// `list`'s end, once its read has ended, in the words its screen uses. `seen` stands in for a part read's time only where its
-    /// model kept none.
-    private func end(of list: List, seen: Date) -> End {
+    /// model kept none. An answer (`Answers`) asks it again after the wait: the same end means the list is as the wait saw it.
+    package func end(of list: List, seen: Date) -> End {
         switch list {
         case .appleDevices:
             let live = ReportsModel.liveDevices(devices)

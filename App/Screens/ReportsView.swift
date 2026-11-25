@@ -80,7 +80,7 @@ struct ReportsView: View {
                 Stepper("\(model.fleetYears) or more years old", value: $model.fleetYears, in: ReportsModel.yearsRange)
                     .accessibilityIdentifier("reports.years")
             case .serviceHealth:
-                Stepper("Quiet after \(model.quietDays) days", value: $model.quietDays, in: ReportsModel.daysRange, step: 10)
+                Stepper("Quiet after \(model.quietDays) days", value: $model.quietDays, in: ReportsModel.quietDaysRange, step: 10)
                     .accessibilityIdentifier("reports.quietdays")
             default: EmptyView()
             }
