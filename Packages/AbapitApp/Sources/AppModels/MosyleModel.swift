@@ -278,6 +278,13 @@ public final class MosyleModel {
         }
     }
 
+    /// Reads the device list again, and only it: the other lists, the selection and a group's members stay as they are (an intent's
+    /// wait, which never restarts another list under way). Before this org's first read, it is that read (`load()`).
+    func reloadDevices() {
+        guard loadedGeneration == orgs.generation else { return load() }
+        start(.devices)
+    }
+
     /// Reads `list` if nothing has asked for it since the last reset.
     private func show(_ list: List) {
         guard loadedGeneration == orgs.generation, state(of: list) == .idle else { return }

@@ -443,6 +443,60 @@ struct LiveWaitTests {
         Self.expectOnlyListReads(world)
     }
 
+    /// Each end is the one seen when its list ended: a screen's Refresh right after the wait (here a read started again and held) never
+    /// turns a fast 403 into "still being read".
+    @Test func anEndIsTheOneSeenWhenItsListEnded() async throws {
+        let world = try await Self.world()
+        world.stubs["a"]!.forbid("/v1/orgDevices")
+        let wait = Self.waiter(world, ManualTimer())
+        wait.afterWait = {
+            world.gates["a"]!.hold("devices", Gate.devicePages)
+            world.devices.load(force: true)
+        }
+        let request = Task { await wait.lists([.appleDevices]) }
+        #expect(await Self.outcome(request) == .lists([.appleDevices: .notRead("your role can't read devices")]))
+        #expect(world.devices.state.isLoading)
+        world.gates["a"]!.release("devices")
+    }
+
+    /// Mosyle's device list is read again alone: the tab on screen (users), the selected group and its members stay as the screen has
+    /// them, and nothing but the device list is asked.
+    @Test func aMosyleReadAgainReadsTheDeviceListAlone() async throws {
+        let world = try await Self.world()
+        world.mosyleStub.add(deviceGroups: [["iddevicegroup": .string("G1"), "name": .string("Group")]], os: "mac")
+        world.mosyle.tab = .users
+        world.mosyle.load()
+        world.mosyle.selectedGroup = "G1"
+        await eventually("the Mosyle screen's reads") {
+            Self.loadedAt(world.mosyle.devices.state) != nil && Self.loadedAt(world.mosyle.users.state) != nil && world.mosyle.members.readsFinished >= 1
+        }
+        let held = try #require(Self.loadedAt(world.mosyle.devices.state)), users = world.mosyle.users.state
+        let (before, members) = (world.mosyleStub.requests.count, world.mosyle.members.readsFinished)
+        let ends = Self.ends(await Self.waiter(world, ManualTimer(), now: { held.addingTimeInterval(16 * 60) }).lists([.mosyleDevices]))
+        let mosyle = try #require(Self.loadedAt(world.mosyle.devices.state))
+        #expect(mosyle > held && ends == [.mosyleDevices: .whole(at: mosyle)])
+        #expect(world.mosyle.users.state == users && world.mosyle.selectedGroup == "G1" && world.mosyle.members.readsFinished == members)
+        let asked = world.mosyleStub.requests.dropFirst(before)
+        #expect(!asked.isEmpty && asked.allSatisfy { $0.hasSuffix("/v1/devices list") }, "\(Array(asked))")
+        #expect(world.stubs["a"]!.requests.isEmpty)
+    }
+
+    /// A read stamped after now (the clock was set back) is read again, never reused as "less than a minute ago".
+    @Test func aReadFromAfterNowIsReadAgain() async throws {
+        let world = try await Self.world()
+        world.devices.load()
+        world.mosyle.loadDevices()
+        await eventually("the screens' reads") {
+            Self.loadedAt(world.devices.servicesState) != nil && Self.loadedAt(world.devices.state) != nil && Self.loadedAt(world.mosyle.devices.state) != nil
+        }
+        let held = try #require(Self.loadedAt(world.devices.state))
+        let ends = Self.ends(await Self.waiter(world, ManualTimer(), now: { held.addingTimeInterval(-60) }).lists(Self.all))
+        let apple = try #require(Self.loadedAt(world.devices.state))
+        #expect(apple > held && ends[.appleDevices] == .whole(at: apple))
+        #expect(Self.count(world.stubs["a"]!, "/v1/orgDevices") == 2 && Self.mosyleWalks(world) == 2)
+        Self.expectOnlyListReads(world)
+    }
+
     // MARK: words
 
     @Test func eachEndSaysItselfWithItsAge() {

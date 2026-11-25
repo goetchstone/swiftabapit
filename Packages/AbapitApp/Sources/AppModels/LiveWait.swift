@@ -6,12 +6,14 @@ import Reports
 /// an intent may start the screen's own live read, never a sweep, and wait up to a time limit; a read under 15 minutes old is
 /// reused, and its age is said).
 ///
-/// - **The screen's own read, never another.** A wanted list that is idle, stopped on an error (refused included), or older than
-///   `fresh` is read again with its model's `load(force: true)` (the Devices model's, or the Mosyle model's `loadDevices(force:
-///   true)`), as Refresh reads it: never a sweep, never a per-device read. At most one such read per model per request: a read
-///   that fails is said, not tried again. A model whose read is under way is never restarted: the request waits on that read, so
-///   two requests, or a request and a screen, share one.
+/// - **The screen's own read, never another.** A wanted list that is idle, stopped on an error (refused included), older than
+///   `fresh`, or stamped after now (the clock was set back) is read again: the Devices model's `load(force: true)`, as Refresh
+///   reads it, or the Mosyle model's device list alone (`reloadDevices`). Never a sweep, never a per-device read. At most one such
+///   read per model per request: a read that fails is said, not tried again. A read under way is never restarted: the request
+///   waits on it, so two requests, or a request and a screen, share one.
 /// - **A held read is reused**: a list read whole or cut at the page cap, under `fresh` old, is answered as it is, with its time.
+/// - **Each end is the one seen when its list ended**, kept then on the main actor: a Refresh after it never turns an answer into
+///   another.
 /// - **Bounded and cancellable.** The wait watches the models' states and ends when every wanted list has ended, at `bound` on the
 ///   injected clock, at a switch of org or client, or when its task is cancelled. Ending the wait never stops the read: the
 ///   screens share it, and it lands there.
@@ -72,6 +74,15 @@ public final class LiveWait {
     private let sleep: @Sendable (Duration) async throws -> Void
     /// Runs once the reads a request needs are started, before it waits: where a test switches the org or cancels mid-wait.
     package var afterStart: (@MainActor () async -> Void)?
+    /// Runs once the wait has ended, before the answer is made: where a test reads a list again, to show each end is the one seen when
+    /// its list ended, never a later state.
+    package var afterWait: (@MainActor () async -> Void)?
+
+    /// Each wanted list's end, kept the moment the wait first saw it end, and whether the org or client changed.
+    @MainActor private final class Seen {
+        var ends: [List: End] = [:]
+        var switched = false
+    }
 
     /// `sleep` is the bound's clock; `now` is what a held read's age is measured against.
     public init(orgs: OrgsModel, devices: DevicesModel, mosyle: MosyleModel, now: @escaping @MainActor () -> Date = { Date() },
@@ -90,12 +101,13 @@ public final class LiveWait {
         let generation = orgs.generation
         start(wanted, fresh: fresh)
         await afterStart?()
-        await wait(wanted, generation: generation, bound: bound)
+        let seen = await wait(wanted, generation: generation, bound: bound)
+        await afterWait?()
         if Task.isCancelled { return .cancelled }
-        guard orgs.generation == generation else { return .switched }
-        let seen = now()
+        guard !seen.switched, orgs.generation == generation else { return .switched }
+        // A list not seen to end was still being read when the bound passed: the wait ends early only once every list has ended.
         var ends: [List: End] = [:]
-        for list in wanted { ends[list] = end(of: list, bound: bound, seen: seen) }
+        for list in wanted { ends[list] = seen.ends[list] ?? .stillReading(after: bound) }
         return .lists(ends)
     }
 
@@ -108,7 +120,8 @@ public final class LiveWait {
         func needsRead(_ state: LoadState) -> Bool {
             switch state {
             case .idle, .failed, .forbidden: true
-            case .loaded(let at): Duration.seconds(now.timeIntervalSince(at)) > fresh
+            // A read stamped after `now` (the clock was set back) has no age that can be trusted: read again.
+            case .loaded(let at): now < at || Duration.seconds(now.timeIntervalSince(at)) > fresh
             // Under way: shared, never restarted. Can't be read here at all: said as it is.
             case .loading, .unusable, .notInScope: false
             }
@@ -118,26 +131,40 @@ public final class LiveWait {
         if wanted.contains(.appleDevices) { apple.append(devices.state) }
         if wanted.contains(.appleServices) { apple.append(devices.servicesState) }
         if !devices.state.isLoading, !devices.servicesState.isLoading, apple.contains(where: needsRead) { devices.load(force: true) }
-        // No Mosyle org: nothing to read, and the Mosyle model is left as it is.
-        if wanted.contains(.mosyleDevices), orgs.mosyleOrg != nil, needsRead(mosyle.devices.state) { mosyle.loadDevices(force: true) }
+        // No Mosyle org: nothing to read, and the Mosyle model is left as it is. Only its device list is read: its other lists, the
+        // selection and a group's members stay as the screen has them.
+        if wanted.contains(.mosyleDevices), orgs.mosyleOrg != nil, needsRead(mosyle.devices.state) { mosyle.reloadDevices() }
     }
 
     /// Waits until every wanted list has ended or the generation changed, the bound passed, or the task was cancelled; whichever
     /// comes first ends the other. Neither ends a read.
-    private func wait(_ wanted: Set<List>, generation: Int, bound: Duration) async {
-        let sleep = sleep
+    private func wait(_ wanted: Set<List>, generation: Int, bound: Duration) async -> Seen {
+        let sleep = sleep, seen = Seen()
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.settled(wanted, generation: generation) }
+            group.addTask { await self.settled(wanted, generation: generation, into: seen) }
             group.addTask { try? await sleep(bound) }
             await group.next()
             group.cancelAll()
         }
+        return seen
     }
 
-    /// Returns once every wanted list has ended or the generation changed, as the models' states say, or when cancelled.
-    private func settled(_ wanted: Set<List>, generation: Int) async {
-        let changes = Observations { [self] in orgs.generation != generation || wanted.allSatisfy(ended) }
+    /// Returns once every wanted list has ended or the generation changed, as the models' states say, or when cancelled. Each list's
+    /// end is kept as it is seen to end, on the main actor, before anything else runs: a Refresh after it never changes what is said.
+    private func settled(_ wanted: Set<List>, generation: Int, into seen: Seen) async {
+        let changes = Observations { [self] in record(wanted, generation: generation, into: seen) }
         for await done in changes where done { return }
+    }
+
+    /// Keeps the end of each wanted list that has ended and isn't kept yet; true once all are kept or the generation changed.
+    private func record(_ wanted: Set<List>, generation: Int, into seen: Seen) -> Bool {
+        guard orgs.generation == generation else {
+            seen.switched = true
+            return true
+        }
+        let at = now()
+        for list in wanted where seen.ends[list] == nil && ended(list) { seen.ends[list] = end(of: list, seen: at) }
+        return seen.ends.count == wanted.count
     }
 
     /// Whether `list`'s read has ended: not idle, not under way. A Mosyle list with no Mosyle org has nothing to read.
@@ -152,10 +179,9 @@ public final class LiveWait {
 
     // MARK: how each list ended
 
-    /// `list`'s end, in the words its screen uses: still being read when its read hasn't ended. `seen` stands in for a part read's
-    /// time only where its model kept none.
-    private func end(of list: List, bound: Duration, seen: Date) -> End {
-        guard ended(list) else { return .stillReading(after: bound) }
+    /// `list`'s end, once its read has ended, in the words its screen uses. `seen` stands in for a part read's time only where its
+    /// model kept none.
+    private func end(of list: List, seen: Date) -> End {
         switch list {
         case .appleDevices:
             let live = ReportsModel.liveDevices(devices)
@@ -180,16 +206,14 @@ public final class LiveWait {
         case .mosyleDevices:
             guard orgs.mosyleOrg != nil else { return .notRead(orgs.mosyleUnavailable?.why ?? "No Mosyle Business organization is set up with this one.") }
             let listing = mosyle.devices, rows = listing.rows.count
+            // The Mosyle model words every error as failed, a refusal included (no role is told: it may be the token's addresses).
             switch listing.state {
-            case .idle, .loading: return .stillReading(after: bound)
             case .loaded(let at):
                 return listing.truncated ? .partly("showing \(rows.formatted()) devices: the list stopped at the page limit", at: at) : .whole(at: at)
-            case .forbidden:
-                return rows == 0 ? .notRead("Mosyle refused the device list")
-                    : .partly("Mosyle refused the list after \(rows.formatted()) devices", at: mosyle.devicesStoppedAt ?? seen)
             case .failed(let why):
                 return rows == 0 ? .notRead(why) : .partly("the read failed after \(rows.formatted()) devices: \(why)", at: mosyle.devicesStoppedAt ?? seen)
             case .unusable(let why), .notInScope(let why): return .notRead(why)
+            case .idle, .loading, .forbidden: return .notRead(mosyle.reportNote ?? "Mosyle's devices weren't read")
             }
         }
     }
