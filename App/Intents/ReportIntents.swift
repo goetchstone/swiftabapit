@@ -56,7 +56,7 @@ struct RunReportIntent: AppIntent {
     @Parameter(title: "Number")
     var number: Int?
 
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     static var parameterSummary: some ParameterSummary {
         Summary("Run \(\.$report)") {
@@ -68,7 +68,7 @@ struct RunReportIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
         let report = report.report
-        return AnswerSnippet.result(await screens.answers.answer(report: report, tokens: Answers.tokens(report, group: group, number: number)))
+        return AnswerSnippet.result(await answers.answer(report: report, tokens: Answers.tokens(report, group: group, number: number)))
     }
 }
 
@@ -84,11 +84,11 @@ struct OutOfWarrantyIntent: AppIntent {
     static let description = IntentDescription("Answers the Out of warranty report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .outOfWarranty, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .outOfWarranty, tokens: [:]))
     }
 }
 
@@ -98,11 +98,11 @@ struct CoverageEndingIntent: AppIntent {
     static let description = IntentDescription("Answers the AppleCare coverage ending report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .coverage, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .coverage, tokens: [:]))
     }
 }
 
@@ -112,11 +112,11 @@ struct FleetAgeIntent: AppIntent {
     static let description = IntentDescription("Answers the Fleet age report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .fleetAge, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .fleetAge, tokens: [:]))
     }
 }
 
@@ -126,11 +126,11 @@ struct ActivationLockIntent: AppIntent {
     static let description = IntentDescription("Answers the Activation Lock report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .activationLock, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .activationLock, tokens: [:]))
     }
 }
 
@@ -140,11 +140,11 @@ struct MigrationIntent: AppIntent {
     static let description = IntentDescription("Answers the MDM migration report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .migration, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .migration, tokens: [:]))
     }
 }
 
@@ -154,10 +154,10 @@ struct ServiceHealthIntent: AppIntent {
     static let description = IntentDescription("Answers the Device management service health report for the active client. It changes nothing.")
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.answer(report: .serviceHealth, tokens: [:]))
+        AnswerSnippet.result(await answers.answer(report: .serviceHealth, tokens: [:]))
     }
 }

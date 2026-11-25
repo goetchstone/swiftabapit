@@ -33,7 +33,7 @@ struct AbapitApp: App {
     @ViewBuilder private var root: some View {
         #if DEBUG
         if let report = SnippetPreview.requested {
-            SnippetPreview(screens: services.screens, report: report)
+            SnippetPreview(answers: services.screens.answers, report: report)
         } else {
             ContentView(services: services)
         }

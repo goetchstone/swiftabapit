@@ -10,10 +10,10 @@ struct NeedsAttentionIntent: AppIntent {
     static let supportedModes: IntentModes = .background
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.attention())
+        AnswerSnippet.result(await answers.attention())
     }
 }

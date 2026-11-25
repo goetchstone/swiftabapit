@@ -41,16 +41,41 @@ struct IntentTests {
         }
     }
 
+    /// The screen models an intent must not reach: through them, the snapshot collector, the history transfer, Dismiss and Snooze, and
+    /// a switch of client all write (the review of PR 52 planted `screens.snapshots.run` and `orgs.selectClient` in an intent, and every
+    /// test passed). The intents' dependency is `Answers` alone, which holds the models it reads privately.
+    static let models = ["ScreenModels", "OrgsModel", "SnapshotCollector", "HistoryTransfer", "NeedsAttentionModel", "DevicesModel", "MosyleModel",
+                         "ReportsModel.init", "ChangesModel", "selectClient", "snapshots.", "historyTransfer", "AppServices"]
+    static let answersHolds = ["orgs", "devices", "mosyle", "reports", "attentionModel"]
+
+    @Test func theIntentsReachAnswersAlone() throws {
+        let reaching = try SourceScan.files(in: Self.intents, matching: Self.models)
+        #expect(reaching.isEmpty, "\(reaching.sorted())")
+        for file in try SourceScan.swiftFiles(in: Self.intents) where SourceScan.mentions(file, ["@Dependency"]) {
+            let dependencies = file.text.components(separatedBy: "@Dependency").dropFirst().map { $0.prefix(while: { $0 != "\n" }).trimmingCharacters(in: .whitespaces) }
+            #expect(dependencies.allSatisfy { $0 == "private var answers: Answers" }, "\(file.path): \(dependencies)")
+        }
+        // What `Answers` holds is private: an intent holding it reaches none of the models behind it.
+        let answers = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.answers })
+        for name in Self.answersHolds {
+            let declarations = answers.text.matches(of: try Regex("(?m)^\\s*([a-z ]*)\\b(let|var) \(name)\\s*:")).map { String(answers.text[$0.range]) }
+            #expect(declarations.count == 1 && declarations.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("private let") }, "\(name): \(declarations)")
+        }
+        let app = try String(contentsOf: Fixtures.repoRoot.appending(path: "App/AppServices.swift"), encoding: .utf8)
+        #expect(app.contains("let answers = screens.answers\n        AppDependencyManager.shared.add(dependency: answers)\n"), "the registration isn't Answers alone")
+        #expect(app.components(separatedBy: "AppDependencyManager").count == 2 && app.components(separatedBy: "add(dependency:").count == 2)
+    }
+
     /// No intent words an answer: the one dialog is the answer's own spoken words, made in the snippet's file.
     @Test func everyDialogIsTheAnswersWords() throws {
         let dialogs = try SourceScan.files(in: Self.intents, matching: ["IntentDialog(", "dialog:"])
         #expect(dialogs == ["\(Self.intents)/Snippets.swift"], "\(dialogs.sorted())")
         let snippet = try #require(try SourceScan.swiftFiles(in: Self.intents).first { $0.path.hasSuffix("/Snippets.swift") })
         #expect(snippet.text.contains("dialog: IntentDialog(\"\\(answer.spoken)\")"))
-        // Every intent's answer comes from `Answers`: each `perform` hands the snippet what `screens.answers` returned.
+        // Every intent's answer comes from `Answers`: each `perform` hands the snippet what `answers` returned.
         for file in try SourceScan.swiftFiles(in: Self.intents) where SourceScan.mentions(file, ["func perform("]) {
             let performs = file.text.components(separatedBy: "func perform(").count - 1
-            let answered = file.text.components(separatedBy: "AnswerSnippet.result(await screens.answers.").count - 1
+            let answered = file.text.components(separatedBy: "AnswerSnippet.result(await answers.").count - 1
             #expect(performs == answered, "\(file.path): \(performs) intents, \(answered) answered by Answers")
         }
     }

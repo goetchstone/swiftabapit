@@ -3,7 +3,7 @@ import AppModels
 import SwiftUI
 
 /// What an intent says and shows, all of it `Answers`' words: the spoken answer as the dialog and as the value Shortcuts passes on,
-/// and a snippet of the rows (serial, model, state; at most 10), with the cap and any estimate said beneath (the operator, 2026-11-24:
+/// and a snippet of the rows (serial, model, state; at most 10), with which devices they are, the cap and any estimate said beneath (the operator, 2026-11-24:
 /// Q5 "Counts aloud, 10 rows"). No intent words an answer itself.
 struct AnswerSnippet: View {
     let answer: Answers.Answer
@@ -26,6 +26,9 @@ struct AnswerSnippet: View {
                         .font(.callout)
                     }
                 }
+            }
+            if let shown = answer.rowsNote {
+                Text(shown).font(.caption).foregroundStyle(.secondary)
             }
             if let cap = answer.capNote {
                 Text(cap).font(.caption).foregroundStyle(.secondary)

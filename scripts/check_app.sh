@@ -143,6 +143,11 @@ release_code "$BINARY" "the binary" " (only its symbol table shows this: an arch
 INTENTS="$APP/Contents/Resources/Metadata.appintents/extract.actionsdata"
 PHRASES="$APP/Contents/Resources/en.lproj/AppShortcuts.strings"
 [ -f "$INTENTS" ] && [ ! -L "$INTENTS" ] || fail "no App Intents metadata"
+# Every App Intents metadata file in the bundle, wherever it is, is held to the same rules: one elsewhere (a nested bundle's) would
+# declare intents this check never read (the review of PR 52).
+metadata=()
+while IFS= read -r -d '' f; do metadata+=("$f"); done < <(find "$APP" -name extract.actionsdata -print0)
+[ "${#metadata[@]}" -ge 1 ] || fail "no App Intents metadata"
 [ -f "$PHRASES" ] && [ ! -L "$PHRASES" ] || fail "no App Shortcuts phrase catalog (App/AppShortcuts.xcstrings)"
 catalog="$(plutil -convert json -o - "$PHRASES" 2>/dev/null)" || fail "the phrase catalog can't be read"
 intents_checker='
@@ -180,7 +185,10 @@ if not shortcuts <= actions or not {"NeedsAttentionIntent", "LookUpSerialIntent"
 if d.get("entities") or d.get("assistantEntities") or d.get("queries") or "Indexed" in text or "indexingKey" in text:
     sys.exit("the metadata holds an app entity, a query or an indexed type (Spotlight is out: the operator, 2026-11-24, Q2)")
 '
-python3 -I -c "$intents_checker" "$INTENTS" <<<"$catalog" || fail "App Intents metadata (above)"
+for f in "${metadata[@]}"; do
+  [ ! -L "$f" ] || fail "${f#"$APP"/} is a link"
+  python3 -I -c "$intents_checker" "$f" <<<"$catalog" || fail "App Intents metadata in ${f#"$APP"/} (above)"
+done
 imports="$(nm -u "$BINARY" 2>/dev/null)" || fail "can't read the binary's imported symbols"
 if hits="$(grep -E 'CSSearchableIndex|CSSearchableItem|IndexedEntity' <<<"$imports")"; then
   fail "the binary imports a Spotlight index (Spotlight is out: the operator, 2026-11-24, Q2): $(tr '\n' ' ' <<<"$hits")"

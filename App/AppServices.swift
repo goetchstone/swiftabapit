@@ -34,12 +34,13 @@ final class AppServices {
         self.isDemo = isDemo
     }
 
-    /// What the App Intents reach (`App/Intents/`): the screen models, whose `Answers` each intent calls and nothing else, never a
-    /// write (SourceScanTests' `noIntentReachesAWrite`). As SwiftGamGui's `SiriIntents.register`; once, at launch, before an intent
-    /// can run.
+    /// What the App Intents reach (`App/Intents/`): `Answers` alone, never the screen models whole, so an intent can't reach the
+    /// snapshot collector, the history transfer, Dismiss and Snooze, or a switch of client (the review of PR 52); `Answers` holds the
+    /// models it reads privately. Nothing an intent reaches writes (SourceScanTests' `IntentTests`). As SwiftGamGui's
+    /// `SiriIntents.register`; once, at launch, before an intent can run.
     func registerIntents() {
-        let screens = screens
-        AppDependencyManager.shared.add(dependency: screens)
+        let answers = screens.answers
+        AppDependencyManager.shared.add(dependency: answers)
     }
 
     /// The folder the app keeps its files in: inside the sandbox container. Injected everywhere, never read

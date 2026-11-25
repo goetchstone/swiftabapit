@@ -6,7 +6,7 @@ import SwiftUI
 /// demo org (the dialog's words above the snippet, as Siri shows them), so CI's screenshots draw the snippet
 /// (`scripts/screenshots.sh`). It is the snippet's own view; Siri's frame around it isn't drawn.
 struct SnippetPreview: View {
-    let screens: ScreenModels
+    let answers: Answers
     let report: ReportsModel.Report
     @State private var answer: Answers.Answer?
 
@@ -28,7 +28,7 @@ struct SnippetPreview: View {
         .padding()
         .frame(width: 560, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .task { answer = await screens.answers.answer(report: report, tokens: [:]) }
+        .task { answer = await answers.answer(report: report, tokens: [:]) }
     }
 }
 #endif

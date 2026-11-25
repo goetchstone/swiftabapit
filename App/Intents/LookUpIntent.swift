@@ -14,7 +14,7 @@ struct LookUpSerialIntent: AppIntent {
     @Parameter(title: "Serial Number", requestValueDialog: "Which serial number?")
     var serial: String
 
-    @Dependency private var screens: ScreenModels
+    @Dependency private var answers: Answers
 
     static var parameterSummary: some ParameterSummary {
         Summary("Look up \(\.$serial)")
@@ -22,6 +22,6 @@ struct LookUpSerialIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
-        AnswerSnippet.result(await screens.answers.lookUp(serial: serial))
+        AnswerSnippet.result(await answers.lookUp(serial: serial))
     }
 }
