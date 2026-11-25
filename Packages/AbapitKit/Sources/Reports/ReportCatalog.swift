@@ -6,18 +6,30 @@ import Foundation
 /// canonical value and refuses anything else, so a token never silently matches nothing. No abapit counterpart.
 public enum ReportCatalog {
     public enum ID: String, Sendable, CaseIterable {
+        case coverage
+        case fleetAge = "fleet-age"
         case activationLock = "activation-lock"
         case migration
         case serviceHealth = "service-health"
         case outOfWarranty = "out-of-warranty"
     }
 
-    /// A filter a report accepts: `values` are the exact canonical tokens; a `days` filter takes a positive whole number.
+    /// A filter a report accepts: `values` are the exact canonical tokens; a number filter (`days`, `years`) takes a whole
+    /// number inside `bounds`, inclusive. A number outside them is a problem in words, never clamped.
     public struct Filter: Sendable, Equatable {
         public let name: String
         public let values: [String]
-        public let isNumber: Bool
+        public let bounds: ClosedRange<Int>?
         public let summary: String
+
+        public var isNumber: Bool { bounds != nil }
+
+        init(name: String, values: [String], bounds: ClosedRange<Int>? = nil, summary: String) {
+            self.name = name
+            self.values = values
+            self.bounds = bounds
+            self.summary = summary
+        }
     }
 
     /// What a report needs read before it runs, so the caller knows what to load and says what it couldn't.
@@ -33,6 +45,20 @@ public enum ReportCatalog {
         public let filters: [Filter]
         public let inputs: [Input]
         public let csvColumns: [String]
+
+        /// What this report accepts, in code's words, built from its filters' values and bounds only: the line a later
+        /// pick prompt shows beside the title. It holds no list data (no serial, name or id).
+        public var holds: String {
+            var parts: [String] = []
+            for filter in filters {
+                if let bounds = filter.bounds {
+                    parts.append("\(filter.name) is a whole number from \(bounds.lowerBound) to \(bounds.upperBound)")
+                } else {
+                    parts.append("\(filter.name) is one of: " + filter.values.joined(separator: ", "))
+                }
+            }
+            return parts.isEmpty ? "\(title): no filters." : "\(title): " + parts.joined(separator: "; ") + "."
+        }
     }
 
     /// The tokens as the report will take them, and what's wrong with the rest.
@@ -42,32 +68,40 @@ public enum ReportCatalog {
     }
 
     public static let entries: [Entry] = [
+        Entry(id: .coverage, title: "AppleCare coverage ending",
+              summary: "Active AppleCare coverage that ends within a number of days, soonest first, and how many devices have none.",
+              filters: [Filter(name: "days", values: [], bounds: 1...CoverageReport.maximumDays, summary: "coverage ending within this many days")],
+              inputs: [Input(resource: "orgDevices", note: "the device list of the snapshot that read coverage"),
+                       Input(resource: "appleCareCoverage", note: "each device's coverage, from the newest snapshot that read it")],
+              csvColumns: ExportPolicy.coverageExpiring.names),
+        Entry(id: .fleetAge, title: "Fleet age",
+              summary: "Devices by age from their order date, and the refresh candidates: the devices a number of years old or more.",
+              filters: [Filter(name: "years", values: [], bounds: 1...FleetAgeReport.maximumYears, summary: "refresh candidates are this many years old or more")],
+              inputs: [Input(resource: "orgDevices", note: "the device list, with its order dates"),
+                       Input(resource: "appleCareCoverage", note: "each device's coverage, from a snapshot when there is one")],
+              csvColumns: ExportPolicy.refreshCandidates.names),
         Entry(id: .activationLock, title: "Activation Lock",
               summary: "Devices by who holds the Activation Lock; a USER lock blocks redeploy and release. Devices whose status wasn't read are counted apart, never as unlocked.",
-              filters: [Filter(name: "group", values: ActivationLockReport.fixedGroups, isNumber: false,
-                               summary: "lock:USER, lock:MDM, lock:NONE, lock:other (a type this version doesn't know, or locked with no type sent), unlocked, unclear or not-read")],
+              filters: [Filter(name: "group", values: ActivationLockReport.fixedGroups, summary: "lock:USER, lock:MDM, lock:NONE, lock:other (a type this version doesn't know, or locked with no type sent), unlocked, unclear or not-read")],
               inputs: [Input(resource: "orgDevices", note: "the device list"),
                        Input(resource: "activationLockStatus", note: "each device's status, read one by one; a device not reached counts as not read")],
               csvColumns: ExportPolicy.activationLockReport.names),
         Entry(id: .migration, title: "MDM migration",
               summary: "Devices by migration status, days to each deadline, and which are past it (a known status other than SUCCESS).",
               filters: [Filter(name: "group", values: MigrationReport.fixedGroups + [MigrationReport.pastDueToken, MigrationReport.pastDueStatusUnknownToken],
-                               isNumber: false,
                                summary: "status:REQUESTED, status:STARTED, status:SUCCESS, status:FAILED, status:other (a status this version doesn't know), no-status, no-data, past-due or past-due-status-unknown")],
               inputs: [Input(resource: "orgDevices", note: "the device list, with its migration attributes")],
               csvColumns: ExportPolicy.migrationReport.names),
         Entry(id: .serviceHealth, title: "Device management service health",
               summary: "Each service's last connection, status and device count, and whether it is healthy, quiet (the Overview's rule), inactive or deleted.",
-              filters: [Filter(name: "group", values: ServiceHealth.fixedGroups, isNumber: false,
-                               summary: "healthy, quiet, inactive, deleted, other-status or cannot-judge"),
-                        Filter(name: "days", values: [], isNumber: true, summary: "quiet means silent for more than this many days (30)")],
+              filters: [Filter(name: "group", values: ServiceHealth.fixedGroups, summary: "healthy, quiet, inactive, deleted, other-status or cannot-judge"),
+                        Filter(name: "days", values: [], bounds: 1...CoverageReport.maximumDays, summary: "quiet means silent for more than this many days (30)")],
               inputs: [Input(resource: "mdmServers", note: "the services list, and which attributes Apple didn't send"),
                        Input(resource: "mdmServers/{id}/relationships/devices", note: "each service's device count, when read")],
               csvColumns: ExportPolicy.serviceHealth.names),
         Entry(id: .outOfWarranty, title: "Out of warranty",
               summary: "Devices with no ACTIVE AppleCare coverage, kept apart from devices with no coverage record at all, with a status this version doesn't know, and not read. Any estimate is from the order date. \(WarrantyReport.assumption)",
-              filters: [Filter(name: "group", values: WarrantyReport.fixedGroups + [WarrantyReport.estimatedPastToken], isNumber: false,
-                               summary: "active, no-active-coverage, no-record, status-unknown, not-read or estimated-past-limit")],
+              filters: [Filter(name: "group", values: WarrantyReport.fixedGroups + [WarrantyReport.estimatedPastToken], summary: "active, no-active-coverage, no-record, status-unknown, not-read or estimated-past-limit")],
               inputs: [Input(resource: "orgDevices", note: "the device list, with its order dates"),
                        Input(resource: "appleCareCoverage", note: "each device's coverage, read one by one; a device not reached counts as not read")],
               csvColumns: ExportPolicy.warrantyReport.names),
@@ -101,8 +135,12 @@ public enum ReportCatalog {
                 continue
             }
             let value = tidy(rawValue)
-            if filter.isNumber {
-                if let days = Int(value), days > 0 { resolved[name] = String(days) } else { problems.append("\(name) must be a whole number of days") }
+            if let bounds = filter.bounds {
+                if let number = Int(value), bounds.contains(number) {
+                    resolved[name] = String(number)
+                } else {
+                    problems.append("\(name) must be a whole number of \(name) from \(bounds.lowerBound) to \(bounds.upperBound)")
+                }
             } else if let canonical = filter.values.first(where: { $0.lowercased() == value.lowercased() }) {
                 resolved[name] = canonical
             } else {
