@@ -1,0 +1,105 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "How are the device management services in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How are the device management services in ${applicationName}"
+          }
+        }
+      }
+    },
+    "How is the MDM migration going in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How is the MDM migration going in ${applicationName}"
+          }
+        }
+      }
+    },
+    "How old is the fleet in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How old is the fleet in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Look up a serial number in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Look up a serial number in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Run the ${report} report in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the ${report} report in ${applicationName}"
+          }
+        }
+      }
+    },
+    "What needs attention in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What needs attention in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Which AppleCare coverage is ending in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which AppleCare coverage is ending in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Which devices are Activation Locked in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which devices are Activation Locked in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Which devices are out of warranty in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which devices are out of warranty in ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

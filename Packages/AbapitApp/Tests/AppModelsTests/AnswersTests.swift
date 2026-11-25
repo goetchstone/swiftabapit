@@ -166,7 +166,10 @@ struct AnswersTests {
                 "\(cut.spoken)")
         #expect(cut.spoken.contains("Status ASSIGNED") == false && cut.spoken.contains("No migration data from Apple: 1000."), "\(cut.spoken)")
         Self.expectNoCanary(cut, "part")
-        #expect(cut.rows.count == 10 && cut.capNote == "Showing 10 of 1,000: the rest are in abapit.")
+        // With no group, none of them is past the deadline: no rows. Asked for the group, ten of them, the cap said.
+        #expect(cut.rows.isEmpty && cut.capNote == nil, "\(cut.rows)")
+        let group = await Self.answers(part).answer(report: .migration, tokens: ["group": "no-data"])
+        #expect(group.rows.count == 10 && group.capNote?.hasPrefix("Showing 10 of 1,0") == true, "\(String(describing: group.capNote))")
     }
 
     /// Mosyle's own message is never said: the failed phrase, and the rules that read it skipped.
@@ -398,6 +401,8 @@ struct AnswersTests {
         let screen = world.screens.reports.build(.migration, tokens: [:])
         #expect(screen.judgesNothing == nil && screen.summary.dropFirst().allSatisfy { migration.spoken.contains($0) }, "\(migration.spoken)")
         let attention = await answers.attention()
+        // The answer leaves the screen's evaluation alone: the screen judges the same lists itself.
+        await world.screens.attention.evaluate(force: true)
         let summary = try #require(world.screens.attention.summary)
         #expect(summary.words.allSatisfy { attention.spoken.contains($0) } && attention.spoken.contains(summary.headline), "\(attention.spoken)")
         let skipped = world.screens.attention.lines.filter(\.isSkipped).map(\.rule)
@@ -459,12 +464,23 @@ struct AnswersTests {
 
     // MARK: Needs attention records as the screen does
 
-    /// A rule judged over a whole read is recorded; over a part read it is shown and not recorded, as the screen does.
-    @Test func findingsAreRecordedOnlyWhenJudgedWhole() async throws {
+    /// An intent's answer judges and says the findings and records nothing (the operator, 2026-11-25, "Don't record (Recommended)"):
+    /// the history's attention table is as it was, and the screen's own evaluation is untouched. The screen still records what it
+    /// judges whole; over a part read the answer says the finding, and nothing is kept either way.
+    @Test func anAnswerRecordsNothingAndTheScreenStillRecords() async throws {
         let world = try await Self.world()
+        let a = world.orgs.store["a"]!
+        let before = try await world.history!.state(org: a)
         let attention = await Self.answers(world).attention()
         #expect(attention.spoken.contains("In Mosyle, but not in Apple's device list: 1 open finding."), "\(attention.spoken)")
-        let kept = try await world.history!.state(org: world.orgs.store["a"]!)
+        #expect(attention.spoken.contains("nothing is kept from this answer."), "\(attention.spoken)")
+        let after = try await world.history!.state(org: a)
+        #expect(after.count == before.count && after.isEmpty, "the answer recorded: \(after)")
+        #expect(try await world.history!.state(org: world.orgs.store["m"]!).isEmpty)
+        #expect(world.screens.attention.summary == nil && world.screens.attention.evaluatedAt == nil, "the screen's evaluation was touched")
+        // The screen's own evaluation, over the same lists, records.
+        await world.screens.attention.evaluate(force: true)
+        let kept = try await world.history!.state(org: a)
         #expect(kept.contains { $0.rule == NeedsAttention.Rule.mosyleNotInApple.rawValue && $0.subject == "ZQXMAC1" }, "\(kept)")
         // Mosyle read in part (the page cap): found and said, never kept.
         let part = try await World.make(mosyle: true, mosylePageCap: 1)
@@ -472,7 +488,7 @@ struct AnswersTests {
         let partial = await Self.answers(part).attention()
         #expect(partial.spoken.contains("Mosyle's device list was read in part") && partial.spoken.contains("found over a part read and not kept."), "\(partial.spoken)")
         let none = try await part.history!.state(org: part.orgs.store["a"]!)
-        #expect(!none.contains { $0.rule == NeedsAttention.Rule.mosyleNotInApple.rawValue }, "\(none)")
+        #expect(none.isEmpty, "\(none)")
         Self.expectNoCanary(partial, "partial")
     }
 
@@ -582,7 +598,9 @@ struct AnswersTests {
         let answers = Self.answers(world)
         let migration = await answers.answer(report: .migration, tokens: [:])
         #expect(migration.spoken.contains("1 with a migration status this version doesn't know."), "\(migration.spoken)")
-        #expect(migration.rows.contains { $0.serial == "ADEV0000007" && $0.state == "status:ZQXSTATUS" })
+        // With no group the rows are the devices past the deadline; the unknown status is in its own group's rows.
+        let other = await answers.answer(report: .migration, tokens: ["group": "status:other"])
+        #expect(other.rows.contains { $0.serial == "ADEV0000007" && $0.state == "status:ZQXSTATUS" })
         let lock = await answers.answer(report: .activationLock, tokens: [:])
         #expect(lock.spoken.contains("1 locked with a lock type this version doesn't know: can't say whether it blocks release.")
                 && lock.spoken.contains("lock type NONE"), "\(lock.spoken)")
@@ -603,5 +621,83 @@ struct AnswersTests {
         let part = await answers.lookUp(serial: "0000008")
         #expect(part.spoken.hasSuffix("No device matches that identifier exactly; 1 device has it as part of an identifier."), "\(part.spoken)")
         #expect(!imei.spoken.contains("356938035643809") && !part.spoken.contains("0000008"))
+    }
+
+    // MARK: the intents' follow-up
+
+    /// What the rules read changes while the answer judges (the Mosyle service set meanwhile): what it judged is over inputs no
+    /// longer held, so nothing is answered.
+    @Test func anInputChangedWhileJudgingAnswersNothing() async throws {
+        let world = try await Self.world()
+        let answers = Self.answers(world)
+        let model = world.screens.attention
+        model.afterAwait = { stage in
+            guard stage == "judge" else { return }
+            model.afterAwait = nil
+            model.setMosyleService("S2")
+        }
+        let answer = await answers.attention()
+        #expect(answer.spoken.hasSuffix(Answers.Phrase.attentionChanged), "\(answer.spoken)")
+        // With nothing changing, the same question is answered.
+        let again = await answers.attention()
+        #expect(again.spoken.contains("open finding") && !again.spoken.hasSuffix(Answers.Phrase.attentionChanged), "\(again.spoken)")
+    }
+
+    /// An intent's group and number become the catalog's tokens: the number under the report's own number filter, or under a name the
+    /// catalog refuses in words when the report has none; a blank group is none.
+    @Test func anIntentsGroupAndNumberAreTheCatalogsTokens() {
+        #expect(Answers.tokens(.coverage, group: nil, number: 30) == ["days": "30"])
+        #expect(Answers.tokens(.fleetAge, group: nil, number: 4) == ["years": "4"])
+        #expect(Answers.tokens(.serviceHealth, group: "quiet", number: 10) == ["group": "quiet", "days": "10"])
+        #expect(Answers.tokens(.outOfWarranty, group: "  ", number: nil) == [:])
+        let refused = Answers.tokens(.activationLock, group: "lock:USER", number: 3)
+        #expect(refused == ["group": "lock:USER", "number": "3"])
+        #expect(!ReportCatalog.problems(.activationLock, tokens: refused).isEmpty)
+        #expect(ReportCatalog.problems(.coverage, tokens: Answers.tokens(.coverage, group: nil, number: 5000)) != [])
+    }
+
+    // MARK: the review of PR 52
+
+    /// The review's fleet: 12 devices with ACTIVE AppleCare and one ordered in 2020 with no record. With no group asked, the rows are
+    /// the one without active coverage, never ten ACTIVE ones with the cap hiding it; the counts are still said whole.
+    @Test func outOfWarrantyShowsTheDevicesWithoutActiveCoverage() async throws {
+        let world = try await Self.world()
+        let active = (0..<12).map { String(format: "ZQXSER%02d", $0) }
+        try await ReportsTests.record(world, days: 0, ["devices": active.map(Self.device) + [ReportsTests.device("ZQXOLD01", order: "2020-03-01T00:00:00Z")],
+                                                       "applecare": active.map { ReportsTests.care($0, endsInDays: 200) }])
+        let answers = Self.answers(world, fixed: true)
+        let warranty = await answers.answer(report: .outOfWarranty, tokens: [:])
+        #expect(warranty.rows.map(\.serial) == ["ZQXOLD01"] && warranty.capNote == nil, "\(warranty.rows) \(String(describing: warranty.capNote))")
+        #expect(warranty.rows.first?.state == "no-record, estimated past")
+        #expect(warranty.rowsNote == Answers.shownWithoutCoverage)
+        #expect(warranty.spoken.contains("12 have ACTIVE AppleCare coverage."), "\(warranty.spoken)")
+        // A group asked shows that group's rows, all of them, with no note.
+        let activeRows = await answers.answer(report: .outOfWarranty, tokens: ["group": "active"])
+        #expect(activeRows.rows.count == 10 && activeRows.capNote == "Showing 10 of 12: the rest are in abapit." && activeRows.rowsNote == nil)
+        // Activation Lock with no group: the locked devices only.
+        try await ReportsTests.record(world, days: 0, ["devices": active.map(Self.device),
+                                                       "activation_lock": active.enumerated().map { ReportsTests.lock($1, locked: $0 == 11, type: $0 == 11 ? "USER" : nil) }])
+        let lock = await answers.answer(report: .activationLock, tokens: [:])
+        #expect(lock.rows.map(\.serial) == ["ZQXSER11"] && lock.rows.first?.state == "lock:USER" && lock.rowsNote == Answers.shownLocked, "\(lock.rows)")
+    }
+
+    /// Migration with no group: the devices past the deadline without success, not the eleven on time before them.
+    @Test func migrationShowsTheDevicesPastTheDeadline() async throws {
+        let world = try await Self.world(devices: 0, mosyle: false)
+        let stub = world.stubs["a"]!
+        stub.add(devices: (0..<11).map { NeedsAttentionTests.migrating(String(format: "ADEV%07d", $0 + 100), deadlineInDays: 30) }
+                 + [NeedsAttentionTests.migrating("ADEV0000999", deadlineInDays: -5)])
+        let answer = await Self.answers(world, fixed: true).answer(report: .migration, tokens: [:])
+        #expect(answer.rows.map(\.serial) == ["ADEV0000999"] && answer.rowsNote == Answers.shownPastDue, "\(answer.rows) \(answer.spoken)")
+    }
+
+    /// Coverage and fleet age list only the devices the question is about already: coverage ending, refresh candidates.
+    @Test func coverageShowsOnlyCoverageEnding() async throws {
+        let world = try await Self.world()
+        let serials = (0..<12).map { String(format: "ZQXSER%02d", $0) }
+        try await ReportsTests.record(world, days: 0, ["devices": serials.map(Self.device),
+                                                       "applecare": serials.enumerated().map { ReportsTests.care($1, endsInDays: $0 == 0 ? 10 : 400) }])
+        let answer = await Self.answers(world, fixed: true).answer(report: .coverage, tokens: ["days": "30"])
+        #expect(answer.rows.map(\.serial) == ["ZQXSER00"] && answer.rowsNote == nil, "\(answer.rows)")
     }
 }

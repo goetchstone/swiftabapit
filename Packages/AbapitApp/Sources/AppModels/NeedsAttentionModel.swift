@@ -347,6 +347,43 @@ public final class NeedsAttentionModel {
         evaluatedKey = key
     }
 
+    /// What an intent's question is answered from (the operator, 2026-11-25, "Don't record (Recommended)": Siri and Shortcuts judge
+    /// and say the findings, and save nothing; only the screen records). The rules over what is held now, with the findings kept for
+    /// later read (so a dismissed or snoozed one isn't counted open), and nothing written: no `seen`, no first-seen date, no ageing.
+    /// The screen's own evaluation and what it shows are untouched.
+    package struct Judgement: Sendable {
+        /// What the rules read, as the judging began.
+        package let key: InputKey
+        package let at: Date
+        package let lines: [Line]
+        package let summary: Summary
+    }
+
+    /// Judges without recording; nil when the active org isn't an Apple org, or the org changed during the read of what is kept.
+    package func judge() async -> Judgement? {
+        let key = inputKey, generation = orgs.generation
+        guard let apple = appleOrg else { return nil }
+        let mosyleOrg = orgs.mosyleOrg
+        let now = now()
+        let made = evaluations(now: now)
+        var kept: [Key: SnapshotStore.Finding] = [:]
+        var problem: String?
+        switch orgs.history {
+        case .success(let store):
+            do {
+                kept = try await Self.kept(store, apple: apple, mosyle: mosyleOrg)
+            } catch {
+                problem = "The findings kept for later couldn't be read: \(error.message)"
+            }
+        case .failure(let failure):
+            problem = failure.message
+        }
+        await afterAwait?("judge")
+        guard generation == orgs.generation else { return nil }
+        let lines = lines(made, kept, (apple.id, mosyleOrg?.id), note: problem)
+        return Judgement(key: key, at: now, lines: lines, summary: Self.summary(of: lines))
+    }
+
     /// The findings kept for the client: its Apple org's, and its Mosyle org's for the one rule kept there. Never another client's.
     private static func kept(_ store: SnapshotStore, apple: OrgProfile, mosyle: OrgProfile?) async throws(SnapshotStore.Failure) -> [Key: SnapshotStore.Finding] {
         var kept: [Key: SnapshotStore.Finding] = [:]
@@ -573,7 +610,10 @@ public final class NeedsAttentionModel {
     // MARK: the lines
 
     /// Every rule as the screen lists it, in the rules' order: empty until the first evaluation.
-    public var lines: [Line] {
+    public var lines: [Line] { lines(evaluated, stored, evaluatedOrgs, note: recordNote) }
+
+    private func lines(_ evaluated: [Evaluated], _ stored: [Key: SnapshotStore.Finding], _ evaluatedOrgs: (apple: String, mosyle: String?),
+                       note recordNote: String?) -> [Line] {
         let now = now()
         let writable: String? = switch orgs.history {
         case .success(let store):
@@ -677,7 +717,10 @@ public final class NeedsAttentionModel {
     /// Nil until the first evaluation.
     public var summary: Summary? {
         guard !evaluated.isEmpty else { return nil }
-        let lines = self.lines
+        return Self.summary(of: lines)
+    }
+
+    static func summary(of lines: [Line]) -> Summary {
         let rows = lines.filter { !$0.open.isEmpty }.map { Summary.Row(rule: $0.rule, title: $0.title, open: $0.open.count, partial: $0.isPartial) }
         return Summary(rows: rows, skipped: lines.filter { $0.isSkipped && !$0.isReading }.map(\.title),
                        clear: lines.filter { $0.verdict == .judged && $0.open.isEmpty }.count, partial: lines.filter(\.isPartial).count,

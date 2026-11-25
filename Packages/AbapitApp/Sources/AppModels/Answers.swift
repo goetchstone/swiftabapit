@@ -33,6 +33,9 @@ public final class Answers {
             }
         }
 
+        /// The rows' column titles, in a row's order.
+        public static let columns = ["Serial number", "Model", "State"]
+
         /// The question answered: the report's or the summary's title, after the client's name when the app shows clients.
         public let lead: String
         /// What is said aloud: counts, the data's age, how much was read.
@@ -43,6 +46,9 @@ public final class Answers {
         public let capNote: String?
         /// Out of warranty only: the assumption behind every estimate.
         public let estimateNote: String?
+        /// Which devices the rows are, when a report with no group asked shows only some of its devices (the locked ones, those
+        /// without active coverage, those past the migration deadline); nil when the rows are every device the group holds.
+        public var rowsNote: String? = nil
     }
 
     /// The most rows an answer shows (the operator, 2026-11-24: Q5, "Counts aloud, 10 rows").
@@ -111,6 +117,18 @@ public final class Answers {
     }
 
     // MARK: the questions
+
+    /// An intent's group and number as the catalog's tokens: the group under `group`, the number under the report's number filter
+    /// (`days` or `years`), or under `number` when the report has none, which the catalog refuses in words. A blank group is none.
+    public static func tokens(_ report: ReportsModel.Report, group: String?, number: Int?) -> [String: String] {
+        var tokens: [String: String] = [:]
+        if let group, group.contains(where: { !$0.isWhitespace }) { tokens["group"] = group }
+        if let number {
+            let name = ReportCatalog.entry(report.catalogID).filters.first(where: \.isNumber)?.name ?? "number"
+            tokens[name] = String(number)
+        }
+        return tokens
+    }
 
     /// `report` with `tokens` (the catalog's), over the active client's data. A token that doesn't resolve reads nothing.
     public func answer(report: ReportsModel.Report, tokens: [String: String]) async -> Answer {
@@ -181,15 +199,19 @@ public final class Answers {
         // with nothing run between this check and that read.
         let read = liveWords(wanted, ends, tail: Phrase.rulesSkipped)
         if read.changed { return said(title, read.words.joined(separator: " ")) }
-        await attentionModel.evaluate(force: true)
+        // Judged, never recorded (the operator, 2026-11-25, "Don't record (Recommended)": only the screen records). The judgement
+        // is over the lists as checked above only if what the rules read is the same once it returns.
+        let judged = attentionModel.inputKey
+        let judgement = await attentionModel.judge()
         if Task.isCancelled { return said(title, Phrase.cancelled) }
         guard orgs.generation == generation else { return said(title, Phrase.switched) }
-        guard attentionModel.updating == nil, let summary = attentionModel.summary else { return said(title, Phrase.attentionChanged) }
+        guard let judgement, judgement.key == judged, attentionModel.inputKey == judged else { return said(title, Phrase.attentionChanged) }
+        let summary = judgement.summary
         var words = read.words
         words += notSent(wanted, ends)
-        if let at = attentionModel.evaluatedAt { words.append("Judged on \(reports.dates.dayTime(at)).") }
+        words.append("Judged on \(reports.dates.dayTime(judgement.at)); nothing is kept from this answer.")
         // The snapshot rules' data: the oldest snapshot any of them used (invariant 8: its age is said).
-        if let oldest = attentionModel.lines.compactMap(\.takenAt).min() {
+        if let oldest = judgement.lines.compactMap(\.takenAt).min() {
             words.append("The oldest snapshot used is from \(reports.dates.day(oldest)), \(ReportsModel.age(since: oldest, now: now())).")
         } else {
             words.append("No snapshot was used.")
@@ -446,6 +468,9 @@ public final class Answers {
         var words = read
         var counts = Array(output.summary.dropFirst())
         var rows: [Answer.Row] = []
+        // With no group, the rows are the devices the question is about, never every device the report counts: the counts are
+        // spoken whole, and the rows say which they are (the review of PR 52: 10 ACTIVE rows hid the one out of warranty).
+        var shown: String?
         func row(_ device: OrgDevice, _ state: String) -> Answer.Row {
             Answer.Row(serial: device.serialNumber, model: Self.sent(device.deviceModel, "model"), state: state)
         }
@@ -456,7 +481,8 @@ public final class Answers {
         case .fleetAge(let report)?:
             rows = report.candidates.map { Answer.Row(serial: $0.serial, model: Self.sent($0.model.string, "model"), state: "\(String(format: "%.1f", $0.ageYears)) years") }
         case .activationLock(let report)?:
-            rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group) }
+            rows = (key.map(report.rows(group:)) ?? report.rows.filter { $0.token.hasPrefix("lock:") }).map { row($0.device, $0.group) }
+            if key == nil { shown = Self.shownLocked }
             // A lock type this version doesn't know is counted, never said: Apple's raw value stays on the screen and in the rows.
             let unknown = report.rows.compactMap { row -> String? in
                 if case .otherLock(let raw) = row.kind, raw != "NONE", raw != "not sent" { raw } else { nil }
@@ -464,13 +490,16 @@ public final class Answers {
             counts.removeAll { line in Set(unknown).contains { line.hasPrefix("Locked, lock type \($0): ") } }
             if !unknown.isEmpty { counts.append("\(unknown.count.formatted()) locked with a lock type this version doesn't know: can't say whether it blocks release.") }
         case .outOfWarranty(let report)?:
-            rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group + ($0.estimatedPast ? ", estimated past" : "")) }
+            rows = (key.map(report.rows(group:)) ?? report.rows.filter { Self.withoutActiveCoverage.contains($0.group) })
+                .map { row($0.device, $0.group + ($0.estimatedPast ? ", estimated past" : "")) }
+            if key == nil { shown = Self.shownWithoutCoverage }
             counts.removeAll { $0.contains(WarrantyReport.assumption) }
             let estimated = report.rows(group: WarrantyReport.estimatedPastToken).count, undated = report.rows.filter(\.lacksReadableOrderDate).count
             counts.append("\(estimated.formatted()) estimated from the order date to be past an assumed one-year warranty: an estimate only. "
                           + "\(undated.formatted()) without active coverage have no readable order date, so no estimate.")
         case .migration(let report)?:
-            rows = (key.map(report.rows(group:)) ?? report.rows).map { row($0.device, $0.group) }
+            rows = (key.map(report.rows(group:)) ?? report.rows.filter { $0.pastDue || $0.pastDueStatusUnknown }).map { row($0.device, $0.group) }
+            if key == nil { shown = Self.shownPastDue }
             // A status this version doesn't know is counted, never said.
             let unknown = report.rows.compactMap { row -> String? in if case .unknown(let raw)? = row.status { raw } else { nil } }
             counts.removeAll { line in Set(unknown).contains { line.hasPrefix("Status \($0): ") } }
@@ -484,10 +513,18 @@ public final class Answers {
         // A report's line that is a label and a count ("Status FAILED: 2") ends as a sentence when said.
         words += counts.map { $0.hasSuffix(".") ? $0 : $0 + "." }
         if let key { words.append("The group \(key) holds \(output.matching.formatted()).") }
-        return said(output.title, words.joined(separator: " "), rows: rows, estimateNote: output.estimateNote)
+        var answer = said(output.title, words.joined(separator: " "), rows: rows, estimateNote: output.estimateNote)
+        answer.rowsNote = shown
+        return answer
     }
 
     // MARK: words
+
+    /// Out of warranty's groups shown with no group asked: no ACTIVE coverage, with a record or without one.
+    static let withoutActiveCoverage: Set = ["no-active-coverage", "no-record"]
+    package static let shownWithoutCoverage = "Shown: the devices without active AppleCare coverage. Name a group to see others."
+    package static let shownLocked = "Shown: the locked devices. Name a group to see others."
+    package static let shownPastDue = "Shown: the devices past the migration deadline without success. Name a group to see others."
 
     /// The answer, the client's name first when the app shows clients.
     private func said(_ title: String, _ spoken: String, rows all: [Answer.Row] = [], estimateNote: String? = nil) -> Answer {

@@ -1,3 +1,4 @@
+import AppIntents
 import AppleBusiness
 import AppModels
 import Foundation
@@ -31,6 +32,15 @@ final class AppServices {
         self.orgs = orgs
         screens = ScreenModels(orgs: orgs)
         self.isDemo = isDemo
+    }
+
+    /// What the App Intents reach (`App/Intents/`): `Answers` alone, never the screen models whole, so an intent can't reach the
+    /// snapshot collector, the history transfer, Dismiss and Snooze, or a switch of client (the review of PR 52); `Answers` holds the
+    /// models it reads privately. Nothing an intent reaches writes (SourceScanTests' `IntentTests`). As SwiftGamGui's
+    /// `SiriIntents.register`; once, at launch, before an intent can run.
+    func registerIntents() {
+        let answers = screens.answers
+        AppDependencyManager.shared.add(dependency: answers)
     }
 
     /// The folder the app keeps its files in: inside the sandbox container. Injected everywhere, never read

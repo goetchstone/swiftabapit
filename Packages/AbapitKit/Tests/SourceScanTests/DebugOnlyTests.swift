@@ -62,7 +62,7 @@ struct DebugOnlyTests {
     /// The scan must see the switches it guards, or it passes vacuously.
     @Test func theScanSeesEverySwitch() throws {
         let code = try Self.roots.flatMap { try SourceScan.swiftFiles(in: $0) }.map { SourceScan.code($0.text, strings: true) }.joined()
-        for name in ["SPIKE", "SNAPSHOT", "DEMO", "SCREEN", "SELECT", "WINDOW"] {
+        for name in ["SPIKE", "SNAPSHOT", "DEMO", "SCREEN", "SELECT", "WINDOW", "SNIPPET"] {
             #expect(code.contains("\"ABAPIT_\(name)\""), "ABAPIT_\(name) isn't read where the scan looks")
         }
     }
