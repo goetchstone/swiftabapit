@@ -110,3 +110,38 @@ sweep, and wait up to a time limit, and that a read under 15 minutes old is reus
 - Gotcha: a model's read can end one list before the other (the Devices model ends its services after the devices, or the
   reverse). A request that wants only the ended list doesn't wait for the other, and the next request shares that read until it
   ends.
+
+## Answers
+
+`Packages/AbapitApp/Sources/AppModels/Answers.swift` (held by `ScreenModels.answers`), tests `AppModelsTests/AnswersTests.swift`.
+One function per question, each returning code's words, for every later intent and the in-app Ask (the operator, 2026-11-24: Q1
+"Six reports + more", Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active client, named").
+
+- `answer(report:tokens:)`: a token that doesn't resolve reads nothing. A snapshot report (coverage, out of warranty, Activation
+  Lock, and fleet age when a snapshot read AppleCare) awaits the Reports screen's history read (`ReportsModel.loadHistory`, `load`
+  without its live read); a live one (migration, service health, fleet age without AppleCare) waits on `LiveWait`; then
+  `ReportsModel.build`, the screen's one function. An answer's history read replaced by the screen's own waits for that one,
+  bounded, and the screen's live read is never lost to an answer's (`liveWanted`: whichever read of the history wins asks for it).
+  `attention()`: `LiveWait` over all three lists, the Needs-attention screen's history read (`loadHistory`), the lists checked
+  as the wait saw them, then the screen's own `evaluate`, so findings are recorded as the screen records them, only for a rule
+  judged whole, and never over a list said not counted. It says the oldest snapshot its rules used, with its age.
+  `lookUp(serial:)`: Find over the awaited device list (serial, IMEI, MEID, EID, order number, MAC), said as an exact match or
+  as part of an identifier; the identifier is never said back.
+- Each returns `Answer { lead, spoken, rows, capNote, estimateNote }`. `spoken`: a snapshot report's "judges nothing" as the
+  screen says it; else the data's date and age, how much was read, the report's own count lines after its read line, values
+  this version doesn't know counted, never said (Apple's raw value stays on the screen and in the rows), "N estimated from the order date" for out of warranty (the assumption in `estimateNote`).
+  Rows: serial, model, state, at most 10, the cap said; service health shows none, as services are known by name.
+- **An error is a fixed phrase per kind** (`Answers.Phrase`), never the reason's text, which can quote Apple's `detail`, Mosyle's
+  own words, a snapshot's code or note, or the history's message: your role can't read; read in part (with counts, never why in
+  the API's words); failed ("abapit says why"); not in scope; can't be read for this organization; no Mosyle org; still being
+  read after the bound; the active organization changed; cancelled. A snapshot report whose history failed, or whose newest
+  snapshot read none of the sweep, says a fixed phrase in place of the screen's words.
+- **Never more than was read**: a list still being read, refused or failed counts nothing. After the wait each list's end is
+  asked again (`LiveWait.end(of:seen:)`), and a list still being read at the bound must still be under way: a list changed
+  since (a Refresh, or a read that ended after the bound) answers nothing, so no count or finding is over another read. A
+  field the API didn't send is said (the services' default fields, Mosyle's refused columns, a device's model or status).
+- **Clients**: with two or more, the client's name leads `lead` and `spoken`; with one, nothing says "client" (the Mosyle org's
+  Needs-attention words drop it). A Mosyle org active says the Reports and Needs-attention screens' words; serial lookup says it
+  reads Apple's list (the executor's words). A School org answers as its screens do.
+- Gotcha: a snapshot report never waits on Apple, so it has no still-being-read words; a switch during its history read answers
+  nothing.

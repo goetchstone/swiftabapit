@@ -11,6 +11,9 @@ import JSONAPI
 public struct QuietServices: Sendable {
     /// The Overview's N, and the Services screen's (`DevicesModel.connection(of:now:)`).
     public static let defaultDays = 30
+    /// The most days the rule's bound may be (Service health's `days` filter and its stepper): its own constant, the same
+    /// 1825 as `CoverageReport.maximumDays` but not tied to it.
+    public static let maximumDays = 1825
 
     public enum LastConnected: Sendable, Equatable {
         /// Apple sent no `lastConnectedDateTime` (absent or null): said as "never".

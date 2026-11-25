@@ -1520,7 +1520,9 @@ each, and is the only resolver of report tokens (S9.1). `phase-9-choices-and-eva
 `LiveWait`, an intent's bounded, cancellable wait for the screens' own live reads (Apple's devices, services and each service's
 device list, Mosyle's devices), a held read under 15 minutes old reused with its age said (the operator, 2026-11-24); the
 25-second bound waits on the operator's live check of Siri's and Shortcuts' time limit (docs/domains/assist-intents.md, "Waiting
-for a live read"). No intent, model pick or answer is built yet.
+for a live read"). On branch `phase-9-answers`: `Answers`, one function per question (the six reports, the Needs-attention
+summary, serial lookup) in code's words: counts, the data's age and how much was read, at most 10 rows, a fixed phrase for each
+error kind, the client named only with two or more (docs/domains/assist-intents.md, "Answers"). No intent or model pick is built yet.
 
 **Owns:** `Assist/`, `App/Intents/`.
 

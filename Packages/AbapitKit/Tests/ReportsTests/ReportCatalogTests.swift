@@ -126,7 +126,7 @@ struct ReportCatalogTests {
         func bounds(_ id: ReportCatalog.ID, _ name: String) throws -> ClosedRange<Int> { try #require(ReportCatalog.entry(id).filters.first { $0.name == name }?.bounds) }
         #expect(try bounds(.coverage, "days") == 1...1825 && CoverageReport.maximumDays == 1825)
         #expect(try bounds(.fleetAge, "years") == 1...10 && FleetAgeReport.maximumYears == 10)
-        #expect(try bounds(.serviceHealth, "days") == 1...1825)
+        #expect(try bounds(.serviceHealth, "days") == 1...1825 && QuietServices.maximumDays == 1825)
         #expect(ReportCatalog.entries.flatMap(\.filters).filter(\.isNumber).count == 3)
     }
 
