@@ -4,13 +4,15 @@
 
 **Owns invariant(s):** #9
 
-**Status:** begun. Phase 9's read-only step started with the report catalog (below); the intents, the model's pick and
-the answers are later PRs. Until then, read the plan section named above and the nearest SwiftGamGui runbook.
+**Status:** begun. Phase 9's read-only step started with the report catalog (below); the model's pick is built (below);
+the intents and the answers are later PRs. Until then, read the plan section named above and the nearest SwiftGamGui runbook.
 
 ## Files
 
 - `Packages/AbapitKit/Sources/Reports/ReportCatalog.swift`: the catalog.
 - `Packages/AbapitKit/Sources/Assist/{Choices,WordRule}.swift`: the run-time list and the plain rule.
+- `Packages/AbapitKit/Sources/Assist/{Picker,ModelPicker,Refusals}.swift`: the model's pick, checked by code; tests
+  `AssistTests/{PickerTests,StubModel}.swift`.
 - `Packages/AbapitKit/Tests/AssistTests/Evals/`: code evaluators, the `Evaluations` harness, the model half (flagged).
 - `Tests/Fixtures/assist/{dev,heldout}.json`: invented phrasings with the right answer.
 
@@ -63,9 +65,41 @@ samples to score both; the model's own pick is a later change.
   take the same evaluation.
 - **WordRule on dev (fast run)**: report 108 of 188, group 30 of 81, refusal 24 of 24. Printed as `EVAL wordrule dev` and pinned
   in `WordRuleEvaluations`; a change to the rule, the list or the dev file moves it, and the pin says so.
-- **The model half** runs only with `ABAPIT_MODEL_EVALS=1`, and never when `CI` or `GITHUB_ACTIONS` is set. It is a placeholder
-  until the model picker exists: skipped with that reason, and failing if the flag is set, so it can't pass by doing nothing.
-  CI never calls the model.
+- **The model half** runs only with `ABAPIT_MODEL_EVALS=1`, and never when `CI` or `GITHUB_ACTIONS` is set: the model picker on
+  the dev samples, `WordRule` printed beside it, and each pick's largest call counted with `tokenCount`. CI never calls the model.
+
+## The model's pick
+
+`Picker.pick(_:for:using:)` maps a sentence onto one of the client's `Choices` and its group, and returns a pick: it runs
+nothing (the operator, 2026-11-24, Q3 "Picks + explanations": code checks every pick, the model gets no tools; D7 and D10:
+on-device only, never Private Cloud Compute).
+
+- **Refused before any call, in words** (`Refusals.before`): no client; an empty sentence or one over 300 characters (never
+  cut); Mosyle named for a client without a Mosyle org; the model unavailable (each `UnavailableReason`); an unsupported language.
+- **Three picks** (`ModelPicker`), each one fresh session, greedy, a 100-token response cap, a `DynamicGenerationSchema` `anyOf`
+  built at run time, the pick field first and then the request's own words that point to it: (1) see or list something, or
+  change something; a change request is answered by code, "This version only reads; nothing was drafted." (2) one of the
+  client's choices (at most 19, one list: the shared lessons narrow in steps past about 40) or "None of these", the reports'
+  holds lines after the list; (3) for a report with groups, a group or "all", the group filter's summary after the list.
+- **The prompt** holds the sentence and the catalog's words only: no example sentence, no list data. A test takes each call
+  apart and finds nothing else.
+- **Code checks every answer**: a pick off the list, a missing pick, empty words, the words field's description echoed back, or
+  words the request doesn't hold is asked about once, the fault named; a second fault is "not understood". A thrown error (each
+  `LanguageModelError` case, a parsing error, assets not ready, a concurrent request) is "not understood" at once, worded by
+  kind, never the error's own text. Code checks the final id and group against the list again (`Picker.check`).
+- **Numbers** come from code's parse of the sentence (days, weeks as seven days, years), resolved by `ReportCatalog.resolve`;
+  a number given twice differently, or out of bounds, is a problem in words. A rule keeps its own window.
+- **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
+  operator's Mac: 379, 1,018 and 534 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
+  (characters / 3 plus the cap) to the same budget.
+- **Dev score** (one flagged run on the operator's Mac, 2026-11-25): report 134 of 188, group 35 of 81, refusal 22 of 24;
+  `WordRule` beside it 108, 30, 24. Mean 1.45 s a sentence, at most 2.59 s. Of 212 dev sentences, 3 hit a guardrail and 7 were
+  refused by the model (each "not understood"). Held out is a later step's single run.
+- Gotcha: the group pick leans to the first group listed when the sentence names none ("status:REQUESTED", "lock:USER",
+  "healthy" for a request of every group); "all" is last on the list. Not tuned here: dev is one run, and a fix is a later
+  change measured on several runs.
+- Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError`, as the SDK does, and fails
+  a test that scripts a value guided generation can't write; `.unchecked` replies test code's own defence.
 
 ## Invariants & failure history
 
