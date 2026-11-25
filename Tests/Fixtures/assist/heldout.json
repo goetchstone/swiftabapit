@@ -1,0 +1,579 @@
+{
+ "about": "Invented phrasings, one per line of a person's request, for scoring a pick of a report or rule. No tenant terms; example.com only. expect is choice, change (a request to change something) or refuse (off topic).",
+ "samples": [
+  {
+   "id": "h-coverage-03",
+   "text": "what warranty plans are about to run out",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-06",
+   "text": "List AppleCare expirations, soonest first",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-09",
+   "text": "I need to renew support on some Macs, which ones?",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-12",
+   "text": "Upcoming AppleCare end dates please",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-15",
+   "text": "Are any of our devices going to lose AppleCare before summer?",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-18",
+   "text": "Which laptops need their coverage renewed this year",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-21",
+   "text": "coverage runs out for which units",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-24",
+   "text": "check AppleCare end dates for the fleet",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-27",
+   "text": "devices needing a support renewal",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-coverage-30",
+   "text": "AppleCare lapse list",
+   "expect": "choice",
+   "choice": "report:coverage",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-03",
+   "text": "show devices by age",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-06",
+   "text": "what's the oldest hardware we have",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-09",
+   "text": "How many Macs are older than five years?",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-12",
+   "text": "devices bought a long time ago",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-15",
+   "text": "Give me the replacement candidates",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-18",
+   "text": "what is the age profile of the fleet",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-21",
+   "text": "show me aging equipment",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-24",
+   "text": "how stale is the hardware by purchase date",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-27",
+   "text": "Which devices are at least six years old?",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-fleet-age-30",
+   "text": "candidates for a hardware renewal cycle",
+   "expect": "choice",
+   "choice": "report:fleet-age",
+   "group": null
+  },
+  {
+   "id": "h-activation-lock-03",
+   "text": "Which iPads are locked to someone's personal Apple Account?",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "lock:USER"
+  },
+  {
+   "id": "h-activation-lock-06",
+   "text": "which devices have the lock managed by the MDM",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "lock:MDM"
+  },
+  {
+   "id": "h-activation-lock-09",
+   "text": "which ones are not locked at all",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "unlocked"
+  },
+  {
+   "id": "h-activation-lock-12",
+   "text": "which devices couldn't be checked for lock status",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "not-read"
+  },
+  {
+   "id": "h-activation-lock-15",
+   "text": "who holds the lock on each device",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": null
+  },
+  {
+   "id": "h-activation-lock-18",
+   "text": "how many devices are free of Activation Lock",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "unlocked"
+  },
+  {
+   "id": "h-activation-lock-21",
+   "text": "which machines are locked, and by whom",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": null
+  },
+  {
+   "id": "h-activation-lock-24",
+   "text": "lock state we never read",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "not-read"
+  },
+  {
+   "id": "h-activation-lock-27",
+   "text": "the lock status is ambiguous for which ones",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "unclear"
+  },
+  {
+   "id": "h-activation-lock-30",
+   "text": "devices someone personally locked",
+   "expect": "choice",
+   "choice": "report:activation-lock",
+   "group": "lock:USER"
+  },
+  {
+   "id": "h-migration-03",
+   "text": "show migration progress",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": null
+  },
+  {
+   "id": "h-migration-06",
+   "text": "devices whose migration hasn't started",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": "status:REQUESTED"
+  },
+  {
+   "id": "h-migration-09",
+   "text": "days left until each migration deadline",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": null
+  },
+  {
+   "id": "h-migration-12",
+   "text": "list the migrations that are done",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": "status:SUCCESS"
+  },
+  {
+   "id": "h-migration-15",
+   "text": "who missed the cutover date",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": "past-due"
+  },
+  {
+   "id": "h-migration-18",
+   "text": "which devices have a migration deadline coming up",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": null
+  },
+  {
+   "id": "h-migration-21",
+   "text": "failed moves between management services",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": "status:FAILED"
+  },
+  {
+   "id": "h-migration-24",
+   "text": "overdue cutovers",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": "past-due"
+  },
+  {
+   "id": "h-migration-27",
+   "text": "check on the migration deadlines",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": null
+  },
+  {
+   "id": "h-migration-30",
+   "text": "report on moving devices to another service",
+   "expect": "choice",
+   "choice": "report:migration",
+   "group": null
+  },
+  {
+   "id": "h-service-health-03",
+   "text": "When did each service last connect?",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": null
+  },
+  {
+   "id": "h-service-health-06",
+   "text": "how many devices does each service manage",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": null
+  },
+  {
+   "id": "h-service-health-09",
+   "text": "is every MDM service connected and working",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": "healthy"
+  },
+  {
+   "id": "h-service-health-12",
+   "text": "which server's status can't be judged",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": "cannot-judge"
+  },
+  {
+   "id": "h-service-health-15",
+   "text": "servers with a status we don't recognise",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": "other-status"
+  },
+  {
+   "id": "h-service-health-18",
+   "text": "Which MDM servers were removed?",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": "deleted"
+  },
+  {
+   "id": "h-service-health-21",
+   "text": "are any of our servers not talking to Apple",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": "quiet"
+  },
+  {
+   "id": "h-service-health-24",
+   "text": "how fresh is each service's last sync",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": null
+  },
+  {
+   "id": "h-service-health-27",
+   "text": "status of the device management servers",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": null
+  },
+  {
+   "id": "h-service-health-30",
+   "text": "how are our MDM connections doing",
+   "expect": "choice",
+   "choice": "report:service-health",
+   "group": null
+  },
+  {
+   "id": "h-out-of-warranty-03",
+   "text": "list everything past warranty",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": null
+  },
+  {
+   "id": "h-out-of-warranty-06",
+   "text": "who has expired coverage",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "no-active-coverage"
+  },
+  {
+   "id": "h-out-of-warranty-09",
+   "text": "Which units are probably out of warranty from their order date?",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "estimated-past-limit"
+  },
+  {
+   "id": "h-out-of-warranty-12",
+   "text": "devices that aren't covered any more",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "no-active-coverage"
+  },
+  {
+   "id": "h-out-of-warranty-15",
+   "text": "count of devices still covered",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "active"
+  },
+  {
+   "id": "h-out-of-warranty-18",
+   "text": "which devices can't we repair for free",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": null
+  },
+  {
+   "id": "h-out-of-warranty-21",
+   "text": "devices with a coverage status this app doesn't know",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "status-unknown"
+  },
+  {
+   "id": "h-out-of-warranty-24",
+   "text": "what's currently covered",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "active"
+  },
+  {
+   "id": "h-out-of-warranty-27",
+   "text": "which equipment has run past its warranty",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": null
+  },
+  {
+   "id": "h-out-of-warranty-30",
+   "text": "not covered by AppleCare",
+   "expect": "choice",
+   "choice": "report:out-of-warranty",
+   "group": "no-active-coverage"
+  },
+  {
+   "id": "h-attention-03",
+   "text": "what should I be doing today",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-06",
+   "text": "anything I should chase up",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-09",
+   "text": "any problems I should know about",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-12",
+   "text": "what's outstanding",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-15",
+   "text": "what has been neglected",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-18",
+   "text": "Where are we behind?",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-21",
+   "text": "any red flags in the fleet",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-24",
+   "text": "things that haven't been done yet",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-27",
+   "text": "how are we doing, anything to worry about",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-attention-30",
+   "text": "a rundown of what's slipping",
+   "expect": "choice",
+   "choice": "attention",
+   "group": null
+  },
+  {
+   "id": "h-change-03",
+   "text": "release the devices that are out of warranty",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-change-06",
+   "text": "reassign the old laptops to another MDM",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-change-09",
+   "text": "enroll the new Macs in Apple MDM",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-change-12",
+   "text": "erase the devices that are past warranty",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-change-15",
+   "text": "change the migration deadline for the late devices",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-change-18",
+   "text": "create a new service and move everything into it",
+   "expect": "change",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-03",
+   "text": "how do I bake bread",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-06",
+   "text": "tell me a joke",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-09",
+   "text": "play some music",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-12",
+   "text": "help me plan a holiday",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-15",
+   "text": "what's 17 times 23",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  },
+  {
+   "id": "h-refuse-18",
+   "text": "how tall is the Eiffel tower",
+   "expect": "refuse",
+   "choice": null,
+   "group": null
+  }
+ ]
+}

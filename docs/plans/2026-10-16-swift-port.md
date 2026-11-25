@@ -1516,7 +1516,7 @@ Live checks wait for the operator.
 
 **Status:** the read-only step began 2026-11-24 (operator's Q1, "Six reports + more": the six reports, the Needs-attention
 summary and serial lookup). Merged: `ReportCatalog` lists all six reports with bounded number filters and a `holds` line
-each, and is the only resolver of report tokens (S9.1). No intent, model pick or answer is built yet.
+each, and is the only resolver of report tokens (S9.1). S9.5 (`phase-9-choices-and-evals`): `Assist/Choices` (the run-time pick list, at most 19) and `WordRule` (the plain rule, dev score in `assist-intents.md`), invented dev and held-out samples, code evaluators and the flagged model-eval placeholder. No intent, model pick or answer is built yet.
 
 **Owns:** `Assist/`, `App/Intents/`.
 
