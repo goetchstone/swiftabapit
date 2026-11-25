@@ -51,8 +51,14 @@ struct RouteTests {
     /// What reads or opens a URL without naming `URLSession`: Foundation's and the session's fetches, and (failure-log
     /// 2026-11-18) SwiftUI's `AsyncImage`, AppKit's `NSImage(byReferencing:)`, Foundation's `Stream.getStreamsToHost`, and
     /// what hands a URL to another app: `NSWorkspace`, SwiftUI's `openURL` (its `OpenURLAction`, App Intents' `OpenURLIntent`).
+    /// Also `NSAttributedString(url:` and `NSURLDownload(`, which fetch; `Data.init`, `NSData.init` and `NSImage.init`, which
+    /// reach a fetch unapplied (`let f: (URL, Data.ReadingOptions) throws -> Data = Data.init`); and what makes a `Text` a
+    /// link that opens in the browser: `AttributedString(markdown`, `LocalizedStringKey(` and `](http` in a string.
+    /// `String.init` and `NSString.init` are left out: `.map(String.init)` is used throughout (gates.md, "Not covered").
     static let fetches = ["contentsOf:", "NSData(", "dataTask(", "downloadTask(", "uploadTask(", "WKWebView", "CFReadStream",
-                          "AsyncImage", "byReferencing:", "getStreamsToHost", "NSWorkspace", "openURL", "OpenURL"]
+                          "AsyncImage", "byReferencing:", "getStreamsToHost", "NSWorkspace", "openURL", "OpenURL",
+                          "NSAttributedString(url:", "NSURLDownload(", "Data.init", "NSData.init", "NSImage.init",
+                          "AttributedString(markdown", "LocalizedStringKey(", "](http"]
     /// SwiftUI's `Link`, which opens its destination in another app: a whole name, since `NavigationLink` and
     /// `ShareLink` hold it and open nothing.
     static let linkName = ["Link"]

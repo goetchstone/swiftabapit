@@ -154,6 +154,15 @@ struct ScannerTests {
         "EnvironmentValues().openURL(url)",
         "let action = OpenURLAction { _ in .handled }",
         "let intent = OpenURLIntent(url)",
+        "let text = try NSAttributedString(url: url, options: [:], documentAttributes: nil)",
+        "let download = NSURLDownload(request: request, delegate: nil)",
+        "let f: (URL, Data.ReadingOptions) throws -> Data = Data.init",
+        "let f: (URL, Data.ReadingOptions) throws -> Data = Data . init",
+        "let f: (URL, NSData.ReadingOptions) throws -> NSData = NSData.init",
+        "let img: (URL) -> NSImage = NSImage.init",
+        "Text(\"[Docs](https://example.com)\")",
+        "Text(LocalizedStringKey(apiString))",
+        "Text(try AttributedString(markdown: apiString))",
     ])
     func theFetchNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.fetches))

@@ -56,8 +56,10 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **No second door.** Nothing starts a program (`Process`, `posix_spawn`, `execv…`, an AppleScript or a user
   script task): a child inherits the network entitlement and fetches past the transport.
 - **No fetch around the transport.** Nothing names `Data(contentsOf:)` and its kin, `AsyncImage`,
-  `NSImage(byReferencing:)` or `Stream.getStreamsToHost`, and nothing hands a URL to another app (`NSWorkspace`,
-  `openURL`, `OpenURLIntent`, SwiftUI's `Link`), in the package or the app. The phase that opens an activity's
+  `NSImage(byReferencing:)`, `Stream.getStreamsToHost`, `NSAttributedString(url:` or `NSURLDownload(`, nor takes
+  `Data.init`, `NSData.init` or `NSImage.init` unapplied. Nothing makes a `Text` link (`AttributedString(markdown`,
+  `LocalizedStringKey(`, a `](http` in a string). Nothing hands a URL to another app through `NSWorkspace`, `openURL`,
+  `OpenURLIntent` or `Link` (what else can is in "Not covered" below), in the package or the app. The phase that opens an activity's
   `downloadUrl` in the browser names the one file that may, with an https-only check and its test, as a reviewed change
   to `RouteTests.nothingFetchesOutsideTheTransport`.
 - **The Release gate's code checks** run on a stripped copy (`strip -D`, as an archive does) and then on the
@@ -134,7 +136,12 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   A request initializer taken unapplied through a generic type whose last argument isn't the request
   (`Box<ReadRequest, Int>.Inner.init`, then called without labels): `ReadRequest>.` and `].` catch the rest.
   A Foundation, AppKit or SwiftUI call that fetches or opens a URL and is on neither `RouteTests.fetches` nor `linkName`:
-  the lists hold the routes found so far (failure-log 2026-11-18). `sed …q` and `awk … exit` after a
+  the lists hold the routes found so far (failure-log 2026-11-18). `ShareLink` and `NSSharingService` hand a URL on
+  and are not listed. `String(contentsOf:)` and `NSString(contentsOf:)` reached through an unapplied initializer
+  given an explicit function type (`let f: (URL, String.Encoding) throws -> String = String.init`) are not caught:
+  `String.init` is used legitimately (`.map(String.init)`) and a substring needle can't tell the two apart; the same
+  goes for `NSString.init`. A markdown link built with no `](http` in the source (a scheme joined at run time) and
+  a `Text` given a `LocalizedStringKey` through another name. `sed …q` and `awk … exit` after a
   pipe, which no script uses.
 - On a new Xcode, re-run the environment-read mutants (an `ABAPIT_DEMO` read, a `getenv`, a `CommandLine`
   read, a `UserDefaults` read, `@AppStorage`). The check reads ObjC selector names and C imports, which a
