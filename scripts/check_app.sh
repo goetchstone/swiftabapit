@@ -105,6 +105,14 @@ release_code() {  # binary, what to call it, what a hit means beyond itself
   if hits="$(grep -E '^_(posix_spawnp?|execv[ep]?)$|^_OBJC_CLASS_\$_(NSTask|NSAppleScript|OSAScript|NSUser(Unix|AppleScript|Automator)?Task)$' <<<"$imports")"; then
     fail "$name can start another program: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
+  # No other way to a host (invariant 4): the transport is URLSession's. Nothing imports a BSD socket or the resolver,
+  # Foundation's Host or stream pair, SwiftUI's AsyncImage, a web view, or what hands a URL or data to another app
+  # (NSWorkspace, NSSharingService). A Release build imports none of these (measured 2026-11-18 on two builds, 1,448
+  # imports each); a review's probes imported each and this gate printed ok (failure-log 2026-11-18). It reads the
+  # binary, so it sees code no source scan read. RouteTests.nothingReachesAHostAnotherWay holds the source.
+  if hits="$(grep -E '^_(socket|connect|connectx|getaddrinfo|gethostbyname2?|gethostbyaddr)$|NSHost|CFHost|NSStream|NSInputStream|NSOutputStream|CFStreamCreatePairWith|AsyncImage|NSWorkspace|NSSharingService|WKWebView' <<<"$imports")"; then
+    fail "$name imports another way to a host: $(tr '\n' ' ' <<<"$hits")$hint"
+  fi
   # No debug-only code: TestSupport's strict stubs and demo, and Vault's MemoryStore, all compiled out under
   # #if DEBUG (linking alone would keep them, through Swift's conformance records). MemoryStore keeps a key in
   # memory; it was public and in every Release build (101 symbols), and the piped `nm | grep -q` never said so

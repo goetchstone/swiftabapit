@@ -28,6 +28,31 @@ struct TreeTests {
         #expect(Self.roots.allSatisfy { seen[$0, default: 0] >= least[$0, default: 10] }, "the scan reads \(seen)")
     }
 
+    /// Xcode compiles what the project's synchronized folders and file references name: exactly `App/`, in one
+    /// target, with no phase that runs a script or copies a file. A second synchronized folder (`Extras/`, holding
+    /// `URLSession.shared.upload`) compiled into the app and no scan read it (failure-log 2026-11-18): the roots above
+    /// are everything the app compiles only while this holds.
+    @Test func theProjectCompilesOnlyTheAppFolder() throws {
+        let project = try String(contentsOf: Fixtures.repoRoot.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)
+        func count(_ needle: String) -> Int { project.components(separatedBy: needle).count - 1 }
+        let groups = project.matches(of: #/isa = PBXFileSystemSynchronizedRootGroup;\s*path = ([^;]+);/#).map { String($0.output.1) }
+        #expect(groups == ["App"], "\(groups)")
+        #expect(count("isa = PBXFileSystemSynchronizedRootGroup;") == 1)
+        let synced = try #require(project.firstMatch(of: #/fileSystemSynchronizedGroups = \(([^)]*)\);/#)).output.1
+        let listed = synced.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        #expect(listed.count == 1 && listed.first?.hasSuffix("/* App */") == true, "\(listed)")
+        #expect(count("fileSystemSynchronizedGroups = (") == 1)
+        #expect(count("isa = PBXNativeTarget;") == 1)
+        for refused in ["PBXShellScriptBuildPhase", "PBXBuildRule", "PBXCopyFilesBuildPhase", "PBXAggregateTarget", "PBXLegacyTarget",
+                        "PBXFileSystemSynchronizedBuildFileExceptionSet", "PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet",
+                        "PBXReferenceProxy", "PBXContainerItemProxy", "PBXTargetDependency"] {
+            #expect(!project.contains(refused), "\(refused)")
+        }
+        let files = project.matches(of: #/isa = PBXFileReference;[^\n]*?path = "?([^";]+)"?;/#).map { String($0.output.1) }.sorted()
+        #expect(files == ["Base.xcconfig", "abapit-Team.entitlements", "abapit.app", "abapit.entitlements"], "\(files)")
+        #expect(count("isa = PBXFileReference;") == 4)
+    }
+
     /// What each root may hold: Swift, which the scans read, and in App/ the inert files an asset or string catalog
     /// needs. App/ is a synchronized folder, so Xcode compiles any source put there: `App/Leak.m`, whose `+load`
     /// opened an NSURLSession, built into Release past every scan and the gate.
