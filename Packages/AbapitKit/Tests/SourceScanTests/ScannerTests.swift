@@ -149,6 +149,8 @@ struct ScannerTests {
         "let image = NSImage(byReferencing : url)",
         "Stream.getStreamsToHost(withName: host, port: 443, inputStream: &input, outputStream: &output)",
         "NSWorkspace.shared.open(url)",
+        "let status = LSOpenCFURLRef(url as CFURL, nil)",
+        "let open = LSOpenCFURLRef",
         "let workspace = `NSWorkspace`.shared",
         "@Environment(\\.openURL) private var open",
         "EnvironmentValues().openURL(url)",
@@ -231,6 +233,36 @@ struct ScannerTests {
         // The call through the needles, an unapplied reference (`transport.send`) through the whole name: `.send` as a
         // substring also matched `Self.sendable(…)`, so the needle is `.send(` and the name check holds the rest.
         #expect(Self.found(code, RouteTests.sends) || SourceScan.names(SourceScan.File(path: "x.swift", text: code), RouteTests.sendName))
+    }
+
+    /// A review's probes (failure-log 2026-11-18), a line each: every one reached a host with every scan green.
+    @Test(arguments: [
+        "var input: InputStream?",
+        "var output: OutputStream?",
+        "let addresses = Host(name: name).addresses",
+        "let host = NSHost(name: name)",
+        "let host = CFHostCreateWithName(nil, name as CFString)",
+        "let open: (Int32, Int32, Int32) -> Int32 = socket",
+        "let status = connect(descriptor, info.pointee.ai_addr, info.pointee.ai_addrlen)",
+        "let status = `connect` (descriptor, address, length)",
+        "guard getaddrinfo(name, service, &hints, &found) == 0 else { return }",
+        "let entry = gethostbyname(name)",
+        "let text = try NSAttributedString(url: url, options: [:], documentAttributes: nil)",
+        "let text = NSAttributedString(html: data, documentAttributes: nil)",
+        "WebView(url: url)",
+        "let page = WebPage()",
+        "NSSharingService(named: .composeEmail)?.perform(withItems: [text])",
+    ])
+    func theHostRoutesFind(_ code: String) {
+        #expect(Self.found(code, RouteTests.hostRoutes) || SourceScan.names(SourceScan.File(path: "x.swift", text: code), RouteTests.hostNames), "\(code)")
+    }
+
+    /// `socket`, `connect` and `Host` are whole names: the app's `APIHost`, a longer name, a comment or a string isn't one.
+    @Test func theHostNamesAreWhole() {
+        for code in ["let host: APIHost = .appleBusiness", "let connected = true", "func reconnect() {}", "let sockets = 0", "// connect again",
+                     "let text = \"can't connect\"", "let hostName = url.host()"] {
+            #expect(!SourceScan.names(SourceScan.File(path: "x.swift", text: code), RouteTests.hostNames), "\(code)")
+        }
     }
 
     static func named(_ code: String, _ names: [String]) -> Bool { SourceScan.names(SourceScan.File(path: "x.swift", text: code), names) }

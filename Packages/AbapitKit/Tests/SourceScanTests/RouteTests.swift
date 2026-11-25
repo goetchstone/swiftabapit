@@ -50,18 +50,26 @@ struct RouteTests {
     static let keychain = ["SecItem", "SecKeyCreate", "kSecClass", "SecAccessControl", "SecKeychain"]
     /// What reads or opens a URL without naming `URLSession`: Foundation's and the session's fetches, and (failure-log
     /// 2026-11-18) SwiftUI's `AsyncImage`, AppKit's `NSImage(byReferencing:)`, Foundation's `Stream.getStreamsToHost`, and
-    /// what hands a URL to another app: `NSWorkspace`, SwiftUI's `openURL` (its `OpenURLAction`, App Intents' `OpenURLIntent`).
+    /// what hands a URL to another app: `NSWorkspace`, Launch Services' `LSOpenCFURLRef` (and the rest of `LSOpen…`), SwiftUI's `openURL` (its `OpenURLAction`, App Intents' `OpenURLIntent`).
     /// Also `NSAttributedString(url:` and `NSURLDownload(`, which fetch; `Data.init`, `NSData.init` and `NSImage.init`, which
     /// reach a fetch unapplied (`let f: (URL, Data.ReadingOptions) throws -> Data = Data.init`); and what makes a `Text` a
     /// link that opens in the browser: `AttributedString(markdown`, `LocalizedStringKey(` and `](http` in a string.
     /// `String.init` and `NSString.init` are left out: `.map(String.init)` is used throughout (gates.md, "Not covered").
     static let fetches = ["contentsOf:", "NSData(", "dataTask(", "downloadTask(", "uploadTask(", "WKWebView", "CFReadStream",
-                          "AsyncImage", "byReferencing:", "getStreamsToHost", "NSWorkspace", "openURL", "OpenURL",
+                          "AsyncImage", "byReferencing:", "getStreamsToHost", "NSWorkspace", "LSOpen", "openURL", "OpenURL",
                           "NSAttributedString(url:", "NSURLDownload(", "Data.init", "NSData.init", "NSImage.init",
                           "AttributedString(markdown", "LocalizedStringKey(", "](http"]
     /// SwiftUI's `Link`, which opens its destination in another app: a whole name, since `NavigationLink` and
     /// `ShareLink` hold it and open nothing.
     static let linkName = ["Link"]
+    /// Other ways to a host that name neither `URLSession` nor a fetch (failure-log 2026-11-18, a review's probes):
+    /// Foundation's stream pair and `Host`, the resolver (a lookup carries data in the name it asks for), an attributed
+    /// string read from a document or HTML (it loads what the document names), a web view, a sharing service.
+    static let hostRoutes = ["InputStream", "OutputStream", "NSHost", "CFHost", "getaddrinfo", "gethostby", "documentAttributes:",
+                             "WebView", "WebPage", "NSSharingService"]
+    /// Whole names: `socket` and `connect` taken unapplied (`let open = socket`, where `socket(` isn't there to find),
+    /// and Foundation's `Host` (the app's type is `APIHost`).
+    static let hostNames = ["socket", "connect", "Host"]
     static let casts = ["unsafeBitCast", "unsafeDowncast", "withMemoryRebound", "assumingMemoryBound", "bindMemory"]
     /// Code found by name at run time: a class or selector from a string, a symbol from the loader, a private
     /// property read through reflection or key-value coding (`URLSessionTransport`'s session).
@@ -594,6 +602,18 @@ struct RouteTests {
         for root in [Self.sources] + Self.appSide {
             let links = try SourceScan.files(in: root, naming: Self.linkName)
             #expect(links.isEmpty, "\(links.sorted())")
+        }
+    }
+
+    /// Nor any other way: a stream pair, a name lookup, a BSD socket taken unapplied, each from a file that named no
+    /// `URLSession`, passed every scan, built into Release and passed the gate (failure-log 2026-11-18). The lists hold
+    /// the routes found so far; `scripts/check_app.sh` reads the same routes from the binary's imports.
+    @Test func nothingReachesAHostAnotherWay() throws {
+        for root in [Self.sources] + Self.appSide {
+            let routes = try SourceScan.files(in: root, matching: Self.hostRoutes)
+            #expect(routes.isEmpty, "\(routes.sorted())")
+            let names = try SourceScan.files(in: root, naming: Self.hostNames)
+            #expect(names.isEmpty, "\(names.sorted())")
         }
     }
 
