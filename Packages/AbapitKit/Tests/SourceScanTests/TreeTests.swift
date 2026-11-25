@@ -51,6 +51,66 @@ struct TreeTests {
         let files = project.matches(of: #/isa = PBXFileReference;[^\n]*?path = "?([^";]+)"?;/#).map { String($0.output.1) }.sorted()
         #expect(files == ["Base.xcconfig", "abapit-Team.entitlements", "abapit.app", "abapit.entitlements"], "\(files)")
         #expect(count("isa = PBXFileReference;") == 4)
+        #expect(Self.whereTheRootsResolve(project) == [], "\(Self.whereTheRootsResolve(project))")
+    }
+
+    /// Where `App` resolves: the project's directory and root are empty, the main group has no `path`, and `App` is
+    /// relative to its group. Each was a way to make the one group `App` mean another folder (`projectDirPath = Extras;`)
+    /// with the name check above still green. Returns what is wrong; empty when nothing is.
+    static func whereTheRootsResolve(_ project: String) -> [String] {
+        var faults: [String] = []
+        func lines(_ key: String) -> [String] { project.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("\(key) =") } }
+        if lines("projectDirPath") != ["projectDirPath = \"\";"] { faults.append("projectDirPath \(lines("projectDirPath"))") }
+        if lines("projectRoot") != ["projectRoot = \"\";"] { faults.append("projectRoot \(lines("projectRoot"))") }
+        func block(_ id: String) -> String? {
+            guard let start = project.range(of: "\n\t\t\(id) "), let end = project.range(of: "\n\t\t};", range: start.upperBound..<project.endIndex) else { return nil }
+            return String(project[start.upperBound..<end.lowerBound])
+        }
+        if let main = project.firstMatch(of: #/mainGroup = ([0-9A-F]+);/#).map({ String($0.output.1) }), let group = block(main) {
+            if group.contains("\n\t\t\tpath =") { faults.append("the main group has a path") }
+            if !group.contains("\n\t\t\tsourceTree = \"<group>\";") { faults.append("the main group's sourceTree") }
+        } else {
+            faults.append("no main group")
+        }
+        if let app = project.firstMatch(of: #/([0-9A-F]+) \/\* App \*\/ = \{\n\t\t\tisa = PBXFileSystemSynchronizedRootGroup;/#).map({ String($0.output.1) }),
+           let group = block(app) {
+            if !group.contains("\n\t\t\tsourceTree = \"<group>\";") { faults.append("App's sourceTree") }
+            if !group.contains("\n\t\t\tpath = App;") { faults.append("App's path") }
+        } else {
+            faults.append("no App group")
+        }
+        return faults
+    }
+
+    /// Each way to point the one `App` group elsewhere, made on the real project's text in memory (never on the file).
+    @Test(arguments: [
+        ("projectDirPath = \"\";", "projectDirPath = Extras;"),
+        ("projectRoot = \"\";", "projectRoot = Extras;"),
+        ("\t\t\tchildren = (\n\t\t\t\t5AB000000000000000000010 /* App */,", "\t\t\tpath = Extras;\n\t\t\tchildren = (\n\t\t\t\t5AB000000000000000000010 /* App */,"),
+        ("\t\t\tpath = App;\n\t\t\tsourceTree = \"<group>\";", "\t\t\tpath = App;\n\t\t\tsourceTree = DERIVED_FILE_DIR;"),
+    ])
+    func theRootsMustResolveToTheAppFolder(_ original: String, _ mutant: String) throws {
+        let project = try String(contentsOf: Fixtures.repoRoot.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)
+        #expect(Self.whereTheRootsResolve(project) == [])
+        #expect(project.components(separatedBy: original).count == 2, "the project no longer holds: \(original)")
+        #expect(!Self.whereTheRootsResolve(project.replacingOccurrences(of: original, with: mutant)).isEmpty, "\(mutant)")
+    }
+
+    /// The Release gate's import pattern, read from `scripts/check_app.sh` and run on symbols a build carries: the
+    /// names a review found past it (`LSOpenCFURLRef`, SwiftUI's `WebView`, which compiles to `_WebKit_SwiftUI`).
+    @Test func theGatePatternRefusesTheHostRoutes() throws {
+        let script = try String(contentsOf: Fixtures.repoRoot.appending(path: "scripts/check_app.sh"), encoding: .utf8)
+        let line = try #require(script.split(separator: "\n").first { $0.contains("NSSharingService") && $0.contains("grep -E") })
+        let pattern = try #require(line.firstMatch(of: #/grep -E '([^']+)'/#)).output.1
+        let regex = try NSRegularExpression(pattern: String(pattern))
+        func refuses(_ symbol: String) -> Bool { regex.firstMatch(in: symbol, range: NSRange(symbol.startIndex..., in: symbol)) != nil }
+        for symbol in ["_socket", "_connect", "_getaddrinfo", "_OBJC_CLASS_$_NSHost", "_OBJC_CLASS_$_NSStream", "_LSOpenCFURLRef",
+                       "_LSOpenURLsWithRole", "_$s15_WebKit_SwiftUI7WebViewV", "_OBJC_CLASS_$_WKWebView", "_OBJC_CLASS_$_NSWorkspace"] {
+            #expect(refuses(symbol), "\(symbol)")
+        }
+        for symbol in ["_connectionFailed", "_$s7SwiftUI4ViewP", "_LSSharedFileList", "_OBJC_CLASS_$_NSURLSession"] {
+            #expect(!refuses(symbol), "\(symbol)")
+        }
     }
 
     /// What each root may hold: Swift, which the scans read, and in App/ the inert files an asset or string catalog

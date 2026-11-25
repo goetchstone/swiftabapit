@@ -107,10 +107,10 @@ release_code() {  # binary, what to call it, what a hit means beyond itself
   fi
   # No other way to a host (invariant 4): the transport is URLSession's. Nothing imports a BSD socket or the resolver,
   # Foundation's Host or stream pair, SwiftUI's AsyncImage, a web view, or what hands a URL or data to another app
-  # (NSWorkspace, NSSharingService). A Release build imports none of these (measured 2026-11-18 on two builds, 1,448
+  # (NSWorkspace, LSOpen…, NSSharingService). A Release build imports none of these (measured 2026-11-18 on two builds, 1,448
   # imports each); a review's probes imported each and this gate printed ok (failure-log 2026-11-18). It reads the
   # binary, so it sees code no source scan read. RouteTests.nothingReachesAHostAnotherWay holds the source.
-  if hits="$(grep -E '^_(socket|connect|connectx|getaddrinfo|gethostbyname2?|gethostbyaddr)$|NSHost|CFHost|NSStream|NSInputStream|NSOutputStream|CFStreamCreatePairWith|AsyncImage|NSWorkspace|NSSharingService|WKWebView' <<<"$imports")"; then
+  if hits="$(grep -E '^_(socket|connect|connectx|getaddrinfo|gethostbyname2?|gethostbyaddr)$|NSHost|CFHost|NSStream|NSInputStream|NSOutputStream|CFStreamCreatePairWith|AsyncImage|NSWorkspace|^_LSOpen|NSSharingService|WKWebView|_WebKit_SwiftUI' <<<"$imports")"; then
     fail "$name imports another way to a host: $(tr '\n' ' ' <<<"$hits")$hint"
   fi
   # No debug-only code: TestSupport's strict stubs and demo, and Vault's MemoryStore, all compiled out under
@@ -136,4 +136,4 @@ release_code "$BINARY" "the binary" " (only its symbol table shows this: an arch
   || fail "the display name isn't the bundle's name, so macOS shows the file name"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "abapit" ] || fail "display name"
 [ "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "27.0" ] || fail "minimum macOS"
-echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or debug code, stripped or not)"
+echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or host routes, or debug code, stripped or not)"

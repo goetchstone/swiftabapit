@@ -149,6 +149,8 @@ struct ScannerTests {
         "let image = NSImage(byReferencing : url)",
         "Stream.getStreamsToHost(withName: host, port: 443, inputStream: &input, outputStream: &output)",
         "NSWorkspace.shared.open(url)",
+        "let status = LSOpenCFURLRef(url as CFURL, nil)",
+        "let open = LSOpenCFURLRef",
         "let workspace = `NSWorkspace`.shared",
         "@Environment(\\.openURL) private var open",
         "EnvironmentValues().openURL(url)",
