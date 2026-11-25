@@ -1516,7 +1516,11 @@ Live checks wait for the operator.
 
 **Status:** the read-only step began 2026-11-24 (operator's Q1, "Six reports + more": the six reports, the Needs-attention
 summary and serial lookup). Merged: `ReportCatalog` lists all six reports with bounded number filters and a `holds` line
-each, and is the only resolver of report tokens (S9.1). No intent, model pick or answer is built yet.
+each, and is the only resolver of report tokens (S9.1). No intent, model pick or answer is built yet. On branch `phase-9-live-wait`:
+`LiveWait`, an intent's bounded, cancellable wait for the screens' own live reads (Apple's devices, services and each service's
+device list, Mosyle's devices), a held read under 15 minutes old reused with its age said (the operator, 2026-11-24); the
+25-second bound waits on the operator's live check of Siri's and Shortcuts' time limit (docs/domains/assist-intents.md, "Waiting
+for a live read").
 
 **Owns:** `Assist/`, `App/Intents/`.
 

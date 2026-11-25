@@ -32,3 +32,31 @@ Q3, "Picks + explanations": the model only picks from this list, and code resolv
 ## Testing / live-verification status
 
 ## To do common tasks here
+
+## Waiting for a live read
+
+`Packages/AbapitApp/Sources/AppModels/LiveWait.swift`, tests `AppModelsTests/LiveWaitTests.swift` (branch `phase-9-live-wait`).
+The operator decided on 2026-11-24 ("Yes, bounded (Recommended)") that an intent may start the screen's own live read, never a
+sweep, and wait up to a time limit, and that a read under 15 minutes old is reused with its age said.
+
+- `LiveWait.lists(_:bound:fresh:)` over Apple's device list, Apple's services with each service's device list, and the Mosyle
+  org's devices. A wanted list that is idle, stopped on an error (a 403 included) or older than `fresh` (15 minutes) is read with
+  its model's own `load(force: true)` (the Mosyle model's `loadDevices(force: true)`, which, like Refresh, reads the Mosyle tab on
+  screen again too). Each model is read at most once per request: a read that fails is said, not tried again. A model whose read
+  is under way is never restarted, even when a list it already ended would need reading on its own: the request waits on that read,
+  so two requests, or a request and a screen, share one.
+- The wait watches the models' observable states (`Observations`), raced against the injected clock's `bound` (25 seconds, until
+  the operator's live check of Siri's and Shortcuts' own time limit). A cancel or the bound ends the wait, never the read: it
+  lands on the screens.
+- Each list ends `.whole(at:)`, `.partly(why, at:)` (the page cap, "showing N of ≥M", or a failure after rows), `.notRead(why)`
+  (a 403 is "your role can't read …"; a failure; can't be read here; no Mosyle org, when Mosyle is asked nothing) or
+  `.stillReading(after:)`. The words are the screens' own (`ReportsModel.liveDevices`/`liveServices`, the Needs-attention
+  screen's for Mosyle); the services' part read is counted ("the device lists of 2 of 5 services weren't read whole"), never
+  named. An error's words are the screen's, which may quote Apple's or Mosyle's own `detail`. A request ends `.cancelled`, or
+  `.switched` when the org generation changed: then nothing of either client is answered.
+- Tests: the strict stubs with the test target's `Gate` (an Apple page held) and `MosyleStub.holdRequests` (a Mosyle page held),
+  the bound on a manual timer, and the Apple clients' retry wait on the same timer for a 429 whose `Retry-After` outlasts the
+  bound. Every test checks that only the lists' own paths were asked: never a device's own path.
+- Gotcha: a model's read can end one list before the other (the Devices model ends its services after the devices, or the
+  reverse). A request that wants only the ended list doesn't wait for the other, and the next request shares that read until it
+  ends.
