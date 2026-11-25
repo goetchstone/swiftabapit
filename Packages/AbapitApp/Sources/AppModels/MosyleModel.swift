@@ -229,6 +229,9 @@ public final class MosyleModel {
     /// devices, after a failed read too.
     public private(set) var columns: MosyleColumns?
     public var columnFallback: MosyleColumnFallback? { columns?.fallback }
+    /// When the device read stopped on an error, so the rows it left can say when they were read (as `DevicesModel`'s
+    /// `devicesStoppedAt`); nil otherwise. A read that ended has its time in `.loaded(at:)`.
+    public private(set) var devicesStoppedAt: Date?
 
     public var selectedDevice: String?
     public var selectedGroup: String? {
@@ -273,6 +276,13 @@ public final class MosyleModel {
         } else {
             show(.devices)
         }
+    }
+
+    /// Reads the device list again, and only it: the other lists, the selection and a group's members stay as they are (an intent's
+    /// wait, which never restarts another list under way). Before this org's first read, it is that read (`load()`).
+    func reloadDevices() {
+        guard loadedGeneration == orgs.generation else { return load() }
+        start(.devices)
     }
 
     /// Reads `list` if nothing has asked for it since the last reset.
@@ -346,7 +356,7 @@ public final class MosyleModel {
                 // A failed device read says where the columns stand too: a refusal may be why it failed.
                 let columns = list == .devices ? await client.columns : nil
                 guard let self, self.current(token) else { return }
-                if list == .devices { self.columns = columns }
+                if list == .devices { (self.columns, self.devicesStoppedAt) = (columns, Date()) }
                 self.set(list, state: Self.state(after: error))
             }
         }
@@ -362,7 +372,7 @@ public final class MosyleModel {
 
     private func clear(_ list: List) {
         switch list {
-        case .devices: devices = Listing()
+        case .devices: (devices, devicesStoppedAt) = (Listing(), nil)
         case .users: users = Listing()
         case .userGroups: userGroups = Listing()
         case .deviceGroups: deviceGroups = Listing()
@@ -402,7 +412,7 @@ public final class MosyleModel {
         token += 1
         (devices, users, userGroups, deviceGroups) = (Listing(), Listing(), Listing(), Listing())
         (attributes, adminLog) = (Listing(), Listing())
-        columns = nil
+        (columns, devicesStoppedAt) = (nil, nil)
         members.show(nil, filter: nil)
     }
 
