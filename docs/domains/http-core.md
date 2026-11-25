@@ -64,7 +64,7 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   starting with `.`, at most 128 characters, before a request exists.
 - **A request is checked as it leaves, not only where it is built.** `HTTPClient.read` refuses anything that isn't
   read-shaped (an Apple GET with no body; a Mosyle POST with a body and no query; nothing to the token host), and
-  `authenticate` anything but the three logins, with no header beyond Mosyle's `accessToken` (`HTTPFailure.notARead`). A
+  `authenticate` anything but the three logins, with no header beyond Mosyle's `accessToken`, and that only to a Mosyle host (`HTTPFailure.notARead`). A
   `method: .delete` built in `AppleRead.swift` passed every source scan (failure-log 2026-11-18). Phase 4's write door is
   a method of its own; it does not loosen these two.
 

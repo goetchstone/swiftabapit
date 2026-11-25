@@ -55,8 +55,25 @@ struct HTTPCoreTests {
     func aRequestThatIsNotAReadIsNeverSent(index: Int) async throws {
         let request = Self.notReads[index], recorder = Recorder()
         let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
-        await #expect(throws: HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) \(request.template)")) {
+        await #expect(throws: HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) a path with no template")) {
             _ = try await client.read(request, authorizer: NoAuth())
+        }
+        #expect(recorder.seen.withLock { $0 }.isEmpty)
+    }
+
+    /// A refusal names the template, never an identifier in a raw path.
+    @Test func aRefusalNamesNoIdentifier() async throws {
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        let bare = ReadRequest(host: .appleBusiness, method: .delete, path: "/v1/orgDevices/C02SERIAL1")
+        let templated = ReadRequest(host: .appleBusiness, method: .delete, path: "/v1/orgDevices/C02SERIAL1", template: "/v1/orgDevices/{id}")
+        for (request, said) in [(bare, "DELETE api-business.apple.com a path with no template"),
+                                (templated, "DELETE api-business.apple.com /v1/orgDevices/{id}")] {
+            do { _ = try await client.read(request, authorizer: NoAuth()); Issue.record("sent") } catch {
+                let message = (error as? HTTPFailure)?.message ?? ""
+                #expect(error as? HTTPFailure == .notARead(said))
+                #expect(!message.contains("C02SERIAL1"), "\(message)")
+            }
         }
         #expect(recorder.seen.withLock { $0 }.isEmpty)
     }
@@ -90,6 +107,7 @@ struct HTTPCoreTests {
         (.mosyle, "/v1/devices", [:]), (.mosyle, "/v1/login/../devices", [:]), (.mosyleLogs, "/v1/logsstream", [:]),
         (.appleAccount, "/auth/oauth2/token", ["Authorization": "Bearer x"]), (.mosyle, "/v1/login", ["Authorization": "Bearer x"]),
         (.mosyle, "/v1/login", ["accessToken": "t", "Authorization": "Bearer x"]),
+        (.appleAccount, "/auth/oauth2/token", ["accessToken": "MOSYLE-SECRET"]),
     ]
 
     /// A credential exchange goes to a login endpoint only, with no header but Mosyle's access token: any other would

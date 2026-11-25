@@ -54,6 +54,12 @@ public actor HTTPClient {
     /// A read as it will be sent (invariant 2): Apple's are GETs with no body; Mosyle's are POSTs with a body and no
     /// query (its session checks the operation); the token host takes no read. Checked as each request leaves, because
     /// a builder scan can't see every way a request is made (failure-log 2026-11-18).
+    /// What a refusal may say of a request's path: its template, or, when it has none (the template is then the raw path,
+    /// which can hold an identifier), only that it has none.
+    static func nameable(_ request: ReadRequest) -> String {
+        request.template == request.path ? "a path with no template" : request.template
+    }
+
     static func isReadShaped(_ request: ReadRequest) -> Bool {
         switch request.host {
         case .appleBusiness, .appleSchool: request.method == .get && request.body == nil
@@ -86,7 +92,7 @@ public actor HTTPClient {
     public var learnedReadsPerMinute: Double { get async { await limiter.readsPerMinute } }
 
     package func read(_ request: ReadRequest, authorizer: any Authorizer) async throws -> HTTPResponse {
-        guard Self.isReadShaped(request) else { throw HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) \(request.template)") }
+        guard Self.isReadShaped(request) else { throw HTTPFailure.notARead("\(request.method.rawValue) \(request.host.rawValue) \(Self.nameable(request))") }
         guard let url = URL.make(host: request.host, path: request.path, query: request.query) else {
             throw HTTPFailure.refusedHost(request.host.rawValue)
         }
@@ -173,7 +179,7 @@ public actor HTTPClient {
         // A login goes to a login endpoint and carries no header but Mosyle's access token: anything else would be a
         // POST of any body, with any credential, past the read check above and the Executor.
         guard Self.logins.contains(where: { $0.0 == exchange.host && $0.1 == exchange.path }),
-              exchange.headers.keys.allSatisfy({ $0 == "accessToken" }) else {
+              exchange.headers.keys.allSatisfy({ $0 == "accessToken" && (exchange.host == .mosyle || exchange.host == .mosyleLogs) }) else {
             throw HTTPFailure.notARead("POST \(exchange.host.rawValue) \(exchange.path)")
         }
         guard let url = URL.make(host: exchange.host, path: exchange.path) else { throw HTTPFailure.refusedHost(exchange.host.rawValue) }

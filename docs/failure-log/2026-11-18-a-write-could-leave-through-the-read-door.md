@@ -1,6 +1,6 @@
 # 2026-11-18 — A write could leave through the read door
 
-- **Symptom** — An audit mutant added a `DELETE /v1/mdmServers/{id}` builder to `AppleRead.swift` and a POST to
+- **Symptom** — A mutant added a `DELETE /v1/mdmServers/{id}` builder to `AppleRead.swift` and a POST to
   `/v1/orgDeviceActivities` through `TokenBroker`'s credential exchange. Both went out with the bearer token.
   `scripts/test.sh` and `scripts/check_graph.py` were green. No write was in the app, so nothing was sent to a tenant.
 - **Cause** — `HTTPClient.read(_:authorizer:)` sent a request's method and body as given, and `HTTPClient.authenticate(_:)`
@@ -15,5 +15,5 @@
 - **Prevention** — `HTTPCoreTests` (`aRequestThatIsNotAReadIsNeverSent`, `aNextLinkIsFollowedOnlyOnAnAppleAPIHost`,
   `aCredentialExchangeGoesOnlyToALogin`, and their controls), `ReadContractTests.everyAppleReadIsAGetWithNoBody`, and `RouteTests.appleReadBuildersNameNoMethodOrBody` (AppleRead.swift
   names no method and no body). Eleven
-  mutants of the check, each killed by a named test, and the audit's two mutants, both refused, are in the PR. Proven on the
+  mutants of the check, each killed by a named test, and the two mutants that opened this entry, both refused, are in the PR. Proven on the
   stub only: no live request is involved.
