@@ -160,8 +160,9 @@ public final class NeedsAttentionModel {
     @ObservationIgnored package private(set) var sources: [String: ReportsModel.SweepSource] = [:]
     /// Bumped each time `sources` is set: part of the evaluation's key.
     private var sourcesStamp = 0
-    /// What the last evaluation was made from; observed, so a screen says when what it shows is older than what is held.
-    private var evaluatedKey: InputKey?
+    /// What the last evaluation was made from; observed, so a screen says when what it shows is older than what is held. `Answers`
+    /// reads it to tell its own evaluation from another that replaced it.
+    private(set) var evaluatedKey: InputKey?
     @ObservationIgnored private var loadToken = 0
     @ObservationIgnored private var evaluateToken = 0
     /// Loads and evaluations that have returned, kept or dropped: what the tests wait on.

@@ -33,6 +33,9 @@ public final class Answers {
             }
         }
 
+        /// The rows' column titles, in a row's order.
+        public static let columns = ["Serial number", "Model", "State"]
+
         /// The question answered: the report's or the summary's title, after the client's name when the app shows clients.
         public let lead: String
         /// What is said aloud: counts, the data's age, how much was read.
@@ -112,6 +115,18 @@ public final class Answers {
 
     // MARK: the questions
 
+    /// An intent's group and number as the catalog's tokens: the group under `group`, the number under the report's number filter
+    /// (`days` or `years`), or under `number` when the report has none, which the catalog refuses in words. A blank group is none.
+    public static func tokens(_ report: ReportsModel.Report, group: String?, number: Int?) -> [String: String] {
+        var tokens: [String: String] = [:]
+        if let group, group.contains(where: { !$0.isWhitespace }) { tokens["group"] = group }
+        if let number {
+            let name = ReportCatalog.entry(report.catalogID).filters.first(where: \.isNumber)?.name ?? "number"
+            tokens[name] = String(number)
+        }
+        return tokens
+    }
+
     /// `report` with `tokens` (the catalog's), over the active client's data. A token that doesn't resolve reads nothing.
     public func answer(report: ReportsModel.Report, tokens: [String: String]) async -> Answer {
         let title = report.title
@@ -181,10 +196,15 @@ public final class Answers {
         // with nothing run between this check and that read.
         let read = liveWords(wanted, ends, tail: Phrase.rulesSkipped)
         if read.changed { return said(title, read.words.joined(separator: " ")) }
+        // What this evaluation reads, kept: another evaluation (the screen's) can start during its awaits and replace it, and
+        // then what is shown was judged over other inputs than the ones checked above.
+        let judged = attentionModel.inputKey
         await attentionModel.evaluate(force: true)
         if Task.isCancelled { return said(title, Phrase.cancelled) }
         guard orgs.generation == generation else { return said(title, Phrase.switched) }
-        guard attentionModel.updating == nil, let summary = attentionModel.summary else { return said(title, Phrase.attentionChanged) }
+        guard attentionModel.evaluatedKey == judged, attentionModel.updating == nil, let summary = attentionModel.summary else {
+            return said(title, Phrase.attentionChanged)
+        }
         var words = read.words
         words += notSent(wanted, ends)
         if let at = attentionModel.evaluatedAt { words.append("Judged on \(reports.dates.dayTime(at)).") }

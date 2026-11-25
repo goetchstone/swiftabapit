@@ -604,4 +604,41 @@ struct AnswersTests {
         #expect(part.spoken.hasSuffix("No device matches that identifier exactly; 1 device has it as part of an identifier."), "\(part.spoken)")
         #expect(!imei.spoken.contains("356938035643809") && !part.spoken.contains("0000008"))
     }
+
+    // MARK: the intents' follow-up
+
+    /// Another evaluation (the screen's) that starts during the answer's and replaces it, over other inputs (the Mosyle service set
+    /// meanwhile): what is shown then was judged over inputs the answer never checked, so nothing is answered, though the screen's
+    /// evaluation is current (`updating` is nil).
+    @Test func anEvaluationReplacedByAnotherAnswersNothing() async throws {
+        let world = try await Self.world()
+        let answers = Self.answers(world)
+        let model = world.screens.attention
+        model.afterAwait = { stage in
+            guard stage == "evaluate" else { return }
+            model.afterAwait = nil
+            model.setMosyleService("S2")
+            await model.evaluate(force: true)
+        }
+        let answer = await answers.attention()
+        #expect(model.updating == nil, "the screen's evaluation is current")
+        #expect(answer.spoken.hasSuffix(Answers.Phrase.attentionChanged), "\(answer.spoken)")
+        // With nothing replacing it, the same question is answered.
+        let again = await answers.attention()
+        #expect(again.spoken.contains("open finding"), "\(again.spoken)")
+        #expect(!again.spoken.hasSuffix(Answers.Phrase.attentionChanged))
+    }
+
+    /// An intent's group and number become the catalog's tokens: the number under the report's own number filter, or under a name the
+    /// catalog refuses in words when the report has none; a blank group is none.
+    @Test func anIntentsGroupAndNumberAreTheCatalogsTokens() {
+        #expect(Answers.tokens(.coverage, group: nil, number: 30) == ["days": "30"])
+        #expect(Answers.tokens(.fleetAge, group: nil, number: 4) == ["years": "4"])
+        #expect(Answers.tokens(.serviceHealth, group: "quiet", number: 10) == ["group": "quiet", "days": "10"])
+        #expect(Answers.tokens(.outOfWarranty, group: "  ", number: nil) == [:])
+        let refused = Answers.tokens(.activationLock, group: "lock:USER", number: 3)
+        #expect(refused == ["group": "lock:USER", "number": "3"])
+        #expect(!ReportCatalog.problems(.activationLock, tokens: refused).isEmpty)
+        #expect(ReportCatalog.problems(.coverage, tokens: Answers.tokens(.coverage, group: nil, number: 5000)) != [])
+    }
 }
