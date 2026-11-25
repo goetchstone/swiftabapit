@@ -29,9 +29,22 @@ struct AbapitApp: App {
         services.registerIntents()
     }
 
+    /// The window's content: the app, or in debug builds an intent's snippet for the screenshots (`ABAPIT_SNIPPET`).
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if let report = SnippetPreview.requested {
+            SnippetPreview(screens: services.screens, report: report)
+        } else {
+            ContentView(services: services)
+        }
+        #else
+        ContentView(services: services)
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup("abapit") {
-            ContentView(services: services)
+            root
                 .task { await Snapshots.runIfRequested() }
         }
         // Every launch opens a fresh window: an admin tool has nothing worth restoring, and a restored

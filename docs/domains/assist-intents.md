@@ -145,3 +145,35 @@ One function per question, each returning code's words, for every later intent a
   reads Apple's list (the executor's words). A School org answers as its screens do.
 - Gotcha: a snapshot report never waits on Apple, so it has no still-being-read words; a switch during its history read answers
   nothing.
+
+## Intents
+
+`App/Intents/{ReportIntents,AttentionIntent,LookUpIntent,Snippets,Shortcuts}.swift`, `App/AppShortcuts.xcstrings`; the screen
+models reach them through `AppServices.registerIntents` (`AppDependencyManager`, as SwiftGamGui's `SiriIntents.register`). The
+operator's answers of 2026-11-24 they rest on: Q1 "Six reports + more", Q2 "Out for now" (no Spotlight, no `IndexedEntity`),
+Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active client, named".
+
+- **Nine read-only intents**: `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
+  the number goes to the report's own number filter, `Answers.tokens`), `NeedsAttentionIntent`, `LookUpSerialIntent(serial:)`,
+  and one intent per report with no parameter (`OutOfWarrantyIntent`, `CoverageEndingIntent`, `FleetAgeIntent`,
+  `ActivationLockIntent`, `MigrationIntent`, `ServiceHealthIntent`) for Siri. Each `perform` calls `Answers` and nothing else.
+- **Each runs in the background** (`supportedModes = .background`: no window opens) **with
+  `authenticationPolicy = .requiresLocalDeviceAuthentication`**, the plan's proposal P8; what that does on a Mac is the operator's
+  live check L6.
+- **What is said is `Answers`' words**: the dialog and the returned value (what Shortcuts passes on) are `Answer.spoken`; the
+  snippet (`AnswerSnippet`) shows the lead, the rows (serial, model, state; at most 10), the cap and any estimate.
+- **Phrases**: one per report, "What needs attention in abapit", "Look up a serial number in abapit" and "Run the <report>
+  report in abapit"; each names the app (`\(.applicationName)`) and is in the catalog, which the build ships as
+  `en.lproj/AppShortcuts.strings` (SwiftGamGui failure-log 2026-10-10). Change a phrase in both places.
+- **Checks**: `scripts/check_app.sh` reads the built metadata (exactly these nine intents, each background only with the local
+  authentication policy set in code and never opening the app; every phrase names the app and is in the built catalog; no app
+  entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source: `App/Intents`,
+  `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`), the intents import only AppIntents, SwiftUI
+  and AppModels, the one dialog is `answer.spoken`, and the report choices are the catalog's titles. `scripts/intents_test.sh`
+  (CI only) reads the definitions from outside the app with `AppIntentsTesting`.
+- Gotcha: an App Shortcut can't preset a parameter (`AppShortcut(intent: RunReportIntent(report: .outOfWarranty), …)` builds,
+  but the metadata keeps only the intent's name, so Siri would ask which report). Hence one intent per report.
+- Gotcha: `Answers.attention()` keeps the input key its evaluation read and answers nothing when the evaluation recorded is
+  another's (the screen's, started during its awaits), even when that one is current.
+- Screenshot: `snippet-out-of-warranty` (`ABAPIT_SNIPPET`, debug builds) draws the dialog's words and the snippet over the demo
+  org; Siri's own frame isn't drawn.
