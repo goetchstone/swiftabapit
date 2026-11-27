@@ -253,6 +253,8 @@ struct PickerTests {
         #expect(try await tokens("devices more than a year old", "report:fleet-age") == ["years": "1"])
         #expect(try await tokens("devices more than an year old", "report:fleet-age") == ["years": "1"])
         #expect(try await tokens("devices ONE YEAR old", "report:fleet-age") == ["years": "1"])
+        #expect(try await tokens("devices on a three\u{2013}year cycle", "report:fleet-age") == ["years": "3"], "an en dash joins a number word to its unit")
+        #expect(try await tokens("devices on a three\u{2014}year cycle", "report:fleet-age") == ["years": "3"])
         #expect(try await tokens("migration deadline in two weeks", "rule:migration_deadline") == [:], "a rule's own window, said in words")
         #expect(Picker.numbers(in: "in two weeks, 3 years").values == ["days": ["14"], "years": ["3"]])
         // Not read: ambiguous words, and a bigger number whose last word is one to twelve ("twenty-one days" is never 1 day).
@@ -274,7 +276,6 @@ struct PickerTests {
         ("fleet age for one site", "report:fleet-age", [:]),
         ("fleet age of devices three years old and one of them broken", "report:fleet-age", ["years": "3"]),
         ("quiet services, any one of them", "rule:quiet_service", [:]),
-        ("AppleCare ending in 30 days, and two of them", "report:coverage", ["days": "30"]),
         // Kept readable: "or more", "and older", "more than", "over", "within".
         ("fleet age 3 years and older", "report:fleet-age", ["years": "3"]),
         ("devices 4 years old or more", "report:fleet-age", ["years": "4"]),
@@ -322,6 +323,30 @@ struct PickerTests {
         ("devices between one and two years", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
         ("AppleCare ending in a day or two", "report:coverage", "\u{201C}two\u{201D} has no unit"),
         ("AppleCare ending in thirty to two weeks", "report:coverage", "\u{201C}thirty\u{201D} has no unit"),
+        // Ranges in words, from two up always bare (fix round 3, the coordinating session, 2026-11-27).
+        ("devices two years, or three old", "report:fleet-age", "\u{201C}three\u{201D} has no unit"),
+        ("AppleCare ending in a week, or two", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("devices one, or two years old", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("devices three/year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("AppleCare ending in one\u{2212}two weeks", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in twenty\u{2212}one days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices one, two years old", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("devices one through two years old", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("devices one thru two years old", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in one till two weeks", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in one until two weeks", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in two\u{2013}three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in two\u{2014}three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in two\u{2212}three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in two/three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in one/two weeks", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in one\u{2013}two weeks", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in a week, or one", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in a week, to one", "report:coverage", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in twenty\u{2013}one days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("AppleCare ending in twenty/one days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        // A "two" or more is no pronoun to refuse for: accepted, the safe direction.
+        ("AppleCare ending in 30 days, and two of them", "report:coverage", "\u{201C}two\u{201D} has no unit"),
         ("AppleCare ending in two-three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
         // Hedged, past-time and glued wording is no window.
         ("devices about a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),

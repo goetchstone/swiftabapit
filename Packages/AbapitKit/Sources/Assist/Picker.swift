@@ -227,7 +227,7 @@ public enum Picker {
     static func spelledNumber(before position: Int, in text: [Character], unit: String) -> (value: Int, start: Int)? {
         var cursor = position
         while cursor > 0, text[cursor - 1].isWhitespace { cursor -= 1 }
-        if cursor > 0, text[cursor - 1] == "-", cursor == position { cursor -= 1 }
+        if cursor > 0, ["-", "\u{2013}", "\u{2014}", "\u{2212}"].contains(text[cursor - 1]), cursor == position { cursor -= 1 }
         guard cursor > 0, text[cursor - 1].isLetter else { return nil }
         var start = cursor
         while start > 0, text[start - 1].isLetter { start -= 1 }
@@ -244,7 +244,7 @@ public enum Picker {
         }
         if hedgedAfter(end, in: text) { return nil }
         // What stands before the number word.
-        if start > 0, text[start - 1] == "-" { return nil }
+        if start > 0, dashes.contains(text[start - 1]) { return nil }
         var before = start
         while before > 0, text[before - 1].isWhitespace { before -= 1 }
         var from = before
@@ -263,22 +263,29 @@ public enum Picker {
         return String(text[start..<cursor])
     }
 
-    /// Whether the number word at token `i` sits in a range: next to "or", "to", "and" or a hyphen with another number after it
-    /// ("one or two", "two-three"), or after one with a unit word or number right before it ("a week or two", "thirty to two").
-    /// Only whitespace may stand between the words, so a comma ends it ("in 30 days, and two of them"). A bare "one" anywhere else
-    /// ("which one", "for each one", "one of them") is a pronoun and no number (fix round 2, the coordinating session, 2026-11-27).
+    /// The characters that join two numbers or a number and its unit, as a hyphen does: hyphen, en dash, em dash, minus sign and "/".
+    static let dashes: Set<Character> = ["-", "\u{2013}", "\u{2014}", "\u{2212}", "/"]
+
+    /// Whether the number word "one" at token `i` sits in a range: next to "or", "to", "and", "through", "thru", "till", "until" or a
+    /// dash with another number after it ("one or two", "one-two", "one through two"), a comma between two number words ("one, two
+    /// years"), or after such a connector with a unit word or number right before it ("a week, or one", "thirty to one"). A bare
+    /// "one" anywhere else ("which one", "for each one", "one of them") is a pronoun and no number. The other number words never
+    /// ask: from two up, one with no unit after it is bare always (fix rounds 2 and 3, the coordinating session, 2026-11-27).
     static func inARange(_ i: Int, _ tokens: [(word: String, start: Int, end: Int)], in text: [Character]) -> Bool {
-        func spaces(_ a: Int, _ b: Int) -> Bool { text[tokens[a].end..<tokens[b].start].allSatisfy(\.isWhitespace) }
-        func hyphen(_ a: Int, _ b: Int) -> Bool { text[tokens[a].end..<tokens[b].start] == ["-"] }
+        func gap(_ a: Int, _ b: Int) -> ArraySlice<Character> { text[tokens[a].end..<tokens[b].start] }
+        func spaces(_ a: Int, _ b: Int) -> Bool { gap(a, b).allSatisfy(\.isWhitespace) }
+        /// Spaces, with at most one comma: for before "or"/"to" and between two number words.
+        func commaOrSpaces(_ a: Int, _ b: Int) -> Bool { gap(a, b).allSatisfy { $0.isWhitespace || $0 == "," } && gap(a, b).filter { $0 == "," }.count <= 1 }
+        func dash(_ a: Int, _ b: Int) -> Bool { gap(a, b).count == 1 && dashes.contains(gap(a, b).first!) }
         func isNumber(_ word: String) -> Bool { word.first?.isNumber == true || numberWords[word] != nil || bigNumbers.contains(word) }
-        let connectors: Set<String> = ["or", "to", "and"]
-        // Forward: "one or two", "one to two", "one and two", "one-two".
-        if i + 1 < tokens.count, hyphen(i, i + 1), isNumber(tokens[i + 1].word) { return true }
-        if i + 2 < tokens.count, connectors.contains(tokens[i + 1].word), spaces(i, i + 1), spaces(i + 1, i + 2) {
-            if isNumber(tokens[i + 2].word) { return true }
-        }
-        // Backward: "a week or two", "thirty to two".
-        if i >= 2, connectors.contains(tokens[i - 1].word), spaces(i - 1, i), spaces(i - 2, i - 1) {
+        let connectors: Set<String> = ["or", "to", "and", "through", "thru", "till", "until"]
+        // Forward: "one or two", "one, or two", "one through two", "one-two", "one/two", "one, two".
+        if i + 1 < tokens.count, isNumber(tokens[i + 1].word), dash(i, i + 1) || (commaOrSpaces(i, i + 1) && gap(i, i + 1).contains(",")) { return true }
+        if i + 2 < tokens.count, connectors.contains(tokens[i + 1].word), spaces(i + 1, i + 2), isNumber(tokens[i + 2].word),
+           spaces(i, i + 1) || (["or", "to"].contains(tokens[i + 1].word) && commaOrSpaces(i, i + 1)) { return true }
+        // Backward: "a week or one", "a week, or one", "thirty to one".
+        if i >= 2, connectors.contains(tokens[i - 1].word), spaces(i - 1, i),
+           spaces(i - 2, i - 1) || (["or", "to"].contains(tokens[i - 1].word) && commaOrSpaces(i - 2, i - 1)) {
             let before = tokens[i - 2].word
             if units[before] != nil || isNumber(before) { return true }
         }
@@ -385,9 +392,12 @@ public enum Picker {
                 // A number word with no unit after it, in a range, is kept apart as a digit is (`Said.bare`): "one or two years",
                 // "between one and two years". Alone ("which one") it is no number.
                 var after = end
-                if after < text.count, text[after] == "-" { after += 1 } else { while after < text.count, text[after].isWhitespace { after += 1 } }
+                if after < text.count, dashes.contains(text[after]) { after += 1 } else { while after < text.count, text[after].isWhitespace { after += 1 } }
                 let unitAfter = units[after < text.count && text[after].isLetter ? letters(from: after).word : ""] != nil
-                if !unitAfter, let i = tokens.firstIndex(where: { $0.start == position }), inARange(i, tokens, in: text) { said.bare.append(word) }
+                // From two up a number word with no unit after it is bare always; "one" only in a range, as it is also a pronoun.
+                if !unitAfter, word != "one" || tokens.firstIndex(where: { $0.start == position }).map({ inARange($0, tokens, in: text) }) == true {
+                    said.bare.append(word)
+                }
             }
             position = end
         }

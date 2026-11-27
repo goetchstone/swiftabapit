@@ -104,8 +104,15 @@ on-device only, never Private Cloud Compute).
   ("a week or two"), with only spaces between (a comma ends it); "which one", "for each one" and "any one of them" are no number.
   The hedges (before: about, around, roughly, approximately, approx, almost, nearly, maybe; after: "ago", "or so", "or thereabouts",
   "and change", "and a half") apply to digits too ("about 30 days", "2 years and a half"); "or more", "or older", "and older",
-  "more than", "over" and "within" stay readable. Follow-ups, not done: "under a year" and "under 1 year" read as the window but
-  invert the meaning for fleet age; "expired" on the out-of-warranty report opens the group pick. Not read, and still a problem: "this/next/last year", "a few",
+  "more than", "over" and "within" stay readable. Fix round 3 (the coordinating session, 2026-11-27) made the bare rule simpler: a number
+  word from "two" up (the tens, "hundred" and "thousand" too) with no unit right after it is bare always, whatever stands around it
+  ("two years, or three", "a week, or two", "two–three", "two/three"), so "in 30 days, and two of them" refuses; only "one" keeps
+  the range test (`inARange`), widened to the connectors "through", "thru", "till" and "until", to a dash, en dash, em dash, minus
+  sign or "/" in place of the hyphen, and to a comma between two number words ("one, two years") or before "or"/"to" ("a week, or
+  one"). The same dashes stop "twenty–one days" from reading as 1; a unit joins its number word with a hyphen, en dash, em dash or
+  minus sign ("three–year") but not "/". Follow-ups, not done: "under a year" and "under 1 year" read as the window but invert the
+  meaning for fleet age; "expired" on the out-of-warranty report opens the group pick; "about" used as a preposition ("about 30
+  devices") refuses a number; "30 days ago" on the Mosyle check-in rule; "and a few", "and so on"; "~30 days"; "30 days, about". Not read, and still a problem: "this/next/last year", "a few",
   "several", "a couple of" (ambiguous), months, and a bigger number whose last word is one to twelve ("twenty days" and
   "twenty-one days" are refused, never read as 20 or 1: the words stop at twelve; "half a year" too). Passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
@@ -148,7 +155,8 @@ on-device only, never Private Cloud Compute).
   - S9.6b (number words, group synonyms; one dev run, 2026-11-27, **held out was NOT re-run**): report 124, group 41, refusal 22;
     mean 1.37 s, at most 3.21 s; 15 refused for numbers (17 before). `WordRule` unchanged (108, 30, 24). After the fix round (bare
     number words, hedges, singular "a"): report 124, group 41, refusal 22 again; mean 1.36 s, at most 2.68 s; 15 refused for numbers. After fix round 2 (bare only in a
-    range, hedges on digits): report 124, group 41, refusal 22 again with the same misses; mean 1.33 s, at most 2.59 s; 15 refused for numbers.
+    range, hedges on digits): report 124, group 41, refusal 22 again with the same misses; mean 1.33 s, at most 2.59 s; 15 refused for numbers. After fix round 3 (a number word from two up bare always): report 124, group 41, refusal 22, the same
+    misses (no right dev sentence lost); mean 1.36 s, at most 2.68 s; 15 refused for numbers.
   - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). The held-out score is below.
 - **Held-out score** (S9.8, one run on the operator's Mac, 2026-11-27, nothing tuned against it; numbers in
   `Tests/Fixtures/assist/runs/heldout-2026-11-27.md`): model report 70 of 94, group 16 of 40, refusal 12 of 12; `WordRule` beside
