@@ -9,6 +9,8 @@
 # - exactly one Mach-O in the bundle: Contents/MacOS/abapit, signed and verifying strictly;
 # - no listener: the binary imports no socket-server or listener API (plan L2), and no ATS exception; and no
 #   second door: it starts no other program (a child inherits the sandbox's network entitlement);
+# - no inbound door in the Info.plist: its keys are exactly the ones this app ships (no URL scheme, document type,
+#   Service, AppleScript or activity type), and the bundle holds no login item, XPC service or extension;
 # - no debug-only code: a Release binary reads no environment variable, launch argument or user default at all
 #   (so no debug switch, whatever its name: UserDefaults reads `-key value` launch arguments itself), and carries
 #   none of TestSupport's stubs or demo and no Vault MemoryStore, checked on the binary as built and on a copy
@@ -62,6 +64,30 @@ python3 -I -c "$checker" "$team" "$BUNDLE_ID" <<<"$entitlements" || fail "entitl
 
 # No App Transport Security exception.
 if plutil -extract NSAppTransportSecurity raw -o - "$PLIST" >/dev/null 2>&1; then fail "the Info.plist has an App Transport Security exception"; fi
+
+# No inbound door, and nothing else the build didn't put there: the Info.plist's keys are exactly these, plus the
+# toolchain's stamps (DT..., BuildMachineOSBuild). A URL scheme (CFBundleURLTypes), a document type, a Service
+# (NSServices), AppleScript (NSAppleScriptEnabled) or an activity type is a key here and no symbol in the binary, so
+# the listener check below never saw one (failure-log 2026-11-18). A new key is a reviewed change to this list.
+plist="$(plutil -convert json -o - "$PLIST" 2>/dev/null)" || fail "the Info.plist can't be read as JSON (it holds a date or data value, which this app's never does)"
+plist_keys='
+import json, re, sys
+got = json.load(sys.stdin)
+want = {"CFBundleDevelopmentRegion", "CFBundleDisplayName", "CFBundleExecutable", "CFBundleIdentifier",
+        "CFBundleInfoDictionaryVersion", "CFBundleName", "CFBundlePackageType", "CFBundleShortVersionString",
+        "CFBundleSupportedPlatforms", "CFBundleVersion", "LSApplicationCategoryType", "LSMinimumSystemVersion",
+        "NSHumanReadableCopyright"}
+if type(got) is not dict:
+    sys.exit("the Info.plist is not a dictionary")
+extra = sorted(k for k in got if k not in want and k != "BuildMachineOSBuild" and not re.fullmatch("DT[A-Za-z]+", k))
+if extra:
+    sys.exit(f"the Info.plist has keys this app does not ship: {extra}")
+'
+python3 -I -c "$plist_keys" <<<"$plist" || fail "Info.plist keys (above)"
+# Nothing beside the code that launchd or LaunchServices would run for the app: no login item, XPC service or helper.
+[ ! -e "$APP/Contents/Library" ] || fail "the bundle has Contents/Library (a login item or a launch agent)"
+[ ! -e "$APP/Contents/XPCServices" ] || fail "the bundle has Contents/XPCServices"
+[ ! -e "$APP/Contents/PlugIns" ] || fail "the bundle has Contents/PlugIns (an app extension)"
 
 # What the code must not do or carry, checked twice: on a copy stripped the way an archive build strips it
 # (DEPLOYMENT_POSTPROCESSING=YES runs `strip -D`: no symbol table), then on the binary as built. Phase 1b's review
@@ -212,4 +238,4 @@ fi
   || fail "the display name isn't the bundle's name, so macOS shows the file name"
 [ "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "abapit" ] || fail "display name"
 [ "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "27.0" ] || fail "minimum macOS"
-echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or host routes, or debug code, stripped or not; read-only background intents, every phrase named and in the catalog, no Spotlight index)"
+echo "check_app: ok ($BUNDLE_ID; ${team:-ad-hoc}; exact entitlements; exact Info.plist keys; one Mach-O; no listener, child process, ATS exception, environment, argument or defaults read, or host routes, or debug code, stripped or not; read-only background intents, every phrase named and in the catalog, no Spotlight index)"

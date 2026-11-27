@@ -55,6 +55,8 @@ jobs:
         run: xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Release -derivedDataPath "$RUNNER_TEMP/dd" build
       - name: Hardened runtime, sandbox, exact entitlements, no listener
         run: scripts/check_app.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
+      - name: The gate refuses an inbound door (its own test)
+        run: scripts/check_app_selftest.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
       - name: App Intents from outside the app (AppIntentsTesting, by bundle ID)
         run: scripts/intents_test.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
       - name: The same gate on an archive-style (stripped) Release build

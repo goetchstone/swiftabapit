@@ -647,6 +647,39 @@ struct RouteTests {
         }
     }
 
+    /// The Info.plist is generated, from three keys. A plist file of its own (`INFOPLIST_FILE`) or another
+    /// `INFOPLIST_KEY_` setting can register a URL scheme, a document type, a Service or AppleScript: an inbound door
+    /// that is a key in the bundle and no symbol in the binary (invariant 4; failure-log 2026-11-18). The Release gate
+    /// holds the built plist's keys; this holds the source, in every build setting file `noBuildSettingOpensThePackageBoundary` reads.
+    @Test func theInfoPlistIsGeneratedFromThreeKeys() throws {
+        let root = Fixtures.repoRoot
+        let project = try String(contentsOf: root.appending(path: "SwiftAbapit.xcodeproj/project.pbxproj"), encoding: .utf8)
+        #expect(Self.infoPlistSettings(project) == ["GENERATE_INFOPLIST_FILE", "INFOPLIST_KEY_CFBundleDisplayName",
+                                                    "INFOPLIST_KEY_LSApplicationCategoryType", "INFOPLIST_KEY_NSHumanReadableCopyright"])
+        #expect(project.components(separatedBy: "GENERATE_INFOPLIST_FILE = YES;").count - 1 == 2, "both configurations generate it")
+        #expect(project.components(separatedBy: "GENERATE_INFOPLIST_FILE").count - 1 == 2, "and nothing sets it again")
+        let config = root.appending(path: "Config")
+        let names = (FileManager.default.enumerator(atPath: config.path)?.allObjects as? [String] ?? []).filter { $0.hasSuffix(".xcconfig") }
+        #expect(names.contains("Base.xcconfig"))
+        for name in names {
+            let found = Self.infoPlistSettings(try String(contentsOf: config.appending(path: name), encoding: .utf8))
+            #expect(found.isEmpty, "Config/\(name) sets \(found.sorted())")
+        }
+    }
+
+    /// Every build setting name in `text` that holds `INFOPLIST` (`INFOPLIST_FILE`, `INFOPLIST_KEY_…`, `GENERATE_INFOPLIST_FILE`).
+    static func infoPlistSettings(_ text: String) -> Set<String> {
+        Set(text.matches(of: #/[A-Za-z0-9_]*INFOPLIST[A-Za-z0-9_]*/#).map { String($0.output) })
+    }
+
+    @Test func anInfoPlistSettingIsFound() {
+        #expect(Self.infoPlistSettings("INFOPLIST_FILE = \"Config/Extra-Info.plist\";") == ["INFOPLIST_FILE"])
+        #expect(Self.infoPlistSettings("GENERATE_INFOPLIST_FILE = YES;\nINFOPLIST_KEY_NSPrincipalClass = X;") == ["GENERATE_INFOPLIST_FILE", "INFOPLIST_KEY_NSPrincipalClass"])
+        #expect(Self.infoPlistSettings("INFOPLIST_OTHER_PREPROCESSOR_FLAGS = -traditional; CREATE_INFOPLIST_SECTION_IN_BINARY = YES")
+                == ["INFOPLIST_OTHER_PREPROCESSOR_FLAGS", "CREATE_INFOPLIST_SECTION_IN_BINARY"])
+        #expect(Self.infoPlistSettings("PRODUCT_BUNDLE_IDENTIFIER = io.github.goetchstone.swiftabapit;").isEmpty)
+    }
+
     /// Raw memory on the app's side, outside debug code: `withUnsafePointer(to:)` and `UnsafeRawPointer.load(as:)` read a
     /// key's and a secret's stored bytes whatever their access level, and passed every scan (integration review H1).
     static let rawMemory = ["Unsafe", "unsafe", "Unmanaged", "MemoryLayout"]
