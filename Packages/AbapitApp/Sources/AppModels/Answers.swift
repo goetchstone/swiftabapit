@@ -151,6 +151,37 @@ public final class Answers {
 
     /// `report` with `tokens` (the catalog's), over the active client's data. A token that doesn't resolve reads nothing.
     public func answer(report: ReportsModel.Report, tokens: [String: String]) async -> Answer {
+        await run(report: report, tokens: tokens) { _ in }
+    }
+
+    /// A report's CSV as the Reports screen's Export writes it, and the words that say how much was read.
+    public struct ReportFile: Equatable, Sendable {
+        public let name: String
+        public let text: String
+    }
+
+    /// What `reportCSV` ends with: the spoken words (counts, the data's age, how much was read, or why nothing was made) and the
+    /// file, which is nil whenever the words say nothing was judged, the client changed or the read didn't finish.
+    public struct CSVAnswer: Equatable, Sendable {
+        public let spoken: String
+        public let file: ReportFile?
+    }
+
+    /// The report's CSV for the active client: the screen's `csv(of:)` over the same `build`, its allowlisted columns, and its
+    /// `exportFileName` (the client's name first only when the app shows clients). It reads as `answer` does and writes nothing; a
+    /// read in part or from an old snapshot is said in `spoken`, and the file's own `listRead` column carries it too. The CSV is
+    /// made from the same `Output` the answer was, with nothing awaited between, so a switch can't give it another client's rows.
+    public func reportCSV(report: ReportsModel.Report, tokens: [String: String]) async -> CSVAnswer {
+        var file: ReportFile?
+        let answer = await run(report: report, tokens: tokens) { [reports] output in
+            guard output.canExport else { return }
+            file = ReportFile(name: reports.exportFileName(for: output), text: reports.csv(of: output))
+        }
+        return CSVAnswer(spoken: answer.spoken, file: file)
+    }
+
+    /// `answer`'s body; `took` sees the report's `Output` once it is built over data that was read, in the same turn.
+    private func run(report: ReportsModel.Report, tokens: [String: String], took: (ReportsModel.Output) -> Void) async -> Answer {
         let title = report.title
         let resolution = ReportCatalog.resolve(report.catalogID, tokens: tokens)
         guard resolution.problems.isEmpty else { return said(title, reports.build(report, tokens: tokens).judgesNothing ?? "") }
@@ -172,6 +203,7 @@ public final class Answers {
             let output = reports.build(report, tokens: tokens)
             if let nothing = output.judgesNothing { return said(title, judgesNothing(nothing, sweep: sweep)) }
             guard case .used(let used)? = reports.sources[sweep] else { return said(title, Phrase.notRead("the snapshot") + " " + Phrase.nothingJudged) }
+            took(output)
             return made(output, read: snapshotWords(used, sweep: sweep), group: key, models: Self.models(used.devices))
         case .live(let list):
             let ends: [LiveWait.List: LiveWait.End]
@@ -184,6 +216,7 @@ public final class Answers {
             // Built at once after the check: nothing runs between them, so the counts are over the lists as said.
             let output = reports.build(report, tokens: tokens)
             if let nothing = output.judgesNothing { return said(title, nothing) }
+            took(output)
             var words = read.words
             if report == .fleetAge { words.append(noCoverage()) }
             return made(output, read: words, group: key, models: Self.models(devices.rows.map(\.device.resource)))

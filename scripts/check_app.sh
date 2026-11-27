@@ -133,7 +133,7 @@ release_code "$BINARY" "the binary" " (only its symbol table shows this: an arch
 
 # App Intents (Phase 9, adapted from SwiftGamGui scripts/check_app.sh @ e8560f2): the built metadata is what Siri and Shortcuts
 # read, and Xcode checks its rules only while it builds, so it is read here.
-# - exactly these intents (Ask since S9.7: its one parameter is the question as a string, and it has a phrase), each read-only (`App/Intents/`; SourceScanTests' `noIntentReachesAWrite` holds the source): a new
+# - exactly these intents (Get report CSV since S9.10: Shortcuts only, no phrase, a report's CSV as a file; Ask since S9.7: its one parameter is the question as a string, and it has a phrase), each read-only (`App/Intents/`; SourceScanTests' `noIntentReachesAWrite` holds the source): a new
 #   intent is a reviewed change to this list. Each runs in the background only (supportedModes 1: never opens a window) and asks
 #   for the Mac's own authentication first (authenticationPolicy 2, requiresLocalDeviceAuthentication, set in the code);
 # - every phrase names the app, and every phrase is in the phrase catalog the build ships (`en.lproj/AppShortcuts.strings`, from
@@ -153,7 +153,7 @@ catalog="$(plutil -convert json -o - "$PHRASES" 2>/dev/null)" || fail "the phras
 intents_checker='
 import json, sys
 actions = {"RunReportIntent", "NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent", "CoverageEndingIntent",
-           "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent", "AskIntent"}
+           "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent", "AskIntent", "GetReportCSVIntent"}
 with open(sys.argv[1], encoding="utf-8") as f:
     text = f.read()
 d = json.loads(text)
@@ -186,6 +186,15 @@ if not shortcuts <= actions or not {"NeedsAttentionIntent", "LookUpSerialIntent"
 ask = [(p.get("name"), p.get("isOptional"), p.get("valueType")) for p in got["AskIntent"].get("parameters", [])]
 if ask != [("question", False, {"primitive": {"wrapper": {"typeIdentifier": 0}}})]:
     sys.exit(f"AskIntent takes {ask}, not one required string named question")
+# Get report CSV is for Shortcuts only (it returns a file, which a spoken request has nowhere to put): it is in no App Shortcut, so no
+# phrase reaches it, and it takes the three parameters of RunReportIntent, a report, a group and a number, and nothing else.
+if "GetReportCSVIntent" in shortcuts:
+    sys.exit("GetReportCSVIntent is in an App Shortcut: it has no Siri phrase")
+def params(name):
+    return [(p.get("name"), p.get("isOptional"), json.dumps(p.get("valueType"), sort_keys=True)) for p in got[name].get("parameters", [])]
+csv_params, run_params = params("GetReportCSVIntent"), params("RunReportIntent")
+if csv_params != run_params or [n for n, _, _ in csv_params] != ["report", "group", "number"]:
+    sys.exit(f"GetReportCSVIntent takes {csv_params}, not the report, group and number of RunReportIntent: {run_params}")
 if d.get("entities") or d.get("assistantEntities") or d.get("queries") or "Indexed" in text or "indexingKey" in text:
     sys.exit("the metadata holds an app entity, a query or an indexed type (Spotlight is out: the operator, 2026-11-24, Q2)")
 '
