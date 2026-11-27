@@ -99,7 +99,13 @@ on-device only, never Private Cloud Compute).
   is ("one or two years", "between one and two years", "thirty to two weeks"); "a"/"an" take a singular unit only and refuse "a
   year-end report", "a day's notice", "a year and a half", "a week or two"; and a hedge or a past time ("about a year", "a year
   ago", "one year or so") is no window. A refusal quotes the words as said ("a month", not "1 month"). Fix round, the
-  coordinating session, 2026-11-27. Not read, and still a problem: "this/next/last year", "a few",
+  coordinating session, 2026-11-27. Fix round 2 (the coordinating session, 2026-11-27): a number word with no unit counts as bare
+  only in a range, next to "or", "to", "and" or a hyphen with another number after it, or after one that follows a unit or number
+  ("a week or two"), with only spaces between (a comma ends it); "which one", "for each one" and "any one of them" are no number.
+  The hedges (before: about, around, roughly, approximately, approx, almost, nearly, maybe; after: "ago", "or so", "or thereabouts",
+  "and change", "and a half") apply to digits too ("about 30 days", "2 years and a half"); "or more", "or older", "and older",
+  "more than", "over" and "within" stay readable. Follow-ups, not done: "under a year" and "under 1 year" read as the window but
+  invert the meaning for fleet age; "expired" on the out-of-warranty report opens the group pick. Not read, and still a problem: "this/next/last year", "a few",
   "several", "a couple of" (ambiguous), months, and a bigger number whose last word is one to twelve ("twenty days" and
   "twenty-one days" are refused, never read as 20 or 1: the words stop at twelve; "half a year" too). Passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
@@ -141,7 +147,8 @@ on-device only, never Private Cloud Compute).
     labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
   - S9.6b (number words, group synonyms; one dev run, 2026-11-27, **held out was NOT re-run**): report 124, group 41, refusal 22;
     mean 1.37 s, at most 3.21 s; 15 refused for numbers (17 before). `WordRule` unchanged (108, 30, 24). After the fix round (bare
-    number words, hedges, singular "a"): report 124, group 41, refusal 22 again; mean 1.36 s, at most 2.68 s; 15 refused for numbers.
+    number words, hedges, singular "a"): report 124, group 41, refusal 22 again; mean 1.36 s, at most 2.68 s; 15 refused for numbers. After fix round 2 (bare only in a
+    range, hedges on digits): report 124, group 41, refusal 22 again with the same misses; mean 1.33 s, at most 2.59 s; 15 refused for numbers.
   - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). The held-out score is below.
 - **Held-out score** (S9.8, one run on the operator's Mac, 2026-11-27, nothing tuned against it; numbers in
   `Tests/Fixtures/assist/runs/heldout-2026-11-27.md`): model report 70 of 94, group 16 of 40, refusal 12 of 12; `WordRule` beside

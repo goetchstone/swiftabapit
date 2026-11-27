@@ -264,6 +264,29 @@ struct PickerTests {
         }
     }
 
+    /// A number word that is a pronoun, or a number in an unrelated clause, is no number: these were picked before the bare-word rule
+    /// and are picked again; "or", "to", "and", "between" and a hyphen make a range, and only a range is bare (fix round 2).
+    @Test(arguments: [
+        ("which one has AppleCare ending soonest", "report:coverage", [:]),
+        ("AppleCare coverage ending: the one with no coverage", "report:coverage", [:]),
+        ("show me one report of AppleCare coverage ending", "report:coverage", [:]),
+        ("AppleCare coverage ending within 30 days for each one", "report:coverage", ["days": "30"]),
+        ("fleet age for one site", "report:fleet-age", [:]),
+        ("fleet age of devices three years old and one of them broken", "report:fleet-age", ["years": "3"]),
+        ("quiet services, any one of them", "rule:quiet_service", [:]),
+        ("AppleCare ending in 30 days, and two of them", "report:coverage", ["days": "30"]),
+        // Kept readable: "or more", "and older", "more than", "over", "within".
+        ("fleet age 3 years and older", "report:fleet-age", ["years": "3"]),
+        ("devices 4 years old or more", "report:fleet-age", ["years": "4"]),
+        ("devices more than 3 years old", "report:fleet-age", ["years": "3"]),
+        ("AppleCare ending in over 30 days", "report:coverage", ["days": "30"]),
+        ("AppleCare ending within 30 days or older", "report:coverage", ["days": "30"]),
+    ] as [(String, String, [String: String])])
+    func aPronounOrAReadableTailIsPicked(_ sentence: String, _ id: String, _ tokens: [String: String]) async throws {
+        guard case .picked(let pick) = try await outcome(sentence, id) else { Issue.record(Comment(rawValue: sentence)); return }
+        #expect(pick.tokens == tokens, Comment(rawValue: sentence))
+    }
+
     /// A number that can't be taken as said refuses the pick, in words: never a value read from part of it, never dropped so the
     /// default window runs (the review's cases, each proved wrong before this).
     @Test(arguments: [
@@ -299,6 +322,7 @@ struct PickerTests {
         ("devices between one and two years", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
         ("AppleCare ending in a day or two", "report:coverage", "\u{201C}two\u{201D} has no unit"),
         ("AppleCare ending in thirty to two weeks", "report:coverage", "\u{201C}thirty\u{201D} has no unit"),
+        ("AppleCare ending in two-three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
         // Hedged, past-time and glued wording is no window.
         ("devices about a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
         ("devices nearly a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
@@ -313,6 +337,19 @@ struct PickerTests {
         ("the a year-end report of devices", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
         ("AppleCare ending in a day\u{2019}s notice", "report:coverage", "\u{201C}day\u{201D} has no number"),
         ("AppleCare ending in a day's notice", "report:coverage", "\u{201C}day\u{201D} has no number"),
+        // Hedges and past times apply to digits too (fix round 2, the coordinating session, 2026-11-27).
+        ("devices about 30 days", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in around 30 days", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in 30 days or so", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in 30 days ago", "report:coverage", "hedged or in the past"),
+        ("devices 2 years and a half old", "report:fleet-age", "hedged or in the past"),
+        ("AppleCare ending in approx. 30 days", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in approx 30 days", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in maybe 30 days", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in 30 days or thereabouts", "report:coverage", "hedged or in the past"),
+        ("AppleCare ending in 30 days and change", "report:coverage", "hedged or in the past"),
+        ("devices roughly 3 years old", "report:fleet-age", "hedged or in the past"),
+        ("devices nearly 3 years old", "report:fleet-age", "hedged or in the past"),
         // "a" and "an" take a singular unit only.
         ("devices a days old", "report:coverage", "\u{201C}days\u{201D} has no number"),
         ("devices an weeks old", "report:coverage", "\u{201C}weeks\u{201D} has no number"),

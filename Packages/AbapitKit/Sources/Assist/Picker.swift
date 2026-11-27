@@ -183,15 +183,20 @@ public enum Picker {
     /// Words before a number word or "a" that make it part of something bigger, smaller or hedged ("half a year", "about a year"):
     /// the unit word is then left a problem, never read as 1.
     static let bigger: Set<String> = bigNumbers.union([
-        "half", "quarter", "third", "once", "twice", "about", "around", "roughly", "approximately", "almost", "nearly",
+        "half", "quarter", "third", "once", "twice", "about", "around", "roughly", "approximately", "approx", "almost", "nearly", "maybe",
     ])
+    /// The words before a number in digits that hedge it ("about 30 days"); a tens or fraction word before digits is no hedge.
+    static let hedgeBefore: Set<String> = ["about", "around", "roughly", "approximately", "approx", "almost", "nearly", "maybe"]
     /// Words after "or" or "and" (and an optional "a") that make the number a range, a fraction or a hedge ("a year and a half", "a week
     /// or two", "one year or so").
-    static let rangeWords: Set<String> = ["half", "quarter", "third", "few", "couple", "so"]
+    static let rangeWords: Set<String> = ["half", "quarter", "third", "few", "couple", "so", "thereabouts", "change"]
 
     /// What stands right after a spelled unit that makes it no window: "ago" (a past time), "or so", or "or"/"and" with another
     /// number or fraction word ("a week or two", "a year and a half"). `text[from...]` is what follows the unit word.
-    static func hedgedAfter(_ from: Int, in text: [Character]) -> Bool {
+    ///
+    /// With `ranges` false (digits: "30 days or 60 days" is two values, not a hedge) only a fraction or hedge word after "or"/"and" counts,
+    /// not another number.
+    static func hedgedAfter(_ from: Int, in text: [Character], ranges: Bool = true) -> Bool {
         func word(at start: Int) -> (String, Int) {
             var end = start
             while end < text.count, text[end].isLetter || text[end].isNumber { end += 1 }
@@ -209,10 +214,10 @@ public enum Picker {
         guard first == "or" || first == "and" else { return false }
         cursor = skipSpace(firstEnd)
         guard cursor < text.count else { return false }
-        if text[cursor].isNumber { return true }
+        if ranges, text[cursor].isNumber { return true }
         var (next, nextEnd) = word(at: cursor)
         if next == "a" || next == "an" { (next, nextEnd) = word(at: skipSpace(nextEnd)) }
-        return numberWords[next] != nil || bigger.contains(next) || rangeWords.contains(next)
+        return rangeWords.contains(next) || (ranges && (numberWords[next] != nil || bigger.contains(next)))
     }
 
     /// The number said in words just before the unit word at `position` ("two weeks", "three-year", "a year"), and where its first
@@ -248,6 +253,38 @@ public enum Picker {
         return (value, start)
     }
 
+    /// The word right before `index` (whitespace, and a period after an abbreviation, skipped), lowercased; "" when none.
+    static func wordBefore(_ index: Int, in text: [Character]) -> String {
+        var cursor = index
+        while cursor > 0, text[cursor - 1].isWhitespace { cursor -= 1 }
+        if cursor > 0, text[cursor - 1] == "." { cursor -= 1 }
+        var start = cursor
+        while start > 0, text[start - 1].isLetter { start -= 1 }
+        return String(text[start..<cursor])
+    }
+
+    /// Whether the number word at token `i` sits in a range: next to "or", "to", "and" or a hyphen with another number after it
+    /// ("one or two", "two-three"), or after one with a unit word or number right before it ("a week or two", "thirty to two").
+    /// Only whitespace may stand between the words, so a comma ends it ("in 30 days, and two of them"). A bare "one" anywhere else
+    /// ("which one", "for each one", "one of them") is a pronoun and no number (fix round 2, the coordinating session, 2026-11-27).
+    static func inARange(_ i: Int, _ tokens: [(word: String, start: Int, end: Int)], in text: [Character]) -> Bool {
+        func spaces(_ a: Int, _ b: Int) -> Bool { text[tokens[a].end..<tokens[b].start].allSatisfy(\.isWhitespace) }
+        func hyphen(_ a: Int, _ b: Int) -> Bool { text[tokens[a].end..<tokens[b].start] == ["-"] }
+        func isNumber(_ word: String) -> Bool { word.first?.isNumber == true || numberWords[word] != nil || bigNumbers.contains(word) }
+        let connectors: Set<String> = ["or", "to", "and"]
+        // Forward: "one or two", "one to two", "one and two", "one-two".
+        if i + 1 < tokens.count, hyphen(i, i + 1), isNumber(tokens[i + 1].word) { return true }
+        if i + 2 < tokens.count, connectors.contains(tokens[i + 1].word), spaces(i, i + 1), spaces(i + 1, i + 2) {
+            if isNumber(tokens[i + 2].word) { return true }
+        }
+        // Backward: "a week or two", "thirty to two".
+        if i >= 2, connectors.contains(tokens[i - 1].word), spaces(i - 1, i), spaces(i - 2, i - 1) {
+            let before = tokens[i - 2].word
+            if units[before] != nil || isNumber(before) { return true }
+        }
+        return false
+    }
+
     /// The numbers the sentence gives in days, weeks (seven days each) or years, in digits or as a word from one to twelve ("two
     /// weeks" is 14 days; "a year" is 1), through the same checks. A number written with a joiner ("1.5 years",
     /// "-30 days", "30-60 days", "1,000 days"), a number glued to letters that aren't a unit ("90d"), months (their days vary)
@@ -257,6 +294,15 @@ public enum Picker {
     static func numbers(in sentence: String) -> Said {
         let text = Array(sentence.lowercased()), original = Array(sentence)
         var said = Said(), used: Set<Int> = []
+        var tokens: [(word: String, start: Int, end: Int)] = []
+        var cursor = 0
+        while cursor < text.count {
+            guard text[cursor].isLetter || text[cursor].isNumber else { cursor += 1; continue }
+            var end = cursor
+            while end < text.count, text[end].isLetter || text[end].isNumber { end += 1 }
+            tokens.append((String(text[cursor..<end]), cursor, end))
+            cursor = end
+        }
         func letters(from start: Int) -> (word: String, end: Int) {
             var end = start
             while end < text.count, text[end].isLetter { end += 1 }
@@ -312,7 +358,14 @@ public enum Picker {
                 continue
             }
             used.insert(next)
-            record(cluster, word, unit)
+            // A hedge or a past time is no window (fix round 2): "about 30 days", "30 days or so", "30 days ago", "2 years and a half".
+            let hedged = ["days", "weeks", "years"].contains(unit)
+                && (hedgeBefore.contains(wordBefore(start, in: text)) || hedgedAfter(wordEnd, in: text, ranges: false))
+            if hedged {
+                said.problems.append("\u{201C}\(cluster) \(word)\u{201D} is hedged or in the past, not a window: give one number of days, weeks or years.")
+            } else {
+                record(cluster, word, unit)
+            }
             index = max(index, wordEnd)
         }
         // A unit word no digits came before: a number word (one to twelve, "a"/"an" for one) read the same way, else a problem.
@@ -329,11 +382,12 @@ public enum Picker {
                     said.problems.append("\u{201C}\(word)\u{201D} has no number in digits before it, such as 30 days.")
                 }
             } else if numberWords[word] != nil || bigNumbers.contains(word) {
-                // A number word with no unit after it is kept apart, as a digit is (`Said.bare`): "one or two years", "between
-                // one and two years".
+                // A number word with no unit after it, in a range, is kept apart as a digit is (`Said.bare`): "one or two years",
+                // "between one and two years". Alone ("which one") it is no number.
                 var after = end
                 if after < text.count, text[after] == "-" { after += 1 } else { while after < text.count, text[after].isWhitespace { after += 1 } }
-                if units[after < text.count && text[after].isLetter ? letters(from: after).word : ""] == nil { said.bare.append(word) }
+                let unitAfter = units[after < text.count && text[after].isLetter ? letters(from: after).word : ""] != nil
+                if !unitAfter, let i = tokens.firstIndex(where: { $0.start == position }), inARange(i, tokens, in: text) { said.bare.append(word) }
             }
             position = end
         }
