@@ -149,7 +149,11 @@ public enum ModelPicker {
         let said = Set(WordRule.words(request))
         if !said.isDisjoint(with: naming) { return true }
         // Another way of saying a group the choice has (S9.6b): it only opens the pick; the model still picks from the plain labels.
-        if choice.groups.contains(where: { group in groupSynonyms[group].map { !said.isDisjoint(with: $0.flatMap(WordRule.words)) } ?? false }) {
+        // The report's own label words never open it, as for `naming` (a synonym that is a word of the label describes the report).
+        let own = Set(WordRule.words(choice.label))
+        if choice.groups.contains(where: { group in
+            groupSynonyms[group].map { !said.isDisjoint(with: Set($0.flatMap(WordRule.words)).subtracting(own)) } ?? false
+        }) {
             return true
         }
         return choice.groups.contains { group in deniesAWord(request, group) }
@@ -160,7 +164,7 @@ public enum ModelPicker {
     /// is invented for a group that doesn't exist: service health has no "unhealthy" group, so it has no such word.
     static let groupSynonyms: [String: [String]] = [
         "past-due": ["overdue"], "past-due-status-unknown": ["overdue"],
-        "status:SUCCESS": ["successful", "success"],
+        "status:SUCCESS": ["successful", "successfully", "success", "successes"],
         "no-active-coverage": ["expired", "lapsed"],
     ]
 

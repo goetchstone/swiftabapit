@@ -95,7 +95,11 @@ on-device only, never Private Cloud Compute).
 - **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) or wk(s) (seven days each), year(s)
   or yr(s), "90-day" too, and (S9.6b, the coordinating session, 2026-11-27) the number words one to twelve in the same place
   ("two weeks" is 14 days, "three-year" 3) and "a"/"an" before a singular unit ("a year" is 1); a number word goes through the same
-  checks as digits (bounds, the unit allowed, the rule's window). Not read, and still a problem: "this/next/last year", "a few",
+  checks as digits (bounds, the unit allowed, the rule's window). A number word with no unit after it is a bare number, as a digit
+  is ("one or two years", "between one and two years", "thirty to two weeks"); "a"/"an" take a singular unit only and refuse "a
+  year-end report", "a day's notice", "a year and a half", "a week or two"; and a hedge or a past time ("about a year", "a year
+  ago", "one year or so") is no window. A refusal quotes the words as said ("a month", not "1 month"). Fix round, the
+  coordinating session, 2026-11-27. Not read, and still a problem: "this/next/last year", "a few",
   "several", "a couple of" (ambiguous), months, and a bigger number whose last word is one to twelve ("twenty days" and
   "twenty-one days" are refused, never read as 20 or 1: the words stop at twelve; "half a year" too). Passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
@@ -113,11 +117,13 @@ on-device only, never Private Cloud Compute).
   for every group; "past due" opens the pick. The pick lists "all" first, then plain labels ("user lock", "requested", "no
   coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it), and code maps the answer back to the
   catalog's token (round 3, 2026-11-27: a word in two labels counts, as "all" leads the list).
-  S9.6b (2026-11-27): a short fixed list of other words per group opens the pick too, for the gate only (the model still picks from
-  the plain labels; `ModelPicker.groupSynonyms` and `denied`): "overdue" for past the deadline, "successful"/"success" for
+  S9.6b (the coordinating session, 2026-11-27, with its fix round): a short fixed list of other words per group opens the pick too,
+  for the gate only (the model still picks from the plain labels; `ModelPicker.groupSynonyms` and `denied`; a synonym that is a word
+  of the report's own label opens nothing): "overdue" for past the deadline, "successful", "successfully", "success" and "successes" for
   succeeded, "expired"/"lapsed" for no active coverage, and "no" or "without" with a lock word within three words of it for
   `unlocked`. A synonym counts only for a report that has the group. "Past due" already opened the pick through "past", and
-  service health has no "unhealthy" group, so none was added (no group is invented).
+  service health has no "unhealthy" group, so none was added (no group is invented). Known false opens, left as they are (mild, as "all" is listed first): "no Activation Lock bypass code",
+  "a success overall", "no lock" about something that isn't the report's devices.
 - **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
   operator's Mac: 379, 1,018 and 457 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
   (characters / 3 plus the cap) to the same budget.
@@ -134,7 +140,8 @@ on-device only, never Private Cloud Compute).
   - after round 3 (the stoplist read as the sentence is, a bare number refused where a number is taken, a word in two group
     labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
   - S9.6b (number words, group synonyms; one dev run, 2026-11-27, **held out was NOT re-run**): report 124, group 41, refusal 22;
-    mean 1.37 s, at most 3.21 s; 15 refused for numbers (17 before). `WordRule` unchanged (108, 30, 24).
+    mean 1.37 s, at most 3.21 s; 15 refused for numbers (17 before). `WordRule` unchanged (108, 30, 24). After the fix round (bare
+    number words, hedges, singular "a"): report 124, group 41, refusal 22 again; mean 1.36 s, at most 2.68 s; 15 refused for numbers.
   - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). The held-out score is below.
 - **Held-out score** (S9.8, one run on the operator's Mac, 2026-11-27, nothing tuned against it; numbers in
   `Tests/Fixtures/assist/runs/heldout-2026-11-27.md`): model report 70 of 94, group 16 of 40, refusal 12 of 12; `WordRule` beside

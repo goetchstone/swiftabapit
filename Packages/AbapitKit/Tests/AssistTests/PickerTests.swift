@@ -175,6 +175,17 @@ struct PickerTests {
         #expect(pick.group == "unlocked" && model.calls.count == 3)
     }
 
+    /// A synonym that is a word of the report's own label describes the whole report and opens nothing; the others still do (fix round).
+    @Test func aSynonymThatIsTheReportsOwnWordOpensNothing() {
+        let own = Choices.Choice(kind: .report(.migration), label: "Overdue migrations", holds: nil, groups: ["past-due", "status:FAILED"])
+        #expect(!ModelPicker.namesAGroup("the overdue ones", own))
+        #expect(ModelPicker.namesAGroup("the failed ones", own))
+        let migration = Self.full.choices.first { $0.id == "report:migration" }!
+        for sentence in ["migrations that finished successfully", "the successes", "a success"] {
+            #expect(ModelPicker.namesAGroup(sentence, migration), Comment(rawValue: sentence))
+        }
+    }
+
     @Test func allIsEveryGroup() async throws {
         let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:migration")), StubModel.pick(ModelPicker.all)])
         guard case .picked(let pick) = try await Picker.pick("failed or started migration of the devices", for: Self.full, using: model) else {
@@ -243,12 +254,12 @@ struct PickerTests {
         #expect(try await tokens("devices more than an year old", "report:fleet-age") == ["years": "1"])
         #expect(try await tokens("devices ONE YEAR old", "report:fleet-age") == ["years": "1"])
         #expect(try await tokens("migration deadline in two weeks", "rule:migration_deadline") == [:], "a rule's own window, said in words")
-        #expect(Picker.numbers(in: "in two weeks and 3 years").values == ["days": ["14"], "years": ["3"]])
+        #expect(Picker.numbers(in: "in two weeks, 3 years").values == ["days": ["14"], "years": ["3"]])
         // Not read: ambiguous words, and a bigger number whose last word is one to twelve ("twenty-one days" is never 1 day).
         for sentence in ["this year", "next year", "last year", "a few years", "several years", "a couple of weeks", "twenty days",
-                         "twenty-one days", "twenty one days", "one hundred days", "half a year", "three weeks and one-day"] {
+                         "twenty-one days", "twenty one days", "one hundred days", "half a year", "three weeks, one-day"] {
             let said = Picker.numbers(in: "devices " + sentence)
-            if sentence == "three weeks and one-day" { #expect(said.values == ["days": ["21", "1"]]); continue }
+            if sentence == "three weeks, one-day" { #expect(said.values == ["days": ["21", "1"]]); continue }
             #expect(said.values.isEmpty && !said.problems.isEmpty, Comment(rawValue: "\(sentence): \(said)"))
         }
     }
@@ -280,6 +291,34 @@ struct PickerTests {
         ("devices bought next year", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
         ("devices bought last year", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
         ("devices more than half a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        // A number word with no unit after it is kept as a bare number, as a digit is (fix round, the coordinating session, 2026-11-27).
+        ("devices one or two years old", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in two to three weeks", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in a week or two", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("devices a year and a half old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices between one and two years", "report:fleet-age", "\u{201C}one\u{201D} has no unit"),
+        ("AppleCare ending in a day or two", "report:coverage", "\u{201C}two\u{201D} has no unit"),
+        ("AppleCare ending in thirty to two weeks", "report:coverage", "\u{201C}thirty\u{201D} has no unit"),
+        // Hedged, past-time and glued wording is no window.
+        ("devices about a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices nearly a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices almost a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices around a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices roughly a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices approximately a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("AppleCare ending in a week or 2", "report:coverage", "\u{201C}week\u{201D} has no number"),
+        ("devices bought a year ago", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices bought two years ago", "report:fleet-age", "\u{201C}years\u{201D} has no number"),
+        ("devices one year or so old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("the a year-end report of devices", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("AppleCare ending in a day\u{2019}s notice", "report:coverage", "\u{201C}day\u{201D} has no number"),
+        ("AppleCare ending in a day's notice", "report:coverage", "\u{201C}day\u{201D} has no number"),
+        // "a" and "an" take a singular unit only.
+        ("devices a days old", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices an weeks old", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        // A refusal quotes the words as the sentence has them.
+        ("devices whose AppleCare ends in a Month", "report:coverage", "\u{201C}a Month\u{201D}: months"),
+        ("devices whose AppleCare ends in Two months", "report:coverage", "\u{201C}Two months\u{201D}: months"),
         // A number word is held to the same checks as digits: bounds, the unit allowed, the rule's window.
         ("devices twelve years old", "report:fleet-age", "from 1 to 10"),
         ("devices whose AppleCare ends in two years", "report:coverage", "not years"),
