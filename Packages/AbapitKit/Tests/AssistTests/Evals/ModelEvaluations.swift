@@ -7,7 +7,7 @@ import Testing
 /// `ABAPIT_MODEL_EVALS=1 swift test --filter ModelEvaluations`. Even with the flag, it refuses to run when `CI` or
 /// `GITHUB_ACTIONS` is set, and with the flag set on a Mac whose model isn't available it fails, so a flag can't pass by doing
 /// nothing. It scores the model picker on the dev samples only, through the same `Judge` and `PickEvaluation` as `WordRule`,
-/// with `WordRule`'s score printed beside it; the held-out samples are a later step's single run, not this one's.
+/// with `WordRule`'s score printed beside it; the held-out samples are `theModelOnHeldOut`'s single run, behind a second switch.
 @Suite("ModelEvaluations", .serialized) struct ModelEvaluations {
     /// Whether the evaluations may run with this environment: the flag is `1`, and neither `CI` nor `GITHUB_ACTIONS` is set.
     static func mayRun(_ environment: [String: String]) -> Bool {
@@ -16,6 +16,14 @@ import Testing
     }
 
     static let flagged = mayRun(ProcessInfo.processInfo.environment)
+
+    /// Whether the held-out run may happen: the flag above, and `ABAPIT_MODEL_EVALS_SET=held-out` besides, so the dev run never
+    /// reaches it. Run it once, with `--filter theModelOnHeldOut`.
+    static func mayRunHeldOut(_ environment: [String: String]) -> Bool {
+        mayRun(environment) && environment["ABAPIT_MODEL_EVALS_SET"] == "held-out"
+    }
+
+    static let heldOutFlagged = mayRunHeldOut(ProcessInfo.processInfo.environment)
 
     /// The client the samples are written for: the largest list.
     static let client = Picker.Client(scope: .business, hasMosyle: true, thresholds: Samples.thresholds)
@@ -69,6 +77,33 @@ import Testing
         #expect(score.report > words.report, "the model picks more reports right than the word rule on dev")
     }
 
+    /// The single held-out run: the same picker, `Judge` and `WordRule` beside it, scores and times only. It prints no sentence,
+    /// no sample id and no miss, asserts no score (a result is recorded, never tuned against), and is not part of the dev run.
+    @Test(.enabled(if: ModelEvaluations.heldOutFlagged, "ABAPIT_MODEL_EVALS=1 and ABAPIT_MODEL_EVALS_SET=held-out are not both set, or CI or GITHUB_ACTIONS is: the held-out run calls the on-device model"))
+    func theModelOnHeldOut() async throws {
+        let model = ModelPicker.OnDevice()
+        try #require(model.availability == .available, "the flag is set and the on-device model isn't available on this Mac")
+        let held = try Samples.heldOut()
+        var answers: [String: WordRule.Answer] = [:], refusals: [String: Int] = [:], times: [Duration] = []
+        let clock = ContinuousClock()
+        for sample in held {
+            let start = clock.now
+            let outcome = try await Picker.pick(sample.text, for: Self.client, using: model)
+            times.append(start.duration(to: clock.now))
+            answers[sample.text] = Self.judged(outcome)
+            if case .refused(let refusal) = outcome { refusals[String(describing: refusal), default: 0] += 1 }
+        }
+        let kept = answers
+        let choices = Self.client.choices
+        let score = Judge.score(held, choices: choices) { kept[$0]! }
+        let words = Judge.score(held, choices: choices) { WordRule.answer($0, choices: choices) }
+        print("EVAL model heldout: \(score.summary)")
+        print("EVAL wordrule heldout: \(words.summary)")
+        let seconds = times.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 }
+        print("EVAL model heldout time: mean \(String(format: "%.2f", seconds.reduce(0, +) / Double(seconds.count))) s, most \(String(format: "%.2f", seconds.max() ?? 0)) s, calls \(seconds.count)")
+        print("EVAL model heldout refusals: \(refusals.sorted { $0.key < $1.key })")
+    }
+
     /// The largest call of each pick, measured with the model's own `tokenCount`: the instructions, the prompt and the schema
     /// each counted on its own (so the fixed overhead of each count is in the total more than once), plus the response cap.
     @Test(.enabled(if: ModelEvaluations.flagged, "ABAPIT_MODEL_EVALS=1 is not set, or CI or GITHUB_ACTIONS is: tokenCount needs the on-device model"))
@@ -82,6 +117,14 @@ import Testing
             print("BUDGET tokenCount \(name): instructions \(parts[0]), prompt \(parts[1]), schema \(parts[2]), cap \(ModelPicker.responseCap): \(whole) of \(PickerTests.budget); context \(model.contextSize)")
             #expect(whole <= PickerTests.budget, Comment(rawValue: name))
         }
+    }
+
+    @Test func theHeldOutRunNeedsItsOwnSwitch() {
+        #expect(!Self.mayRunHeldOut(["ABAPIT_MODEL_EVALS": "1"]))
+        #expect(!Self.mayRunHeldOut(["ABAPIT_MODEL_EVALS_SET": "held-out"]))
+        #expect(!Self.mayRunHeldOut(["ABAPIT_MODEL_EVALS": "1", "ABAPIT_MODEL_EVALS_SET": "dev"]))
+        #expect(Self.mayRunHeldOut(["ABAPIT_MODEL_EVALS": "1", "ABAPIT_MODEL_EVALS_SET": "held-out"]))
+        #expect(!Self.mayRunHeldOut(["ABAPIT_MODEL_EVALS": "1", "ABAPIT_MODEL_EVALS_SET": "held-out", "CI": "true"]))
     }
 
     @Test func theFlagNeverRunsThemOnCI() {
