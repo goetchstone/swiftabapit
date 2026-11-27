@@ -14,6 +14,7 @@ struct IntentTests {
     static let assist = "Packages/AbapitKit/Sources/Assist"
     static let answers = "Packages/AbapitApp/Sources/AppModels/Answers.swift"
     static let ask = "Packages/AbapitApp/Sources/AppModels/AskModel.swift"
+    static let liveWait = "Packages/AbapitApp/Sources/AppModels/LiveWait.swift"
 
     /// Names of the write path, matched anywhere in code and string literals (`SourceScan.mentions`): the chokepoint's types, the
     /// ticket's label, the write builders (`AppleWriteBuilders`, `MosyleWriteBuilders`, plan §3.2), and the modules that hold them.
@@ -186,6 +187,36 @@ struct IntentTests {
         "static func models(_ devices: [Resource])", "for device in devices where",
     ]
 
+    /// What `LiveWait` (handed `orgs`, `devices` and `mosyle` bare by `Answers`) may call, each checked against the model's own code on
+    /// 2026-11-27. It starts reads, as the screens do, and nothing else: no client switch, setting, snapshot or finding.
+    static let liveWaitMayCall: [String: [String: String]] = [
+        "orgs": [
+            "generation": "the switch counter, `private(set)`",
+            "mosyleOrg": "the client's Mosyle profile, a computed value",
+            "mosyleUnavailable": "why there is no Mosyle org, computed",
+        ],
+        "devices": [
+            "state": "the device list's read state, `private(set)`",
+            "servicesState": "the service list's read state, `private(set)`",
+            "serviceDevices": "the devices of each service as read, `private(set)`",
+            "load": "`load(force: true)` starts the screen's own read of Apple's device and service lists (it resets what the screen holds, as Refresh does); it writes nothing and switches nothing",
+        ],
+        "mosyle": [
+            "devices": "the Mosyle device list as a value (`Listing`)",
+            "reloadDevices": "starts the read of the Mosyle device list again, and only it; it writes nothing",
+            "devicesStoppedAt": "when the read stopped, `private(set)`",
+            "reportNote": "words about the read, computed",
+        ],
+    ]
+
+    /// `LiveWait`'s bare uses: its declarations and init, and the two functions that read `devices`
+    /// (`ReportsModel.liveDevices`, `liveServices`: neither assigns or calls anything that changes it).
+    static let liveWaitBare = [
+        "private let orgs: OrgsModel", "private let devices: DevicesModel", "private let mosyle: MosyleModel",
+        "public init(orgs: OrgsModel, devices: DevicesModel, mosyle: MosyleModel,", "self.orgs = orgs", "self.devices = devices", "self.mosyle = mosyle",
+        "ReportsModel.liveDevices(devices)", "ReportsModel.liveServices(devices)",
+    ]
+
     /// The uses of the held `models` in `file`: each `<name>.<member>…` (also `self.<name>`, `?.`, across lines and in interpolations;
     /// comments don't count) as the path of members it reads through, and each bare use not in `answersBare`, as `<name> (bare)`.
     static func heldUses(_ file: SourceScan.File, _ models: [String], bare allowed: [String] = Self.answersBare) -> [(model: String, path: [String])] {
@@ -256,6 +287,17 @@ struct IntentTests {
             #expect(used[model] == Set(members.keys), "\(model): used \(used[model, default: []].sorted()), allowed \(members.keys.sorted())")
         }
         #expect(Set(Self.answersMayCall.keys) == Set(Self.answersHolds), "the allowlist names the models Answers holds")
+        // `LiveWait` is handed three of the models bare: the same method over it.
+        let wait = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.liveWait })
+        #expect(Self.uncalled(wait, allowed: Self.liveWaitMayCall, bare: Self.liveWaitBare).isEmpty,
+                "LiveWait.swift calls what no allowlist names: \(Self.uncalled(wait, allowed: Self.liveWaitMayCall, bare: Self.liveWaitBare))")
+        let waitUsed = Dictionary(grouping: Self.heldUses(wait, Self.liveWaitMayCall.keys.sorted(), bare: Self.liveWaitBare), by: \.model)
+            .mapValues { Set($0.compactMap { Self.entry($0.model, $0.path, in: Self.liveWaitMayCall) }) }
+        for (model, members) in Self.liveWaitMayCall {
+            #expect(waitUsed[model] == Set(members.keys), "LiveWait \(model): used \(waitUsed[model, default: []].sorted()), allowed \(members.keys.sorted())")
+        }
+        // Whatever hands `Answers`' models to `LiveWait` is its two makes, and each hands the three it holds.
+        #expect(SourceScan.code(answers.text, strings: false).components(separatedBy: "LiveWait(").count == 3)
     }
 
     /// The scan finds a call the allowlist doesn't name, however it is spelled, and passes the ones it does.
