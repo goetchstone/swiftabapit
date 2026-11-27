@@ -10,9 +10,9 @@
   Info.plist settings, and the gate had no test of its own (its mutants were made by hand, per PR).
 - **Fix** — The gate holds the Info.plist's keys exactly (the thirteen the build writes, plus nine toolchain stamps named one by one, each a string) and
   holds `Contents` to exactly the five entries a clean build writes and `Resources` to data only (no nested bundle,
-  Info.plist, scripting definition or `InfoPlist.strings`). `RouteTests.theInfoPlistIsGeneratedFromThreeKeys` holds the build
+  Info.plist, scripting definition, symlink or `InfoPlist.*`), and `MacOS` to exactly `abapit`. `RouteTests.theInfoPlistIsGeneratedFromThreeKeys` holds the build
   settings. https://github.com/goetchstone/swiftabapit/pull/59
-- **Prevention** — `scripts/check_app_selftest.sh`, which CI runs after the gate: nineteen doors, each refused by
+- **Prevention** — `scripts/check_app_selftest.sh`, which CI runs after the gate: twenty-three doors, each refused by
   name (of the first ten, eight are inbound doors and two are guards: the date value and `LSEnvironment`), and it fails
   against the old gate. Also learned: `xcodebuild` registers every app it builds with LaunchServices, `.noindex` or
   not, so a mutant with a door is made from a copy and never built by Xcode.

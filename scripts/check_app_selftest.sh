@@ -34,6 +34,12 @@ refused() {
     local nested="$2" spec file
     shift 2
     for spec in "$@"; do
+      if [[ "$spec" == *"=>"* ]]; then  # path=>target: a symlink
+        file="$work/abapit.app/Contents/${spec%%=>*}"
+        mkdir -p "$(dirname "$file")"
+        ln -s "${spec#*=>}" "$file"
+        continue
+      fi
       file="$work/abapit.app/Contents/${spec%%=*}"
       mkdir -p "$(dirname "$file")"
       printf '%s\n' "${spec#*=}" > "$file"
@@ -88,7 +94,11 @@ refused "a file in a folder the build never writes" "Contents holds SharedSuppor
 refused "an extension in Resources" "Contents/Resources holds an Info.plist or a nested bundle" tree - Resources/E.appex=x
 refused "an extension in a folder of its own" "Contents holds Extensions" tree - Extensions/E.appex=x
 refused "a scripting definition" "Contents/Resources holds a scripting definition" tree - Resources/abapit.sdef=x
-refused "a localized InfoPlist.strings" "Contents/Resources holds InfoPlist.strings" tree - Resources/en.lproj/InfoPlist.strings=x
+refused "a localized InfoPlist.strings" "Contents/Resources holds an InfoPlist.* file" tree - Resources/en.lproj/InfoPlist.strings=x
+refused "a nested app in MacOS" "Contents/MacOS holds more than abapit" tree MacOS/H.app:CFBundleURLTypes
+refused "a symlink in Resources" "Contents/Resources holds a symlink" tree - "Resources/apps=>/System/Applications"
+refused "a localized InfoPlist.stringsdict" "Contents/Resources holds an InfoPlist.* file" tree - Resources/en.lproj/InfoPlist.stringsdict=x
+refused "an extension in upper case" "Contents/Resources holds an Info.plist or a nested bundle" tree - Resources/E.APPEX=x
 
 [ "$failed" = 0 ] || { echo "check_app_selftest: the gate let a door through (above)" >&2; exit 1; }
 echo "check_app_selftest: ok ($count doors refused)"

@@ -103,6 +103,9 @@ for entry in "$APP/Contents"/* "$APP/Contents"/.[!.]* "$APP/Contents"/..?*; do
     *) fail "Contents holds ${entry##*/}, which the build never writes (it holds exactly Info.plist, PkgInfo, MacOS, Resources and _CodeSignature)" ;;
   esac
 done
+# Contents/MacOS holds exactly the app's one executable: a nested app there (with its own Info.plist) is a door too.
+macos="$(ls -A "$APP/Contents/MacOS" 2>/dev/null)" || fail "can't read Contents/MacOS"
+[ "$macos" = abapit ] || fail "Contents/MacOS holds more than abapit, or something else: $(tr '\n' ' ' <<<"$macos")"
 # Resources holds data only: a nested bundle, an Info.plist, a scripting definition or a localized InfoPlist.strings
 # would add a door (or change the Info.plist's display) from inside the sealed resources. find's output is captured first.
 nested="$(find "$APP/Contents/Resources" \( -iname Info.plist -o -iname '*.app' -o -iname '*.appex' -o -iname '*.xpc' -o -iname '*.bundle' -o -iname '*.framework' \) -print 2>/dev/null)" \
@@ -110,8 +113,11 @@ nested="$(find "$APP/Contents/Resources" \( -iname Info.plist -o -iname '*.app' 
 [ -z "$nested" ] || fail "Contents/Resources holds an Info.plist or a nested bundle: $(tr '\n' ' ' <<<"$nested")"
 sdef="$(find "$APP/Contents/Resources" -iname '*.sdef' -print 2>/dev/null)" || fail "can't read Contents/Resources"
 [ -z "$sdef" ] || fail "Contents/Resources holds a scripting definition (AppleScript): $(tr '\n' ' ' <<<"$sdef")"
-loc="$(find "$APP/Contents/Resources" -iname InfoPlist.strings -print 2>/dev/null)" || fail "can't read Contents/Resources"
-[ -z "$loc" ] || fail "Contents/Resources holds InfoPlist.strings, which overrides the Info.plist's own values: $(tr '\n' ' ' <<<"$loc")"
+# A symlink could lead out of the bundle to a whole folder of apps; the build writes none here.
+links="$(find "$APP/Contents/Resources" -type l -print 2>/dev/null)" || fail "can't read Contents/Resources"
+[ -z "$links" ] || fail "Contents/Resources holds a symlink: $(tr '\n' ' ' <<<"$links")"
+loc="$(find "$APP/Contents/Resources" -iname 'InfoPlist.*' -print 2>/dev/null)" || fail "can't read Contents/Resources"
+[ -z "$loc" ] || fail "Contents/Resources holds an InfoPlist.* file (.strings, .stringsdict, .loctable), which overrides the Info.plist's own values: $(tr '\n' ' ' <<<"$loc")"
 
 # What the code must not do or carry, checked twice: on a copy stripped the way an archive build strips it
 # (DEPLOYMENT_POSTPROCESSING=YES runs `strip -D`: no symbol table), then on the binary as built. Phase 1b's review

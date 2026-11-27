@@ -24,9 +24,9 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   `DEPLOYMENT_POSTPROCESSING=YES` build (an archive's strip), which costs seconds.
 - `scripts/check_app_selftest.sh` — the gate's test of its Info.plist and bundle-folder checks: copies of a Release app,
   each with one inbound door, must each be refused by name. CI runs it after the gate. Of its first ten doors, eight are
-  inbound doors and two are guards (the date value JSON can't hold, and `LSEnvironment`); the nine added after a review
+  inbound doors and two are guards (the date value JSON can't hold, and `LSEnvironment`); the thirteen added after a review
   are the stamps' type and name, a nested app or extension in `Contents` or `Resources`, a file in a folder the build
-  never writes, a scripting definition and `InfoPlist.strings`.
+  never writes, a scripting definition, `InfoPlist.*` files, a symlink, and a nested app in `MacOS`.
 - `scripts/check_graph.py`, `scripts/check_text.py` — the manifest SwiftPM evaluates; invisible characters.
 
 ## How it works
@@ -78,7 +78,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   stamps, named one by one, each a string (`BuildMachineOSBuild`, `DTCompiler`, `DTPlatformBuild`, `DTPlatformName`,
   `DTPlatformVersion`, `DTSDKBuild`, `DTSDKName`, `DTXcode`, `DTXcodeBuild`): no `DT…` wildcard. A URL scheme, a document
   type, a Service, AppleScript or an activity type is a key, so each is refused by name. `Contents` holds exactly
-  `Info.plist`, `PkgInfo`, `MacOS`, `Resources` and `_CodeSignature` (a clean Release build holds just these), so
+  `Info.plist`, `PkgInfo`, `MacOS`, `Resources` and `_CodeSignature` (a clean Release build holds just these), `MacOS`
+  to exactly `abapit`, `Resources` to no symlink and no `InfoPlist.*` (any case, matching `TreeTests`), so
   `Library`, `XPCServices`, `PlugIns`, `Helpers`, `Extensions`, `SharedSupport` and anything else are refused. `Resources`
   holds no `Info.plist`, `.app`, `.appex`, `.xpc`, `.bundle`, `.framework`, `.sdef` or `InfoPlist.strings`, and
   `TreeTests` refuses an `InfoPlist` string catalog under `App/`.
