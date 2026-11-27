@@ -308,6 +308,8 @@ struct IntentTests {
             "mosyle.loadDevices(force: true)", "self.orgs.select(\"b\")", "orgs\n    .selectClient(\"b\")", "orgs?.remove(\"a\")", "orgs . remove(\"a\")",
             "let line = \"\\(attentionModel.evaluate(force: true))\"", "let o = orgs", "take(orgs)", "reports.newMadeUpMethod()",
             "orgs.active?.name; orgs.reloadSettings()",
+            // S9.12: Answers never explains (Siri and Shortcuts don't speak the model's explanations).
+            "await attentionModel.explain()", "attentionModel.explanation(line)", "attentionModel.explainer = m",
         ]
         for code in planted {
             let found = Self.uncalled(SourceScan.File(path: "x.swift", text: "func f() {\n    \(code)\n}"))

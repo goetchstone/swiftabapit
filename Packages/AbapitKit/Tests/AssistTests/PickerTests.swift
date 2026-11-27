@@ -677,9 +677,9 @@ struct PickerTests {
             #expect(!SourceScan.names(file, ["Tool", "ToolOutput", "tools"]), Comment(rawValue: file.path))
             #expect(!SourceScan.mentions(file, ["Tool{", ":Tool", "tools:", "toolCallingMode"]), Comment(rawValue: file.path))
         }
-        // The one session is made with the on-device model, and nothing else makes one.
+        // The sessions are made with the on-device model, and nothing else makes one: the picker's and the explainer's (S9.12).
         let sessions = assist.filter { SourceScan.mentions($0, ["LanguageModelSession("]) }
-        #expect(sessions.map(\.path) == ["Packages/AbapitKit/Sources/Assist/ModelPicker.swift"])
+        #expect(sessions.map(\.path) == ["Packages/AbapitKit/Sources/Assist/Explain.swift", "Packages/AbapitKit/Sources/Assist/ModelPicker.swift"])
         #expect(sessions.allSatisfy { SourceScan.mentions($0, ["LanguageModelSession(model:SystemLanguageModel.default,instructions:instructions)"]) })
         // The scan itself sees what it looks for.
         let planted = SourceScan.File(path: "x.swift", text: "struct T: Tool {}\nlet m = \(pcc)LanguageModel()")

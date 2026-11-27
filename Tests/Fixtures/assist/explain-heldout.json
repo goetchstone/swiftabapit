@@ -1,0 +1,341 @@
+{
+ "about": "Invented fact sets for the Needs-attention explanation, held out: scored once by the flagged run, never tuned against. No tenant data.",
+ "facts": [
+  {
+   "id": "eh-01",
+   "rule": "missing_from_apple_mdm",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 30
+   },
+   "found": 1,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 6
+  },
+  {
+   "id": "eh-02",
+   "rule": "missing_from_mosyle",
+   "thresholds": {
+    "checkInDays": 14,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 21,
+    "quietServiceDays": 7
+   },
+   "found": 9,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": null
+  },
+  {
+   "id": "eh-03",
+   "rule": "apple_mdm_not_in_apple",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 120,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 7
+   },
+   "found": 1043,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 0
+  },
+  {
+   "id": "eh-04",
+   "rule": "mosyle_not_in_apple",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 30
+   },
+   "found": 1,
+   "hidden": 0,
+   "read": "partial",
+   "ageDays": null
+  },
+  {
+   "id": "eh-05",
+   "rule": "applecare_expiring",
+   "thresholds": {
+    "checkInDays": 21,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 60
+   },
+   "found": 12,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 21
+  },
+  {
+   "id": "eh-06",
+   "rule": "mosyle_check_in",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 60
+   },
+   "found": 5,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": null
+  },
+  {
+   "id": "eh-07",
+   "rule": "apple_mdm_check_in",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 14,
+    "quietServiceDays": 7
+   },
+   "found": 41,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 45
+  },
+  {
+   "id": "eh-08",
+   "rule": "filevault_off",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 7
+   },
+   "found": 250,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 1
+  },
+  {
+   "id": "eh-09",
+   "rule": "firewall_off",
+   "thresholds": {
+    "checkInDays": 30,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 14,
+    "quietServiceDays": 30
+   },
+   "found": 2,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 0
+  },
+  {
+   "id": "eh-10",
+   "rule": "activation_lock_user",
+   "thresholds": {
+    "checkInDays": 14,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 30
+   },
+   "found": 12,
+   "hidden": 2,
+   "read": "whole",
+   "ageDays": 3
+  },
+  {
+   "id": "eh-11",
+   "rule": "quiet_service",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 21,
+    "quietServiceDays": 30
+   },
+   "found": 2,
+   "hidden": 0,
+   "read": "partial",
+   "ageDays": null
+  },
+  {
+   "id": "eh-12",
+   "rule": "migration_deadline",
+   "thresholds": {
+    "checkInDays": 30,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 7,
+    "quietServiceDays": 30
+   },
+   "found": 3,
+   "hidden": 1,
+   "read": "whole",
+   "ageDays": null
+  },
+  {
+   "id": "eh-13",
+   "rule": "missing_from_apple_mdm",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 7
+   },
+   "found": 1,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 0
+  },
+  {
+   "id": "eh-14",
+   "rule": "missing_from_mosyle",
+   "thresholds": {
+    "checkInDays": 60,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 14,
+    "quietServiceDays": 60
+   },
+   "found": 64,
+   "hidden": 2,
+   "read": "whole",
+   "ageDays": null
+  },
+  {
+   "id": "eh-15",
+   "rule": "apple_mdm_not_in_apple",
+   "thresholds": {
+    "checkInDays": 30,
+    "appleCareExpiringDays": 90,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 14
+   },
+   "found": 5,
+   "hidden": 0,
+   "read": "partial",
+   "ageDays": 0
+  },
+  {
+   "id": "eh-16",
+   "rule": "mosyle_not_in_apple",
+   "thresholds": {
+    "checkInDays": 14,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 14,
+    "quietServiceDays": 60
+   },
+   "found": 9,
+   "hidden": 1,
+   "read": "whole",
+   "ageDays": null
+  },
+  {
+   "id": "eh-17",
+   "rule": "applecare_expiring",
+   "thresholds": {
+    "checkInDays": 21,
+    "appleCareExpiringDays": 90,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 30
+   },
+   "found": 26,
+   "hidden": 0,
+   "read": "partial",
+   "ageDays": 1
+  },
+  {
+   "id": "eh-18",
+   "rule": "mosyle_check_in",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 120,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 60
+   },
+   "found": 3,
+   "hidden": 1,
+   "read": "partial",
+   "ageDays": null
+  },
+  {
+   "id": "eh-19",
+   "rule": "apple_mdm_check_in",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 30
+   },
+   "found": 5,
+   "hidden": 1,
+   "read": "whole",
+   "ageDays": 0
+  },
+  {
+   "id": "eh-20",
+   "rule": "filevault_off",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 7,
+    "quietServiceDays": 14
+   },
+   "found": 250,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 45
+  },
+  {
+   "id": "eh-21",
+   "rule": "firewall_off",
+   "thresholds": {
+    "checkInDays": 21,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 14,
+    "quietServiceDays": 30
+   },
+   "found": 250,
+   "hidden": 2,
+   "read": "whole",
+   "ageDays": 21
+  },
+  {
+   "id": "eh-22",
+   "rule": "activation_lock_user",
+   "thresholds": {
+    "checkInDays": 45,
+    "appleCareExpiringDays": 180,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 30
+   },
+   "found": 2,
+   "hidden": 0,
+   "read": "whole",
+   "ageDays": 9
+  },
+  {
+   "id": "eh-23",
+   "rule": "quiet_service",
+   "thresholds": {
+    "checkInDays": 14,
+    "appleCareExpiringDays": 60,
+    "migrationDeadlineDays": 30,
+    "quietServiceDays": 7
+   },
+   "found": 41,
+   "hidden": 0,
+   "read": "partial",
+   "ageDays": null
+  },
+  {
+   "id": "eh-24",
+   "rule": "migration_deadline",
+   "thresholds": {
+    "checkInDays": 21,
+    "appleCareExpiringDays": 30,
+    "migrationDeadlineDays": 10,
+    "quietServiceDays": 14
+   },
+   "found": 4,
+   "hidden": 2,
+   "read": "whole",
+   "ageDays": null
+  }
+ ]
+}

@@ -72,7 +72,8 @@ status=0
 # (`add-apple`, `add-mosyle`), drawn with its question of which customer the new org is for; pane is ABAPIT_PANE's, the
 # pane Activity opens on (`changes`: the snapshot history over the demo's fake snapshots); snippet is ABAPIT_SNIPPET's, a report
 # whose intent answer (the spoken words and the snippet of rows) is drawn in the window's place; model is ABAPIT_MODEL's, the
-# on-device model as the Ask sees it (`unavailable`: Apple Intelligence off; the demo's model is available unless given). Section is a SidebarItem raw
+# on-device model as the Ask and Needs attention's explanations see it (`unavailable`: Apple Intelligence off; the demo's model is
+# available unless given). Section is a SidebarItem raw
 # value (AppModels/Navigation.swift). The narrow-*
 # runs open a section in the smallest window with the sidebar and any inspector dragged to their widest, where
 # SwiftGamGui's narrow-window layout loop crashed AppKit (its failure-log 2026-10-10): they fail when the pane has
@@ -90,7 +91,8 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
             clients-overview:overview:::clients clients-settings:settings:::clients \
             add-mosyle-asks:settings:::apple:add-mosyle clients-add-apple:settings:::clients:add-apple \
             changes:activity:::::changes reports:reports needs-attention:needs-attention \
-            snippet-out-of-warranty:reports::::::out-of-warranty reports-model-off:reports:::::::unavailable; do
+            snippet-out-of-warranty:reports::::::out-of-warranty reports-model-off:reports:::::::unavailable \
+            needs-attention-model-off:needs-attention:::::::unavailable; do
   IFS=: read -r name section selected window demo sheet pane snippet model <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"

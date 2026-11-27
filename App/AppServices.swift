@@ -29,7 +29,8 @@ final class AppServices {
     /// Counts `devices`: one device read for the Devices screen and the Dashboard.
     var dashboard: DashboardModel { screens.dashboard }
     /// The Reports screen's Ask: a question in words, drafted onto a report through `Answers` with the on-device model (or, in a
-    /// debug build, the model `ABAPIT_MODEL` asks for; the demo's answers nothing).
+    /// debug build, the model `ABAPIT_MODEL` asks for; the demo's answers nothing). The Needs-attention explanations use the same
+    /// debug model (`NeedsAttentionModel.explainer`); otherwise their own on-device model (`Explain.OnDevice`).
     let ask: AskModel
 
     private init(orgs: OrgsModel, isDemo: Bool) {
@@ -39,6 +40,7 @@ final class AppServices {
         #if DEBUG
         if let model = DemoModel.requested(demo: isDemo) {
             ask = AskModel(answers: screens.answers, model: model)
+            screens.attention.explainer = model
             return
         }
         #endif
