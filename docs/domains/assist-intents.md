@@ -372,22 +372,33 @@ executor's" was decided while building it.
   strings, no tools, no re-ask (the executor's: a sentence that fails is dropped, not repaired). The open count is not in the prompt
   (the executor's, from the first dev run: "open" read as "firewall open" and "open check-in alerts"), only found and dismissed or snoozed.
 - **Code checks every sentence** (`Explain.check`; a sentence failing any one is dropped, and every drop is counted):
-  - *number*: every number (digits, a thousands comma, number words, "no"/"none"/"nothing" as zero before a count) must be one of the
-    facts' with its unit: days for the threshold and the age; for a count, "findings" or the rule's own noun (services for the quiet
-    service rule, devices or Macs for the others; "alerts", "cases", "them" and the like count findings too). A number with no unit,
-    a decimal, a percentage, "dozen", "hundreds" or another unit (weeks, hours) is dropped. "One" with no unit is the pronoun.
+  - *number*: every number (digits, a thousands comma, number words, "no"/"none"/"nothing"/"zero" as zero) must be one of the
+    facts' with its unit **and in its place** (the coordinating session, 2026-11-27, fix round): a count is "findings" or the rule's
+    own noun (services for the quiet service rule, devices or Macs for the others; "alerts", "cases", "them" and the like count
+    findings too) and is the found count, or the dismissed or snoozed count only beside dismissed/snoozed/hidden words (within six
+    words); days are the threshold only beside window words (within, more than, at least, for, over, past, threshold, …) or the age
+    only beside age words (old, snapshot, ago, age, taken). With findings, a zero is only "none dismissed or snoozed", beside its
+    words, when none were: "No Macs have FileVault off." and "Nothing was found." are dropped. A number with no unit, a decimal, a
+    percentage, another unit (weeks, hours), a digit glued to letters or of another script ("5th", "7devices", "30d"), an ordinal, a
+    vague count ("a couple", "several", "both", "most", "all", "many", "a single", "dozens") or span ("a fortnight", "a quarter",
+    "tomorrow", "last week") is dropped. "One" with no unit is the pronoun.
   - *name*: every capitalized word must be in the rule's title or description, the fixed vocabulary (Apple, AppleCare, Mosyle, Mac,
     iPhone, iPad, MDM, FileVault, Activation, Lock, Account, Business, School, IT), or an ordinary word starting the sentence.
   - *person*: "I", "we", "our": the app never speaks as if it acted.
-  - *advice*: an imperative first word (renew, contact, turn, review, …), or "should", "must", "need to", "recommend", "consider",
-    "please", "make sure", "you can". abapit can't do what advice asks, and the model mustn't tell the person what to change.
+  - *advice*: an imperative first word (renew, contact, turn, review, …), or "should", "must", "ought", "could", "wise", "need to",
+    "recommend", "consider", "please", "make sure", "you can", "good idea", "advisable". abapit can't do what advice asks, and the
+    model mustn't tell the person what to change.
   - *done*: a claim of an act ("has been fixed", "were removed", "will be resolved", "abapit will notify"); a word that also names a state
     (enrolled, assigned, locked) is a claim only after "been", "now", "will", "got" or "being".
-  - *read*: words against the read ("every device was read" over a part read; "partial", "missed" over a whole one; a snapshot when
-    live, "live" when a snapshot).
+  - *read*: words against the read: over a part read, "complete", "full", "entire", "whole", each/every/all with a read word ("it
+    covered each Mac"), or a negated miss or skip ("nothing was missed", "no Mac was skipped"; not "some wasn't read, possibly
+    missing some"); over a whole one, "partial", "in part", "missed"; a snapshot when live, "live" when a snapshot.
+  - *allClear* (fix round): with findings, words that say nothing needs attention ("fine", "healthy", "no issues", "no attention",
+    "need no", "nothing needs", "all clear").
   - and empty, over 240 characters, the field's description echoed, a repeat, past the third.
-  None reads meaning: a false sentence with no number, name or claim passes (dev: "the service has been offline … on multiple devices",
-  "MDM migration failed" where it may only be requested). What is shown is labelled as the model's.
+  **Known misses** (none reads meaning): a claim against the rule with no number ("FileVault is on for every Mac"); a name written
+  in lowercase; a wrong reading in general ("the service has been offline … on multiple devices", "MDM migration failed" where it may
+  only be requested, "the system flagged devices out of sync"). What is shown is labelled as the model's.
 - **Nothing shown when nothing holds**: all dropped is "The on-device model's explanation didn't match this rule's facts, so none is
   shown."; a thrown error is "couldn't explain this rule: …" in `Refusal.NotUnderstood`'s words, never the error's text.
 - **Display only**: held in memory per rule with the facts it was written from, shown only while the line's facts are the same, cleared
@@ -399,13 +410,21 @@ executor's" was decided while building it.
   intents never ask. About 1.45 s a rule on the operator's Mac, so twelve rules with findings take about 17 s, each shown as it lands.
 - **The clients rule**: `explain()` takes the org generation before each call and compares it after (as `AskModel.read`); changed, what
   was written is dropped and nothing more is asked.
+- **Runs** (fix round): each `explain()` tags what it writes with its run; a cancelled run clears only an entry it wrote, and a run
+  takes over a rule another run left being written, so the screen cancelling one run and starting the next leaves every rule shown
+  (`ExplainScreenTests.aCancelledRunNeverClearsAnotherRunsWork`, the reviewer's repro: 300 ms calls, a cancel after 50 ms).
 - **The model off**: the screen says why in its own words (`Explain.offWords` over `Refusals.availability`, one per reason), asks
   nothing, and everything else on it works as before.
-- **The flag**: `Explain.isOn`. On only if the held-out evaluation passes: no kept sentence states a number the facts don't hold (an
-  independent scan, `Unsupported`, not the checker), and at least three in four fact sets keep a sentence (the executor's bar, set
-  before the held-out run). Off, nothing is shown, asked or said.
+- **The flag**: `Explain.isOn`. On only if the held-out evaluation passes: no kept sentence the independent scan (`Unsupported`) finds
+  unsupported, and at least three in four fact sets keep a sentence (the bar the executor set, kept by the coordinating session in
+  the fix round). Off, nothing is shown, asked or said.
+- **The independent scan** (`Unsupported`, rewritten in the fix round): regular expressions and word lists of its own, none of
+  `Explain`'s code, unit- and fact-aware. It counts a number not the fact's with its unit and in its place, a zero or "all clear"
+  with findings, a part read said whole, a glued or foreign digit, an ordinal, a vague count or span, a scale word. The first scan
+  only looked for digits the facts didn't hold, so it shared the checker's blind spots.
 - **Evaluation**: `ExplainEvaluation` (Apple's `Evaluations`; code evaluators: kept share, the share of sentences dropped, unsupported
-  numbers kept, which must be 0) over invented fact sets: 36 dev, 24 held back, written before any tuning. The model run is behind
+  numbers kept, which must be 0) over invented fact sets: 36 dev, and 24 held back in `explain-heldout-2.json`, committed on its own
+  before the fix round's changes (the first set held back is kept, superseded, read by the shape test only). The model run is behind
   `ABAPIT_MODEL_EVALS=1` (refused on CI); the held-back set behind `ABAPIT_MODEL_EVALS_SET=explain-held-out` besides, once, printing
   scores only. Tokens: instructions 105, the longest prompt 114, the schema 80, the cap 160: 459 of 8,192.
 - **Dev** (the operator's Mac, 2026-11-27):
@@ -415,9 +434,20 @@ executor's" was decided while building it.
   - after the open count left the prompt, the read lines were reworded, the rule's own noun was required, and "them", "alerts" and the
     like became counts: 36 of 36 kept; 6 of 108 dropped, all number; 0 unsupported; mean 1.45 s, at most 1.81 s. Of the 6 drops, 5
     were false (a quiet service's findings as devices, three times; "one Mac" for 41 and for 5) and 1 true ("the two systems").
-- **Held back** (one run, the operator's Mac, 2026-11-27, nothing tuned against it): 24 of 24 kept a sentence; 7 of 72 sentences dropped (6 number,
-  1 done); **0 unsupported numbers kept**; mean 1.40 s, at most 2.28 s. It passes the bar set before the run, so `Explain.isOn` is
-  true. Its sentences weren't printed, so how many of its drops were true is unknown.
+  - fix round (the stricter checks and the rewritten scan, on dev only): 36 of 36 kept; 12 of 108 dropped (11 number, 1 advice);
+    0 the new scan finds unsupported; mean 1.48 s, at most 2.17 s. Of the 12, 6 were false (a quiet service's findings as devices,
+    three times; "one Mac" for 41 and for 5; "flagged many devices out of sync") and 6 true, dropped by the new rules ("all the
+    details", "did not find all cases", "could not be read", "the two systems"). On the way, two true drops were fixed (a hidden
+    count six words from "dismissed"; "wasn't read, possibly missing some" said of a part read), and one false alarm of the new
+    scan on that same sentence.
+- **Held back, first set — superseded** (one run, 2026-11-27): 24 of 24 kept; 7 of 72 dropped (6 number, 1 done); 0 unsupported by
+  the first scan; mean 1.40 s, at most 2.28 s. It can't stand: that scan shared the checker's blind spots (a zero or "no devices"
+  with findings, a part read called whole, a fact's number in another's place all passed both), so the review of PR 58 had the flag
+  set off and a new set written.
+- **Held back, second set** (one run, the operator's Mac, 2026-11-27, nothing tuned against it): 24 of 24 kept a sentence; 7 of 72 sentences dropped (5 number, 1
+  advice, 1 done); **0 kept sentences the new scan finds unsupported**; mean 1.45 s, at most 2.53 s. It passes, so `Explain.isOn` is
+  true again. Its sentences weren't printed, so how many of its drops were true is unknown.
 - Proven by mutants (the PR lists them): each check removed, the facts guard, the generation guard, the off guard, the flag, a field
-  added to `Facts`, the CSV naming the explanations, the independent scan blinded.
+  added to `Facts`, the CSV naming the explanations, the independent scan blinded; and the fix round's: each new number, read,
+  all-clear and advice rule, the run token both ways, the age-0 wording, and each new rule of the scan.
 

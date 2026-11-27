@@ -757,10 +757,12 @@ public final class NeedsAttentionModel {
         case none(String)
     }
 
-    /// The facts an explanation was written from, and what is shown for them.
+    /// The facts an explanation was written from, what is shown for them, and the run that wrote it: a run clears only an entry it
+    /// wrote itself (the coordinating session, 2026-11-27, fix round: a cancelled run had cleared one another run was writing).
     private struct Held: Equatable {
         let facts: Explain.Facts
         let explanation: Explanation
+        let run: Int
     }
 
     /// The model the explanations ask: Apple's on-device model, or in a debug build the one `ABAPIT_MODEL` asks for.
@@ -768,6 +770,8 @@ public final class NeedsAttentionModel {
     /// `Explain.isOn`: off, no explanation is shown or asked for, and nothing says so.
     @ObservationIgnored package var explainsOn = Explain.isOn
     private var explained: [Rule: Held] = [:]
+    /// Bumped by each `explain()`: the token its entries carry.
+    @ObservationIgnored private var explainRuns = 0
     /// Explanation runs that have returned, kept or dropped: what the tests wait on.
     package private(set) var explainsFinished = 0
 
@@ -810,15 +814,20 @@ public final class NeedsAttentionModel {
     public func explain() async {
         guard explainsOn, explanationsOff == nil else { return }
         let generation = orgs.generation
+        explainRuns += 1
+        let run = explainRuns
         defer { explainsFinished += 1 }
         for line in lines {
-            guard let facts = facts(line), explained[line.rule]?.facts != facts else { continue }
-            explained[line.rule] = Held(facts: facts, explanation: .writing)
+            guard let facts = facts(line) else { continue }
+            // Written for these facts, or being written by this run: skipped. One another run is writing is taken over (the screen
+            // cancels a run before it starts the next), so a cancelled run never leaves a rule unexplained.
+            if let held = explained[line.rule], held.facts == facts, held.explanation != .writing || held.run == run { continue }
+            explained[line.rule] = Held(facts: facts, explanation: .writing, run: run)
             let outcome: Explain.Outcome
             do {
                 outcome = try await Explain.explain(facts, using: explainer)
             } catch {
-                if explained[line.rule] == Held(facts: facts, explanation: .writing) { explained[line.rule] = nil }
+                if explained[line.rule] == Held(facts: facts, explanation: .writing, run: run) { explained[line.rule] = nil }
                 return
             }
             await afterAwait?("explain")
@@ -827,7 +836,7 @@ public final class NeedsAttentionModel {
             let shown: Explanation = outcome.sentences.isEmpty
                 ? .none(outcome.note ?? "No explanation is shown.")
                 : .shown(sentences: outcome.sentences, dropped: outcome.dropped.count)
-            explained[line.rule] = Held(facts: facts, explanation: shown)
+            explained[line.rule] = Held(facts: facts, explanation: shown, run: run)
         }
     }
 

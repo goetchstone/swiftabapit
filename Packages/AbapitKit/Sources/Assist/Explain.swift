@@ -16,7 +16,7 @@ import Reports
 /// - **Code checks every sentence** (`check`), and drops one that fails any `Check`. Every drop is counted. All dropped: nothing is
 ///   shown, never a made-up sentence.
 public enum Explain {
-    /// Whether explanations are shown at all: on only because the held-out evaluation passed (`docs/domains/assist-intents.md`,
+    /// Whether explanations are shown at all: on only when the held-out evaluation passes (`docs/domains/assist-intents.md`,
     /// "Explaining what needs attention"). Off, the Needs-attention screen shows no explanation and never asks the model.
     public static let isOn = true
 
@@ -132,7 +132,7 @@ public enum Explain {
 
     static func dataWords(_ ageDays: Int?) -> String {
         guard let ageDays else { return "read live" }
-        return ageDays == 0 ? "from a snapshot taken today" : "from a snapshot \(days(ageDays)) old"
+        return ageDays == 0 ? "from a snapshot less than a day old" : "from a snapshot \(days(ageDays)) old"
     }
 
     static func days(_ count: Int) -> String { count == 1 ? "1 day" : "\(count) days" }
@@ -242,10 +242,13 @@ public enum Explain {
         case advice
         /// A claim that something was done or will be: "has been fixed", "were removed", "abapit will notify".
         case done
-        /// Words against the read's facts: whole when it was in part, in part when whole; a snapshot when live, live when a snapshot.
+        /// Words against the read's facts: whole when it was in part ("nothing was missed", "it covered each Mac"), in part when
+        /// whole; a snapshot when live, live when a snapshot.
         case read
-        /// A number (digits, a number word, "no"/"none" before a unit) that isn't one of the facts' with its unit, a number with no
-        /// unit, a decimal, a percentage.
+        /// Says nothing needs attention while the rule found something: "no issues", "are fine", "need no attention".
+        case allClear
+        /// A number (digits, a number word, "no"/"none"/"nothing"/"zero" as zero) that isn't one of the facts' with its unit and in
+        /// its place, a number with no unit, a decimal, a percentage, a digit glued to letters, an ordinal, a vague count.
         case number
         /// A capitalized word that isn't in the rule's title or description or the fixed vocabulary.
         case name
@@ -265,6 +268,7 @@ public enum Explain {
         if givesAdvice(tokens) { return .advice }
         if claimsDone(tokens) { return .done }
         if contradictsTheRead(tokens, facts) { return .read }
+        if facts.found > 0, saysAllClear(tokens) { return .allClear }
         if !numbersHold(sentence, facts) { return .number }
         if !namesHold(sentence, facts) { return .name }
         return nil
@@ -286,7 +290,8 @@ public enum Explain {
     static let tens = ["twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90]
     static let scales = ["hundred": 100, "thousand": 1000, "million": 1_000_000]
     /// Words that are a count but no exact number: a sentence with one states a number the facts don't hold.
-    static let vague = ["dozen", "dozens", "hundreds", "thousands", "half", "twice", "double", "triple", "percent", "percentage", "majority", "most"]
+    static let vague: Set<String> = ["dozen", "dozens", "hundreds", "thousands", "half", "twice", "double", "triple", "percent", "percentage",
+                                     "majority", "most", "couple", "several", "both", "all", "single", "few", "handful", "numerous", "many"]
 
     /// Every noun a count may name; one that isn't the rule's (`Facts.nouns`) is a unit no fact has.
     static let itemNouns: Set<String> = ["finding", "findings", "device", "devices", "mac", "macs", "service", "services", "migration",
@@ -302,31 +307,55 @@ public enum Explain {
                                        "active", "affected", "of", "the", "these", "those", "its", "their", "apple", "mdm", "mosyle", "managed",
                                        "flagged", "listed", "remaining", "or", "and", "full", "whole", "consecutive", "straight"]
 
-    /// Whether every number `sentence` states is one of the facts' with its unit.
+    /// Words that put a count in the hidden fact's place: "2 were dismissed or snoozed".
+    static let hideWords: Set<String> = ["dismissed", "snoozed", "hidden", "dismiss", "snooze", "dismissing", "snoozing", "hide"]
+    /// Words that put a number of days in the threshold's place: "within 90 days", "for 30 days or more", "more than 30 days".
+    static let windowWords: Set<String> = ["within", "than", "least", "over", "beyond", "threshold", "window", "longer", "more", "for", "past",
+                                           "after", "limit"]
+    /// Words that put a number of days in the age's place: "a snapshot 3 days old".
+    static let ageWords: Set<String> = ["old", "snapshot", "snapshots", "ago", "age", "aged", "taken"]
+    /// How far either side of a number its place words are looked for, in words.
+    static let reach = 6
+    /// Ordinals: a position is no fact's number.
+    static let ordinals: Set<String> = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+                                        "eleventh", "twelfth", "twentieth", "hundredth", "thousandth"]
+    /// Time words that state a span no fact holds ("last week", "tomorrow").
+    static let spans: Set<String> = ["fortnight", "quarter", "tomorrow", "yesterday", "tonight"]
+    static let spanLeads: Set<String> = ["last", "next", "this", "past", "coming"]
+    static let spanUnits: Set<String> = ["week", "weeks", "month", "months", "year", "years", "quarter"]
+
+    /// Whether every number `sentence` states is one of the facts', with its unit, in its place: a count is the findings, or the
+    /// dismissed or snoozed ones beside a word saying so; days are the threshold beside window words, or the age beside age words.
+    /// A zero ("no devices", "none", "nothing", "zero") is the dismissed or snoozed count only, beside its words, when none were.
     static func numbersHold(_ sentence: String, _ facts: Facts) -> Bool {
         // A thousands comma joins its digits; any other digit beside a point or comma is a decimal or a list ("1.5", "3,4").
         let joined = sentence.replacingOccurrences(of: #"(\d),(\d{3})(?!\d)"#, with: "$1$2", options: .regularExpression)
         if joined.range(of: #"\d[.,]\d"#, options: .regularExpression) != nil || joined.contains("%") { return false }
         let tokens = lowerTokens(joined)
-        if tokens.contains(where: vague.contains) { return false }
-        let known = facts.numbers
+        // A digit that isn't a plain number ("5th", "7devices", "30d", a digit of another script) states something no fact holds.
+        for token in tokens where token.contains(where: \.isNumber) {
+            if !token.allSatisfy({ $0.isASCII && $0.isNumber }) || Int(token) == nil { return false }
+        }
+        if tokens.contains(where: { vague.contains($0) || ordinals.contains($0) || spans.contains($0) }) { return false }
+        if zip(tokens, tokens.dropFirst()).contains(where: { spanLeads.contains($0) && spanUnits.contains($1) }) { return false }
+        if zip(tokens, tokens.dropFirst()).contains(where: { $0 == "a" && ["couple", "few", "single", "third", "dozen"].contains($1) }) { return false }
         var index = 0
         while index < tokens.count {
             let token = tokens[index]
             // A run of number words or one of digits, read as one number.
             var value: Int?, next = index + 1
-            if let digits = Int(token), token.allSatisfy(\.isASCII) {
+            if let digits = Int(token) {
                 value = digits
             } else if ones[token] != nil || tens[token] != nil {
                 let read = numberWords(tokens, from: index)
                 (value, next) = (read.value, read.next)
             } else if token == "no" || token == "none" || token == "nothing" {
-                // "No devices", "none of the findings", "nothing was found": a zero, held to a fact's zero. "No" before anything else
-                // ("no check-in", "not") states no number.
+                // "No devices", "none of the findings", "nothing was found": a zero. "No" before anything else ("no check-in") states
+                // no number.
                 let unit = unitAfter(tokens, from: index + 1, nouns: facts.nouns)
                 if token == "no" && unit == nil { index += 1; continue }
                 if let unit, unit != .items { return false }
-                if !known.contains(Stated(value: 0, unit: .items)) { return false }
+                if !holds(0, .items, at: index..<next, tokens, facts) { return false }
                 index = next
                 continue
             } else if scales[token] != nil {
@@ -335,16 +364,38 @@ public enum Explain {
             guard let value else { index += 1; continue }
             switch unitAfter(tokens, from: next, nouns: facts.nouns) {
             case .some(.some(let unit)):
-                if !known.contains(Stated(value: value, unit: unit)) { return false }
+                if !holds(value, unit, at: index..<next, tokens, facts) { return false }
             case .some(.none):
                 return false
             case .none:
-                // "One" with no unit is the pronoun ("each one"); any other number needs its unit.
-                if !(token == "one" && next == index + 1) { return false }
+                // A zero with no unit ("zero were dismissed") counts findings; "one" with no unit is the pronoun ("each one"); any
+                // other number needs its unit.
+                if value == 0 {
+                    if !holds(0, .items, at: index..<next, tokens, facts) { return false }
+                } else if !(token == "one" && next == index + 1) {
+                    return false
+                }
             }
             index = next
         }
         return true
+    }
+
+    /// Whether `value` in `unit`, stated at `span`, is a fact's number in that fact's place.
+    static func holds(_ value: Int, _ unit: Unit, at span: Range<Int>, _ tokens: [String], _ facts: Facts) -> Bool {
+        func near(_ words: Set<String>) -> Bool {
+            tokens[max(0, span.lowerBound - reach)..<min(tokens.count, span.upperBound + reach)].contains(where: words.contains)
+        }
+        switch unit {
+        case .items:
+            // With findings, a zero is only the dismissed or snoozed count: "no devices" or "nothing was found" isn't.
+            if value == facts.found, value > 0 || facts.found == 0 { return true }
+            return value == facts.hidden && near(hideWords)
+        case .days:
+            if let threshold = facts.threshold, value == threshold, near(windowWords) { return true }
+            if let age = facts.ageDays, value == age, near(ageWords) { return true }
+            return false
+        }
     }
 
     /// The number words from `start`: "twenty five", "one hundred twenty", "three thousand". Returns the value and the index after.
@@ -389,7 +440,7 @@ public enum Explain {
     static let starters: Set<String> = ["this", "these", "that", "those", "the", "a", "an", "it", "its", "they", "their", "there", "each", "every",
                                         "all", "any", "some", "no", "none", "of", "in", "on", "for", "when", "while", "if", "because", "since",
                                         "so", "but", "and", "only", "what", "which", "here", "such", "until", "after", "before", "once",
-                                        "with", "without", "from", "devices", "findings", "nothing", "one", "two", "three", "four", "five",
+                                        "with", "without", "from", "devices", "findings", "nothing", "zero", "one", "two", "three", "four", "five",
                                         "six", "seven", "eight", "nine", "ten", "as", "at", "by", "not", "more", "most", "both", "either",
                                         "neither", "however", "also", "still", "even", "although", "though", "where", "how", "within"]
 
@@ -434,10 +485,12 @@ public enum Explain {
                                         "be", "please", "remember", "note", "monitor", "track", "audit", "inspect", "handle", "tell", "get"]
     /// Words that advise anywhere in a sentence.
     static let advising: Set<String> = ["should", "must", "ought", "recommend", "recommended", "recommends", "suggest", "suggests",
-                                        "suggested", "please", "consider", "ensure", "advisable", "advised", "shouldn't", "mustn't"]
+                                        "suggested", "please", "consider", "ensure", "advisable", "advised", "shouldn't", "mustn't", "could", "wise",
+                                        "ought"]
     /// Two-word advice ("need to", "make sure").
     static let advisingPairs: Set<[String]> = [["need", "to"], ["needs", "to"], ["have", "to"], ["has", "to"], ["make", "sure"],
-                                               ["you", "can"], ["you", "may"], ["you", "might"], ["want", "to"], ["best", "to"], ["it's", "best"]]
+                                               ["you", "can"], ["you", "may"], ["you", "might"], ["want", "to"], ["best", "to"], ["it's", "best"],
+                                               ["good", "idea"]]
 
     static func givesAdvice(_ tokens: [String]) -> Bool {
         if let first = tokens.first, commands.contains(first) { return true }
@@ -475,16 +528,31 @@ public enum Explain {
         return false
     }
 
-    /// Words that say a read was whole.
-    static let wholeWords: Set<String> = ["whole", "complete", "completely", "full", "fully", "entire", "entirely", "every", "all"]
+    /// Words that say nothing needs attention, while the rule found something.
+    static let allClearWords: Set<String> = ["fine", "healthy", "ok", "okay", "safe", "harmless"]
+    static let allClearPairs: Set<[String]> = [["no", "attention"], ["nothing", "needs"], ["nothing", "to"], ["no", "issues"], ["no", "issue"],
+                                               ["no", "problem"], ["no", "problems"], ["no", "action"], ["no", "concern"], ["no", "concerns"],
+                                               ["all", "clear"], ["all", "good"], ["need", "no"], ["needs", "no"]]
+
+    static func saysAllClear(_ tokens: [String]) -> Bool {
+        if tokens.contains(where: allClearWords.contains) { return true }
+        return zip(tokens, tokens.dropFirst()).contains { allClearPairs.contains([$0, $1]) }
+    }
 
     static func contradictsTheRead(_ tokens: [String], _ facts: Facts) -> Bool {
         switch facts.read {
         case .partial:
-            // "Every device was read", "the read was complete": a part read said as whole.
-            let readWords: Set<String> = ["read", "checked", "scanned", "covered", "looked"]
-            if tokens.contains(where: readWords.contains), tokens.contains(where: wholeWords.contains) { return true }
-            if tokens.contains(where: ["complete", "completely", "fully", "entire", "entirely"].contains) { return true }
+            // "Every device was read", "the read was complete", "it covered each Mac", "nothing was missed": a part read said as whole.
+            let readWords: Set<String> = ["read", "checked", "scanned", "covered", "looked", "included", "reviewed", "examined", "counted",
+                                          "inspected", "searched"]
+            if tokens.contains(where: readWords.contains), tokens.contains(where: ["each", "every", "all"].contains) { return true }
+            if tokens.contains(where: ["complete", "completely", "full", "fully", "entire", "entirely", "whole"].contains) { return true }
+            let negations: Set<String> = ["no", "nothing", "none", "not", "never", "without", "didn't", "wasn't", "weren't", "nor", "neither"]
+            for (index, token) in tokens.enumerated() where token.hasPrefix("miss") || token.hasPrefix("skip") || token == "overlooked" {
+                // "Nothing was missed", "no Mac was skipped"; not "some of it wasn't read, possibly missing some".
+                let before = tokens[max(0, index - 4)..<index]
+                if before.contains(where: negations.contains), !before.contains("read") { return true }
+            }
         case .whole:
             if tokens.contains(where: ["partial", "partially", "partly", "incomplete", "missed"].contains) { return true }
             if zip(tokens, tokens.dropFirst()).contains(where: { $0 == "in" && $1 == "part" }) { return true }

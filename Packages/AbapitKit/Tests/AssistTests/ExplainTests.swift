@@ -49,7 +49,7 @@ struct ExplainTests {
     }
 
     @Test func theDataLineSaysTodayAndLive() {
-        #expect(Explain.prompt(Self.facts(ageDays: 0)).contains("Data: from a snapshot taken today"))
+        #expect(Explain.prompt(Self.facts(ageDays: 0)).contains("Data: from a snapshot less than a day old"))
         #expect(Explain.prompt(Self.facts(ageDays: 1)).contains("Data: from a snapshot 1 day old"))
         #expect(Explain.prompt(Self.facts(.quietService, ageDays: nil)).contains("Data: read live"))
         #expect(Explain.prompt(Self.facts(read: .whole)).contains("Read: in full: every list the check needs was read whole"))
@@ -90,7 +90,7 @@ struct ExplainTests {
 
     @Test func aNumberMustBeAFactsWithItsUnit() {
         let f = Self.facts() // 90 days threshold, 5 found, 2 hidden, 3 days old
-        for kept in ["This check found 5 devices whose AppleCare coverage ends within 90 days.", "5 findings in all, and 2 findings are dismissed or snoozed.",
+        for kept in ["This check found 5 devices whose AppleCare coverage ends within 90 days.", "5 findings in total, and 2 findings are dismissed or snoozed.",
                      "Of the 5 findings, 2 dismissed devices are hidden.", "The snapshot is 3 days old.", "Five devices were found, two hidden findings among them.",
                      "Each one is listed below.", "The 90-day window counts from today.", "The administrator dismissed or snoozed 2 of them.", "It raised 5 alerts.", "There are no more than 90 days left on these devices."] {
             #expect(Explain.numbersHold(kept, f), Comment(rawValue: kept))
@@ -164,6 +164,68 @@ struct ExplainTests {
         #expect(Explain.check("The snapshot is old.", live) == .read)
         #expect(Explain.check("The list was read live.", whole) == .read)
         #expect(Explain.check("The list was read live.", live) == nil)
+    }
+
+    // MARK: the fix round of PR 58 (the coordinating session, 2026-11-27)
+
+    /// With findings, a zero is only the dismissed or snoozed count, beside its words, when none were; a sentence saying nothing
+    /// needs attention is dropped whatever its numbers.
+    @Test func aZeroOrAllClearWithFindingsIsDropped() {
+        let noneHidden = Self.facts(.fileVaultOff, found: 4, hidden: 0)
+        for dropped in ["No Macs have FileVault off.", "No devices need attention.", "Nothing was found.", "Zero devices were found.",
+                        "It found 0 Macs."] {
+            #expect(Explain.check(dropped, noneHidden) != nil, Comment(rawValue: dropped))
+        }
+        #expect(Explain.check("These devices are fine and need no attention.", Self.facts()) == .allClear, "with 2 hidden too")
+        #expect(Explain.check("There are no issues here.", noneHidden) == .allClear)
+        #expect(Explain.check("Nothing needs attention here.", noneHidden) == .allClear)
+        for kept in ["None were dismissed or snoozed.", "The administrator dismissed or snoozed none of them.",
+                     "No findings were dismissed or snoozed.", "Zero were dismissed or snoozed."] {
+            #expect(Explain.check(kept, noneHidden) == nil, Comment(rawValue: kept))
+        }
+        #expect(Explain.check("None were dismissed or snoozed.", Self.facts()) == .number, "2 were")
+    }
+
+    /// A part read said to be whole: "nothing was missed", "no Mac was skipped", "it covered each Mac".
+    @Test func aPartReadSaidWholeIsDropped() {
+        let partial = Self.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)
+        for dropped in ["Nothing was missed.", "No Mac was skipped.", "It covered each Mac.", "The list is full.", "It reviewed every Mac.",
+                        "It didn't miss a Mac."] {
+            #expect(Explain.check(dropped, partial) == .read, Comment(rawValue: dropped))
+        }
+        #expect(Explain.check("It may have missed some Macs.", partial) == nil)
+        #expect(Explain.check("Some data wasn't read, possibly missing some Macs.", partial) == nil)
+    }
+
+    /// A fact's number in another fact's place: the dismissed or snoozed count as found, the age as the threshold, and back.
+    @Test func aFactsNumberInAnotherFactsPlaceIsDropped() {
+        let f = Self.facts() // 90 days threshold, 5 found, 2 hidden, 3 days old
+        for dropped in ["2 devices have coverage ending within 90 days.", "The check found 3 devices.", "Coverage ends within 3 days.",
+                        "The snapshot is 90 days old.", "These devices have 2 days left."] {
+            #expect(!Explain.numbersHold(dropped, f), Comment(rawValue: dropped))
+        }
+        for kept in ["2 of them were dismissed or snoozed.", "Coverage ends within 90 days.", "The snapshot is 3 days old.",
+                     "It found 5 devices.", "The check found 5 devices, 2 of them snoozed, within 90 days.",
+                     "Two of those 5 devices were dismissed or snoozed."] {
+            #expect(Explain.numbersHold(kept, f), Comment(rawValue: kept))
+        }
+    }
+
+    @Test func gluedDigitsOrdinalsSpansAndVagueCountsAreDropped() {
+        for dropped in ["The 5th device is listed.", "It found 7devices.", "Not seen for 30d.", "It found \u{0665} devices.",
+                        "The first device is listed.", "A couple of devices are listed.", "Several devices are listed.", "Both devices are listed.",
+                        "Most devices are listed.", "All devices are listed.", "Dozens of devices are listed.", "Coverage ends within a fortnight.",
+                        "Coverage ends within a quarter.", "Coverage ends tomorrow.", "It changed last week.", "A single device is listed.",
+                        "A third of the devices are listed."] {
+            #expect(!Explain.numbersHold(dropped, Self.facts()), Comment(rawValue: dropped))
+        }
+    }
+
+    @Test func softAdviceIsDropped() {
+        for dropped in ["It would be wise to renew these.", "You could renew them.", "Renewing them is a good idea.", "It is advisable to look.",
+                        "One ought to renew them."] {
+            #expect(Explain.check(dropped, Self.facts()) == .advice, Comment(rawValue: dropped))
+        }
     }
 
     @Test func emptyLongEchoedAndRepeatedAreDropped() {

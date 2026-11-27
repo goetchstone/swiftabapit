@@ -16,11 +16,14 @@ final class ExplainStub: Picker.Asking, @unchecked Sendable {
     private let reply: @Sendable (String) -> [String]
     /// Run during the first call, before it answers: a test switches the client there.
     private let during: (@MainActor () -> Void)?
+    /// How long each call takes; a cancel during it throws, as the SDK's call does.
+    private let delay: Duration?
 
-    init(availability: SystemLanguageModel.Availability = .available, during: (@MainActor () -> Void)? = nil,
+    init(availability: SystemLanguageModel.Availability = .available, during: (@MainActor () -> Void)? = nil, delay: Duration? = nil,
          reply: @escaping @Sendable (String) -> [String] = ExplainStub.counted) {
         self.availability = availability
         self.during = during
+        self.delay = delay
         self.reply = reply
     }
 
@@ -32,6 +35,7 @@ final class ExplainStub: Picker.Asking, @unchecked Sendable {
             return made.count == 1
         }
         if first, let during { await during() }
+        if let delay { try await Task.sleep(for: delay) }
         let json = try JSONSerialization.data(withJSONObject: ["sentences": reply(prompt)])
         return try GeneratedContent(json: String(decoding: json, as: UTF8.self))
     }
@@ -85,6 +89,27 @@ struct ExplainScreenTests {
         // Asked again with nothing changed, nothing is asked.
         await model.explain()
         #expect(stub.prompts.count == withFindings.count)
+    }
+
+    /// The reviewer's repro (the coordinating session, 2026-11-27, fix round): a run cancelled while it writes, and a second started,
+    /// as the screen's `.task(id:)` does when the facts change. Every rule ends shown: the cancelled run clears only what it wrote.
+    @Test func aCancelledRunNeverClearsAnotherRunsWork() async throws {
+        let stub = ExplainStub(delay: .milliseconds(300))
+        let (_, model) = try await Self.ready(stub)
+        let first = Task { await model.explain() }
+        try await Task.sleep(for: .milliseconds(50))
+        first.cancel()
+        let second = Task { await model.explain() }
+        await first.value
+        await second.value
+        let withFindings = model.lines.filter { !$0.isSkipped && !$0.findings.isEmpty }
+        #expect(!withFindings.isEmpty)
+        for line in withFindings {
+            guard case .shown? = model.explanation(line) else {
+                Issue.record("\(line.rule.rawValue): \(String(describing: model.explanation(line)))")
+                continue
+            }
+        }
     }
 
     @Test func allDroppedShowsNoneInWords() async throws {

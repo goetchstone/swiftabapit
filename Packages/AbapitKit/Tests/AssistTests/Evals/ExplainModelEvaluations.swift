@@ -9,8 +9,8 @@ import Testing
 /// --filter ExplainModelEvaluations` runs the dev set (refused when `CI` or `GITHUB_ACTIONS` is set, as `ModelEvaluations`). The set
 /// held back runs once, behind `ABAPIT_MODEL_EVALS_SET=explain-held-out` besides, and prints scores only: no sentence, no id.
 ///
-/// It passes (decided before the held-out run, the executor's): no kept sentence states a number the facts don't hold (the
-/// independent scan, `Unsupported`), and at least three in four fact sets keep a sentence. `Explain.isOn` follows that result.
+/// It passes (the coordinating session, 2026-11-27, fix round): no kept sentence the independent scan (`Unsupported`) finds
+/// unsupported, and at least three in four fact sets keep a sentence. `Explain.isOn` follows that result.
 @Suite("ExplainModelEvaluations", .serialized) struct ExplainModelEvaluations {
     static func mayRunHeldBack(_ environment: [String: String]) -> Bool {
         ModelEvaluations.mayRun(environment) && environment["ABAPIT_MODEL_EVALS_SET"] == "explain-held-out"
@@ -95,7 +95,8 @@ import Testing
             for sentence in written {
                 let tidy = sentence.trimmingCharacters(in: .whitespaces)
                 let kept = outcome.sentences.contains(tidy)
-                print("EVAL explain \(sample.id) \(kept ? "KEPT" : "DROP \(Explain.check(tidy, facts).map(\.rawValue) ?? "repeat/extra")"): \(tidy)")
+                let flagged = kept && Unsupported.count(tidy, facts) > 0 ? " UNSUPPORTED" : ""
+                print("EVAL explain \(sample.id) \(kept ? "KEPT" : "DROP \(Explain.check(tidy, facts).map(\.rawValue) ?? "repeat/extra")")\(flagged): \(tidy)")
             }
             if case .failed(let why) = outcome { print("EVAL explain \(sample.id) FAILED \(why)") }
         }
@@ -156,9 +157,10 @@ struct ExplainSampleFileTests {
     }
 
     @Test func bothFilesHaveTheShape() throws {
-        let dev = try ExplainSamples.dev(), held = try ExplainSamples.explainHeldOut()
+        let dev = try ExplainSamples.dev(), held = try ExplainSamples.explainHeldOut(), first = try ExplainSamples.explainHeldOutFirst()
         check(dev, prefix: "ed")
-        check(held, prefix: "eh")
+        check(held, prefix: "ek")
+        check(first, prefix: "eh")
         #expect(dev.count >= 24 && held.count >= 12)
         #expect(dev.contains { $0.read == .partial } && dev.contains { $0.ageDays == nil } && dev.contains { $0.found >= 1000 })
     }
@@ -177,5 +179,9 @@ struct ExplainSampleFileTests {
         }
         #expect(namers.isEmpty, Comment(rawValue: "\(namers)"))
         #expect(Set(readers).isSubset(of: ["ExplainEvaluation.swift", "ExplainModelEvaluations.swift"]), Comment(rawValue: "\(readers)"))
+        // The superseded set is read by the shape test only.
+        var firstReaders: [String] = []
+        for file in try SourceScan.swiftFiles(in: "Packages") where file.text.contains("explain" + "HeldOutFirst()") { firstReaders.append(file.path) }
+        #expect(firstReaders.map { URL(filePath: $0).lastPathComponent }.sorted() == ["ExplainEvaluation.swift", "ExplainModelEvaluations.swift"])
     }
 }
