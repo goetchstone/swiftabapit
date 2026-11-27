@@ -9,8 +9,8 @@ import Reports
 ///
 /// - **The screens' own data, awaited.** A snapshot report awaits the Reports screen's history read; a live one waits, bounded, on
 ///   the screens' own live read (`LiveWait`); then the report is built by the screen's one function (`ReportsModel.build`). The
-///   Needs-attention summary is the screen's evaluation, so findings are recorded exactly as the screen records them: only when
-///   a rule was judged over a whole read. A serial is looked up by the Devices screen's Find over the awaited device list.
+///   Needs-attention summary is the rules' judgement over what was read, with the findings kept for later read and nothing
+///   recorded (`judge`: the operator, 2026-11-25, "Don't record"); only the screen records. A serial is looked up by the Devices screen's Find over the awaited device list.
 /// - **`spoken` says counts, never names**: the data's date and age, how much was read, every group's count with values this
 ///   version doesn't know named (invariant 10), and an estimate called one. Never a serial, a device, service, user or group name.
 ///   Rows (at most `rowLimit`: serial, model, state) are for the snippet, with the cap said.
