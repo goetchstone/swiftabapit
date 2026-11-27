@@ -77,18 +77,24 @@ public enum Picker {
 
     /// The pick held to the list: an id not on it, or a group the choice doesn't have, is refused, never matched to something
     /// near it. A number the sentence gives is held to the choice: a report's number filter takes it (resolved by the catalog),
-    /// a rule's window must be it, and a choice that takes no number ignores it. A number that can't be taken as said is a
-    /// problem, and any problem refuses the pick in its words.
+    /// a rule's window must be it, and a choice that takes no number (the summary, a rule with no window, a report with no
+    /// number filter) refuses it, never drops it (the coordinating session, 2026-11-27). A number that can't be taken as said
+    /// is a problem, and any problem refuses the pick in its words.
     static func check(_ id: String, group: String?, sentence: String, against choices: [Choices.Choice],
                       thresholds: NeedsAttention.Thresholds) -> Outcome {
         guard let choice = choices.first(where: { $0.id == id }) else { return .refused(.notOnTheList) }
         if let group, !choice.groups.contains(group) { return .refused(.notOnTheList) }
         let said = numbers(in: sentence)
+        /// The pick, or a refusal when the sentence gives a number this choice can't take.
+        func noNumber(_ pick: Pick) -> Outcome {
+            if said.values.isEmpty && said.problems.isEmpty { return .picked(pick) }
+            return .refused(.numbers(["\(choice.label) takes no number, so the sentence's number can't be used."] + said.problems))
+        }
         switch choice.kind {
         case .attentionSummary:
-            return .picked(Pick(choice: choice, group: nil, tokens: [:]))
+            return noNumber(Pick(choice: choice, group: nil, tokens: [:]))
         case .rule(let rule):
-            guard let window = window(rule, thresholds) else { return .picked(Pick(choice: choice, group: nil, tokens: [:])) }
+            guard let window = window(rule, thresholds) else { return noNumber(Pick(choice: choice, group: nil, tokens: [:])) }
             var problems = said.problems
             for (unit, values) in said.values.sorted(by: { $0.key < $1.key }) where unit != "days" || values.contains(where: { $0 != String(window) }) {
                 problems.append("\(choice.label) has a window of \(window) days; the sentence gives " + values.map { "\($0) \(unit)" }.joined(separator: ", ") + ".")
@@ -98,7 +104,7 @@ public enum Picker {
             var tokens: [String: String] = [:]
             if let group { tokens["group"] = group }
             let filters = ReportCatalog.entry(report).filters.filter(\.isNumber).map(\.name)
-            guard !filters.isEmpty else { return .picked(Pick(choice: choice, group: group, tokens: tokens)) }
+            guard !filters.isEmpty else { return noNumber(Pick(choice: choice, group: group, tokens: tokens)) }
             var problems = said.problems
             for (unit, values) in said.values.sorted(by: { $0.key < $1.key }) {
                 if !filters.contains(unit) {
@@ -134,18 +140,30 @@ public enum Picker {
         var problems: [String] = []
     }
 
-    static let units: [String: String] = ["day": "days", "days": "days", "week": "weeks", "weeks": "weeks", "year": "years",
-                                          "years": "years", "month": "months", "months": "months"]
-    /// Characters that make a number more than plain digits: a decimal point, a thousands comma, a minus sign or a range dash.
-    static let joiners: Set<Character> = [".", ",", "-", "\u{2212}", "\u{2013}"]
+    /// The unit words after a number: days, weeks and years are read (with `yr`/`yrs`, `wk`/`wks`); months and anything shorter
+    /// than a day are units abapit doesn't read, each a problem (the coordinating session, 2026-11-27).
+    static let units: [String: String] = [
+        "day": "days", "days": "days", "week": "weeks", "weeks": "weeks", "wk": "weeks", "wks": "weeks",
+        "year": "years", "years": "years", "yr": "years", "yrs": "years",
+        "month": "months", "months": "months", "mo": "months", "mos": "months",
+        "hour": "hours", "hours": "hours", "hr": "hours", "hrs": "hours",
+        "minute": "minutes", "minutes": "minutes", "min": "minutes", "mins": "minutes",
+    ]
+    /// The unit words that are a problem with no digits before them ("two weeks", "a year"); an abbreviation alone is no unit.
+    static let spelled: Set<String> = ["day", "days", "week", "weeks", "year", "years", "month", "months"]
+    /// Characters that make a number more than plain digits: a decimal point, a thousands comma, a minus sign or a range dash
+    /// (hyphen, en dash, em dash).
+    static let joiners: Set<Character> = [".", ",", "-", "\u{2212}", "\u{2013}", "\u{2014}"]
 
     /// The numbers the sentence gives in days, weeks (seven days each) or years. A number written with a joiner ("1.5 years",
     /// "-30 days", "30-60 days", "1,000 days"), a number glued to letters that aren't a unit ("90d"), months (their days vary)
     /// and a unit word with no number in digits ("two weeks", "a year") are problems, never a value. A number with no unit
-    /// after it is no filter. "90-day" is 90 days: a hyphen between the digits and the unit is not a joiner.
+    /// after it is no filter, unless the sentence gives another number with a unit: then it is a problem, as it may be one end of
+    /// a range ("30 to 60 days", "between 30 and 60 days"). "90-day" is 90 days: a hyphen between the digits and the unit is
+    /// not a joiner.
     static func numbers(in sentence: String) -> Said {
         let text = Array(sentence.lowercased())
-        var said = Said(), used: Set<Int> = []
+        var said = Said(), used: Set<Int> = [], bare: [String] = [], withUnit = false
         func letters(from start: Int) -> (word: String, end: Int) {
             var end = start
             while end < text.count, text[end].isLetter { end += 1 }
@@ -174,15 +192,22 @@ public enum Picker {
             }
             let (word, wordEnd) = next < text.count && text[next].isLetter ? letters(from: next) : ("", next)
             guard let unit = units[word] else {
-                if glued, !word.isEmpty { said.problems.append("\u{201C}\(cluster)\(word)\u{201D} isn't a number of days, weeks or years abapit reads.") }
+                if glued, !word.isEmpty {
+                    said.problems.append("\u{201C}\(cluster)\(word)\u{201D} isn't a number of days, weeks or years abapit reads.")
+                } else {
+                    bare.append(cluster)
+                }
                 continue
             }
             used.insert(next)
+            withUnit = true
             let phrase = "\(cluster) \(word)"
             if cluster.contains(where: { joiners.contains($0) }) {
                 said.problems.append("\u{201C}\(phrase)\u{201D} isn't a whole number in plain digits.")
             } else if unit == "months" {
                 said.problems.append("\u{201C}\(phrase)\u{201D}: months aren't read, as their days vary. Give days.")
+            } else if unit == "hours" || unit == "minutes" {
+                said.problems.append("\u{201C}\(phrase)\u{201D}: \(unit) aren't read. Give days.")
             } else if unit == "weeks" {
                 if let weeks = Int(cluster), case let (days, overflow) = weeks.multipliedReportingOverflow(by: 7), !overflow {
                     said.values["days", default: []].append(String(days))
@@ -199,10 +224,14 @@ public enum Picker {
         while position < text.count {
             guard text[position].isLetter, position == 0 || !text[position - 1].isLetter else { position += 1; continue }
             let (word, end) = letters(from: position)
-            if units[word] != nil, !used.contains(position) {
+            if spelled.contains(word), !used.contains(position) {
                 said.problems.append("\u{201C}\(word)\u{201D} has no number in digits before it, such as 30 days.")
             }
             position = end
+        }
+        // A bare number beside a number with a unit may be one end of a range.
+        if withUnit {
+            for number in bare { said.problems.append("\u{201C}\(number)\u{201D} has no unit beside a number that has one: give one number of days, weeks or years.") }
         }
         return said
     }

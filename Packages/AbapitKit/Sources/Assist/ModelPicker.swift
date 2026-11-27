@@ -10,8 +10,8 @@ import Reports
 ///    only to a question, so a question never lands on a change.
 /// 2. the report, summary or rule, from `Choices` (at most 19 labels, one pick: the lessons narrow in steps past about 40), or
 ///    none. A report's holds line follows the list, in the catalog's words.
-/// 3. for a report with groups, when the sentence shares a word with a group's plain label, the group, from those labels plus
-///    "all" (code maps the label back to the catalog's token); a sentence naming no group is "all" with no call.
+/// 3. for a report with groups, when the sentence shares a word that names one group's plain label, the group, from "all" (first)
+///    and those labels (code maps the label back to the catalog's token); a sentence naming no group is "all" with no call.
 ///
 /// The prompt holds the sentence and the catalog's words only, with no example sentence. The answer's committing field (the
 /// pick) is first; a second field copies the words of the request that point to it, so code can tell an answer that read the
@@ -73,7 +73,7 @@ public enum ModelPicker {
             switch self {
             case .asks: "Pick what the request asks for."
             case .choice: "Pick the report or check that answers the request, or \(ModelPicker.none) when none does."
-            case .group: "Pick the group of this report the request asks for, or \(ModelPicker.all) for every group."
+            case .group: "Pick \(ModelPicker.all) for every group of this report, or the one group the request asks for."
             }
         }
     }
@@ -109,7 +109,8 @@ public enum ModelPicker {
         guard namesAGroup(request, chosen) else { return .picked(chosen.id, group: nil) }
 
         let labels = chosen.groups.map(groupLabel)
-        switch try await ask(request, labels: labels + [all], step: .group, about: chosen.label, using: model) {
+        // "all" first: listed last, the pick leaned to the first group (the coordinating session, 2026-11-27).
+        switch try await ask(request, labels: [all] + labels, step: .group, about: chosen.label, using: model) {
         case .refused(let why): return .refused(why)
         case .picked(all): return .picked(chosen.id, group: nil)
         case .picked(let label):
@@ -135,11 +136,18 @@ public enum ModelPicker {
 
     static func groupLabel(_ token: String) -> String { groupLabels[token] ?? token }
 
-    /// Whether the sentence shares a word with any group's plain label, beyond the words of the report's own label ("lock" names
-    /// Activation Lock, not a group of it). Words as `WordRule` reads them.
+    /// Words too general to name a group: they sit in several reports' labels and in what a person says about a whole report.
+    static let groupStopWords: Set<String> = ["status", "coverage", "data", "type"]
+
+    /// Whether the sentence shares a word that names one group: a word of a group's plain label that no other label of the same
+    /// report has, isn't in `groupStopWords`, and isn't a word of the report's own label ("lock" names Activation Lock, not a
+    /// group of it). Words as `WordRule` reads them (the coordinating session, 2026-11-27).
     static func namesAGroup(_ request: String, _ choice: Choices.Choice) -> Bool {
-        let said = Set(WordRule.words(request)).subtracting(WordRule.words(choice.label))
-        return choice.groups.contains { !said.isDisjoint(with: WordRule.words(groupLabel($0))) }
+        let labelWords = choice.groups.map { Set(WordRule.words(groupLabel($0))) }
+        var seen: [String: Int] = [:]
+        for words in labelWords { for word in words { seen[word, default: 0] += 1 } }
+        let naming = Set(seen.filter { $0.value == 1 }.keys).subtracting(groupStopWords).subtracting(WordRule.words(choice.label))
+        return !Set(WordRule.words(request)).isDisjoint(with: naming)
     }
 
     /// The lines after the choices: each report's holds line, from the catalog. The summary's would repeat the rules' labels,

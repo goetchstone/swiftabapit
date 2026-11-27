@@ -91,7 +91,7 @@ struct PickerTests {
         let schemas = try model.calls.map { try StubModel.shape($0.schema) }
         #expect(schemas[1].enums["pick"] == Self.full.choices.map(\.label) + [ModelPicker.none])
         // The group pick lists plain words, "all" last, and code maps the answer back to the catalog's token.
-        #expect(schemas[2].enums["pick"] == choice.groups.map(ModelPicker.groupLabel) + [ModelPicker.all])
+        #expect(schemas[2].enums["pick"] == [ModelPicker.all] + choice.groups.map(ModelPicker.groupLabel), "all first")
         #expect(!schemas[2].enums["pick"]!.contains("lock:USER"))
         #expect(schemas.allSatisfy { $0.required == ["pick", "words"] })
     }
@@ -114,7 +114,10 @@ struct PickerTests {
     /// group pick leaned to the first group listed when a sentence named none).
     @Test func aSentenceNamingNoGroupIsEveryGroupWithNoCall() async throws {
         for (sentence, id) in [("the MDM migration report", "report:migration"), ("Activation Lock report", "report:activation-lock"),
-                               ("show service health", "report:service-health"), ("devices out of warranty", "report:out-of-warranty")] {
+                               ("show service health", "report:service-health"), ("devices out of warranty", "report:out-of-warranty"),
+                               // A word several of the report's groups share, or a general one, names no group either.
+                               ("show MDM migration status", "report:migration"), ("devices out of AppleCare coverage", "report:out-of-warranty"),
+                               ("MDM migration data", "report:migration"), ("activation lock type for each device", "report:activation-lock")] {
             let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)])
             guard case .picked(let pick) = try await Picker.pick(sentence, for: Self.full, using: model) else { Issue.record(Comment(rawValue: sentence)); continue }
             #expect(pick.choice.id == id && pick.group == nil && pick.tokens.isEmpty, Comment(rawValue: sentence))
@@ -122,7 +125,13 @@ struct PickerTests {
         }
         let choice = Self.full.choices.first { $0.id == "report:migration" }!
         #expect(ModelPicker.namesAGroup("which migrations failed", choice))
-        #expect(ModelPicker.namesAGroup("devices past the deadline", choice))
+        #expect(ModelPicker.namesAGroup("the ones requested", choice))
+        #expect(!ModelPicker.namesAGroup("devices past the deadline", choice), "past and deadline are in two labels")
+        #expect(!ModelPicker.namesAGroup("unknown status", choice))
+        // A word of the report's own label names no group, even where only one label holds it: here "lock" is in one label.
+        let two = Choices.Choice(kind: .report(.activationLock), label: "Activation Lock", holds: nil, groups: ["unlocked", "lock:USER"])
+        #expect(!ModelPicker.namesAGroup("the Activation Lock report", two))
+        #expect(ModelPicker.namesAGroup("the user ones", two))
         #expect(!ModelPicker.namesAGroup("all of the MDM migration", choice), "the report's own words name no group")
     }
 
@@ -147,7 +156,9 @@ struct PickerTests {
     }
 
     func outcome(_ sentence: String, _ id: String) async throws -> Picker.Outcome {
-        let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)])
+        let choice = Self.full.choices.first { $0.id == id }!
+        let group = !choice.groups.isEmpty && ModelPicker.namesAGroup(sentence, choice) ? [StubModel.pick(ModelPicker.all, words: sentence)] : []
+        let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)] + group)
         return try await Picker.pick(sentence, for: Self.full, using: model)
     }
 
@@ -168,8 +179,9 @@ struct PickerTests {
         #expect(try await tokens("devices on a 90-day AppleCare window", "report:coverage") == ["days": "90"])
         #expect(try await tokens("devices ending in 30 days, so 30 days.", "report:coverage") == ["days": "30"])
         #expect(try await tokens("devices with firewall off", "rule:firewall_off") == [:], "a rule with no window takes no number")
-        #expect(try await tokens("devices with firewall off for 12 days", "rule:firewall_off") == [:])
-        #expect(try await tokens("the Activation Lock of 10 devices this year", "report:activation-lock") == [:], "a report with no number filter ignores them")
+        #expect(try await tokens("devices 4 yrs old or more", "report:fleet-age") == ["years": "4"])
+        #expect(try await tokens("AppleCare ending in 2 wks", "report:coverage") == ["days": "14"])
+        #expect(try await tokens("the Activation Lock of every device", "report:activation-lock") == [:])
     }
 
     /// A number that can't be taken as said refuses the pick, in words: never a value read from part of it, never dropped so the
@@ -192,6 +204,21 @@ struct PickerTests {
         ("AppleCare ending in 60 days", "rule:applecare_expiring", "window of 90 days"),
         ("devices not checked in to Mosyle for 2 years", "rule:mosyle_check_in", "2 years"),
         ("services quiet for days", "rule:quiet_service", "no number"),
+        // A range written in words or with spaced or em dashes (the coordinating session, 2026-11-27).
+        ("devices whose AppleCare ends in 30 to 60 days", "report:coverage", "\u{201C}30\u{201D} has no unit"),
+        ("devices whose AppleCare ends between 30 and 60 days", "report:coverage", "\u{201C}30\u{201D} has no unit"),
+        ("devices whose AppleCare ends in 30 - 60 days", "report:coverage", "\u{201C}30\u{201D} has no unit"),
+        ("devices whose AppleCare ends in 30\u{2014}60 days", "report:coverage", "plain digits"),
+        // Units abapit doesn't read.
+        ("devices whose AppleCare ends within 48 hours", "report:coverage", "hours aren't read"),
+        ("devices whose AppleCare ends within 48 hrs", "report:coverage", "hours aren't read"),
+        ("devices whose AppleCare ends within 90 mins", "report:coverage", "minutes aren't read"),
+        ("devices whose AppleCare ends in 3 mos", "report:coverage", "months"),
+        // A choice that takes no number refuses one.
+        ("firewall off for over 30 days", "rule:firewall_off", "takes no number"),
+        ("user locks older than 1.5 years", "report:activation-lock", "takes no number"),
+        ("what needs attention in the next 30 days", "attention", "takes no number"),
+        ("the Activation Lock of 10 devices this year", "report:activation-lock", "takes no number"),
     ])
     func aNumberThatCantBeTakenRefusesThePick(_ sentence: String, _ id: String, _ said: String) async throws {
         let outcome = try await outcome(sentence, id)
@@ -210,8 +237,11 @@ struct PickerTests {
     }
 
     @Test func theParseReadsPlainDigitsBeforeAUnit() {
-        #expect(Picker.numbers(in: "in 10 devices, 90-day, 1 year").values == ["days": ["90"], "years": ["1"]])
-        #expect(Picker.numbers(in: "in 10 devices, 90-day, 1 year").problems.isEmpty)
+        #expect(Picker.numbers(in: "90-day, 1 year").values == ["days": ["90"], "years": ["1"]])
+        #expect(Picker.numbers(in: "90-day, 1 year").problems.isEmpty)
+        #expect(Picker.numbers(in: "10 devices, 90-day").problems.count == 1, "a bare number beside one with a unit")
+        #expect(Picker.numbers(in: "10 devices").problems.isEmpty && Picker.numbers(in: "10 devices").values.isEmpty)
+        #expect(Picker.numbers(in: "a min, an hr, a mo").problems.isEmpty, "an abbreviation alone is no unit word")
         #expect(Picker.numbers(in: "for 45days").values == ["days": ["45"]])
         #expect(Picker.numbers(in: "today, 2024-05-01, version 1.5").values.isEmpty)
         #expect(Picker.numbers(in: "today, 2024-05-01, version 1.5").problems.isEmpty, "a number with no unit is no filter")
@@ -400,7 +430,7 @@ struct PickerTests {
         return [
             try call("asks", ModelPicker.Asks.allCases.map(\.rawValue), .asks),
             try call("choice", choices.map(\.label) + [ModelPicker.none], .choice, holds: ModelPicker.holds(choices)),
-            try call("group", groupChoice.groups.map(ModelPicker.groupLabel) + [ModelPicker.all], .group, about: groupChoice.label),
+            try call("group", [ModelPicker.all] + groupChoice.groups.map(ModelPicker.groupLabel), .group, about: groupChoice.label),
         ]
     }
 
