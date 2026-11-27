@@ -91,20 +91,20 @@ on-device only, never Private Cloud Compute).
 - **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) or wk(s) (seven days each), year(s)
   or yr(s), "90-day" too, passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
-  ("90d"), in months, hours or minutes, a bare number beside one with a unit ("30 to 60 days", "between 30 and 60 days"), or
-  a unit word with no digits ("two weeks", "a year") is a problem; so is a unit the report doesn't take, two different values,
+  ("90d"), in months, hours or minutes, or a unit word with no digits ("two weeks", "a year") is a problem; so is, for a choice
+  that takes a number, a bare number ("within 60", "30 d", "before 2021", one end of "30 to 60 days"); so is a unit the report doesn't take, two different values,
   and, for a rule with a window (AppleCare ending, check-in, quiet service, migration deadline), a number other than its window.
   **Any problem refuses the pick** (`Refusal.numbers`, the problems as its words; the coordinating session's decision,
   2026-11-25), so no caller runs a pick past a refused number into the default window. A choice that takes no number (the
   summary, a rule with no window, a report with no number filter) refuses a sentence that gives one, never drops it ("firewall
-  off for over 30 days"; the coordinating session, 2026-11-27).
+  off for over 30 days"; the coordinating session, 2026-11-27), and ignores a bare number ("Activation Lock on macOS 15").
 - **The group** (the coordinating session's decisions, 2026-11-25 and 2026-11-27): a sentence that shares no word naming one
-  group is every group, decided by code with no call. A word names a group when it is in that group's plain label and in no other
-  label of the same report, isn't a word of the report's own label, and isn't general (status, coverage, data, type): "show MDM
-  migration status" and "devices out of AppleCare coverage" ask for every group. Otherwise the group pick lists "all" first, then
-  plain labels ("user lock", "requested", "no coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it),
-  and code maps the answer back to the catalog's token. A cost: "past the deadline" names no group, as both past-due labels
-  hold it.
+  group is every group, decided by code with no call. A word names a group when it is in any of the report's group labels, isn't
+  a word of the report's own label, and isn't general (status, coverage, data, type, each read through `WordRule.words`, which
+  makes "status" "statu"): "show MDM migration status", "service health status" and "devices out of AppleCare coverage" ask
+  for every group; "past due" opens the pick. The pick lists "all" first, then plain labels ("user lock", "requested", "no
+  coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it), and code maps the answer back to the
+  catalog's token (round 3, 2026-11-27: a word in two labels counts, as "all" leads the list).
 - **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
   operator's Mac: 379, 1,018 and 457 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
   (characters / 3 plus the cap) to the same budget.
@@ -118,6 +118,8 @@ on-device only, never Private Cloud Compute).
   - after the second round (ranges, abbreviations, a choice that takes no number refusing one, the stricter group gate, "all"
     first; 2026-11-27): report 122, group 38, refusal 22; mean 1.33 s, at most 2.83 s; 17 sentences refused for numbers. Group
     fell 3 as the gate now sends "past the deadline" and other shared words to every group.
+  - after round 3 (the stoplist read as the sentence is, a bare number refused where a number is taken, a word in two group
+    labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
   - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). Held out is a
     later step's single run.
 - Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError` (what SwiftGamGui saw) and

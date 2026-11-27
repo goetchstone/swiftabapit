@@ -95,7 +95,7 @@ public enum Picker {
             return noNumber(Pick(choice: choice, group: nil, tokens: [:]))
         case .rule(let rule):
             guard let window = window(rule, thresholds) else { return noNumber(Pick(choice: choice, group: nil, tokens: [:])) }
-            var problems = said.problems
+            var problems = said.forANumber
             for (unit, values) in said.values.sorted(by: { $0.key < $1.key }) where unit != "days" || values.contains(where: { $0 != String(window) }) {
                 problems.append("\(choice.label) has a window of \(window) days; the sentence gives " + values.map { "\($0) \(unit)" }.joined(separator: ", ") + ".")
             }
@@ -105,7 +105,7 @@ public enum Picker {
             if let group { tokens["group"] = group }
             let filters = ReportCatalog.entry(report).filters.filter(\.isNumber).map(\.name)
             guard !filters.isEmpty else { return noNumber(Pick(choice: choice, group: group, tokens: tokens)) }
-            var problems = said.problems
+            var problems = said.forANumber
             for (unit, values) in said.values.sorted(by: { $0.key < $1.key }) {
                 if !filters.contains(unit) {
                     problems.append("\(choice.label) takes \(filters.joined(separator: " or ")), not \(unit).")
@@ -138,6 +138,14 @@ public enum Picker {
         var values: [String: [String]] = [:]
         /// What can't be taken as said, in words.
         var problems: [String] = []
+        /// Digit runs with no unit after them: a problem for a choice that takes a number (a range's end, "within 60", "30 d",
+        /// "before 2021"), nothing for one that takes none ("macOS 15").
+        var bare: [String] = []
+
+        /// The problems for a choice that takes a number: each bare number is one.
+        var forANumber: [String] {
+            problems + bare.map { "\u{201C}\($0)\u{201D} has no unit: give one number of days, weeks or years." }
+        }
     }
 
     /// The unit words after a number: days, weeks and years are read (with `yr`/`yrs`, `wk`/`wks`); months and anything shorter
@@ -158,12 +166,11 @@ public enum Picker {
     /// The numbers the sentence gives in days, weeks (seven days each) or years. A number written with a joiner ("1.5 years",
     /// "-30 days", "30-60 days", "1,000 days"), a number glued to letters that aren't a unit ("90d"), months (their days vary)
     /// and a unit word with no number in digits ("two weeks", "a year") are problems, never a value. A number with no unit
-    /// after it is no filter, unless the sentence gives another number with a unit: then it is a problem, as it may be one end of
-    /// a range ("30 to 60 days", "between 30 and 60 days"). "90-day" is 90 days: a hyphen between the digits and the unit is
-    /// not a joiner.
+    /// after it is kept apart (`Said.bare`): `check` makes it a problem for a choice that takes a number (the coordinating
+    /// session, 2026-11-27, round 3). "90-day" is 90 days: a hyphen between the digits and the unit is not a joiner.
     static func numbers(in sentence: String) -> Said {
         let text = Array(sentence.lowercased())
-        var said = Said(), used: Set<Int> = [], bare: [String] = [], withUnit = false
+        var said = Said(), used: Set<Int> = []
         func letters(from start: Int) -> (word: String, end: Int) {
             var end = start
             while end < text.count, text[end].isLetter { end += 1 }
@@ -195,12 +202,11 @@ public enum Picker {
                 if glued, !word.isEmpty {
                     said.problems.append("\u{201C}\(cluster)\(word)\u{201D} isn't a number of days, weeks or years abapit reads.")
                 } else {
-                    bare.append(cluster)
+                    said.bare.append(cluster)
                 }
                 continue
             }
             used.insert(next)
-            withUnit = true
             let phrase = "\(cluster) \(word)"
             if cluster.contains(where: { joiners.contains($0) }) {
                 said.problems.append("\u{201C}\(phrase)\u{201D} isn't a whole number in plain digits.")
@@ -228,10 +234,6 @@ public enum Picker {
                 said.problems.append("\u{201C}\(word)\u{201D} has no number in digits before it, such as 30 days.")
             }
             position = end
-        }
-        // A bare number beside a number with a unit may be one end of a range.
-        if withUnit {
-            for number in bare { said.problems.append("\u{201C}\(number)\u{201D} has no unit beside a number that has one: give one number of days, weeks or years.") }
         }
         return said
     }

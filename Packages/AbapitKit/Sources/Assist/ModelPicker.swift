@@ -139,14 +139,13 @@ public enum ModelPicker {
     /// Words too general to name a group: they sit in several reports' labels and in what a person says about a whole report.
     static let groupStopWords: Set<String> = ["status", "coverage", "data", "type"]
 
-    /// Whether the sentence shares a word that names one group: a word of a group's plain label that no other label of the same
-    /// report has, isn't in `groupStopWords`, and isn't a word of the report's own label ("lock" names Activation Lock, not a
-    /// group of it). Words as `WordRule` reads them (the coordinating session, 2026-11-27).
+    /// Whether the sentence shares a word with any group's plain label that isn't a word of the report's own label ("lock" names
+    /// Activation Lock, not a group of it) and isn't in `groupStopWords`. Words as `WordRule` reads them, the stoplist too (the
+    /// coordinating session, 2026-11-27, round 3: a word in two labels counts, as "all" is listed first).
     static func namesAGroup(_ request: String, _ choice: Choices.Choice) -> Bool {
-        let labelWords = choice.groups.map { Set(WordRule.words(groupLabel($0))) }
-        var seen: [String: Int] = [:]
-        for words in labelWords { for word in words { seen[word, default: 0] += 1 } }
-        let naming = Set(seen.filter { $0.value == 1 }.keys).subtracting(groupStopWords).subtracting(WordRule.words(choice.label))
+        // The stoplist read as the sentence is, so "status" is the "statu" `WordRule.words` makes of it.
+        let stop = Set(groupStopWords.flatMap(WordRule.words))
+        let naming = Set(choice.groups.flatMap { WordRule.words(groupLabel($0)) }).subtracting(stop).subtracting(WordRule.words(choice.label))
         return !Set(WordRule.words(request)).isDisjoint(with: naming)
     }
 

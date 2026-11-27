@@ -117,7 +117,9 @@ struct PickerTests {
                                ("show service health", "report:service-health"), ("devices out of warranty", "report:out-of-warranty"),
                                // A word several of the report's groups share, or a general one, names no group either.
                                ("show MDM migration status", "report:migration"), ("devices out of AppleCare coverage", "report:out-of-warranty"),
-                               ("MDM migration data", "report:migration"), ("activation lock type for each device", "report:activation-lock")] {
+                               ("MDM migration data", "report:migration"), ("activation lock type for each device", "report:activation-lock"),
+                               // "status" through the stoplist as `WordRule` reads it ("statu").
+                               ("service health status", "report:service-health"), ("warranty status of my devices", "report:out-of-warranty")] {
             let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label(id), words: sentence)])
             guard case .picked(let pick) = try await Picker.pick(sentence, for: Self.full, using: model) else { Issue.record(Comment(rawValue: sentence)); continue }
             #expect(pick.choice.id == id && pick.group == nil && pick.tokens.isEmpty, Comment(rawValue: sentence))
@@ -126,8 +128,11 @@ struct PickerTests {
         let choice = Self.full.choices.first { $0.id == "report:migration" }!
         #expect(ModelPicker.namesAGroup("which migrations failed", choice))
         #expect(ModelPicker.namesAGroup("the ones requested", choice))
-        #expect(!ModelPicker.namesAGroup("devices past the deadline", choice), "past and deadline are in two labels")
-        #expect(!ModelPicker.namesAGroup("unknown status", choice))
+        // A word in two labels counts, "all" being listed first (round 3).
+        #expect(ModelPicker.namesAGroup("devices past due", choice))
+        #expect(ModelPicker.namesAGroup("the ones that missed the deadline", choice))
+        #expect(ModelPicker.namesAGroup("unknown status", choice))
+        #expect(!ModelPicker.namesAGroup("migration status", choice), "status is on the stoplist")
         // A word of the report's own label names no group, even where only one label holds it: here "lock" is in one label.
         let two = Choices.Choice(kind: .report(.activationLock), label: "Activation Lock", holds: nil, groups: ["unlocked", "lock:USER"])
         #expect(!ModelPicker.namesAGroup("the Activation Lock report", two))
@@ -182,6 +187,7 @@ struct PickerTests {
         #expect(try await tokens("devices 4 yrs old or more", "report:fleet-age") == ["years": "4"])
         #expect(try await tokens("AppleCare ending in 2 wks", "report:coverage") == ["days": "14"])
         #expect(try await tokens("the Activation Lock of every device", "report:activation-lock") == [:])
+        #expect(try await tokens("Activation Lock on macOS 15", "report:activation-lock") == [:], "a bare number, where no number is taken, is ignored")
     }
 
     /// A number that can't be taken as said refuses the pick, in words: never a value read from part of it, never dropped so the
@@ -209,6 +215,11 @@ struct PickerTests {
         ("devices whose AppleCare ends between 30 and 60 days", "report:coverage", "\u{201C}30\u{201D} has no unit"),
         ("devices whose AppleCare ends in 30 - 60 days", "report:coverage", "\u{201C}30\u{201D} has no unit"),
         ("devices whose AppleCare ends in 30\u{2014}60 days", "report:coverage", "plain digits"),
+        // A bare number where a number is taken (round 3).
+        ("AppleCare ending within 60", "report:coverage", "\u{201C}60\u{201D} has no unit"),
+        ("coverage ending in 30 d", "report:coverage", "\u{201C}30\u{201D} has no unit"),
+        ("AppleCare ending in 30 dys", "rule:applecare_expiring", "\u{201C}30\u{201D} has no unit"),
+        ("devices bought before 2021", "report:fleet-age", "\u{201C}2021\u{201D} has no unit"),
         // Units abapit doesn't read.
         ("devices whose AppleCare ends within 48 hours", "report:coverage", "hours aren't read"),
         ("devices whose AppleCare ends within 48 hrs", "report:coverage", "hours aren't read"),
@@ -239,7 +250,7 @@ struct PickerTests {
     @Test func theParseReadsPlainDigitsBeforeAUnit() {
         #expect(Picker.numbers(in: "90-day, 1 year").values == ["days": ["90"], "years": ["1"]])
         #expect(Picker.numbers(in: "90-day, 1 year").problems.isEmpty)
-        #expect(Picker.numbers(in: "10 devices, 90-day").problems.count == 1, "a bare number beside one with a unit")
+        #expect(Picker.numbers(in: "10 devices, 90-day").bare == ["10"], "a bare number is kept apart")
         #expect(Picker.numbers(in: "10 devices").problems.isEmpty && Picker.numbers(in: "10 devices").values.isEmpty)
         #expect(Picker.numbers(in: "a min, an hr, a mo").problems.isEmpty, "an abbreviation alone is no unit word")
         #expect(Picker.numbers(in: "for 45days").values == ["days": ["45"]])
