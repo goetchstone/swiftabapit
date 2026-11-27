@@ -122,15 +122,14 @@ on-device only, never Private Cloud Compute).
     fell 3 as the gate now sends "past the deadline" and other shared words to every group.
   - after round 3 (the stoplist read as the sentence is, a bare number refused where a number is taken, a word in two group
     labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
-  - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). Held out is
-    the next item.
+  - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). The held-out score is below.
 - **Held-out score** (S9.8, one run on the operator's Mac, 2026-11-27, nothing tuned against it; numbers in
   `Tests/Fixtures/assist/runs/heldout-2026-11-27.md`): model report 70 of 94, group 16 of 40, refusal 12 of 12; `WordRule` beside
   it 39 of 94, 7 of 40, 6 of 12 (dev: model 122 of 188, 39 of 81, 22 of 24; `WordRule` 108, 30, 24). Mean 1.31 s a sentence, at
   most 1.93 s over 106 calls. Tokens as above (379, 1,018, 457). The model's refusals: 8 not on the list, 5 for numbers, 1
   guardrail stop, 1 its own. **The model beats `WordRule` on held out, on report and on group.** Report held up (74% against 65% on
   dev) while the group score fell (40% against 48%). The rule is the dev samples' words, so the gap is larger held out than dev.
-  Whether the in-app Ask switches from `WordRule` to the model is the operator's decision; until it is made, Ask uses `WordRule`.
+  The model beats `WordRule` held out, so Ask uses the model (had it not, Ask would use `WordRule` until the operator decided).
 - Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError` (what SwiftGamGui saw) and
   fails a test that scripts a value guided generation can't write; `.unchecked` replies test code's own defence. Whether the SDK
   throws a dropped field or returns content without it (code's `.noPick` fault, asked about once) isn't settled: both paths are
