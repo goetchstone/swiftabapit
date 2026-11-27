@@ -125,7 +125,7 @@ public final class AskModel {
     /// Words a lookup's sentence may hold besides the serial without asking anything more.
     static let filler: Set = ["look", "up", "lookup", "find", "search", "for", "serial", "number", "no", "imei", "meid", "identifier", "id",
                               "the", "a", "an", "this", "that", "device", "devices", "which", "what", "where", "is", "it", "show", "me",
-                              "please", "check", "in", "abapit", "of", "with", "has", "have"]
+                              "please", "check", "in", "abapit", "of", "with", "has", "have", "where's", "where\u{2019}s", "wheres", "whereis"]
 
     /// Said after a lookup when the sentence held more than the serial and filler (the coordinating session, 2026-11-27).
     public static let onlyTheLookUp = "Only the serial lookup was run; the rest of the question wasn't read."

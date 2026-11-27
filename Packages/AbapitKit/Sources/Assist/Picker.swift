@@ -132,7 +132,7 @@ public enum Picker {
         }
     }
 
-    /// The numbers a sentence gives, as code reads them: plain digits before a unit word.
+    /// The numbers a sentence gives, as code reads them: plain digits before a unit word, or a number word from one to twelve.
     struct Said: Equatable {
         /// By filter name (`days`, `years`), each value as its digits (any length: the catalog's bounds refuse what's too big).
         var values: [String: [String]] = [:]
@@ -159,6 +159,8 @@ public enum Picker {
     ]
     /// The unit words that are a problem with no digits before them ("two weeks", "a year"); an abbreviation alone is no unit.
     static let spelled: Set<String> = ["day", "days", "week", "weeks", "year", "years", "month", "months"]
+    /// The abbreviations a number word may stand before ("two wks"); alone they are no unit and no problem.
+    static let abbreviated: Set<String> = ["wk", "wks", "yr", "yrs"]
     /// Characters that make a number more than plain digits: a decimal point, a thousands comma, a minus sign or a range dash
     /// (hyphen, en dash, em dash).
     static let joiners: Set<Character> = [".", ",", "-", "\u{2212}", "\u{2013}", "\u{2014}"]
@@ -167,18 +169,167 @@ public enum Picker {
     /// takes it. Worded as that, not as a number of days, which "3pm" was never meant to be (the coordinating session, S9.7).
     static func gluedWords(_ token: String) -> String { "abapit's reports can't filter by \u{201C}\(token)\u{201D}." }
 
-    /// The numbers the sentence gives in days, weeks (seven days each) or years. A number written with a joiner ("1.5 years",
+    /// The number words read before a unit word (the coordinating session, 2026-11-27): one to twelve, and "a"/"an" for one before
+    /// a singular unit ("a year"). Nothing else: "a few", "several", "a couple of" and "this"/"next"/"last" year are ambiguous.
+    static let numberWords: [String: Int] = [
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+        "twelve": 12,
+    ]
+    /// The singular unit words "a" and "an" may stand before, exactly as written: "a days" and "an weeks" are no number.
+    static let singular: Set<String> = ["day", "week", "wk", "year", "yr", "month"]
+    /// Number words read as a number only in a bigger one ("twenty-one", "one hundred"): never as one to twelve, so a unit after
+    /// one is a problem, and with no unit after it the word is kept as a bare number.
+    static let bigNumbers: Set<String> = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand"]
+    /// Words before a number word or "a" that make it part of something bigger, smaller or hedged ("half a year", "about a year"):
+    /// the unit word is then left a problem, never read as 1.
+    static let bigger: Set<String> = bigNumbers.union([
+        "half", "quarter", "third", "once", "twice", "about", "around", "roughly", "approximately", "approx", "almost", "nearly", "maybe",
+    ])
+    /// The words before a number in digits that hedge it ("about 30 days"); a tens or fraction word before digits is no hedge.
+    static let hedgeBefore: Set<String> = ["about", "around", "roughly", "approximately", "approx", "almost", "nearly", "maybe"]
+    /// Words after "or" or "and" (and an optional "a") that make the number a range, a fraction or a hedge ("a year and a half", "a week
+    /// or two", "one year or so").
+    static let rangeWords: Set<String> = ["half", "quarter", "third", "few", "couple", "so", "thereabouts", "change"]
+
+    /// What stands right after a spelled unit that makes it no window: "ago" (a past time), "or so", or "or"/"and" with another
+    /// number or fraction word ("a week or two", "a year and a half"). `text[from...]` is what follows the unit word.
+    ///
+    /// With `ranges` false (digits: "30 days or 60 days" is two values, not a hedge) only a fraction or hedge word after "or"/"and" counts,
+    /// not another number.
+    static func hedgedAfter(_ from: Int, in text: [Character], ranges: Bool = true) -> Bool {
+        func word(at start: Int) -> (String, Int) {
+            var end = start
+            while end < text.count, text[end].isLetter || text[end].isNumber { end += 1 }
+            return (String(text[start..<end]), end)
+        }
+        func skipSpace(_ index: Int) -> Int {
+            var index = index
+            while index < text.count, text[index].isWhitespace { index += 1 }
+            return index
+        }
+        var cursor = skipSpace(from)
+        guard cursor < text.count else { return false }
+        let (first, firstEnd) = word(at: cursor)
+        if first == "ago" { return true }
+        guard first == "or" || first == "and" else { return false }
+        cursor = skipSpace(firstEnd)
+        guard cursor < text.count else { return false }
+        if ranges, text[cursor].isNumber { return true }
+        var (next, nextEnd) = word(at: cursor)
+        if next == "a" || next == "an" { (next, nextEnd) = word(at: skipSpace(nextEnd)) }
+        return rangeWords.contains(next) || (ranges && (numberWords[next] != nil || bigger.contains(next)))
+    }
+
+    /// The number said in words just before the unit word at `position` ("two weeks", "three-year", "a year"), and where its first
+    /// word starts; nil when it isn't a window. A hyphen or a bigger-number word before it ("twenty-one days", "half a year", "about
+    /// a year"), a range or hedge after it ("a week or two", "a year ago") and, for "a"/"an", a hyphen or apostrophe right after the
+    /// unit ("a year-end report", "a day's notice") are nil: the unit is left a problem.
+    static func spelledNumber(before position: Int, in text: [Character], unit: String) -> (value: Int, start: Int)? {
+        var cursor = position
+        while cursor > 0, text[cursor - 1].isWhitespace { cursor -= 1 }
+        if cursor > 0, ["-", "\u{2013}", "\u{2014}", "\u{2212}"].contains(text[cursor - 1]), cursor == position { cursor -= 1 }
+        guard cursor > 0, text[cursor - 1].isLetter else { return nil }
+        var start = cursor
+        while start > 0, text[start - 1].isLetter { start -= 1 }
+        let word = String(text[start..<cursor])
+        let value: Int
+        let end = position + unit.count
+        if let number = numberWords[word] {
+            value = number
+        } else if word == "a" || word == "an", singular.contains(unit) {
+            if end < text.count, ["-", "'", "\u{2019}"].contains(text[end]) { return nil }
+            value = 1
+        } else {
+            return nil
+        }
+        if hedgedAfter(end, in: text) { return nil }
+        // What stands before the number word.
+        if start > 0, dashes.contains(text[start - 1]) { return nil }
+        var before = start
+        while before > 0, text[before - 1].isWhitespace { before -= 1 }
+        var from = before
+        while from > 0, text[from - 1].isLetter { from -= 1 }
+        if from < before, bigger.contains(String(text[from..<before])) || numberWords[String(text[from..<before])] != nil { return nil }
+        return (value, start)
+    }
+
+    /// The word right before `index` (whitespace, and a period after an abbreviation, skipped), lowercased; "" when none.
+    static func wordBefore(_ index: Int, in text: [Character]) -> String {
+        var cursor = index
+        while cursor > 0, text[cursor - 1].isWhitespace { cursor -= 1 }
+        if cursor > 0, text[cursor - 1] == "." { cursor -= 1 }
+        var start = cursor
+        while start > 0, text[start - 1].isLetter { start -= 1 }
+        return String(text[start..<cursor])
+    }
+
+    /// The characters that join two numbers or a number and its unit, as a hyphen does: hyphen, en dash, em dash, minus sign and "/".
+    static let dashes: Set<Character> = ["-", "\u{2013}", "\u{2014}", "\u{2212}", "/"]
+
+    /// The words that join two ends of a range, between them and the second end: one word or a short phrase, as said.
+    static let rangeConnectors: Set<String> = [
+        "", "or", "to", "and", "through", "thru", "till", "until", "up to", "vs", "versus", "plus", "or else", "or more",
+    ]
+
+    /// Whether the number word "one" at token `i` is one end of a range: a number (a digit or a number word) follows it, or a number
+    /// or unit word precedes it, with between them only characters that aren't letters (any punctuation or spacing: "one - two",
+    /// "one; two", "one... two") or a connector word (`rangeConnectors`: "one up to two", "a week vs one"). A bare "one" anywhere else
+    /// ("which one", "for each one", "one of them") is a pronoun and no number. The other number words never ask: from two up, one
+    /// with no unit after it is bare always (fix rounds 2 to 4, the coordinating session, 2026-11-27: the default is turned round, a
+    /// closed list of separators missed every one it hadn't named).
+    static func inARange(_ i: Int, _ tokens: [(word: String, start: Int, end: Int)], in text: [Character]) -> Bool {
+        func isNumber(_ word: String) -> Bool { word.first?.isNumber == true || numberWords[word] != nil || bigNumbers.contains(word) }
+        /// The words strictly between two tokens, joined by a space: "" when only punctuation and spacing stand between them.
+        func between(_ a: Int, _ b: Int) -> String { tokens[(a + 1)..<b].map(\.word).joined(separator: " ") }
+        for distance in 1...3 {
+            if i + distance < tokens.count, isNumber(tokens[i + distance].word), rangeConnectors.contains(between(i, i + distance)) { return true }
+            if i - distance >= 0, isNumber(tokens[i - distance].word) || units[tokens[i - distance].word] != nil,
+               rangeConnectors.contains(between(i - distance, i)) { return true }
+        }
+        return false
+    }
+
+    /// The numbers the sentence gives in days, weeks (seven days each) or years, in digits or as a word from one to twelve ("two
+    /// weeks" is 14 days; "a year" is 1), through the same checks. A number written with a joiner ("1.5 years",
     /// "-30 days", "30-60 days", "1,000 days"), a number glued to letters that aren't a unit ("90d"), months (their days vary)
-    /// and a unit word with no number in digits ("two weeks", "a year") are problems, never a value. A number with no unit
+    /// and a unit word with no number before it ("this year", "a few weeks") are problems, never a value. A number with no unit
     /// after it is kept apart (`Said.bare`): `check` makes it a problem for a choice that takes a number (the coordinating
     /// session, 2026-11-27, round 3). "90-day" is 90 days: a hyphen between the digits and the unit is not a joiner.
     static func numbers(in sentence: String) -> Said {
-        let text = Array(sentence.lowercased())
+        let text = Array(sentence.lowercased()), original = Array(sentence)
         var said = Said(), used: Set<Int> = []
+        var tokens: [(word: String, start: Int, end: Int)] = []
+        var cursor = 0
+        while cursor < text.count {
+            guard text[cursor].isLetter || text[cursor].isNumber else { cursor += 1; continue }
+            var end = cursor
+            while end < text.count, text[end].isLetter || text[end].isNumber { end += 1 }
+            tokens.append((String(text[cursor..<end]), cursor, end))
+            cursor = end
+        }
         func letters(from start: Int) -> (word: String, end: Int) {
             var end = start
             while end < text.count, text[end].isLetter { end += 1 }
             return (String(text[start..<end]), end)
+        }
+        /// A number and its unit word, once read: a problem, or a value (weeks as seven days each).
+        func record(_ cluster: String, _ word: String, _ unit: String, said written: String? = nil) {
+            let phrase = written ?? "\(cluster) \(word)"
+            if cluster.contains(where: { joiners.contains($0) }) {
+                said.problems.append("\u{201C}\(phrase)\u{201D} isn't a whole number in plain digits.")
+            } else if unit == "months" {
+                said.problems.append("\u{201C}\(phrase)\u{201D}: months aren't read, as their days vary. Give days.")
+            } else if unit == "hours" || unit == "minutes" {
+                said.problems.append("\u{201C}\(phrase)\u{201D}: \(unit) aren't read. Give days.")
+            } else if unit == "weeks" {
+                if let weeks = Int(cluster), case let (days, overflow) = weeks.multipliedReportingOverflow(by: 7), !overflow {
+                    said.values["days", default: []].append(String(days))
+                } else {
+                    said.values["days", default: []].append(cluster)
+                }
+            } else {
+                said.values[unit, default: []].append(cluster)
+            }
         }
         var index = 0
         while index < text.count {
@@ -211,31 +362,39 @@ public enum Picker {
                 continue
             }
             used.insert(next)
-            let phrase = "\(cluster) \(word)"
-            if cluster.contains(where: { joiners.contains($0) }) {
-                said.problems.append("\u{201C}\(phrase)\u{201D} isn't a whole number in plain digits.")
-            } else if unit == "months" {
-                said.problems.append("\u{201C}\(phrase)\u{201D}: months aren't read, as their days vary. Give days.")
-            } else if unit == "hours" || unit == "minutes" {
-                said.problems.append("\u{201C}\(phrase)\u{201D}: \(unit) aren't read. Give days.")
-            } else if unit == "weeks" {
-                if let weeks = Int(cluster), case let (days, overflow) = weeks.multipliedReportingOverflow(by: 7), !overflow {
-                    said.values["days", default: []].append(String(days))
-                } else {
-                    said.values["days", default: []].append(cluster)
-                }
+            // A hedge or a past time is no window (fix round 2): "about 30 days", "30 days or so", "30 days ago", "2 years and a half".
+            let hedged = ["days", "weeks", "years"].contains(unit)
+                && (hedgeBefore.contains(wordBefore(start, in: text)) || hedgedAfter(wordEnd, in: text, ranges: false))
+            if hedged {
+                said.problems.append("\u{201C}\(cluster) \(word)\u{201D} is hedged or in the past, not a window: give one number of days, weeks or years.")
             } else {
-                said.values[unit, default: []].append(cluster)
+                record(cluster, word, unit)
             }
             index = max(index, wordEnd)
         }
-        // A unit word no digits came before.
+        // A unit word no digits came before: a number word (one to twelve, "a"/"an" for one) read the same way, else a problem.
         var position = 0
         while position < text.count {
             guard text[position].isLetter, position == 0 || !text[position - 1].isLetter else { position += 1; continue }
             let (word, end) = letters(from: position)
-            if spelled.contains(word), !used.contains(position) {
-                said.problems.append("\u{201C}\(word)\u{201D} has no number in digits before it, such as 30 days.")
+            if spelled.contains(word) || abbreviated.contains(word), !used.contains(position) {
+                if let found = spelledNumber(before: position, in: text, unit: word) {
+                    // Quoted as the sentence says it ("a month", not "1 month").
+                    let source = original.count == text.count ? original : text
+                    record(String(found.value), word, units[word]!, said: String(source[found.start..<end]))
+                } else if spelled.contains(word) {
+                    said.problems.append("\u{201C}\(word)\u{201D} has no number in digits before it, such as 30 days.")
+                }
+            } else if numberWords[word] != nil || bigNumbers.contains(word) {
+                // A number word with no unit after it, in a range, is kept apart as a digit is (`Said.bare`): "one or two years",
+                // "between one and two years". Alone ("which one") it is no number.
+                var after = end
+                if after < text.count, dashes.contains(text[after]) { after += 1 } else { while after < text.count, text[after].isWhitespace { after += 1 } }
+                let unitAfter = units[after < text.count && text[after].isLetter ? letters(from: after).word : ""] != nil
+                // From two up a number word with no unit after it is bare always; "one" only in a range, as it is also a pronoun.
+                if !unitAfter, word != "one" || tokens.firstIndex(where: { $0.start == position }).map({ inARange($0, tokens, in: text) }) == true {
+                    said.bare.append(word)
+                }
             }
             position = end
         }
