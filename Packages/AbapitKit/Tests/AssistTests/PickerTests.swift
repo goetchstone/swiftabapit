@@ -247,6 +247,15 @@ struct PickerTests {
         }
     }
 
+    /// Digits glued to letters that aren't a unit are refused as a filter abapit's reports don't have, never as a number of days the
+    /// person didn't mean ("3pm" was never a window; S9.7). The refusal stands; only its words changed.
+    @Test(arguments: ["3pm", "14in", "90d"])
+    func aGluedTokenIsNoFilter(_ token: String) {
+        let said = Picker.numbers(in: "devices at \(token) please")
+        #expect(said.problems == ["abapit's reports can't filter by \u{201C}\(token)\u{201D}."], Comment(rawValue: "\(said.problems)"))
+        #expect(said.values.isEmpty)
+    }
+
     @Test func theParseReadsPlainDigitsBeforeAUnit() {
         #expect(Picker.numbers(in: "90-day, 1 year").values == ["days": ["90"], "years": ["1"]])
         #expect(Picker.numbers(in: "90-day, 1 year").problems.isEmpty)

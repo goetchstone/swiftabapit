@@ -1,6 +1,7 @@
 import AppIntents
 import AppleBusiness
 import AppModels
+import Assist
 import Foundation
 import History
 import Mosyle
@@ -27,11 +28,21 @@ final class AppServices {
     var activity: ActivityModel { screens.activity }
     /// Counts `devices`: one device read for the Devices screen and the Dashboard.
     var dashboard: DashboardModel { screens.dashboard }
+    /// The Reports screen's Ask: a question in words, drafted onto a report through `Answers` with the on-device model (or, in a
+    /// debug build, the model `ABAPIT_MODEL` asks for; the demo's answers nothing).
+    let ask: AskModel
 
     private init(orgs: OrgsModel, isDemo: Bool) {
         self.orgs = orgs
         screens = ScreenModels(orgs: orgs)
         self.isDemo = isDemo
+        #if DEBUG
+        if let model = DemoModel.requested(demo: isDemo) {
+            ask = AskModel(answers: screens.answers, model: model)
+            return
+        }
+        #endif
+        ask = AskModel(answers: screens.answers, model: ModelPicker.OnDevice())
     }
 
     /// What the App Intents reach (`App/Intents/`): `Answers` alone, never the screen models whole, so an intent can't reach the

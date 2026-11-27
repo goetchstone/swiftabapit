@@ -357,9 +357,10 @@ job (§6.6).
 
 ```
 App → {ChangeCore, AppleBusiness, Mosyle, History, Reports, Planners, Assist, AppModels, Vault(public API only)}
-AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, Mosyle, MosyleModels, JSONAPI, History}   the screen models, in Packages/AbapitApp
+AppModels → {AppleBusiness, AppleModels, Orgs, Vault, Reports, Mosyle, MosyleModels, JSONAPI, History, Assist}   the screen models, in Packages/AbapitApp
                                                                (AbapitKit's products: its public API only); never HTTPCore, Wire or ChangeCore.
                                                                History (Phase 3): the snapshot collector records through SnapshotStore.record
+                                                               Assist (Phase 9, S9.7): the Ask's pick, answered through Answers
 ChangeCore → {HTTPCore, Wire, Planners, Vault}
 AppleBusiness → {HTTPCore, Wire, Vault, Orgs, AppleModels, JSONAPI}
 Mosyle → {HTTPCore, Wire, Vault, Orgs, MosyleModels, JSONAPI}
@@ -1516,13 +1517,13 @@ Live checks wait for the operator.
 
 **Status:** the read-only step began 2026-11-24 (operator's Q1, "Six reports + more": the six reports, the Needs-attention
 summary and serial lookup). Merged: `ReportCatalog` lists all six reports with bounded number filters and a `holds` line
-each, and is the only resolver of report tokens (S9.1). `phase-9-choices-and-evals`: `Assist/Choices` (the run-time pick list, at most 19) and `WordRule` (the plain rule, dev score in `assist-intents.md`), invented dev and held-out samples, code evaluators and the flagged model-eval placeholder. On branch `phase-9-live-wait`:
+each, and is the only resolver of report tokens (S9.1). `phase-9-choices-and-evals`: `Assist/Choices` (the run-time pick list, at most 19) and `WordRule` (the plain rule, dev score in `assist-intents.md`), invented dev and held-out samples, code evaluators and the flagged model-eval placeholder. Merged (#48):
 `LiveWait`, an intent's bounded, cancellable wait for the screens' own live reads (Apple's devices, services and each service's
 device list, Mosyle's devices), a held read under 15 minutes old reused with its age said (the operator, 2026-11-24); the
 25-second bound waits on the operator's live check of Siri's and Shortcuts' time limit (docs/domains/assist-intents.md, "Waiting
-for a live read"). On branch `phase-9-answers`: `Answers`, one function per question (the six reports, the Needs-attention
+for a live read"). Merged: `Answers`, one function per question (the six reports, the Needs-attention
 summary, serial lookup) in code's words: counts, the data's age and how much was read, at most 10 rows, a fixed phrase for each
-error kind, the client named only with two or more (docs/domains/assist-intents.md, "Answers"). On branch `phase-9-read-intents`: nine read-only App Intents that reach `Answers` alone (the six reports, Needs attention, serial lookup; declared background only, with `.requiresLocalDeviceAuthentication`, both waiting on the operator's live check of what they do on a Mac), one Siri phrase per report in `AppShortcuts.xcstrings`, `check_app.sh` reading the built metadata, `noIntentReachesAWrite`; Needs attention from an intent records nothing (the operator, 2026-11-25: "Don't record (Recommended)") (docs/domains/assist-intents.md, "Intents"). The model picker: `Assist/{Picker,ModelPicker,Refusals}`, the on-device model's checked pick of a report or rule and its group, refusals before any call, no tools (docs/domains/assist-intents.md, "The model's pick").
+error kind, the client named only with two or more (docs/domains/assist-intents.md, "Answers"). Merged (#52): nine read-only App Intents that reach `Answers` alone (the six reports, Needs attention, serial lookup; declared background only, with `.requiresLocalDeviceAuthentication`, both waiting on the operator's live check of what they do on a Mac), one Siri phrase per report in `AppShortcuts.xcstrings`, `check_app.sh` reading the built metadata, `noIntentReachesAWrite`; Needs attention from an intent records nothing (the operator, 2026-11-25: "Don't record (Recommended)") (docs/domains/assist-intents.md, "Intents"). Merged (#51): the model picker, `Assist/{Picker,ModelPicker,Refusals}`, the on-device model's checked pick of a report or rule and its group, refusals before any call, no tools (docs/domains/assist-intents.md, "The model's pick"). On branch `phase-9-ask` (S9.7): the Ask, a question in words on the Reports screen (the operator's Q8, "On the Reports screen") and through Siri (`AskIntent`), a serial sent to the lookup before any model call, the picker's pick answered through `Answers` after "I read that as: …", a draft the operator fills the report with by a click, and with the model off the field off and Siri naming the fixed phrases (docs/domains/assist-intents.md, "The Ask").
 
 **Owns:** `Assist/`, `App/Intents/`.
 

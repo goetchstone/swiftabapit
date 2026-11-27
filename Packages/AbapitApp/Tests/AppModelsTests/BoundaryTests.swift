@@ -43,12 +43,13 @@ struct BoundaryTests {
                                     Self.rawMemory))
     }
 
-    /// What the screen models may import: Foundation, Observation and their nine AbapitKit products (Mosyle, MosyleModels and
-    /// JSONAPI joined with the Mosyle screens, Phase 7; History with the snapshot collector, Phase 3). `import Network` and
-    /// `import SQLite3` passed every check once the module's list was dropped with the move (integration review M3).
+    /// What the screen models may import: Foundation, Observation and their ten AbapitKit products (Mosyle, MosyleModels and
+    /// JSONAPI joined with the Mosyle screens, Phase 7; History with the snapshot collector, Phase 3; Assist with the Ask, S9.7).
+    /// `import Network` and `import SQLite3` passed every check once the module's list was dropped with the move (integration
+    /// review M3). FoundationModels isn't here: the Ask reaches the model through Assist's `Picker.Asking`.
     @Test func theScreenModelsImportOnlyTheirModules() throws {
         let allowed: Set = ["Foundation", "Observation", "AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "Mosyle", "MosyleModels", "JSONAPI",
-                            "History"]
+                            "History", "Assist"]
         for file in try SourceScan.swiftFiles(in: Self.directory) {
             let extra = Set(SourceScan.imports(of: file)).subtracting(allowed)
             #expect(extra.isEmpty, "\(file.path) imports \(extra.sorted())")

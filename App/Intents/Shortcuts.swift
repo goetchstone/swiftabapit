@@ -1,7 +1,7 @@
 import AppIntents
 
 /// The phrases Siri listens for (the operator, 2026-11-24: Q1 "Six reports + more"): one per report, the Needs-attention summary,
-/// serial lookup, and any report by name. Each names the app, as Siri requires, and each is in App/AppShortcuts.xcstrings too:
+/// serial lookup, a question in words (S9.7), and any report by name. Each names the app, as Siri requires, and each is in App/AppShortcuts.xcstrings too:
 /// without that catalog Xcode ships no phrase localization and Siri never matches a phrase by voice (SwiftGamGui failure-log
 /// 2026-10-10). Change both together; `scripts/check_app.sh` checks every phrase names the app and is in the built catalog.
 struct AbapitShortcuts: AppShortcutsProvider {
@@ -30,6 +30,9 @@ struct AbapitShortcuts: AppShortcutsProvider {
         AppShortcut(intent: LookUpSerialIntent(), phrases: [
             "Look up a serial number in \(.applicationName)",
         ], shortTitle: "Look Up a Serial Number", systemImageName: "magnifyingglass")
+        AppShortcut(intent: AskIntent(), phrases: [
+            "Ask \(.applicationName) a question",
+        ], shortTitle: "Ask a Question", systemImageName: "text.bubble")
         AppShortcut(intent: RunReportIntent(), phrases: [
             "Run the \(\.$report) report in \(.applicationName)",
         ], shortTitle: "Run a Report", systemImageName: "chart.bar.doc.horizontal")

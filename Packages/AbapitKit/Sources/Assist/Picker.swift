@@ -163,6 +163,10 @@ public enum Picker {
     /// (hyphen, en dash, em dash).
     static let joiners: Set<Character> = [".", ",", "-", "\u{2212}", "\u{2013}", "\u{2014}"]
 
+    /// What is said of digits glued to letters that aren't a unit ("90d", "3pm", "14in", a serial-like token): no filter of abapit's
+    /// takes it. Worded as that, not as a number of days, which "3pm" was never meant to be (the coordinating session, S9.7).
+    static func gluedWords(_ token: String) -> String { "abapit's reports can't filter by \u{201C}\(token)\u{201D}." }
+
     /// The numbers the sentence gives in days, weeks (seven days each) or years. A number written with a joiner ("1.5 years",
     /// "-30 days", "30-60 days", "1,000 days"), a number glued to letters that aren't a unit ("90d"), months (their days vary)
     /// and a unit word with no number in digits ("two weeks", "a year") are problems, never a value. A number with no unit
@@ -200,7 +204,7 @@ public enum Picker {
             let (word, wordEnd) = next < text.count && text[next].isLetter ? letters(from: next) : ("", next)
             guard let unit = units[word] else {
                 if glued, !word.isEmpty {
-                    said.problems.append("\u{201C}\(cluster)\(word)\u{201D} isn't a number of days, weeks or years abapit reads.")
+                    said.problems.append(gluedWords("\(cluster)\(word)"))
                 } else {
                     said.bare.append(cluster)
                 }

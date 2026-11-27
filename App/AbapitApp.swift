@@ -209,7 +209,7 @@ struct ContentView: View {
             case .mosyle: MosyleView(model: services.screens.mosyle)
             case .reconciliation: ReconciliationView(model: services.screens.reconciliation)
             case .settings: SettingsView(orgs: orgs, transfer: services.screens.historyTransfer, attention: services.screens.attention, isDemo: services.isDemo)
-            case .reports: ReportsView(model: services.screens.reports)
+            case .reports: ReportsView(model: services.screens.reports, ask: services.ask)
             }
         }
     }
