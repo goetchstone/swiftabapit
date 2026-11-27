@@ -4,13 +4,16 @@
 
 **Owns invariant(s):** #9
 
-**Status:** begun. Phase 9's read-only step started with the report catalog (below); the intents, the model's pick and
-the answers are later PRs. Until then, read the plan section named above and the nearest SwiftGamGui runbook.
+**Status:** begun. Phase 9's read-only step started with the report catalog (below); the answers, the read intents and the
+model's pick are built (below); the in-app Ask is a later PR. Read the plan section named above and the nearest SwiftGamGui
+runbook too.
 
 ## Files
 
 - `Packages/AbapitKit/Sources/Reports/ReportCatalog.swift`: the catalog.
 - `Packages/AbapitKit/Sources/Assist/{Choices,WordRule}.swift`: the run-time list and the plain rule.
+- `Packages/AbapitKit/Sources/Assist/{Picker,ModelPicker,Refusals}.swift`: the model's pick, checked by code; tests
+  `AssistTests/{PickerTests,StubModel}.swift`.
 - `Packages/AbapitKit/Tests/AssistTests/Evals/`: code evaluators, the `Evaluations` harness, the model half (flagged).
 - `Tests/Fixtures/assist/{dev,heldout}.json`: invented phrasings with the right answer.
 
@@ -63,9 +66,66 @@ samples to score both; the model's own pick is a later change.
   take the same evaluation.
 - **WordRule on dev (fast run)**: report 108 of 188, group 30 of 81, refusal 24 of 24. Printed as `EVAL wordrule dev` and pinned
   in `WordRuleEvaluations`; a change to the rule, the list or the dev file moves it, and the pin says so.
-- **The model half** runs only with `ABAPIT_MODEL_EVALS=1`, and never when `CI` or `GITHUB_ACTIONS` is set. It is a placeholder
-  until the model picker exists: skipped with that reason, and failing if the flag is set, so it can't pass by doing nothing.
-  CI never calls the model.
+- **The model half** runs only with `ABAPIT_MODEL_EVALS=1`, and never when `CI` or `GITHUB_ACTIONS` is set: the model picker on
+  the dev samples, `WordRule` printed beside it, and each pick's largest call counted with `tokenCount`. CI never calls the model.
+
+## The model's pick
+
+`Picker.pick(_:for:using:)` maps a sentence onto one of the client's `Choices` and its group, and returns a pick: it runs
+nothing (the operator, 2026-11-24, Q3 "Picks + explanations": code checks every pick, the model gets no tools; D7 and D10:
+on-device only, never Private Cloud Compute).
+
+- **Refused before any call, in words** (`Refusals.before`): no client; an empty sentence or one over 300 characters (never
+  cut); Mosyle named for a client without a Mosyle org; the model unavailable (each `UnavailableReason`); an unsupported language.
+- **Three picks** (`ModelPicker`), each one fresh session, greedy, a 100-token response cap, a `DynamicGenerationSchema` `anyOf`
+  built at run time, the pick field first and then the request's own words that point to it: (1) see or list something, or
+  change something; a change request is answered by code, "This version only reads; nothing was drafted." (2) one of the
+  client's choices (at most 19, one list: the shared lessons narrow in steps past about 40) or "None of these", the reports'
+  holds lines after the list; (3) for a report with groups whose sentence names one, a group's plain label or "all".
+- **The prompt** holds the sentence and the catalog's words only: no example sentence, no list data. A test takes each call
+  apart and finds nothing else.
+- **Code checks every answer**: a pick off the list, a missing pick, empty words, the words field's description echoed back, or
+  words the request doesn't hold is asked about once, the fault named; a second fault is "not understood". A thrown error (each
+  `LanguageModelError` case, a parsing error, assets not ready, a concurrent request) is "not understood" at once, worded by
+  kind, never the error's own text. Code checks the final id and group against the list again (`Picker.check`).
+- **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) or wk(s) (seven days each), year(s)
+  or yr(s), "90-day" too, passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
+  minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
+  ("90d"), in months, hours or minutes, or a unit word with no digits ("two weeks", "a year") is a problem; so is, for a choice
+  that takes a number, a bare number ("within 60", "30 d", "before 2021", one end of "30 to 60 days"); so is a unit the report doesn't take, two different values,
+  and, for a rule with a window (AppleCare ending, check-in, quiet service, migration deadline), a number other than its window.
+  **Any problem refuses the pick** (`Refusal.numbers`, the problems as its words; the coordinating session's decision,
+  2026-11-25), so no caller runs a pick past a refused number into the default window. A choice that takes no number (the
+  summary, a rule with no window, a report with no number filter) refuses a sentence that gives one, never drops it ("firewall
+  off for over 30 days"; the coordinating session, 2026-11-27), and ignores a bare number ("Activation Lock on macOS 15").
+- **The group** (the coordinating session's decisions, 2026-11-25 and 2026-11-27): a sentence that shares no word naming one
+  group is every group, decided by code with no call. A word names a group when it is in any of the report's group labels, isn't
+  a word of the report's own label, and isn't general (status, coverage, data, type, each read through `WordRule.words`, which
+  makes "status" "statu"): "show MDM migration status", "service health status" and "devices out of AppleCare coverage" ask
+  for every group; "past due" opens the pick. The pick lists "all" first, then plain labels ("user lock", "requested", "no
+  coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it), and code maps the answer back to the
+  catalog's token (round 3, 2026-11-27: a word in two labels counts, as "all" leads the list).
+- **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
+  operator's Mac: 379, 1,018 and 457 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
+  (characters / 3 plus the cap) to the same budget.
+- **Dev score** (flagged runs on the operator's Mac, 2026-11-25; `WordRule` beside it 108 of 188, 30 of 81, 24 of 24):
+  - first run: report 134 of 188, group 35 of 81, refusal 22 of 24; mean 1.45 s a sentence, at most 2.59 s. The group pick
+    leaned to the first group listed when the sentence named none (`lock:USER`, `status:REQUESTED`, `healthy`; 13 times).
+  - after the number refusals and the group decision: report 122, group 41, refusal 22; mean 1.34 s, at most 2.68 s. 16 dev
+    sentences are now refused for their numbers ("this year", "a month", "in two weeks", a window other than the rule's), which
+    is most of the report drop; the group pre-check also sends a few named groups to every group where the sentence's word
+    isn't the label's ("request" against "requested").
+  - after the second round (ranges, abbreviations, a choice that takes no number refusing one, the stricter group gate, "all"
+    first; 2026-11-27): report 122, group 38, refusal 22; mean 1.33 s, at most 2.83 s; 17 sentences refused for numbers. Group
+    fell 3 as the gate now sends "past the deadline" and other shared words to every group.
+  - after round 3 (the stoplist read as the sentence is, a bare number refused where a number is taken, a word in two group
+    labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
+  - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). Held out is a
+    later step's single run.
+- Gotcha: the stub (`StubModel`) throws a required field left out as `GeneratedContent.ParsingError` (what SwiftGamGui saw) and
+  fails a test that scripts a value guided generation can't write; `.unchecked` replies test code's own defence. Whether the SDK
+  throws a dropped field or returns content without it (code's `.noPick` fault, asked about once) isn't settled: both paths are
+  tested, and the next flagged run should count which one occurs.
 
 ## Invariants & failure history
 
