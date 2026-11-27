@@ -122,6 +122,8 @@ struct TreeTests {
     /// Whether `path` (a file under `root`) is one the scans can't vouch for. Finder's `.DS_Store` is ignored.
     static func refused(_ path: String, in root: String) -> Bool {
         let url = URL(filePath: path)
+        // A catalog named InfoPlist localizes the Info.plist (it ships as InfoPlist.strings, which the Release gate refuses).
+        if url.deletingPathExtension().lastPathComponent == "InfoPlist" { return true }
         return url.lastPathComponent != ".DS_Store" && !(kinds[root] ?? []).contains(url.pathExtension)
     }
 
@@ -191,7 +193,7 @@ struct TreeTests {
     @Test func whatIsRefused() {
         for path in ["Leak.m", "Leak.mm", "leak.c", "leak.cpp", "leak.s", "Shader.metal", "libleak.a", "leak.dylib", "Leak.framework/Leak",
                      "Main.xib", "Main.storyboard", "Intents.intentdefinition", "Model.xcdatamodeld/Model.xcdatamodel/contents", "Info.plist",
-                     ".Leak.m", "Leak.M"] {
+                     ".Leak.m", "Leak.M", "InfoPlist.xcstrings", "Screens/InfoPlist.xcstrings"] {
             #expect(Self.refused(path, in: "App"), "\(path)")
         }
         for path in ["Screens/DevicesView.swift", "Assets.xcassets/AppIcon.appiconset/Contents.json", "Assets.xcassets/AppIcon.appiconset/icon.png",

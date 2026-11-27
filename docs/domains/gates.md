@@ -22,6 +22,11 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   scanner's own tests).
 - `scripts/check_app.sh` — the Release gate; CI runs it on the Release build and again after an incremental
   `DEPLOYMENT_POSTPROCESSING=YES` build (an archive's strip), which costs seconds.
+- `scripts/check_app_selftest.sh` — the gate's test of its Info.plist and bundle-folder checks: copies of a Release app,
+  each with one inbound door, must each be refused by name. CI runs it after the gate. Of its first ten doors, eight are
+  inbound doors and two are guards (the date value JSON can't hold, and `LSEnvironment`); the thirteen added after a review
+  are the stamps' type and name, a nested app or extension in `Contents` or `Resources`, a file in a folder the build
+  never writes, a scripting definition, `InfoPlist.*` files, a symlink, and a nested app in `MacOS`.
 - `scripts/check_graph.py`, `scripts/check_text.py` — the manifest SwiftPM evaluates; invisible characters.
 
 ## How it works
@@ -69,6 +74,16 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   getter, `sysctl`, `proc_pid…`, `CommandLine`, the `NSUserDefaults` class, `AppStorage`, `CFPreferences`. It
   refuses a child process's imports (`NSTask`, which is `Process`; `posix_spawn`; `execv…`; the script tasks).
   It refuses TestSupport's names and Vault's `MemoryStore` in `strings -a` and in `nm`.
+- **The Release gate's Info.plist check.** The keys are exactly the thirteen the build writes, plus the toolchain's
+  stamps, named one by one, each a string (`BuildMachineOSBuild`, `DTCompiler`, `DTPlatformBuild`, `DTPlatformName`,
+  `DTPlatformVersion`, `DTSDKBuild`, `DTSDKName`, `DTXcode`, `DTXcodeBuild`): no `DT…` wildcard. A URL scheme, a document
+  type, a Service, AppleScript or an activity type is a key, so each is refused by name. `Contents` holds exactly
+  `Info.plist`, `PkgInfo`, `MacOS`, `Resources` and `_CodeSignature` (a clean Release build holds just these), `MacOS`
+  to exactly `abapit`, `Resources` to no symlink and no `InfoPlist.*` (any case, matching `TreeTests`), so
+  `Library`, `XPCServices`, `PlugIns`, `Helpers`, `Extensions`, `SharedSupport` and anything else are refused. `Resources`
+  holds no `Info.plist`, `.app`, `.appex`, `.xpc`, `.bundle`, `.framework`, `.sdef` or `InfoPlist.strings`, and
+  `TreeTests` refuses an `InfoPlist` string catalog under `App/`.
+  `RouteTests.theInfoPlistIsGeneratedFromThreeKeys` holds the build settings: no `INFOPLIST_FILE`, three `INFOPLIST_KEY_`s.
 - **No other way to a host.** `RouteTests.nothingReachesAHostAnotherWay` refuses, in the package and the app,
   Foundation's stream pair and `Host`, the resolver (`getaddrinfo`, `gethostby…`), the whole names `socket` and
   `connect` (taken unapplied, `socket(` isn't there to find), an attributed string read from a document or HTML, a web
@@ -139,6 +154,9 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   build (`swift test`, not `swift test -c release`).
 - **A needle matches across whitespace, in a string too.** The words `open URL` in a button's title read as `openURL`
   and fail the fetch scan: word the title another way.
+- **`xcodebuild` registers every app it builds with LaunchServices** (its `RegisterWithLaunchServices` step). A
+  `.noindex` folder keeps Spotlight out, not LaunchServices. A mutant with an inbound door is made from a copy
+  (`check_app_selftest.sh`: copy, change, sign, read), never built by Xcode, and never opened.
 
 ## Testing / verification status
 - Offline: `scripts/test.sh` (all four suites). Gate changes are proven by building mutant Release apps from
@@ -169,6 +187,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **A second transport user** (Mosyle's client, Phase 7): a reviewed change to
   `RouteTests.onlyTheClientBuildsTheTransportAndOnlyHTTPClientSends`.
 - **A gate change:** build each mutant it should refuse, from a scratch copy, and run the gate on each.
+- **A new Info.plist key:** add it to `want` in `scripts/check_app.sh` and its reason to the PR. An inbound door (a URL
+  scheme, a document type, a Service) is a design change: stop for the operator.
 - **A Release use of `NSWorkspace` or `openURL`** (opening an activity's `downloadUrl` in the browser, by design): a
   reviewed change that excuses the one file by name in `RouteTests` and takes `NSWorkspace` out of the gate's import
   list, with an https-only check and its test in the same PR.
