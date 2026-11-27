@@ -11,6 +11,17 @@ struct ScannerTests {
         SourceScan.mentions(SourceScan.File(path: "x.swift", text: code), needles, except: except)
     }
 
+    /// A needle with whitespace is squeezed as the text is, or it would match nothing and its scan pass vacuously (PR 55: the
+    /// `func perform(` scan found no file for a whole phase).
+    @Test func aNeedleWithWhitespaceStillFinds() {
+        #expect(Self.found("struct I { func  perform() {} }", ["func perform("]))
+        #expect(Self.found("func\nperform()", ["func perform("]))
+        #expect(!Self.found("func performance()", ["func perform("]))
+        #expect(!Self.found("let x = 1 // func perform(", ["func perform("]))
+        #expect(!Self.found("func other() {}", ["func perform("]))
+        #expect(!Self.found("func perform() {}", [" "]) && !Self.found("func perform() {}", [""]))
+    }
+
     @Test(arguments: [
         "let s = URLSession.shared",
         "URLSession.shared.upload(for: request, from: body)",
