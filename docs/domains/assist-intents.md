@@ -243,11 +243,20 @@ write (a fix from the review of PR 52). `Answers` keeps the models it reads priv
 reports + more", Q2 "Out for now" (no Spotlight, no `IndexedEntity`), Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active
 client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below).
 
-- **Ten read-only intents**: `AskIntent(question:)` (S9.7, "The Ask" below), and `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
+- **Eleven read-only intents** (the eleventh, below, returns a file): `AskIntent(question:)` (S9.7, "The Ask" below), and `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
   the number goes to the report's own number filter, `Answers.tokens`), `NeedsAttentionIntent`, `LookUpSerialIntent(serial:)`,
   and one intent per report with no parameter (`OutOfWarrantyIntent`, `CoverageEndingIntent`, `FleetAgeIntent`,
   `ActivationLockIntent`, `MigrationIntent`, `ServiceHealthIntent`) for Siri. Each `perform` calls `Answers` and nothing else (Ask
   through `AskModel(answers: answers)`, which holds `Answers` and the model privately).
+- **Get report CSV (S9.10, the operator's Q7, "Yes, late this step")**: `GetReportCSVIntent(report:group:number:)`, Shortcuts only (no App Shortcut, no phrase), returns
+  the report's CSV as an `IntentFile` made in memory, with no temporary file, log or copy of the app's own: the Reports screen's `csv(of:)` and `exportFileName(for:)`
+  over the same `build`, through `Answers.reportCSV`, so the columns are `ExportPolicy`'s allowlist and the client's name leads the file name only with several clients.
+  Nothing is returned, and `Answers`' words say why, when nothing was judged, the client changed (`Phrase.switched`) or the read didn't finish; a read in part or an old
+  snapshot is said in the dialog beside the file, whose `listRead` column carries it too. The dialog also says the report's `exportNote` (the coordinating session, 2026-11-27, fix round): a group does not
+  filter the file, and coverage's file leaves out devices with no coverage or an unreadable date. Decisions of the executor's: no size cap (the screen export has none beyond the reads' own caps, and a cap would
+  make the file differ from the screen's), the file in memory (the screen export writes no temporary file either), and `IntentFile?` so that "nothing" is a result with the reason spoken. The rows are
+  the tenant's devices: use the file only in your own shortcuts. Shortcuts may store the file in its own container when a later action uses it. For the operator: the file's `listRead` column carries the snapshot's
+  error code and collector note, as the screen export does.
 - **Each declares `.background`** (`supportedModes`) **and `authenticationPolicy = .requiresLocalDeviceAuthentication`**. Neither
   is verified on a Mac. A cold launch still runs `AbapitApp`, whose `WindowGroup` may open a window, and the app quits when its last
   window closes (`applicationShouldTerminateAfterLastWindowClosed`). Whether a window opens, what the authentication policy does,
@@ -265,13 +274,13 @@ client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below
 - **Phrases**: one per report, "What needs attention in abapit", "Look up a serial number in abapit", "Ask abapit a
   question" and "Run the <report> report in abapit"; each names the app (`\(.applicationName)`) and is in the catalog, which the build ships as
   `en.lproj/AppShortcuts.strings` (SwiftGamGui failure-log 2026-10-10). Change a phrase in both places.
-- **Checks**: `scripts/check_app.sh` reads every `extract.actionsdata` in the bundle (exactly these ten intents, each background
+- **Checks**: `scripts/check_app.sh` reads every `extract.actionsdata` in the bundle (exactly these eleven intents, each background
   only with the local authentication policy set in code and never opening the app; every phrase names the app and is in the built
   catalog; no app entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source:
   `App/Intents`, `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`); the intents import only
   AppIntents, SwiftUI, AppModels and Foundation, never name a screen model, and depend on `Answers` alone; the one dialog is
   `answer.spoken`; the report choices are the catalog's titles. `scripts/intents_test.sh` (CI only) registers the Release build and
-  reads the ten definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
+  reads the eleven definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
   no-key answer) ended "transport cancelled" on the runner, so it isn't run; the authentication policy is a likely cause,
   unconfirmed.
 - Gotcha: a serial dictated to Siri goes through Siri's speech recognition, which may not run on the Mac (D7 keeps models on

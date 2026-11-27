@@ -24,6 +24,12 @@ struct IntentTests {
     /// What an intent file may import: the framework, SwiftUI for the snippet, and the screen models whose `Answers` it calls.
     static let intentImports: Set = ["AppIntents", "AppModels", "SwiftUI", "Foundation"]
 
+    /// What the CSV intent's files may not hold: a write to disk, a log, a dump, a handle, a pasteboard, a defaults store, a network call.
+    static let outputNeedles = ["write(to", "FileManager", "createFile", "NSTemporaryDirectory", "temporaryDirectory", "Logger", "OSLog", "print(", "NSLog",
+                                "os_log", "NSPasteboard", "UIPasteboard", "URLSession", "dump(", "FileHandle", "debugPrint", "UserDefaults"]
+    /// What `Answers` may not do on the way to a CSV or any answer: switch the client, write a snapshot or the history, record a finding.
+    static let answersMayNot = [".select(", "selectClient", "snapshots.", "historyTransfer", "record("]
+
     static func files() throws -> [SourceScan.File] {
         let answers = try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").filter { [Self.answers, Self.ask].contains($0.path) }
         return try SourceScan.swiftFiles(in: Self.intents) + SourceScan.swiftFiles(in: Self.assist) + answers
@@ -86,18 +92,67 @@ struct IntentTests {
         #expect(app.components(separatedBy: "AppDependencyManager").count == 2 && app.components(separatedBy: "add(dependency:").count == 2)
     }
 
-    /// No intent words an answer: the one dialog is the answer's own spoken words, made in the snippet's file.
+    /// No intent words an answer: every dialog is the answer's own spoken words, made in the snippet's file, and every file an intent
+    /// returns is made there from `Answers`' text. Counted over code with its comments blanked, so a commented-out call counts for
+    /// nothing (the review of PR 55).
     @Test func everyDialogIsTheAnswersWords() throws {
         let dialogs = try SourceScan.files(in: Self.intents, matching: ["IntentDialog(", "dialog:"])
         #expect(dialogs == ["\(Self.intents)/Snippets.swift"], "\(dialogs.sorted())")
         let snippet = try #require(try SourceScan.swiftFiles(in: Self.intents).first { $0.path.hasSuffix("/Snippets.swift") })
         #expect(snippet.text.contains("dialog: IntentDialog(\"\\(answer.spoken)\")"))
+        for file in try SourceScan.swiftFiles(in: Self.intents) {
+            let code = SourceScan.code(file.text, strings: true)
+            let sites = code.components(separatedBy: "IntentDialog(").count - 1
+            let spoken = code.components(separatedBy: "IntentDialog(\"\\(answer.spoken)\")").count - 1
+            #expect(sites == spoken, "\(file.path): \(sites) IntentDialog sites, \(spoken) of them the answer's words")
+            let labelled = code.components(separatedBy: "dialog:").count - 1
+            let labelledSpoken = code.components(separatedBy: "dialog: IntentDialog(\"\\(answer.spoken)\")").count - 1
+            #expect(labelled == labelledSpoken, "\(file.path): \(labelled) dialog: sites, \(labelledSpoken) the answer's words")
+            // A file an intent returns is made in the snippet's file alone.
+            if file.path != snippet.path {
+                #expect(!code.contains("IntentFile("), "\(file.path) makes a file")
+            }
+        }
         // Every intent's answer comes from `Answers`: each `perform` hands the snippet what `answers` returned.
-        for file in try SourceScan.swiftFiles(in: Self.intents) where SourceScan.mentions(file, ["func perform("]) {
-            let performs = file.text.components(separatedBy: "func perform(").count - 1
-            let answered = file.text.components(separatedBy: "AnswerSnippet.result(await answers.").count - 1
-                + file.text.components(separatedBy: "AnswerSnippet.result(await AskModel(answers: answers).ask(").count - 1
+        for file in try SourceScan.swiftFiles(in: Self.intents) where file.text.contains("func perform(") {
+            let code = SourceScan.code(file.text, strings: true)
+            let performs = code.components(separatedBy: "func perform(").count - 1
+            let answered = code.components(separatedBy: "AnswerSnippet.result(await answers.").count - 1
+                + code.components(separatedBy: "AnswerSnippet.result(await AskModel(answers: answers).ask(").count - 1
+                + code.components(separatedBy: "AnswerSnippet.fileResult(await answers.reportCSV(").count - 1
             #expect(performs == answered, "\(file.path): \(performs) intents, \(answered) answered by Answers")
+        }
+    }
+
+    /// `Answers` only reads: it names no client switch, snapshot write, history transfer or recording (the review of PR 55 asked for a
+    /// scan, since `reportCSV` sits beside the models it reads).
+    @Test func answersSwitchesNothingAndWritesNothing() throws {
+        let answers = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.answers })
+        #expect(!SourceScan.mentions(answers, Self.answersMayNot), "Answers.swift switches, writes or records")
+        #expect(SourceScan.mentions(answers, ["func reportCSV("]), "the scan sees reportCSV")
+        for planted in ["orgs.selectClient(\"b\")", "orgs.select(\"b\")", "snapshots.run()", "historyTransfer.export()", "attentionModel.record(findings)"] {
+            #expect(SourceScan.mentions(SourceScan.File(path: "x.swift", text: planted), Self.answersMayNot), "\(planted)")
+        }
+    }
+
+    /// Get report CSV is for Shortcuts only and reads only: no App Shortcut or phrase names it, it holds `Answers` alone, it writes no
+    /// file of its own and logs nothing (the CSV is the person's own Shortcut's), and it is made from the one `ReportChoice`.
+    @Test func theCSVIntentHasNoPhraseWritesNothingAndLogsNothing() throws {
+        let intent = try #require(try SourceScan.swiftFiles(in: Self.intents).first { $0.path.hasSuffix("/ReportCSVIntent.swift") })
+        let snippets = try #require(try SourceScan.swiftFiles(in: Self.intents).first { $0.path.hasSuffix("/Snippets.swift") })
+        let shortcuts = try #require(try SourceScan.swiftFiles(in: Self.intents).first { $0.path.hasSuffix("/Shortcuts.swift") })
+        #expect(!SourceScan.mentions(shortcuts, ["GetReportCSVIntent"]), "an App Shortcut names the CSV intent")
+        #expect(intent.text.contains("static let supportedModes: IntentModes = .background") && intent.text.contains("@Dependency private var answers: Answers"))
+        #expect(intent.text.contains("var report: ReportChoice") && intent.text.contains("var group: String?") && intent.text.contains("var number: Int?"))
+        for file in [intent, snippets] {
+            #expect(!SourceScan.mentions(file, Self.outputNeedles), "\(file.path) writes, logs or sends")
+        }
+        // The file is made in memory from `Answers`' text, as the screen's export is.
+        #expect(snippets.text.contains("IntentFile(data: Data($0.text.utf8), filename: $0.name, type: .commaSeparatedText)"))
+        for planted in ["let url = FileManager.default.temporaryDirectory", "try text.write(to: url)", "Logger().info(\"x\")", "print(rows)", "dump(rows)",
+                        "let h = FileHandle.standardError", "debugPrint(rows)", "UserDefaults.standard.set(rows, forKey: \"k\")",
+                        "NSPasteboard.general.setString(text, forType: .string)", "UIPasteboard.general.string = text"] {
+            #expect(SourceScan.mentions(SourceScan.File(path: "x.swift", text: planted), Self.outputNeedles), "\(planted)")
         }
     }
 
@@ -114,7 +169,7 @@ struct IntentTests {
     /// The scan must see what it guards and find each name it looks for, or the tests above pass vacuously.
     @Test func theScanSeesTheIntentsAndFindsEveryName() throws {
         let paths = Set(try Self.files().map(\.path))
-        for name in ["ReportIntents", "AttentionIntent", "LookUpIntent", "AskIntent", "Snippets", "Shortcuts"] {
+        for name in ["ReportIntents", "ReportCSVIntent", "AttentionIntent", "LookUpIntent", "AskIntent", "Snippets", "Shortcuts"] {
             #expect(paths.contains("\(Self.intents)/\(name).swift"), "\(name)")
         }
         #expect(paths.contains(Self.answers) && paths.contains(Self.ask))

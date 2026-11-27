@@ -1,5 +1,6 @@
 import AppIntents
 import AppModels
+import Foundation
 import SwiftUI
 
 /// What an intent says and shows, all of it `Answers`' words: the spoken answer as the dialog and as the value Shortcuts passes on,
@@ -46,5 +47,12 @@ struct AnswerSnippet: View {
     @MainActor
     static func result(_ answer: Answers.Answer) -> some IntentResult & ReturnsValue<String> & ProvidesDialog & ShowsSnippetView {
         .result(value: answer.spoken, dialog: IntentDialog("\(answer.spoken)"), view: AnswerSnippet(answer: answer))
+    }
+
+    /// The CSV intent's result: the file, if there is one, and `Answers`' spoken words as the dialog.
+    @MainActor
+    static func fileResult(_ answer: Answers.CSVAnswer) -> some IntentResult & ReturnsValue<IntentFile?> & ProvidesDialog {
+        let file = answer.file.map { IntentFile(data: Data($0.text.utf8), filename: $0.name, type: .commaSeparatedText) }
+        return .result(value: file, dialog: IntentDialog("\(answer.spoken)"))
     }
 }
