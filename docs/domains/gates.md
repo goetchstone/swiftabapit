@@ -69,6 +69,19 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   getter, `sysctl`, `proc_pid…`, `CommandLine`, the `NSUserDefaults` class, `AppStorage`, `CFPreferences`. It
   refuses a child process's imports (`NSTask`, which is `Process`; `posix_spawn`; `execv…`; the script tasks).
   It refuses TestSupport's names and Vault's `MemoryStore` in `strings -a` and in `nm`.
+- **No other way to a host.** `RouteTests.nothingReachesAHostAnotherWay` refuses, in the package and the app,
+  Foundation's stream pair and `Host`, the resolver (`getaddrinfo`, `gethostby…`), the whole names `socket` and
+  `connect` (taken unapplied, `socket(` isn't there to find), an attributed string read from a document or HTML, a web
+  view and a sharing service. The Release gate refuses, as imports, exactly these (`_socket`, `_connect`, `_connectx`, `_getaddrinfo`,
+  `_gethostbyname`, `_gethostbyname2`, `_gethostbyaddr`, `NSHost`, `CFHost`, `NSStream`, `NSInputStream`,
+  `NSOutputStream`, `CFStreamCreatePairWith…`, `AsyncImage`, `NSWorkspace`, `_LSOpen…`, `NSSharingService`,
+  `WKWebView`, `_WebKit_SwiftUI`): it reads the binary, so it sees code no scan read. Only `_socket`, `_connect`,
+  `_getaddrinfo`, `NSHost` and `NSStream` were proven refused at the binary level (by a probe build). The source scan and the import allowlist hold the rest: `NWConnection`,
+  `NSURLConnection`, `CFReadStream`, `dlsym` and other run-time lookups. Both are lists of the routes found so far, not
+  every route (failure-log 2026-11-18, "a probe reached a host past every gate").
+- **What Xcode compiles.** `TreeTests.theProjectCompilesOnlyTheAppFolder` holds the project to one synchronized
+  folder (`App`), one target, four file references and no script, copy or rule phase. A second folder (`Extras/`)
+  compiled into the app past every scan. `scripts/check_graph.py` holds the same for SwiftPM (no custom `path`).
 
 ## Invariants & failure history
 - failure-log 2026-10-16, "the gate checked names, not values" (Phase 0): exact entitlements, one Mach-O,
@@ -156,3 +169,6 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **A second transport user** (Mosyle's client, Phase 7): a reviewed change to
   `RouteTests.onlyTheClientBuildsTheTransportAndOnlyHTTPClientSends`.
 - **A gate change:** build each mutant it should refuse, from a scratch copy, and run the gate on each.
+- **A Release use of `NSWorkspace` or `openURL`** (opening an activity's `downloadUrl` in the browser, by design): a
+  reviewed change that excuses the one file by name in `RouteTests` and takes `NSWorkspace` out of the gate's import
+  list, with an https-only check and its test in the same PR.

@@ -20,11 +20,31 @@ enum Launch {
 
 struct AbapitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var services = AppServices.make()
+    @State private var services: AppServices
+
+    init() {
+        let services = AppServices.make()
+        _services = State(initialValue: services)
+        // The intents reach the screen models' answers only (invariant 9).
+        services.registerIntents()
+    }
+
+    /// The window's content: the app, or in debug builds an intent's snippet for the screenshots (`ABAPIT_SNIPPET`).
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if let report = SnippetPreview.requested {
+            SnippetPreview(answers: services.screens.answers, report: report)
+        } else {
+            ContentView(services: services)
+        }
+        #else
+        ContentView(services: services)
+        #endif
+    }
 
     var body: some Scene {
         WindowGroup("abapit") {
-            ContentView(services: services)
+            root
                 .task { await Snapshots.runIfRequested() }
         }
         // Every launch opens a fresh window: an admin tool has nothing worth restoring, and a restored

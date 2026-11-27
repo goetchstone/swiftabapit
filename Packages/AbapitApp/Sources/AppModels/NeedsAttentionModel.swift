@@ -102,6 +102,8 @@ public final class NeedsAttentionModel {
         public let source: [String]
         /// Skipped only because a list it reads was still being read when it was judged.
         public let isReading: Bool
+        /// When the oldest snapshot among its inputs was taken; nil when it read only live lists, or was skipped.
+        public let takenAt: Date?
         public var id: String { rule.rawValue }
 
         /// The findings not dismissed or snoozed.
@@ -215,6 +217,13 @@ public final class NeedsAttentionModel {
     /// Asks the Devices and Mosyle models for the lists the rules read live (the reads their screens make, never a sweep), reads the
     /// active org's history for the sweeps and Apple MDM's list, then evaluates.
     public func load() async {
+        if await loadHistory() { await evaluate(force: true) }
+    }
+
+    /// `load` without its evaluation: what an answer awaits (`Answers`), which checks the live lists are as its wait saw them and
+    /// then evaluates. True when `load` goes on to evaluate (not superseded, the org unchanged).
+    @discardableResult
+    package func loadHistory() async -> Bool {
         if let first = beforeFirstLoad {
             beforeFirstLoad = nil
             await first()
@@ -224,11 +233,11 @@ public final class NeedsAttentionModel {
         defer { loadsFinished += 1 }
         guard let profile = orgs.active else {
             state = .unusable(ScreenWords.noOrganization)
-            return
+            return false
         }
         guard profile.provider == .known(.apple) else {
             state = .unusable(Self.mosyleWords)
-            return
+            return false
         }
         readLive()
         // The settings as the file holds them now: a hand edit, or a file that can no longer be read, is seen and said.
@@ -246,7 +255,7 @@ public final class NeedsAttentionModel {
             outcome = .failure(failure)
         }
         await afterAwait?("load")
-        guard token == loadToken, generation == orgs.generation else { return }
+        guard token == loadToken, generation == orgs.generation else { return false }
         switch outcome {
         case .success(let read):
             sources = read
@@ -256,7 +265,7 @@ public final class NeedsAttentionModel {
             state = .failed(failure.message)
         }
         sourcesStamp += 1
-        await evaluate(force: true)
+        return true
     }
 
     /// The live lists the rules read: the Devices screen's, and the Mosyle screen's devices when the client has a Mosyle org.
@@ -336,6 +345,43 @@ public final class NeedsAttentionModel {
         recordNote = problem
         evaluatedAt = now
         evaluatedKey = key
+    }
+
+    /// What an intent's question is answered from (the operator, 2026-11-25, "Don't record (Recommended)": Siri and Shortcuts judge
+    /// and say the findings, and save nothing; only the screen records). The rules over what is held now, with the findings kept for
+    /// later read (so a dismissed or snoozed one isn't counted open), and nothing written: no `seen`, no first-seen date, no ageing.
+    /// The screen's own evaluation and what it shows are untouched.
+    package struct Judgement: Sendable {
+        /// What the rules read, as the judging began.
+        package let key: InputKey
+        package let at: Date
+        package let lines: [Line]
+        package let summary: Summary
+    }
+
+    /// Judges without recording; nil when the active org isn't an Apple org, or the org changed during the read of what is kept.
+    package func judge() async -> Judgement? {
+        let key = inputKey, generation = orgs.generation
+        guard let apple = appleOrg else { return nil }
+        let mosyleOrg = orgs.mosyleOrg
+        let now = now()
+        let made = evaluations(now: now)
+        var kept: [Key: SnapshotStore.Finding] = [:]
+        var problem: String?
+        switch orgs.history {
+        case .success(let store):
+            do {
+                kept = try await Self.kept(store, apple: apple, mosyle: mosyleOrg)
+            } catch {
+                problem = "The findings kept for later couldn't be read: \(error.message)"
+            }
+        case .failure(let failure):
+            problem = failure.message
+        }
+        await afterAwait?("judge")
+        guard generation == orgs.generation else { return nil }
+        let lines = lines(made, kept, (apple.id, mosyleOrg?.id), note: problem)
+        return Judgement(key: key, at: now, lines: lines, summary: Self.summary(of: lines))
     }
 
     /// The findings kept for the client: its Apple org's, and its Mosyle org's for the one rule kept there. Never another client's.
@@ -564,7 +610,10 @@ public final class NeedsAttentionModel {
     // MARK: the lines
 
     /// Every rule as the screen lists it, in the rules' order: empty until the first evaluation.
-    public var lines: [Line] {
+    public var lines: [Line] { lines(evaluated, stored, evaluatedOrgs, note: recordNote) }
+
+    private func lines(_ evaluated: [Evaluated], _ stored: [Key: SnapshotStore.Finding], _ evaluatedOrgs: (apple: String, mosyle: String?),
+                       note recordNote: String?) -> [Line] {
         let now = now()
         let writable: String? = switch orgs.history {
         case .success(let store):
@@ -596,7 +645,8 @@ public final class NeedsAttentionModel {
                                isHidden: kept?.isHidden(at: now) ?? false, actionsBlocked: blocked, keeperOrg: keeper)
             }
             let reading = item.pending && { if case .skipped = verdict { true } else { false } }()
-            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source, isReading: reading)
+            return Line(rule: item.rule, title: title, verdict: verdict, findings: findings, words: words, source: item.source, isReading: reading,
+                        takenAt: item.result?.takenAt)
         }
     }
 
@@ -667,7 +717,10 @@ public final class NeedsAttentionModel {
     /// Nil until the first evaluation.
     public var summary: Summary? {
         guard !evaluated.isEmpty else { return nil }
-        let lines = self.lines
+        return Self.summary(of: lines)
+    }
+
+    static func summary(of lines: [Line]) -> Summary {
         let rows = lines.filter { !$0.open.isEmpty }.map { Summary.Row(rule: $0.rule, title: $0.title, open: $0.open.count, partial: $0.isPartial) }
         return Summary(rows: rows, skipped: lines.filter { $0.isSkipped && !$0.isReading }.map(\.title),
                        clear: lines.filter { $0.verdict == .judged && $0.open.isEmpty }.count, partial: lines.filter(\.isPartial).count,

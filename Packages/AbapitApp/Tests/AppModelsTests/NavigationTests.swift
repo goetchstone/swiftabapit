@@ -194,7 +194,11 @@ struct NavigationTests {
         // A run's pane (its seventh field) is one Activity opens on: Changes, over the demo's fake snapshots.
         #expect(specs.contains { $0 == ["reports", "reports"] }, "Reports' picture is drawn over the demo's history")
         #expect(specs.contains { $0 == ["needs-attention", "needs-attention"] }, "Needs attention's picture is drawn over the demo's lists and history")
-        #expect(specs.filter { $0.count > 6 }.map { "\($0[0]):\($0[1]):\($0[6])" } == ["changes:activity:changes"])
+        #expect(specs.filter { $0.count > 6 && !$0[6].isEmpty }.map { "\($0[0]):\($0[1]):\($0[6])" } == ["changes:activity:changes"])
+        // A run's snippet (its eighth field) is a report's id: the intent's answer for it, drawn over the demo's history.
+        let snippets = specs.filter { $0.count > 7 && !$0[7].isEmpty }
+        #expect(snippets.map { "\($0[0]):\($0[7])" } == ["snippet-out-of-warranty:out-of-warranty"], "\(snippets)")
+        #expect(snippets.allSatisfy { ReportsModel.Report(rawValue: $0[7]) != nil })
         // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
         // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
         let demos = specs.map { $0.count > 4 ? $0[4] : "" }

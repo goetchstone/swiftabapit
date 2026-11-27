@@ -27,6 +27,20 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-18 — Invariant 4's hosts were held by lists of the routes someone had already found
+- **What happened:** a review's probes (a stream pair, a name lookup, a BSD socket, an `AsyncImage`, `NSWorkspace`, and
+  `URLSession` in a second source folder) built into Release with every test and the gate green (failure-log
+  2026-11-18, "a probe reached a host past every gate").
+- **Invariant in force:** #4 (outbound HTTPS only to the five allowlisted hosts).
+- **Why it didn't hold:** wrong layer for part of it. `HTTPCore` holds the hosts for requests that go through it; for
+  everything else the homes are name lists, and the Release gate read listener imports only. Nothing held which
+  folders Xcode compiles.
+- **Would a rule have caught it?** only if enforced differently: the binary's imports are read for outbound routes as
+  they are for listeners, and the project file is held like the package manifest.
+- **Enforcement home if changed:** tripwire tests (`RouteTests.nothingReachesAHostAnotherWay`,
+  `TreeTests.theProjectCompilesOnlyTheAppFolder`) and `scripts/check_app.sh`. Invariant 4's home line could say the
+  lists are lists: an `improve-rules` edit, not made here.
+
 ## 2026-11-12 — A convenience met a rule that hid it
 - **What happened:** PR #18's review (failure-log 2026-11-12, "an org joined a client nobody could see"): "a new org joins
   the active client when it has room" and "no client UI with one client" each made sense. Together, a second customer's org

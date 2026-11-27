@@ -4,8 +4,9 @@
 
 **Owns invariant(s):** #9
 
-**Status:** begun. Phase 9's read-only step started with the report catalog (below); the model's pick is built (below);
-the intents and the answers are later PRs. Until then, read the plan section named above and the nearest SwiftGamGui runbook.
+**Status:** begun. Phase 9's read-only step started with the report catalog (below); the answers, the read intents and the
+model's pick are built (below); the in-app Ask is a later PR. Read the plan section named above and the nearest SwiftGamGui
+runbook too.
 
 ## Files
 
@@ -158,3 +159,84 @@ sweep, and wait up to a time limit, and that a read under 15 minutes old is reus
 - Gotcha: a model's read can end one list before the other (the Devices model ends its services after the devices, or the
   reverse). A request that wants only the ended list doesn't wait for the other, and the next request shares that read until it
   ends.
+
+## Answers
+
+`Packages/AbapitApp/Sources/AppModels/Answers.swift` (held by `ScreenModels.answers`), tests `AppModelsTests/AnswersTests.swift`.
+One function per question, each returning code's words, for every later intent and the in-app Ask (the operator, 2026-11-24: Q1
+"Six reports + more", Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active client, named").
+
+- `answer(report:tokens:)`: a token that doesn't resolve reads nothing. A snapshot report (coverage, out of warranty, Activation
+  Lock, and fleet age when a snapshot read AppleCare) awaits the Reports screen's history read (`ReportsModel.loadHistory`, `load`
+  without its live read); a live one (migration, service health, fleet age without AppleCare) waits on `LiveWait`; then
+  `ReportsModel.build`, the screen's one function. An answer's history read replaced by the screen's own waits for that one,
+  bounded, and the screen's live read is never lost to an answer's (`liveWanted`: whichever read of the history wins asks for it).
+  `attention()`: `LiveWait` over all three lists, the Needs-attention screen's history read (`loadHistory`), the lists checked
+  as the wait saw them, then the screen's own `evaluate`, so findings are recorded as the screen records them, only for a rule
+  judged whole, and never over a list said not counted. It says the oldest snapshot its rules used, with its age.
+  `lookUp(serial:)`: Find over the awaited device list (serial, IMEI, MEID, EID, order number, MAC), said as an exact match or
+  as part of an identifier; the identifier is never said back.
+- Each returns `Answer { lead, spoken, rows, capNote, estimateNote }`. `spoken`: a snapshot report's "judges nothing" as the
+  screen says it; else the data's date and age, how much was read, the report's own count lines after its read line, values
+  this version doesn't know counted, never said (Apple's raw value stays on the screen and in the rows), "N estimated from the order date" for out of warranty (the assumption in `estimateNote`).
+  Rows: serial, model, state, at most 10, the cap said; service health shows none, as services are known by name.
+- **An error is a fixed phrase per kind** (`Answers.Phrase`), never the reason's text, which can quote Apple's `detail`, Mosyle's
+  own words, a snapshot's code or note, or the history's message: your role can't read; read in part (with counts, never why in
+  the API's words); failed ("abapit says why"); not in scope; can't be read for this organization; no Mosyle org; still being
+  read after the bound; the active organization changed; cancelled. A snapshot report whose history failed, or whose newest
+  snapshot read none of the sweep, says a fixed phrase in place of the screen's words.
+- **Never more than was read**: a list still being read, refused or failed counts nothing. After the wait each list's end is
+  asked again (`LiveWait.end(of:seen:)`), and a list still being read at the bound must still be under way: a list changed
+  since (a Refresh, or a read that ended after the bound) answers nothing, so no count or finding is over another read. A
+  field the API didn't send is said (the services' default fields, Mosyle's refused columns, a device's model or status).
+- **Clients**: with two or more, the client's name leads `lead` and `spoken`; with one, nothing says "client" (the Mosyle org's
+  Needs-attention words drop it). A Mosyle org active says the Reports and Needs-attention screens' words; serial lookup says it
+  reads Apple's list (the executor's words). A School org answers as its screens do.
+- Gotcha: a snapshot report never waits on Apple, so it has no still-being-read words; a switch during its history read answers
+  nothing.
+
+## Intents
+
+`App/Intents/{ReportIntents,AttentionIntent,LookUpIntent,Snippets,Shortcuts}.swift`, `App/AppShortcuts.xcstrings`. The intents
+reach `Answers` alone, through `AppServices.registerIntents` (`AppDependencyManager`, as SwiftGamGui's `SiriIntents.register`):
+never the screen models whole, through which the snapshot collector, the history transfer, Dismiss and Snooze and a switch of client
+write (a fix from the review of PR 52). `Answers` keeps the models it reads private. The operator's answers they rest on: Q1 "Six
+reports + more", Q2 "Out for now" (no Spotlight, no `IndexedEntity`), Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active
+client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below).
+
+- **Nine read-only intents**: `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
+  the number goes to the report's own number filter, `Answers.tokens`), `NeedsAttentionIntent`, `LookUpSerialIntent(serial:)`,
+  and one intent per report with no parameter (`OutOfWarrantyIntent`, `CoverageEndingIntent`, `FleetAgeIntent`,
+  `ActivationLockIntent`, `MigrationIntent`, `ServiceHealthIntent`) for Siri. Each `perform` calls `Answers` and nothing else.
+- **Each declares `.background`** (`supportedModes`) **and `authenticationPolicy = .requiresLocalDeviceAuthentication`**. Neither
+  is verified on a Mac. A cold launch still runs `AbapitApp`, whose `WindowGroup` may open a window, and the app quits when its last
+  window closes (`applicationShouldTerminateAfterLastWindowClosed`). Whether a window opens, what the authentication policy does,
+  and whether the Keychain key's Touch ID prompt shows from Siri are the operator's live checks.
+- **What is said is `Answers`' words**: the dialog and the returned value (what Shortcuts passes on) are `Answer.spoken`; the
+  snippet (`AnswerSnippet`) shows the lead, the rows (serial, model, state; at most 10), which devices they are (`rowsNote`), the
+  cap and any estimate. With no group asked, the rows are the devices the question is about: out of warranty's without active
+  coverage, Activation Lock's locked ones, migration's past the deadline without success; coverage lists those ending and fleet age
+  its refresh candidates (a fix from the review of PR 52: ten ACTIVE rows had hidden the one out of warranty). The counts are spoken
+  whole.
+- **Needs attention from an intent records nothing** (the operator, 2026-11-25: "Don't record (Recommended)"): it is judged and
+  said, with no `seen`, no first-seen date and no ageing, by `NeedsAttentionModel.judge()`, which reads what is kept (a dismissed or
+  snoozed finding isn't counted open) and leaves the screen's evaluation alone. Only the screen records. What the rules read is
+  checked again after the judgement; changed, nothing is answered.
+- **Phrases**: one per report, "What needs attention in abapit", "Look up a serial number in abapit" and "Run the <report>
+  report in abapit"; each names the app (`\(.applicationName)`) and is in the catalog, which the build ships as
+  `en.lproj/AppShortcuts.strings` (SwiftGamGui failure-log 2026-10-10). Change a phrase in both places.
+- **Checks**: `scripts/check_app.sh` reads every `extract.actionsdata` in the bundle (exactly these nine intents, each background
+  only with the local authentication policy set in code and never opening the app; every phrase names the app and is in the built
+  catalog; no app entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source:
+  `App/Intents`, `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`); the intents import only
+  AppIntents, SwiftUI, AppModels and Foundation, never name a screen model, and depend on `Answers` alone; the one dialog is
+  `answer.spoken`; the report choices are the catalog's titles. `scripts/intents_test.sh` (CI only) registers the Release build and
+  reads the nine definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
+  no-key answer) ended "transport cancelled" on the runner, so it isn't run; the authentication policy is a likely cause,
+  unconfirmed.
+- Gotcha: a serial dictated to Siri goes through Siri's speech recognition, which may not run on the Mac (D7 keeps models on
+  device; Siri's dictation is Apple's, outside this app). Typed into Shortcuts, it stays on the Mac.
+- Gotcha: an App Shortcut can't preset a parameter (`AppShortcut(intent: RunReportIntent(report: .outOfWarranty), …)` builds,
+  but the metadata keeps only the intent's name, so Siri would ask which report). Hence one intent per report.
+- Screenshot: `snippet-out-of-warranty` (`ABAPIT_SNIPPET`, debug builds) draws the dialog's words and the snippet over the demo
+  org; Siri's own frame isn't drawn.
