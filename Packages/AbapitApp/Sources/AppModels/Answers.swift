@@ -128,6 +128,13 @@ public final class Answers {
         return Picker.Client(scope: school ? .school : .business, hasMosyle: orgs.mosyleOrg != nil, thresholds: attentionModel.thresholds)
     }
 
+    /// The org generation: a request that awaited something (the Ask's model call) compares it before and after, and a change is
+    /// a switch, so nothing picked for one client is answered over another's data.
+    var generation: Int { orgs.generation }
+
+    /// Runs `handler` on every org or client switch (the Ask clears its draft).
+    func onSwitch(_ handler: @escaping @MainActor () -> Void) { orgs.onSwitch(handler) }
+
     // MARK: the questions
 
     /// An intent's group and number as the catalog's tokens: the group under `group`, the number under the report's number filter

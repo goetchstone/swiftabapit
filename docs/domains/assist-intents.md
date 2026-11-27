@@ -272,7 +272,16 @@ Q3 "Picks + explanations", Q8 "On the Reports screen", D7 and D10 (on-device onl
 
 - **A serial first, with no model call** (`AskModel.serial(in:)`): a token of 8 to 20 ASCII letters and digits in one case, with
   letters before digits and never only digits then letters ("1825days"), or 14 to 17 digits alone (an IMEI, a MEID), goes to
-  `Answers.lookUp`. The picker would refuse it for its digits. It works with the model off. Mixed case ("iPhone15Pro") isn't one.
+  `Answers.lookUp`. The picker would refuse it for its digits. It works with the model off. Mixed case ("iPhone15Pro") isn't one,
+  nor a token ending in a unit word after its last digit ("within90days", "last30days", "applecare2years"; the coordinating
+  session, 2026-11-27). Known, announced false positives: a word glued to a number with no unit, such as "macbookair2020" or
+  "FY2025Q4", is a lookup that says "I read that as: Serial lookup" first and finds nothing.
+- **A serial with other words** (beyond `AskModel.filler`: look up, find, serial, where is, please, …) runs only the lookup, and the
+  answer ends "Only the serial lookup was run; the rest of the question wasn't read." No change is ever drafted (the coordinating
+  session, 2026-11-27).
+- **A switch while the model is asked** (the review of PR 54): `read` takes the org generation before the picker and compares it
+  after; changed, Siri says `Answers.Phrase.switched` and the field drafts nothing, so a pick made for one client is never answered
+  over another's data.
 - **Then the picker** (`Picker.pick` over `Answers.assistClient`: the active org's scope, whether it has a Mosyle org, the
   thresholds). A change request is answered with `Picker.changeRequestWords` and drafts nothing; a refusal is its words.
 - **Siri** (`ask`): a report pick is `Answers.answer(report:tokens:)`, the summary and a rule are `Answers.attention()` (the whole
@@ -289,8 +298,10 @@ Q3 "Picks + explanations", Q8 "On the Reports screen", D7 and D10 (on-device onl
   phrases (`AskModel.sirisPhrases`; a test holds each in `App/AppShortcuts.xcstrings`).
 - **Screenshots**: `reports` draws the field with the demo's model available; `reports-model-off` with `ABAPIT_MODEL=unavailable`
   (debug builds only, `App/Debug/DemoModel.swift`; the demo's model is never asked anything).
-- Gotcha: a sentence holding both a serial and a change verb ("wipe C02…") is a lookup, which reads only and says "I read that as:
-  Serial lookup" first.
+- **The draft is cleared** when the question is edited and when the org or client switches; "Fill the Report" is off until a new
+  draft exists (the coordinating session, 2026-11-27).
+- **IntentTests** hold `AskModel.swift` to the intents' list of screen models (`Mirror`, `selectClient`, `OrgsModel`, …) as well as
+  to the write path: an intent reaches whatever the Ask reaches.
 - Not done: re-checking the lists after `attention()`'s judgement. `NeedsAttentionModel.inputKey` already holds each list's
   `LoadState`, whose `.loaded(at:)` changes with any read since, so a second check could not be told apart by a test.
 

@@ -54,6 +54,12 @@ struct IntentTests {
     @Test func theIntentsReachAnswersAlone() throws {
         let reaching = try SourceScan.files(in: Self.intents, matching: Self.models)
         #expect(reaching.isEmpty, "\(reaching.sorted())")
+        // The Ask the intent makes is held to the same list: through it, an intent would reach whatever it reaches. Its own uses of
+        // `ReportsModel` (the report type, the defaults, `apply(to:)`, which the intent can't call without a `ReportsModel`) are not on
+        // the list, which names only `ReportsModel.init`.
+        let askFile = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.ask })
+        #expect(!SourceScan.mentions(askFile, Self.models), "\(Self.ask) reaches a screen model")
+        #expect(SourceScan.mentions(askFile, ["ReportsModel"]), "the scan sees AskModel")
         #expect(SourceScan.mentions(SourceScan.File(path: "x.swift", text: "let held = Mirror(reflecting: answers).children"), Self.models))
         for file in try SourceScan.swiftFiles(in: Self.intents) where SourceScan.mentions(file, ["@Dependency"]) {
             let dependencies = file.text.components(separatedBy: "@Dependency").dropFirst().map { $0.prefix(while: { $0 != "\n" }).trimmingCharacters(in: .whitespaces) }

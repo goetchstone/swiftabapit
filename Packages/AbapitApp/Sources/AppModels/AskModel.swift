@@ -23,6 +23,9 @@ public final class AskModel {
         /// A request to change something: nothing is drafted.
         case changeRequest
         case refused(Refusal)
+        /// The active org or client changed while the model was asked: what it picked was for the other one, so nothing is
+        /// answered or drafted.
+        case switched
     }
 
     /// A report and its filters as the Ask understood them, for the operator to check before they fill the screen.
@@ -42,8 +45,10 @@ public final class AskModel {
     private let answers: Answers
     private let model: any Picker.Asking
 
-    /// The Ask field's text.
-    public var question = ""
+    /// The Ask field's text. An edit clears the draft, which was the last sentence's (the coordinating session, 2026-11-27).
+    public var question = "" {
+        didSet { if question != oldValue { clear() } }
+    }
     /// A sentence is being read.
     public private(set) var working = false
     /// The last sentence's report, once the operator may fill the screen with it.
@@ -51,9 +56,19 @@ public final class AskModel {
     /// What the field says about the last sentence: what it was read as, or why nothing was.
     public private(set) var said: String?
 
+    /// Whether the screen's field cleared its draft on a switch yet: registered once, by the first `submit`, so an intent's Ask
+    /// (one per request) never adds a handler.
+    @ObservationIgnored private var watchesSwitches = false
+
     public init(answers: Answers, model: any Picker.Asking = ModelPicker.OnDevice()) {
         self.answers = answers
         self.model = model
+    }
+
+    /// No draft and nothing said: after an edit of the question, and on a switch of org or client.
+    private func clear() {
+        draft = nil
+        said = nil
     }
 
     // MARK: the model's availability
@@ -78,7 +93,9 @@ public final class AskModel {
 
     /// The first token of `sentence` shaped like a serial number, an IMEI or a MEID: 8 to 20 ASCII letters and digits in one case
     /// (never "iPhone15Pro"), with letters before digits ("C02…", "W8…") and never only digits then letters ("1825days", "90days"),
-    /// or 14 to 17 digits alone. Punctuation around it is dropped.
+    /// and never ending in a unit word after its last digit ("within90days", "applecare2years"; the coordinating session,
+    /// 2026-11-27), or 14 to 17 digits alone. Punctuation around it is dropped. Known false positives, a glued word and number
+    /// such as "macbookair2020" or "FY2025Q4", are a lookup that says so first and finds nothing.
     public static func serial(in sentence: String) -> String? {
         for word in sentence.split(whereSeparator: \.isWhitespace) {
             let token = word.trimmingCharacters(in: .punctuationCharacters.union(.symbols))
@@ -89,6 +106,8 @@ public final class AskModel {
                 continue
             }
             guard digits > 0, token.uppercased() == token || token.lowercased() == token else { continue }
+            let tail = String(token.reversed().prefix(while: \.isLetter).reversed()).lowercased()
+            if units.contains(tail) { continue }
             var switches = 0, previous: Bool?
             for character in token {
                 if let previous, previous != character.isNumber { switches += 1 }
@@ -100,10 +119,34 @@ public final class AskModel {
         return nil
     }
 
-    /// What `sentence` is read as: a serial with no model call, else the picker's outcome. Throws only `CancellationError`.
+    /// The unit words a token may end in after its digits: a number of days, weeks, years or months glued on, never a serial.
+    static let units: Set = ["day", "days", "week", "weeks", "wk", "wks", "year", "years", "yr", "yrs", "month", "months", "mo", "mos"]
+
+    /// Words a lookup's sentence may hold besides the serial without asking anything more.
+    static let filler: Set = ["look", "up", "lookup", "find", "search", "for", "serial", "number", "no", "imei", "meid", "identifier", "id",
+                              "the", "a", "an", "this", "that", "device", "devices", "which", "what", "where", "is", "it", "show", "me",
+                              "please", "check", "in", "abapit", "of", "with", "has", "have"]
+
+    /// Said after a lookup when the sentence held more than the serial and filler (the coordinating session, 2026-11-27).
+    public static let onlyTheLookUp = "Only the serial lookup was run; the rest of the question wasn't read."
+
+    /// Whether `sentence` holds words besides `serial` and `filler`.
+    static func asksMore(_ sentence: String, serial: String) -> Bool {
+        sentence.split(whereSeparator: \.isWhitespace).contains { word in
+            let token = word.trimmingCharacters(in: .punctuationCharacters.union(.symbols))
+            guard !token.isEmpty, token != serial else { return false }
+            return !filler.contains(token.lowercased())
+        }
+    }
+
+    /// What `sentence` is read as: a serial with no model call, else the picker's outcome, or `switched` when the org or client
+    /// changed while the model was asked. Throws only `CancellationError`.
     public func read(_ sentence: String) async throws -> Reading {
         if let serial = Self.serial(in: Picker.tidy(sentence)) { return .serial(serial) }
-        switch try await Picker.pick(sentence, for: answers.assistClient, using: model) {
+        let generation = answers.generation
+        let outcome = try await Picker.pick(sentence, for: answers.assistClient, using: model)
+        guard answers.generation == generation else { return .switched }
+        switch outcome {
         case .picked(let pick): return .picked(pick)
         case .changeRequest: return .changeRequest
         case .refused(let refusal): return .refused(refusal)
@@ -126,7 +169,7 @@ public final class AskModel {
     static func understood(_ reading: Reading) -> String? {
         switch reading {
         case .serial: return "I read that as: Serial lookup, for the identifier given."
-        case .changeRequest, .refused: return nil
+        case .changeRequest, .refused, .switched: return nil
         case .picked(let pick):
             switch pick.choice.kind {
             case .attentionSummary: return "I read that as: \(Choices.summaryLabel), every rule."
@@ -173,8 +216,13 @@ public final class AskModel {
             default: refusal.words
             }
             return Answers.Answer(lead: title, spoken: words, rows: [], capNote: nil, estimateNote: nil)
+        case .switched:
+            return Answers.Answer(lead: title, spoken: Answers.Phrase.switched, rows: [], capNote: nil, estimateNote: nil)
         case .serial(let serial):
-            answer = await answers.lookUp(serial: serial)
+            let found = await answers.lookUp(serial: serial)
+            guard Self.asksMore(Picker.tidy(question), serial: serial) else { answer = found; break }
+            answer = Answers.Answer(lead: found.lead, spoken: found.spoken + " " + Self.onlyTheLookUp, rows: found.rows, capNote: found.capNote,
+                                    estimateNote: found.estimateNote, rowsNote: found.rowsNote)
         case .picked(let pick):
             switch pick.choice.kind {
             case .report(let id):
@@ -199,13 +247,21 @@ public final class AskModel {
     /// is pointed to the Devices screen's Find, and Needs attention to its own screen.
     public func submit() async {
         guard !working, off == nil else { return }
+        if !watchesSwitches {
+            watchesSwitches = true
+            answers.onSwitch { [weak self] in self?.clear() }
+        }
         working = true
         defer { working = false }
-        draft = nil
-        said = nil
+        clear()
+        let asked = question
         let reading: Reading
-        do { reading = try await read(question) } catch { return }
+        do { reading = try await read(asked) } catch { return }
+        // Edited while the model was asked: the answer is to a sentence no longer in the field.
+        guard question == asked else { return }
         switch reading {
+        case .switched:
+            said = Answers.Phrase.switched
         case .serial:
             said = "That looks like a serial number or another identifier: find it on the Devices screen. Nothing was run."
         case .changeRequest:

@@ -35,17 +35,16 @@ struct ReportsView: View {
                 Button("Ask") { Task { await ask.submit() } }
                     .disabled(off != nil || ask.working || empty)
                     .accessibilityIdentifier("reports.ask.button")
+                // Off until the last sentence made a draft; an edit of the question or a switch of client clears it.
+                Button("Fill the Report") { ask.apply(to: model) }
+                    .disabled(ask.draft == nil)
+                    .accessibilityIdentifier("reports.ask.fill")
                 if ask.working { ProgressView().controlSize(.small) }
             }
             if let off {
                 Label(off, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("reports.ask.off")
             } else if let said = ask.said {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Label(said, systemImage: "text.bubble").font(.callout).accessibilityIdentifier("reports.ask.said")
-                    if ask.draft != nil {
-                        Button("Fill the Report") { ask.apply(to: model) }.accessibilityIdentifier("reports.ask.fill")
-                    }
-                }
+                Label(said, systemImage: "text.bubble").font(.callout).accessibilityIdentifier("reports.ask.said")
             }
         }
         .padding(.horizontal)

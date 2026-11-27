@@ -16,11 +16,15 @@ final class AskStub: Picker.Asking, @unchecked Sendable {
     private let lock = NSLock()
     private var replies: [String]
     private var made = 0
+    /// Run during the first call, before it answers: a test switches the client there.
+    private let during: (@MainActor () -> Void)?
 
-    init(_ replies: [String] = [], availability: SystemLanguageModel.Availability = .available, supportsLocale: Bool = true) {
+    init(_ replies: [String] = [], availability: SystemLanguageModel.Availability = .available, supportsLocale: Bool = true,
+         during: (@MainActor () -> Void)? = nil) {
         self.replies = replies
         self.availability = availability
         self.supportsLocale = supportsLocale
+        self.during = during
     }
 
     var calls: Int { lock.withLock { made } }
@@ -29,10 +33,11 @@ final class AskStub: Picker.Asking, @unchecked Sendable {
     enum Unscripted: Error { case call }
 
     func answer(instructions: String, prompt: String, schema: GenerationSchema) async throws -> GeneratedContent {
-        let reply: String? = lock.withLock {
+        let (reply, first): (String?, Bool) = lock.withLock {
             made += 1
-            return replies.isEmpty ? nil : replies.removeFirst()
+            return (replies.isEmpty ? nil : replies.removeFirst(), made == 1)
         }
+        if first, let during { await during() }
         guard let reply else {
             Issue.record("an unscripted call to the model")
             throw Unscripted.call
@@ -173,7 +178,7 @@ struct AskModelTests {
     }
 
     @Test(arguments: [
-        ("look up C02ZX1ABJG5H", "C02ZX1ABJG5H"), ("serial xg7hq2kd9v?", "xg7hq2kd9v"), ("imei 356938035643809.", "356938035643809"),
+        ("look up C02EXAMPLE01", "C02EXAMPLE01"), ("serial c02example02?", "c02example02"), ("imei 350000000000001.", "350000000000001"),
         ("\u{201C}ADEV0000001\u{201D}", "ADEV0000001"),
     ])
     func aSerialIsFound(_ sentence: String, _ serial: String) {
@@ -181,9 +186,73 @@ struct AskModelTests {
     }
 
     @Test(arguments: ["devices older than 1825days", "which iPhone15Pro are locked", "AppleCare ending in 90 days", "at 3pm",
-                      "out of warranty", "devices 14in or larger", "1234567"])
+                      "out of warranty", "devices 14in or larger", "1234567",
+                      // A unit word after the last digit (the coordinating session, 2026-11-27).
+                      "AppleCare ending within90days", "devices seen last30days", "applecare2years", "fleetage4yrs",
+                      "coverage2mos"])
     func noSerialIsFound(_ sentence: String) {
         #expect(AskModel.serial(in: sentence) == nil)
+    }
+
+    /// Known, announced false positives: a word glued to a number with no unit after it reads as a serial, and the lookup says so
+    /// first ("I read that as: Serial lookup") and finds nothing.
+    @Test(arguments: ["macbookair2020", "FY2025Q4"])
+    func aGluedWordAndNumberIsAKnownFalsePositive(_ token: String) {
+        #expect(AskModel.serial(in: "devices \(token)") == token)
+    }
+
+    /// A serial with more words than the lookup's filler: only the lookup runs, and the answer says the rest wasn't read; no change
+    /// is drafted (the coordinating session, 2026-11-27).
+    @Test func aSerialWithMoreWordsSaysOnlyTheLookUpRan() async throws {
+        let world = try await Self.world()
+        let ask = AskModel(answers: world.screens.answers, model: AskStub())
+        let more = await ask.ask("wipe ADEV0000001 and show its coverage")
+        #expect(more.spoken.hasSuffix(" " + AskModel.onlyTheLookUp) && more.rows.map(\.serial) == ["ADEV0000001"], "\(more.spoken)")
+        let plain = await ask.ask("where is the device ADEV0000001?")
+        #expect(!plain.spoken.contains(AskModel.onlyTheLookUp), "\(plain.spoken)")
+    }
+
+    // MARK: a switch while the model is asked
+
+    /// The client switches while the model is asked: what it picked was for the other client, so Siri answers nothing and the field
+    /// drafts nothing (the review of PR 54: a pick for client A was answered over client B's data).
+    @Test func aSwitchDuringTheModelCallAnswersNothing() async throws {
+        let world = try await Self.world()
+        let orgs = world.orgs
+        let siri = AskStub(AskStub.reads("Out of warranty", words: "out of warranty"), during: { orgs.select("b") })
+        let answer = await AskModel(answers: world.screens.answers, model: siri).ask(Self.question)
+        #expect(answer.spoken == Answers.Phrase.switched && answer.rows.isEmpty, "\(answer.spoken)")
+
+        orgs.select("a")
+        let field = AskModel(answers: world.screens.answers,
+                             model: AskStub(AskStub.reads("Out of warranty", words: "out of warranty"), during: { orgs.select("b") }))
+        field.question = Self.question
+        await field.submit()
+        #expect(field.draft == nil && field.said == Answers.Phrase.switched, "\(field.said ?? "")")
+    }
+
+    /// A draft is the last sentence's, for the client it was read for: editing the question or switching the client clears it, and
+    /// "Fill the Report" then fills nothing (the coordinating session, 2026-11-27).
+    @Test func anEditOrASwitchClearsTheDraft() async throws {
+        let world = try await Self.world()
+        let reports = world.screens.reports
+        let ask = AskModel(answers: world.screens.answers,
+                           model: AskStub(AskStub.reads("Activation Lock", words: "Activation Lock") + AskStub.reads("Activation Lock", words: "Activation Lock")))
+        ask.question = "Activation Lock"
+        await ask.submit()
+        #expect(ask.draft != nil)
+        ask.question = "Activation Lock of the Macs"
+        #expect(ask.draft == nil && ask.said == nil)
+        ask.apply(to: reports)
+        #expect(reports.report == .coverage, "nothing was filled")
+
+        ask.question = "Activation Lock"
+        await ask.submit()
+        #expect(ask.draft != nil)
+        world.orgs.select("b")
+        #expect(ask.draft == nil && ask.said == nil)
+        ask.apply(to: reports)
+        #expect(reports.report == .coverage, "nothing was filled")
     }
 
     // MARK: the Reports screen
