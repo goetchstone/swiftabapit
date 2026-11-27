@@ -66,28 +66,52 @@ python3 -I -c "$checker" "$team" "$BUNDLE_ID" <<<"$entitlements" || fail "entitl
 if plutil -extract NSAppTransportSecurity raw -o - "$PLIST" >/dev/null 2>&1; then fail "the Info.plist has an App Transport Security exception"; fi
 
 # No inbound door, and nothing else the build didn't put there: the Info.plist's keys are exactly these, plus the
-# toolchain's stamps (DT..., BuildMachineOSBuild). A URL scheme (CFBundleURLTypes), a document type, a Service
+# toolchain's stamps, named one by one and each a string. A URL scheme (CFBundleURLTypes), a document type, a Service
 # (NSServices), AppleScript (NSAppleScriptEnabled) or an activity type is a key here and no symbol in the binary, so
 # the listener check below never saw one (failure-log 2026-11-18). A new key is a reviewed change to this list.
-plist="$(plutil -convert json -o - "$PLIST" 2>/dev/null)" || fail "the Info.plist can't be read as JSON (it holds a date or data value, which this app's never does)"
+plist="$(plutil -convert json -o - "$PLIST" 2>/dev/null)" || fail "the Info.plist can't be read as JSON (it holds a date or data value, which this app's Info.plist never holds)"
 plist_keys='
-import json, re, sys
+import json, sys
 got = json.load(sys.stdin)
 want = {"CFBundleDevelopmentRegion", "CFBundleDisplayName", "CFBundleExecutable", "CFBundleIdentifier",
         "CFBundleInfoDictionaryVersion", "CFBundleName", "CFBundlePackageType", "CFBundleShortVersionString",
         "CFBundleSupportedPlatforms", "CFBundleVersion", "LSApplicationCategoryType", "LSMinimumSystemVersion",
         "NSHumanReadableCopyright"}
+# What the toolchain stamps in (all strings). A key on neither list is a reviewed change, never a wildcard.
+stamps = {"BuildMachineOSBuild", "DTCompiler", "DTPlatformBuild", "DTPlatformName", "DTPlatformVersion", "DTSDKBuild",
+          "DTSDKName", "DTXcode", "DTXcodeBuild"}
 if type(got) is not dict:
     sys.exit("the Info.plist is not a dictionary")
-extra = sorted(k for k in got if k not in want and k != "BuildMachineOSBuild" and not re.fullmatch("DT[A-Za-z]+", k))
+extra = sorted(k for k in got if k not in want and k not in stamps)
 if extra:
     sys.exit(f"the Info.plist has keys this app does not ship: {extra}")
+bad = sorted(k for k in got if k in stamps and type(got[k]) is not str)
+if bad:
+    sys.exit(f"the Info.plist holds a toolchain stamp that is not a string: {bad}")
 '
 python3 -I -c "$plist_keys" <<<"$plist" || fail "Info.plist keys (above)"
 # Nothing beside the code that launchd or LaunchServices would run for the app: no login item, XPC service or helper.
 [ ! -e "$APP/Contents/Library" ] || fail "the bundle has Contents/Library (a login item or a launch agent)"
 [ ! -e "$APP/Contents/XPCServices" ] || fail "the bundle has Contents/XPCServices"
 [ ! -e "$APP/Contents/PlugIns" ] || fail "the bundle has Contents/PlugIns (an app extension)"
+# Contents holds exactly what a clean Release build writes (measured 2026-11-27): any other folder (Helpers,
+# SharedSupport, Extensions...) could hold a nested app, extension or service the checks above never name.
+for entry in "$APP/Contents"/* "$APP/Contents"/.[!.]* "$APP/Contents"/..?*; do
+  [ -e "$entry" ] || [ -L "$entry" ] || continue
+  case "${entry##*/}" in
+    Info.plist|PkgInfo|MacOS|Resources|_CodeSignature) ;;
+    *) fail "Contents holds ${entry##*/}, which the build never writes (it holds exactly Info.plist, PkgInfo, MacOS, Resources and _CodeSignature)" ;;
+  esac
+done
+# Resources holds data only: a nested bundle, an Info.plist, a scripting definition or a localized InfoPlist.strings
+# would add a door (or change the Info.plist's display) from inside the sealed resources. find's output is captured first.
+nested="$(find "$APP/Contents/Resources" \( -iname Info.plist -o -iname '*.app' -o -iname '*.appex' -o -iname '*.xpc' -o -iname '*.bundle' -o -iname '*.framework' \) -print 2>/dev/null)" \
+  || fail "can't read Contents/Resources"
+[ -z "$nested" ] || fail "Contents/Resources holds an Info.plist or a nested bundle: $(tr '\n' ' ' <<<"$nested")"
+sdef="$(find "$APP/Contents/Resources" -iname '*.sdef' -print 2>/dev/null)" || fail "can't read Contents/Resources"
+[ -z "$sdef" ] || fail "Contents/Resources holds a scripting definition (AppleScript): $(tr '\n' ' ' <<<"$sdef")"
+loc="$(find "$APP/Contents/Resources" -iname InfoPlist.strings -print 2>/dev/null)" || fail "can't read Contents/Resources"
+[ -z "$loc" ] || fail "Contents/Resources holds InfoPlist.strings, which overrides the Info.plist's own values: $(tr '\n' ' ' <<<"$loc")"
 
 # What the code must not do or carry, checked twice: on a copy stripped the way an archive build strips it
 # (DEPLOYMENT_POSTPROCESSING=YES runs `strip -D`: no symbol table), then on the binary as built. Phase 1b's review
