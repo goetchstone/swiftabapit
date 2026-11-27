@@ -210,6 +210,14 @@ struct AskModelTests {
         #expect(more.spoken.hasSuffix(" " + AskModel.onlyTheLookUp) && more.rows.map(\.serial) == ["ADEV0000001"], "\(more.spoken)")
         let plain = await ask.ask("where is the device ADEV0000001?")
         #expect(!plain.spoken.contains(AskModel.onlyTheLookUp), "\(plain.spoken)")
+        // Where's, wheres, whereis, "#" and "serial#" are filler too (S9.6b).
+        for sentence in ["Where's ADEV0000001?", "Where\u{2019}s ADEV0000001?", "wheres ADEV0000001", "whereis ADEV0000001", "serial# ADEV0000001",
+                         "# ADEV0000001", "where is serial #ADEV0000001"] {
+            let answer = await ask.ask(sentence)
+            #expect(!answer.spoken.contains(AskModel.onlyTheLookUp) && answer.rows.map(\.serial) == ["ADEV0000001"], Comment(rawValue: "\(sentence): \(answer.spoken)"))
+        }
+        let askedMore = await ask.ask("Where's ADEV0000001 coverage?")
+        #expect(askedMore.spoken.hasSuffix(" " + AskModel.onlyTheLookUp), "\(askedMore.spoken)")
     }
 
     // MARK: a switch while the model is asked

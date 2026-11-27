@@ -140,6 +140,41 @@ struct PickerTests {
         #expect(!ModelPicker.namesAGroup("all of the MDM migration", choice), "the report's own words name no group")
     }
 
+    /// Other ways of saying a group open the group pick, and only for a report that has the group (the coordinating session,
+    /// 2026-11-27, S9.6b); the model still picks from the plain labels.
+    @Test func aSynonymOpensTheGroupPickOnlyWhereTheGroupIs() {
+        func choice(_ id: String) -> Choices.Choice { Self.full.choices.first { $0.id == id }! }
+        let lock = choice("report:activation-lock"), migration = choice("report:migration"), warranty = choice("report:out-of-warranty")
+        let health = choice("report:service-health")
+        for sentence in ["devices with no Activation Lock", "which devices are without a lock", "show devices with no lock on them"] {
+            #expect(ModelPicker.namesAGroup(sentence, lock), Comment(rawValue: sentence))
+        }
+        #expect(ModelPicker.namesAGroup("the overdue migrations", migration))
+        #expect(ModelPicker.namesAGroup("successful migrations", migration))
+        #expect(ModelPicker.namesAGroup("devices past due", migration))
+        for sentence in ["expired warranty", "devices whose coverage lapsed"] { #expect(ModelPicker.namesAGroup(sentence, warranty), Comment(rawValue: sentence)) }
+        // Still no group for the report's own words, and none where the report lacks the group.
+        #expect(!ModelPicker.namesAGroup("the Activation Lock report", lock))
+        #expect(!ModelPicker.namesAGroup("Activation Lock, with the lock type", lock), "\u{201C}with\u{201D} alone is no negation")
+        #expect(!ModelPicker.namesAGroup("no devices to show for the Activation Lock report today", lock), "the lock word is too far from the negation")
+        #expect(!ModelPicker.namesAGroup("the overdue Activation Locks", lock))
+        #expect(!ModelPicker.namesAGroup("expired migrations", migration))
+        #expect(!ModelPicker.namesAGroup("successful warranty checks", warranty))
+        #expect(!ModelPicker.namesAGroup("devices with no lock", migration))
+        #expect(!ModelPicker.namesAGroup("lapsed service health", health))
+        #expect(!ModelPicker.namesAGroup("no lock on any service", health), "\u{201C}no lock\u{201D} is a word for the unlocked group only")
+        #expect(!ModelPicker.namesAGroup("unhealthy services", health), "service health has no unhealthy group, so no word for it")
+    }
+
+    /// A synonym opens the pick end to end: three calls, the third offered the plain labels.
+    @Test func aSynonymSentenceTakesTheGroupCall() async throws {
+        let sentence = "devices with no Activation Lock"
+        let model = StubModel([StubModel.pick(Self.see, words: sentence), StubModel.pick(label("report:activation-lock"), words: sentence),
+                               StubModel.pick("unlocked", words: sentence)])
+        guard case .picked(let pick) = try await Picker.pick(sentence, for: Self.full, using: model) else { Issue.record("not picked"); return }
+        #expect(pick.group == "unlocked" && model.calls.count == 3)
+    }
+
     @Test func allIsEveryGroup() async throws {
         let model = StubModel([StubModel.pick(Self.see), StubModel.pick(label("report:migration")), StubModel.pick(ModelPicker.all)])
         guard case .picked(let pick) = try await Picker.pick("failed or started migration of the devices", for: Self.full, using: model) else {
@@ -190,6 +225,34 @@ struct PickerTests {
         #expect(try await tokens("Activation Lock on macOS 15", "report:activation-lock") == [:], "a bare number, where no number is taken, is ignored")
     }
 
+    /// Number words from one to twelve are read before a unit word as their digits would be, and "a"/"an" before a singular unit is
+    /// one (the coordinating session, 2026-11-27, S9.6b).
+    @Test func numberWordsAreRead() async throws {
+        func tokens(_ sentence: String, _ id: String) async throws -> [String: String]? {
+            if case .picked(let pick) = try await outcome(sentence, id) { return pick.tokens }
+            return nil
+        }
+        #expect(try await tokens("devices whose AppleCare ends in two weeks", "report:coverage") == ["days": "14"])
+        #expect(try await tokens("devices whose AppleCare ends in ten days", "report:coverage") == ["days": "10"])
+        #expect(try await tokens("devices whose AppleCare ends in two wks", "report:coverage") == ["days": "14"])
+        #expect(try await tokens("devices whose AppleCare ends in a week", "report:coverage") == ["days": "7"])
+        #expect(try await tokens("devices whose AppleCare ends in twelve weeks", "report:coverage") == ["days": "84"])
+        #expect(try await tokens("devices three years old or more", "report:fleet-age") == ["years": "3"])
+        #expect(try await tokens("devices on a three-year cycle", "report:fleet-age") == ["years": "3"])
+        #expect(try await tokens("devices more than a year old", "report:fleet-age") == ["years": "1"])
+        #expect(try await tokens("devices more than an year old", "report:fleet-age") == ["years": "1"])
+        #expect(try await tokens("devices ONE YEAR old", "report:fleet-age") == ["years": "1"])
+        #expect(try await tokens("migration deadline in two weeks", "rule:migration_deadline") == [:], "a rule's own window, said in words")
+        #expect(Picker.numbers(in: "in two weeks and 3 years").values == ["days": ["14"], "years": ["3"]])
+        // Not read: ambiguous words, and a bigger number whose last word is one to twelve ("twenty-one days" is never 1 day).
+        for sentence in ["this year", "next year", "last year", "a few years", "several years", "a couple of weeks", "twenty days",
+                         "twenty-one days", "twenty one days", "one hundred days", "half a year", "three weeks and one-day"] {
+            let said = Picker.numbers(in: "devices " + sentence)
+            if sentence == "three weeks and one-day" { #expect(said.values == ["days": ["21", "1"]]); continue }
+            #expect(said.values.isEmpty && !said.problems.isEmpty, Comment(rawValue: "\(sentence): \(said)"))
+        }
+    }
+
     /// A number that can't be taken as said refuses the pick, in words: never a value read from part of it, never dropped so the
     /// default window runs (the review's cases, each proved wrong before this).
     @Test(arguments: [
@@ -203,10 +266,27 @@ struct PickerTests {
         ("devices whose AppleCare ends within 4000 days", "report:coverage", "from 1 to 1825"),
         ("devices ending in 30 days or 60 days", "report:coverage", "more than once"),
         ("devices whose AppleCare ends in 3 months", "report:coverage", "months"),
-        ("devices whose AppleCare ends in two weeks", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        // A unit word with no number, or a number in words that isn't read (S9.6b): never a value.
+        ("devices whose AppleCare ends in a few weeks", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        ("devices whose AppleCare ends in a couple of weeks", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        ("devices whose AppleCare ends in several weeks", "report:coverage", "\u{201C}weeks\u{201D} has no number"),
+        ("devices whose AppleCare ends in twenty days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices whose AppleCare ends in twenty-one days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices whose AppleCare ends in twenty one days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices whose AppleCare ends in thirty days", "report:coverage", "\u{201C}days\u{201D} has no number"),
+        ("devices whose AppleCare ends in two months", "report:coverage", "months aren't read"),
+        ("devices whose AppleCare ends in a month", "report:coverage", "months aren't read"),
+        ("devices more than this year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices bought next year", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices bought last year", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        ("devices more than half a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
+        // A number word is held to the same checks as digits: bounds, the unit allowed, the rule's window.
+        ("devices twelve years old", "report:fleet-age", "from 1 to 10"),
+        ("devices whose AppleCare ends in two years", "report:coverage", "not years"),
+        ("AppleCare ending in two weeks", "rule:applecare_expiring", "window of 90 days"),
+        ("the Activation Lock of devices from two weeks ago", "report:activation-lock", "takes no number"),
         ("devices whose AppleCare ends in 90d", "report:coverage", "90d"),
         ("devices 4 years old", "report:coverage", "not years"),
-        ("devices more than a year old", "report:fleet-age", "\u{201C}year\u{201D} has no number"),
         ("AppleCare ending in 60 days", "rule:applecare_expiring", "window of 90 days"),
         ("devices not checked in to Mosyle for 2 years", "rule:mosyle_check_in", "2 years"),
         ("services quiet for days", "rule:quiet_service", "no number"),

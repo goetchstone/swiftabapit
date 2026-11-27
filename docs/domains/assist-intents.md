@@ -93,9 +93,13 @@ on-device only, never Private Cloud Compute).
   `LanguageModelError` case, a parsing error, assets not ready, a concurrent request) is "not understood" at once, worded by
   kind, never the error's own text. Code checks the final id and group against the list again (`Picker.check`).
 - **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) or wk(s) (seven days each), year(s)
-  or yr(s), "90-day" too, passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
+  or yr(s), "90-day" too, and (S9.6b, the coordinating session, 2026-11-27) the number words one to twelve in the same place
+  ("two weeks" is 14 days, "three-year" 3) and "a"/"an" before a singular unit ("a year" is 1); a number word goes through the same
+  checks as digits (bounds, the unit allowed, the rule's window). Not read, and still a problem: "this/next/last year", "a few",
+  "several", "a couple of" (ambiguous), months, and a bigger number whose last word is one to twelve ("twenty days" and
+  "twenty-one days" are refused, never read as 20 or 1: the words stop at twelve; "half a year" too). Passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
-  ("90d", "3pm", "14in": "abapit's reports can't filter by “3pm”", S9.7), in months, hours or minutes, or a unit word with no digits ("two weeks", "a year") is a problem; so is, for a choice
+  ("90d", "3pm", "14in": "abapit's reports can't filter by “3pm”", S9.7), in months, hours or minutes, or a unit word with no number before it ("this year", "a few weeks") is a problem; so is, for a choice
   that takes a number, a bare number ("within 60", "30 d", "before 2021", one end of "30 to 60 days"); so is a unit the report doesn't take, two different values,
   and, for a rule with a window (AppleCare ending, check-in, quiet service, migration deadline), a number other than its window.
   **Any problem refuses the pick** (`Refusal.numbers`, the problems as its words; the coordinating session's decision,
@@ -109,6 +113,11 @@ on-device only, never Private Cloud Compute).
   for every group; "past due" opens the pick. The pick lists "all" first, then plain labels ("user lock", "requested", "no
   coverage record", ...; `ModelPicker.groupLabels`, one per group, a test holds it), and code maps the answer back to the
   catalog's token (round 3, 2026-11-27: a word in two labels counts, as "all" leads the list).
+  S9.6b (2026-11-27): a short fixed list of other words per group opens the pick too, for the gate only (the model still picks from
+  the plain labels; `ModelPicker.groupSynonyms` and `denied`): "overdue" for past the deadline, "successful"/"success" for
+  succeeded, "expired"/"lapsed" for no active coverage, and "no" or "without" with a lock word within three words of it for
+  `unlocked`. A synonym counts only for a report that has the group. "Past due" already opened the pick through "past", and
+  service health has no "unhealthy" group, so none was added (no group is invented).
 - **Size**: each pick's largest call (a 300-character sentence, a fault line, the full list) counted with `tokenCount` on the
   operator's Mac: 379, 1,018 and 457 tokens with the cap, under 1,500 of an 8,192 context. The fast run holds an estimate
   (characters / 3 plus the cap) to the same budget.
@@ -124,11 +133,13 @@ on-device only, never Private Cloud Compute).
     fell 3 as the gate now sends "past the deadline" and other shared words to every group.
   - after round 3 (the stoplist read as the sentence is, a bare number refused where a number is taken, a word in two group
     labels counting): report 122, group 39, refusal 22; mean 1.30 s, at most 2.61 s; 17 refused for numbers.
+  - S9.6b (number words, group synonyms; one dev run, 2026-11-27, **held out was NOT re-run**): report 124, group 41, refusal 22;
+    mean 1.37 s, at most 3.21 s; 15 refused for numbers (17 before). `WordRule` unchanged (108, 30, 24).
   - In all runs, 3 or 4 guardrail stops and 7 of the model's own refusals in 212 sentences (each "not understood"). The held-out score is below.
 - **Held-out score** (S9.8, one run on the operator's Mac, 2026-11-27, nothing tuned against it; numbers in
   `Tests/Fixtures/assist/runs/heldout-2026-11-27.md`): model report 70 of 94, group 16 of 40, refusal 12 of 12; `WordRule` beside
   it 39 of 94, 7 of 40, 6 of 12 (dev: model 122 of 188, 39 of 81, 22 of 24; `WordRule` 108, 30, 24). Mean 1.31 s a sentence, at
-  most 1.93 s over 106 calls. Tokens as above (379, 1,018, 457). The model's refusals: 8 not on the list, 5 for numbers, 1
+  most 1.93 s over 106 calls (the picker as it was before S9.6b; not re-run since). Tokens as above (379, 1,018, 457). The model's refusals: 8 not on the list, 5 for numbers, 1
   guardrail stop, 1 its own. **The model beats `WordRule` on held out, on report and on group.** Report held up (74% against 65% on
   dev) while the group score fell (40% against 48%). The rule is the dev samples' words, so the gap is larger held out than dev.
   The model beats `WordRule` held out, so Ask uses the model (had it not, Ask would use `WordRule` until the operator decided).
@@ -276,7 +287,7 @@ Q3 "Picks + explanations", Q8 "On the Reports screen", D7 and D10 (on-device onl
   nor a token ending in a unit word after its last digit ("within90days", "last30days", "applecare2years"; the coordinating
   session, 2026-11-27). Known, announced false positives: a word glued to a number with no unit, such as "macbookair2020" or
   "FY2025Q4", is a lookup that says "I read that as: Serial lookup" first and finds nothing.
-- **A serial with other words** (beyond `AskModel.filler`: look up, find, serial, where is, please, …) runs only the lookup, and the
+- **A serial with other words** (beyond `AskModel.filler`: look up, find, serial, where is, where's, whereis, please, …; a bare "#" or "serial#" is trimmed away, S9.6b) runs only the lookup, and the
   answer ends "Only the serial lookup was run; the rest of the question wasn't read." No change is ever drafted (the coordinating
   session, 2026-11-27).
 - **A switch while the model is asked** (the review of PR 54): `read` takes the org generation before the picker and compares it

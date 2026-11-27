@@ -146,7 +146,36 @@ public enum ModelPicker {
         // The stoplist read as the sentence is, so "status" is the "statu" `WordRule.words` makes of it.
         let stop = Set(groupStopWords.flatMap(WordRule.words))
         let naming = Set(choice.groups.flatMap { WordRule.words(groupLabel($0)) }).subtracting(stop).subtracting(WordRule.words(choice.label))
-        return !Set(WordRule.words(request)).isDisjoint(with: naming)
+        let said = Set(WordRule.words(request))
+        if !said.isDisjoint(with: naming) { return true }
+        // Another way of saying a group the choice has (S9.6b): it only opens the pick; the model still picks from the plain labels.
+        if choice.groups.contains(where: { group in groupSynonyms[group].map { !said.isDisjoint(with: $0.flatMap(WordRule.words)) } ?? false }) {
+            return true
+        }
+        return choice.groups.contains { group in deniesAWord(request, group) }
+    }
+
+    /// Other words for a group, read through `WordRule.words`, for the gate only (the coordinating session, 2026-11-27). A group the
+    /// report doesn't have is never looked at, so "overdue" opens nothing for a report with no past-the-deadline group. No synonym
+    /// is invented for a group that doesn't exist: service health has no "unhealthy" group, so it has no such word.
+    static let groupSynonyms: [String: [String]] = [
+        "past-due": ["overdue"], "past-due-status-unknown": ["overdue"],
+        "status:SUCCESS": ["successful", "success"],
+        "no-active-coverage": ["expired", "lapsed"],
+    ]
+
+    /// The words after "no" or "without" that ask for a group by its absence: no lock is `unlocked`. Read as the sentence's own
+    /// words ("no" is no word to `WordRule`), the word within three after the negation.
+    static let denied: [String: Set<String>] = ["unlocked": ["lock", "locks", "locked"]]
+
+    /// Whether `request` says "no lock" or "without a lock" for a group in `denied`.
+    static func deniesAWord(_ request: String, _ group: String) -> Bool {
+        guard let words = denied[group] else { return false }
+        let tokens = request.lowercased().split { !($0.isLetter || $0.isNumber) }.map(String.init)
+        for (index, token) in tokens.enumerated() where token == "no" || token == "without" {
+            if tokens.dropFirst(index + 1).prefix(3).contains(where: words.contains) { return true }
+        }
+        return false
     }
 
     /// The lines after the choices: each report's holds line, from the catalog. The summary's would repeat the rules' labels,
