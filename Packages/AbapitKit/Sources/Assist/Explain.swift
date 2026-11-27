@@ -268,7 +268,7 @@ public enum Explain {
         if givesAdvice(tokens) { return .advice }
         if claimsDone(tokens) { return .done }
         if contradictsTheRead(tokens, facts) { return .read }
-        if facts.found > 0, saysAllClear(tokens) { return .allClear }
+        if facts.found > 0, saysAllClear(tokens, facts) { return .allClear }
         if !numbersHold(sentence, facts) { return .number }
         if !namesHold(sentence, facts) { return .name }
         return nil
@@ -291,7 +291,7 @@ public enum Explain {
     static let scales = ["hundred": 100, "thousand": 1000, "million": 1_000_000]
     /// Words that are a count but no exact number: a sentence with one states a number the facts don't hold.
     static let vague: Set<String> = ["dozen", "dozens", "hundreds", "thousands", "half", "twice", "double", "triple", "percent", "percentage",
-                                     "majority", "most", "couple", "several", "both", "all", "single", "few", "handful", "numerous", "many"]
+                                     "majority", "most", "couple", "several", "both", "single", "few", "handful", "numerous", "many"]
 
     /// Every noun a count may name; one that isn't the rule's (`Facts.nouns`) is a unit no fact has.
     static let itemNouns: Set<String> = ["finding", "findings", "device", "devices", "mac", "macs", "service", "services", "migration",
@@ -339,6 +339,15 @@ public enum Explain {
         if tokens.contains(where: { vague.contains($0) || ordinals.contains($0) || spans.contains($0) }) { return false }
         if zip(tokens, tokens.dropFirst()).contains(where: { spanLeads.contains($0) && spanUnits.contains($1) }) { return false }
         if zip(tokens, tokens.dropFirst()).contains(where: { $0 == "a" && ["couple", "few", "single", "third", "dozen"].contains($1) }) { return false }
+        // "All" is a vague count, except as the findings' own (fix round 2, the executor's reading of it): "all 12 Macs" (the number is
+        // then held to the facts like any), "all of these devices", "all of them". "All devices" could be the whole fleet.
+        for (index, token) in tokens.enumerated() where token == "all" {
+            let next = index + 1 < tokens.count ? tokens[index + 1] : ""
+            let after = index + 2 < tokens.count ? tokens[index + 2] : ""
+            let counted = Int(next) != nil || ones[next] != nil || tens[next] != nil
+            let theirs = next == "of" && ["these", "those", "them"].contains(after)
+            if !counted && !theirs && !(next == "clear" || next == "good") { return false }
+        }
         var index = 0
         while index < tokens.count {
             let token = tokens[index]
@@ -441,7 +450,8 @@ public enum Explain {
                                         "all", "any", "some", "no", "none", "of", "in", "on", "for", "when", "while", "if", "because", "since",
                                         "so", "but", "and", "only", "what", "which", "here", "such", "until", "after", "before", "once",
                                         "with", "without", "from", "devices", "findings", "nothing", "zero", "one", "two", "three", "four", "five",
-                                        "six", "seven", "eight", "nine", "ten", "as", "at", "by", "not", "more", "most", "both", "either",
+                                        "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "twenty", "thirty", "forty", "fifty",
+                                        "sixty", "seventy", "eighty", "ninety", "as", "at", "by", "not", "more", "most", "both", "either",
                                         "neither", "however", "also", "still", "even", "although", "though", "where", "how", "within"]
 
     /// Whether every capitalized word of `sentence` is in the rule's title or description, the vocabulary, or an ordinary word
@@ -528,15 +538,29 @@ public enum Explain {
         return false
     }
 
-    /// Words that say nothing needs attention, while the rule found something.
-    static let allClearWords: Set<String> = ["fine", "healthy", "ok", "okay", "safe", "harmless"]
-    static let allClearPairs: Set<[String]> = [["no", "attention"], ["nothing", "needs"], ["nothing", "to"], ["no", "issues"], ["no", "issue"],
-                                               ["no", "problem"], ["no", "problems"], ["no", "action"], ["no", "concern"], ["no", "concerns"],
-                                               ["all", "clear"], ["all", "good"], ["need", "no"], ["needs", "no"]]
+    /// Words that say nothing needs attention, while the rule found something ("everything" anywhere in the sentence; fix round 2 added
+    /// secure, protected, passes, no risk, looks good).
+    static let allClearWords: Set<String> = ["fine", "healthy", "ok", "okay", "harmless", "secure", "protected", "everything", "passes"]
+    static let allClearPhrases: [[String]] = [["no", "attention"], ["nothing", "needs"], ["nothing", "to"], ["no", "issues"], ["no", "issue"],
+                                              ["no", "problem"], ["no", "problems"], ["no", "action"], ["no", "concern"], ["no", "concerns"],
+                                              ["all", "clear"], ["all", "good"], ["need", "no"], ["needs", "no"], ["no", "risk"], ["no", "risks"],
+                                              ["looks", "good"], ["look", "good"], ["pass", "the", "check"]]
+    /// Words that contradict one rule's findings: an encrypted Mac is no FileVault finding.
+    static let ruleClear: [NeedsAttention.Rule: Set<String>] = [.fileVaultOff: ["encrypted"]]
+    /// Who "is safe" or "are safe" may be said of to say all clear: the findings themselves.
+    static let safeSubjects: Set<String> = ["they", "these", "those", "it", "them"]
 
-    static func saysAllClear(_ tokens: [String]) -> Bool {
+    static func saysAllClear(_ tokens: [String], _ facts: Facts) -> Bool {
         if tokens.contains(where: allClearWords.contains) { return true }
-        return zip(tokens, tokens.dropFirst()).contains { allClearPairs.contains([$0, $1]) }
+        if let words = ruleClear[facts.rule], tokens.contains(where: words.contains) { return true }
+        for phrase in allClearPhrases where tokens.count >= phrase.count {
+            for start in 0...(tokens.count - phrase.count) where Array(tokens[start..<start + phrase.count]) == phrase { return true }
+        }
+        // "These Macs are safe", "they are safe"; not "FileVault keeps the data on a Mac safe".
+        for (index, token) in tokens.enumerated() where token == "safe" && index >= 1 && ["is", "are"].contains(tokens[index - 1]) {
+            if tokens[max(0, index - 5)..<(index - 1)].contains(where: { safeSubjects.contains($0) || facts.nouns.contains($0) }) { return true }
+        }
+        return false
     }
 
     static func contradictsTheRead(_ tokens: [String], _ facts: Facts) -> Bool {
@@ -544,11 +568,14 @@ public enum Explain {
         case .partial:
             // "Every device was read", "the read was complete", "it covered each Mac", "nothing was missed": a part read said as whole.
             let readWords: Set<String> = ["read", "checked", "scanned", "covered", "looked", "included", "reviewed", "examined", "counted",
-                                          "inspected", "searched"]
+                                          "inspected", "searched", "found", "listed"]
             if tokens.contains(where: readWords.contains), tokens.contains(where: ["each", "every", "all"].contains) { return true }
-            if tokens.contains(where: ["complete", "completely", "full", "fully", "entire", "entirely", "whole"].contains) { return true }
+            if tokens.contains(where: ["complete", "completely", "full", "fully", "entire", "entirely", "whole", "thorough", "thoroughly",
+                                       "exhaustive", "exhaustively", "entirety"].contains) { return true }
             let negations: Set<String> = ["no", "nothing", "none", "not", "never", "without", "didn't", "wasn't", "weren't", "nor", "neither"]
             for (index, token) in tokens.enumerated() where token.hasPrefix("miss") || token.hasPrefix("skip") || token == "overlooked" {
+                // "Is missing from Apple MDM" is what the missing-from rules find, not a miss of the read (fix round 2).
+                if token == "missing", index + 1 < tokens.count, tokens[index + 1] == "from" { continue }
                 // "Nothing was missed", "no Mac was skipped"; not "some of it wasn't read, possibly missing some".
                 let before = tokens[max(0, index - 4)..<index]
                 if before.contains(where: negations.contains), !before.contains("read") { return true }

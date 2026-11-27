@@ -228,6 +228,41 @@ struct ExplainTests {
         }
     }
 
+    // MARK: fix round 2 (the coordinating session, 2026-11-27)
+
+    @Test func moreAllClearWordingIsDropped() {
+        let fileVault = Self.facts(.fileVaultOff, found: 4, hidden: 0)
+        for dropped in ["Every Mac is encrypted.", "These Macs are secure.", "They are protected.", "The Macs pass the check.",
+                        "There is no risk.", "For now, everything looks good.", "These Macs look good.", "The fleet passes."] {
+            #expect(Explain.check(dropped, fileVault) == .allClear, Comment(rawValue: dropped))
+        }
+        #expect(Explain.check("These Macs are safe.", fileVault) == .allClear)
+        #expect(Explain.check("FileVault keeps the data on a Mac safe.", fileVault) == nil, "safe said of the data, not the findings")
+        #expect(Explain.check("These Macs may keep encrypted backups.", Self.facts(.firewallOff, found: 4, hidden: 0)) == nil,
+                "encrypted contradicts the FileVault rule only")
+    }
+
+    @Test func moreWholeWordsOverAPartReadAreDropped() {
+        let partial = Self.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)
+        for dropped in ["The read was thorough.", "It read the lists in their entirety.", "It found every Mac.", "The check was exhaustive.",
+                        "Each Mac was listed."] {
+            #expect(Explain.check(dropped, partial) == .read, Comment(rawValue: dropped))
+        }
+        let missing = Self.facts(.missingFromAppleMDM, found: 4, hidden: 0, read: .partial)
+        #expect(Explain.check("A device that is not enrolled is missing from Apple MDM.", missing) == nil, "the rule's own finding, not a miss")
+    }
+
+    @Test func twelveAndAllOfTheseAreKept() {
+        let twelve = Self.facts(.fileVaultOff, found: 12, hidden: 0)
+        #expect(Explain.check("Twelve Macs have FileVault off.", twelve) == nil)
+        #expect(Explain.check("Twenty Macs have FileVault off.", Self.facts(.fileVaultOff, found: 20, hidden: 0)) == nil)
+        #expect(Explain.check("All 12 Macs have FileVault off.", twelve) == nil)
+        #expect(Explain.check("All of these Macs have FileVault off.", twelve) == nil)
+        #expect(Explain.check("All of them have FileVault off.", twelve) == nil)
+        #expect(Explain.check("All Macs have FileVault off.", twelve) == .number, "all Macs could be the whole fleet")
+        #expect(Explain.check("All 11 Macs have FileVault off.", twelve) == .number, "the number is still the found count")
+    }
+
     @Test func emptyLongEchoedAndRepeatedAreDropped() {
         let f = Self.facts()
         #expect(Explain.check("", f) == .empty)

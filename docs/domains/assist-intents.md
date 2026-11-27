@@ -380,8 +380,11 @@ executor's" was decided while building it.
     only beside age words (old, snapshot, ago, age, taken). With findings, a zero is only "none dismissed or snoozed", beside its
     words, when none were: "No Macs have FileVault off." and "Nothing was found." are dropped. A number with no unit, a decimal, a
     percentage, another unit (weeks, hours), a digit glued to letters or of another script ("5th", "7devices", "30d"), an ordinal, a
-    vague count ("a couple", "several", "both", "most", "all", "many", "a single", "dozens") or span ("a fortnight", "a quarter",
-    "tomorrow", "last week") is dropped. "One" with no unit is the pronoun.
+    vague count ("a couple", "several", "both", "most", "many", "a single", "dozens") or span ("a fortnight", "a quarter",
+    "tomorrow", "last week") is dropped. "All" is vague too, except as the findings' own (fix round 2, the executor's reading of the
+    coordinating session's item): "all 12 Macs" (the number is still held to the found count), "all of these", "all of them"; bare
+    "all Macs" could be the whole fleet and is dropped. "One" with no unit is the pronoun; number words up to twelve and the tens may
+    start a sentence ("Twelve Macs have FileVault off.").
   - *name*: every capitalized word must be in the rule's title or description, the fixed vocabulary (Apple, AppleCare, Mosyle, Mac,
     iPhone, iPad, MDM, FileVault, Activation, Lock, Account, Business, School, IT), or an ordinary word starting the sentence.
   - *person*: "I", "we", "our": the app never speaks as if it acted.
@@ -390,11 +393,15 @@ executor's" was decided while building it.
     model mustn't tell the person what to change.
   - *done*: a claim of an act ("has been fixed", "were removed", "will be resolved", "abapit will notify"); a word that also names a state
     (enrolled, assigned, locked) is a claim only after "been", "now", "will", "got" or "being".
-  - *read*: words against the read: over a part read, "complete", "full", "entire", "whole", each/every/all with a read word ("it
-    covered each Mac"), or a negated miss or skip ("nothing was missed", "no Mac was skipped"; not "some wasn't read, possibly
-    missing some"); over a whole one, "partial", "in part", "missed"; a snapshot when live, "live" when a snapshot.
-  - *allClear* (fix round): with findings, words that say nothing needs attention ("fine", "healthy", "no issues", "no attention",
-    "need no", "nothing needs", "all clear").
+  - *read*: words against the read: over a part read, "complete", "full", "entire", "whole", "thorough", "exhaustive", "entirety"
+    (fix round 2), each/every/all with a read word ("it covered each Mac"; "found" and "listed" count, fix round 2: "it found every
+    Mac"), or a negated miss or skip ("nothing was missed", "no Mac was skipped"; not "some wasn't read, possibly missing some", nor
+    "is missing from Apple MDM", the missing-from rules' own finding); over a whole one, "partial", "in part", "missed"; a snapshot
+    when live, "live" when a snapshot.
+  - *allClear* (fix round; fix round 2 added the second half): with findings, words that say nothing needs attention ("fine",
+    "healthy", "no issues", "no attention", "need no", "nothing needs", "all clear"; "secure", "protected", "everything" anywhere,
+    "passes", "pass the check", "no risk", "looks good"; "encrypted" on the FileVault rule; "is safe"/"are safe" said of the findings,
+    not "FileVault keeps the data on a Mac safe").
   - and empty, over 240 characters, the field's description echoed, a repeat, past the third.
   **Known misses** (none reads meaning): a claim against the rule with no number ("FileVault is on for every Mac"); a name written
   in lowercase; a wrong reading in general ("the service has been offline … on multiple devices", "MDM migration failed" where it may
@@ -421,7 +428,11 @@ executor's" was decided while building it.
 - **The independent scan** (`Unsupported`, rewritten in the fix round): regular expressions and word lists of its own, none of
   `Explain`'s code, unit- and fact-aware. It counts a number not the fact's with its unit and in its place, a zero or "all clear"
   with findings, a part read said whole, a glued or foreign digit, an ordinal, a vague count or span, a scale word. The first scan
-  only looked for digits the facts didn't hold, so it shared the checker's blind spots.
+  only looked for digits the facts didn't hold, so it shared the checker's blind spots. **It is separate code, not an independent
+  design**: it shares the checker's place-window idea (a number held to its fact by the words near it) and word lists much like the
+  checker's, so it can't catch what both miss. Known shared misses: a number placed by proximity ("within 3 days, per the
+  snapshot" reads 3 as the threshold), advice with no listed word ("The next step is renewal."), a claim against the rule, a
+  lowercase name, meaning in general. **A held-out "0 unsupported" measures only the classes the scan knows**, nothing more.
 - **Evaluation**: `ExplainEvaluation` (Apple's `Evaluations`; code evaluators: kept share, the share of sentences dropped, unsupported
   numbers kept, which must be 0) over invented fact sets: 36 dev, and 24 held back in `explain-heldout-2.json`, committed on its own
   before the fix round's changes (the first set held back is kept, superseded, read by the shape test only). The model run is behind
@@ -447,6 +458,9 @@ executor's" was decided while building it.
 - **Held back, second set** (one run, the operator's Mac, 2026-11-27, nothing tuned against it): 24 of 24 kept a sentence; 7 of 72 sentences dropped (5 number, 1
   advice, 1 done); **0 kept sentences the new scan finds unsupported**; mean 1.45 s, at most 2.53 s. It passes, so `Explain.isOn` is
   true again. Its sentences weren't printed, so how many of its drops were true is unknown.
+- Fix round 2 (the coordinating session, 2026-11-27; stricter checks and two false drops removed; held out not re-run, dev only):
+  dev 36 of 36 kept, 12 of 108 dropped (11 number, 1 advice), 0 unsupported, the same 12 drops as before it; mean 1.46 s, at most
+  2.52 s.
 - Proven by mutants (the PR lists them): each check removed, the facts guard, the generation guard, the off guard, the flag, a field
   added to `Facts`, the CSV naming the explanations, the independent scan blinded; and the fix round's: each new number, read,
   all-clear and advice rule, the run token both ways, the age-0 wording, and each new rule of the scan.

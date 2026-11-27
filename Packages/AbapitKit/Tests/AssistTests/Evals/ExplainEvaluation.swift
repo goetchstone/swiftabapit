@@ -105,8 +105,11 @@ struct ExplainEvaluation: Evaluation {
 }
 
 /// What a kept sentence states that the facts don't hold, found apart from the checker: written separately here (regular
-/// expressions and word lists of its own, none of `Explain`'s code or lists), so a blind spot of the checker's isn't this scan's too
-/// (the coordinating session, 2026-11-27, fix round: the first scan shared the checker's). Each of these counts one:
+/// expressions and word lists of its own, none of `Explain`'s code or lists; the coordinating session, 2026-11-27, fix round: the
+/// first scan shared the checker's blind spots). It is not independent in design, though: it shares the checker's place-window idea
+/// (a number held to its fact by the words near it) and word lists much like the checker's, so it can't catch what both miss: a
+/// number placed by proximity ("within 3 days, per the snapshot"), advice with no listed word ("The next step is renewal."), a claim
+/// against the rule, a lowercase name, meaning in general. Its "0 unsupported" measures only the classes below. Each counts one:
 /// - a number that isn't a fact's with its unit and in its place: a count of findings (or of what the rule finds: services for the
 ///   quiet service rule, devices or Macs for the others) that is neither the found count nor, beside dismissed/snoozed/hidden words,
 ///   the hidden one; days that are neither the threshold beside window words nor the age beside age words; another unit; no unit;
@@ -125,23 +128,30 @@ enum Unsupported {
     static let alwaysWrong = [
         #"\d+(st|nd|rd|th)\b"#, #"\d[a-z]"#, #"[a-z]\d"#, #"\d[.,]\d"#, #"%"#, #"[\p{Nd}&&[^\x00-\x7F]]"#,
         #"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|hundredth|thousandth)\b"#,
-        #"\b(couple|several|both|all|most|many|few|handful|numerous|single|dozens?|hundreds|thousands|half|twice|double|triple|majority|percent)\b"#,
+        #"\b(couple|several|both|most|many|few|handful|numerous|single|dozens?|hundreds|thousands|half|twice|double|triple|majority|percent)\b"#,
+        // "All" only as the findings' own: "all 12 Macs", "all of these", "all of them" (and "all clear", which `allClear` counts).
+        #"\ball\b(?!\s+(\d+|[a-z]+teen|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|of\s+(these|those|them)|clear|good)\b)"#,
         #"\b(fortnight|quarter|tomorrow|yesterday|tonight)\b"#, #"\b(last|next|this|past|coming) (week|month|year)s?\b"#,
         #"\b(hundred|thousand|million)\b"#,
     ]
     /// A part read said whole.
     static let wholeOverPart = [
-        #"\b(complete|completely|entire|entirely|whole|full|fully)\b"#,
-        #"\b(each|every|all)\b.*\b(read|checked|scanned|covered|looked|included|reviewed|examined|counted)\b"#,
-        #"\b(read|checked|scanned|covered|looked|included|reviewed|examined|counted)\b.*\b(each|every|all)\b"#,
+        #"\b(complete|completely|entire|entirely|entirety|whole|full|fully|thorough|thoroughly|exhaustive|exhaustively)\b"#,
+        #"\b(each|every|all)\b.*\b(read|checked|scanned|covered|looked|included|reviewed|examined|counted|found|listed)\b"#,
+        #"\b(read|checked|scanned|covered|looked|included|reviewed|examined|counted|found|listed)\b.*\b(each|every|all)\b"#,
         // Nothing or none missed, or never missing: "nothing was missed", "no Mac was skipped", "it didn't miss any". Not "some wasn't
         // read, possibly missing some", which says the part read.
         #"\b(nothing|none|no \w+) (was|were|is|are|got|has been|have been) (missed|skipped|overlooked)\b"#,
         #"\b(didn't|did not|never|without) (miss|skip|overlook)\w*"#,
     ]
     /// Nothing needs attention, said of a rule that found something.
-    static let allClear = [#"\b(fine|healthy|okay|ok|safe)\b"#, #"\bno (attention|issues?|problems?|action|concerns?)\b"#,
-                           #"\bnothing (needs|to)\b"#, #"\bneeds? no\b"#, #"\ball (clear|good)\b"#]
+    static let allClear = [#"\b(fine|healthy|okay|ok|secure|protected|everything|harmless)\b"#,
+                           #"\bno (attention|issues?|problems?|action|concerns?|risks?)\b"#, #"\bnothing (needs|to)\b"#,
+                           #"\bneeds? no\b"#, #"\ball (clear|good)\b"#, #"\blooks? good\b"#, #"\bpass(es)?\b"#,
+                           // "safe" said of the findings ("these Macs are safe"), not of what FileVault keeps.
+                           #"\b(they|these|those|it|them|devices?|macs?|services?|computers?|iphones?|ipads?)\b(\W+\w+){0,3}?\W+(is|are) safe\b"#]
+    /// Rule by rule: an encrypted Mac is no FileVault finding.
+    static func ruleAllClear(_ rule: NeedsAttention.Rule) -> [String] { rule == .fileVaultOff ? [#"\bencrypted\b"#] : [] }
 
     static func matches(_ text: String, _ patterns: [String]) -> Int {
         patterns.filter { text.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }.count
@@ -160,7 +170,7 @@ enum Unsupported {
             .replacingOccurrences(of: #"(\d),(\d{3})\b"#, with: "$1$2", options: .regularExpression)
         var wrong = matches(text, alwaysWrong)
         if facts.read == .partial { wrong += min(matches(text, wholeOverPart), 1) }
-        if facts.found > 0 { wrong += min(matches(text, allClear), 1) }
+        if facts.found > 0 { wrong += min(matches(text, allClear + ruleAllClear(facts.rule)), 1) }
 
         let words = text.components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "'")).inverted).filter { !$0.isEmpty }
         let (own, foreign) = nouns(of: facts.rule)
@@ -242,13 +252,24 @@ struct ExplainEvaluationTests {
                                  ("Nothing was missed.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
                                  ("It covered each Mac.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
                                  ("No Mac was skipped.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
-                                 ("It didn't miss a Mac.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial))] {
+                                 ("It didn't miss a Mac.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
+                                 // Fix round 2 (the coordinating session, 2026-11-27).
+                                 ("Every Mac is encrypted.", noneHidden), ("These Macs are secure.", noneHidden), ("They are protected.", noneHidden),
+                                 ("The Macs pass the check.", noneHidden), ("There is no risk.", noneHidden),
+                                 ("For now, everything looks good.", noneHidden), ("These Macs are safe.", noneHidden),
+                                 ("All Macs have FileVault off.", noneHidden),
+                                 ("The read was thorough.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
+                                 ("It read the lists in their entirety.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
+                                 ("It found every Mac.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial))] {
             #expect(Unsupported.count(sentence, made) >= 1, Comment(rawValue: sentence))
         }
         for (sentence, made) in [("None were dismissed or snoozed.", noneHidden), ("It found 4 Macs with FileVault off.", noneHidden),
                                  ("It found 4 services.", ExplainTests.facts(.quietService, found: 4, hidden: 0, ageDays: nil)),
                                  ("It may have missed some Macs.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
-                                 ("Some data wasn't read, possibly missing some Macs.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial))] {
+                                 ("Some data wasn't read, possibly missing some Macs.", ExplainTests.facts(.fileVaultOff, found: 4, hidden: 0, read: .partial)),
+                                 ("FileVault keeps the data on a Mac safe.", noneHidden), ("Twelve Macs have FileVault off.", ExplainTests.facts(.fileVaultOff, found: 12, hidden: 0)),
+                                 ("All 4 Macs have FileVault off.", noneHidden), ("All of these Macs have FileVault off.", noneHidden),
+                                 ("A device that is not enrolled is missing from Apple MDM.", ExplainTests.facts(.missingFromAppleMDM, found: 4, hidden: 0, read: .partial))] {
             #expect(Unsupported.count(sentence, made) == 0, Comment(rawValue: sentence))
         }
     }
