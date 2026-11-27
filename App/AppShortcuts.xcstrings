@@ -1,6 +1,17 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Ask ${applicationName} a question": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask ${applicationName} a question"
+          }
+        }
+      }
+    },
     "How are the device management services in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {

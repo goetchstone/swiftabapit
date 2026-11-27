@@ -558,7 +558,7 @@ struct AnswersTests {
             if released {
                 #expect(answer.spoken.contains("From the snapshot of Sep 21, 2026") && !answer.spoken.contains("Reading the snapshot history"), "\(answer.spoken)")
             } else {
-                #expect(answer.spoken.hasSuffix(Answers.Phrase.historyStillReading), "\(answer.spoken)")
+                #expect(answer.spoken.hasSuffix(Answers.Phrase.historyStillReading()), "\(answer.spoken)")
                 release.yield()
             }
         }

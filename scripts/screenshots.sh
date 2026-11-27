@@ -54,7 +54,7 @@ debug_run() {
   env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
     ABAPIT_DEMO="${demo:-1}" ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name-lldb.png" \
     ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} ${pane:+ABAPIT_PANE="$pane"} ${snippet:+ABAPIT_SNIPPET="$snippet"} \
-    /usr/bin/lldb --batch -o run -k "thread backtrace -c 40" -k "quit" -- "$binary" > "$dlog" 2>&1 &
+    ${model:+ABAPIT_MODEL="$model"} /usr/bin/lldb --batch -o run -k "thread backtrace -c 40" -k "quit" -- "$binary" > "$dlog" 2>&1 &
   local pid=$!
   for _ in $(seq 120); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
   if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "$name: lldb run still going after 120 s" >&2; fi
@@ -67,11 +67,12 @@ debug_run() {
 }
 
 status=0
-# name:section[:selected[:window[:demo[:sheet[:pane[:snippet]]]]]] — demo is ABAPIT_DEMO's value, `1` unless given (`clients`: two clients,
+# name:section[:selected[:window[:demo[:sheet[:pane[:snippet[:model]]]]]]] — demo is ABAPIT_DEMO's value, `1` unless given (`clients`: two clients,
 # the client switcher and Settings by client; `apple`: the Apple org alone); sheet is ABAPIT_SHEET's, Settings' add sheet
 # (`add-apple`, `add-mosyle`), drawn with its question of which customer the new org is for; pane is ABAPIT_PANE's, the
 # pane Activity opens on (`changes`: the snapshot history over the demo's fake snapshots); snippet is ABAPIT_SNIPPET's, a report
-# whose intent answer (the spoken words and the snippet of rows) is drawn in the window's place. Section is a SidebarItem raw
+# whose intent answer (the spoken words and the snippet of rows) is drawn in the window's place; model is ABAPIT_MODEL's, the
+# on-device model as the Ask sees it (`unavailable`: Apple Intelligence off; the demo's model is available unless given). Section is a SidebarItem raw
 # value (AppModels/Navigation.swift). The narrow-*
 # runs open a section in the smallest window with the sidebar and any inspector dragged to their widest, where
 # SwiftGamGui's narrow-window layout loop crashed AppKit (its failure-log 2026-10-10): they fail when the pane has
@@ -89,15 +90,15 @@ for spec in overview:overview devices:devices device-inspector:devices:first ser
             clients-overview:overview:::clients clients-settings:settings:::clients \
             add-mosyle-asks:settings:::apple:add-mosyle clients-add-apple:settings:::clients:add-apple \
             changes:activity:::::changes reports:reports needs-attention:needs-attention \
-            snippet-out-of-warranty:reports::::::out-of-warranty; do
-  IFS=: read -r name section selected window demo sheet pane snippet <<< "$spec"
+            snippet-out-of-warranty:reports::::::out-of-warranty reports-model-off:reports:::::::unavailable; do
+  IFS=: read -r name section selected window demo sheet pane snippet model <<< "$spec"
   file="$out/$name.png"
   rm -f "$file"
   : > "$log"
   touch "$marker"
   env -i HOME="$HOME" PATH="/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" \
     ABAPIT_DEMO="${demo:-1}" ABAPIT_SCREEN="$section" ABAPIT_SNAPSHOT="$name.png" \
-    ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} ${sheet:+ABAPIT_SHEET="$sheet"} ${pane:+ABAPIT_PANE="$pane"} ${snippet:+ABAPIT_SNIPPET="$snippet"} "$binary" > "$log" 2>&1 &
+    ${selected:+ABAPIT_SELECT="$selected"} ${window:+ABAPIT_WINDOW="$window"} ${sheet:+ABAPIT_SHEET="$sheet"} ${pane:+ABAPIT_PANE="$pane"} ${snippet:+ABAPIT_SNIPPET="$snippet"} ${model:+ABAPIT_MODEL="$model"} "$binary" > "$log" 2>&1 &
   pid=$!
   for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
   hung=0

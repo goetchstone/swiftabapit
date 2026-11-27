@@ -63,7 +63,7 @@ public final class LiveWait {
     }
 
     /// The longest a request waits (the planner's proposal, pending the operator's live check of Siri's and Shortcuts' own limit).
-    public static let bound: Duration = .seconds(25)
+    public nonisolated static let bound: Duration = .seconds(25)
     /// A held read younger than this is reused (the operator, 2026-11-24).
     public static let fresh: Duration = .seconds(15 * 60)
 

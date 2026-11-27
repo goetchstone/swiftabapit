@@ -56,6 +56,18 @@ struct PackageGraphTests {
         #expect(declared == Self.allowed)
     }
 
+    /// The screen models' products (plan §3.2): AbapitKit's public API, never HTTPCore, Wire or ChangeCore. Assist since S9.7, for
+    /// the Ask. The same list as `scripts/check_graph.py`'s `APP_EDGES`, which reads the manifest SwiftPM evaluates.
+    static let appModels: Set = ["AppleBusiness", "AppleModels", "Orgs", "Vault", "Reports", "Mosyle", "MosyleModels", "JSONAPI", "History", "Assist"]
+
+    @Test func theScreenModelsDependOnThePlannedProducts() throws {
+        let text = try String(contentsOf: Fixtures.repoRoot.appending(path: "Packages/AbapitApp/Package.swift"), encoding: .utf8)
+        let target = try #require(text.firstMatch(of: #/\.target\(name:\s*"AppModels",\s*dependencies:\s*\[([^\]]*)\]/#))
+        let products = Set(target.output.1.matches(of: #/\.product\(name:\s*"([A-Za-z]+)"/#).map { String($0.output.1) })
+        #expect(products == Self.appModels, "\(products.sorted())")
+        #expect(products.isDisjoint(with: ["HTTPCore", "Wire", "ChangeCore", "TestSupport"]))
+    }
+
     @Test func thereAreNoPackageDependencies() throws {
         let manifest = try String(contentsOf: Fixtures.packageManifest, encoding: .utf8)
         #expect(!manifest.contains(".package("), "zero third-party dependencies (L5)")

@@ -4,8 +4,8 @@
 
 **Owns invariant(s):** #9
 
-**Status:** begun. Phase 9's read-only step started with the report catalog (below); the answers, the read intents and the
-model's pick are built (below); the in-app Ask is a later PR. Read the plan section named above and the nearest SwiftGamGui
+**Status:** begun. Phase 9's read-only step started with the report catalog (below); the answers, the read intents, the
+model's pick and the Ask (in the app and from Siri, S9.7) are built (below). Read the plan section named above and the nearest SwiftGamGui
 runbook too.
 
 ## Files
@@ -16,6 +16,8 @@ runbook too.
   `AssistTests/{PickerTests,StubModel}.swift`.
 - `Packages/AbapitKit/Tests/AssistTests/Evals/`: code evaluators, the `Evaluations` harness, the model half (flagged).
 - `Tests/Fixtures/assist/{dev,heldout}.json`: invented phrasings with the right answer.
+- `Packages/AbapitApp/Sources/AppModels/AskModel.swift`, `App/Intents/AskIntent.swift`, the Ask field in
+  `App/Screens/ReportsView.swift`; tests `AppModelsTests/AskModelTests.swift`.
 
 ## How it works
 
@@ -93,7 +95,7 @@ on-device only, never Private Cloud Compute).
 - **Numbers** come from code's parse of the sentence: plain digits before day(s), week(s) or wk(s) (seven days each), year(s)
   or yr(s), "90-day" too, passed to `ReportCatalog.resolve` as written so its bounds refuse what's too big. A number written with `.`, `,`, `-` or a
   minus sign or a dash ("1.5 years", "-30 days", "30-60 days", "30—60 days", "1,000 days"), glued to letters that aren't a unit
-  ("90d"), in months, hours or minutes, or a unit word with no digits ("two weeks", "a year") is a problem; so is, for a choice
+  ("90d", "3pm", "14in": "abapit's reports can't filter by “3pm”", S9.7), in months, hours or minutes, or a unit word with no digits ("two weeks", "a year") is a problem; so is, for a choice
   that takes a number, a bare number ("within 60", "30 d", "before 2021", one end of "30 to 60 days"); so is a unit the report doesn't take, two different values,
   and, for a rule with a window (AppleCare ending, check-in, quiet service, migration deadline), a number other than its window.
   **Any problem refuses the pick** (`Refusal.numbers`, the problems as its words; the coordinating session's decision,
@@ -223,10 +225,11 @@ write (a fix from the review of PR 52). `Answers` keeps the models it reads priv
 reports + more", Q2 "Out for now" (no Spotlight, no `IndexedEntity`), Q4 "Yes, bounded", Q5 "Counts aloud, 10 rows", Q6 "Active
 client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below).
 
-- **Nine read-only intents**: `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
+- **Ten read-only intents**: `AskIntent(question:)` (S9.7, "The Ask" below), and `RunReportIntent(report:group:number:)` for Shortcuts (a `ReportChoice`, the catalog's six titles;
   the number goes to the report's own number filter, `Answers.tokens`), `NeedsAttentionIntent`, `LookUpSerialIntent(serial:)`,
   and one intent per report with no parameter (`OutOfWarrantyIntent`, `CoverageEndingIntent`, `FleetAgeIntent`,
-  `ActivationLockIntent`, `MigrationIntent`, `ServiceHealthIntent`) for Siri. Each `perform` calls `Answers` and nothing else.
+  `ActivationLockIntent`, `MigrationIntent`, `ServiceHealthIntent`) for Siri. Each `perform` calls `Answers` and nothing else (Ask
+  through `AskModel(answers: answers)`, which holds `Answers` and the model privately).
 - **Each declares `.background`** (`supportedModes`) **and `authenticationPolicy = .requiresLocalDeviceAuthentication`**. Neither
   is verified on a Mac. A cold launch still runs `AbapitApp`, whose `WindowGroup` may open a window, and the app quits when its last
   window closes (`applicationShouldTerminateAfterLastWindowClosed`). Whether a window opens, what the authentication policy does,
@@ -241,16 +244,16 @@ client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below
   said, with no `seen`, no first-seen date and no ageing, by `NeedsAttentionModel.judge()`, which reads what is kept (a dismissed or
   snoozed finding isn't counted open) and leaves the screen's evaluation alone. Only the screen records. What the rules read is
   checked again after the judgement; changed, nothing is answered.
-- **Phrases**: one per report, "What needs attention in abapit", "Look up a serial number in abapit" and "Run the <report>
-  report in abapit"; each names the app (`\(.applicationName)`) and is in the catalog, which the build ships as
+- **Phrases**: one per report, "What needs attention in abapit", "Look up a serial number in abapit", "Ask abapit a
+  question" and "Run the <report> report in abapit"; each names the app (`\(.applicationName)`) and is in the catalog, which the build ships as
   `en.lproj/AppShortcuts.strings` (SwiftGamGui failure-log 2026-10-10). Change a phrase in both places.
-- **Checks**: `scripts/check_app.sh` reads every `extract.actionsdata` in the bundle (exactly these nine intents, each background
+- **Checks**: `scripts/check_app.sh` reads every `extract.actionsdata` in the bundle (exactly these ten intents, each background
   only with the local authentication policy set in code and never opening the app; every phrase names the app and is in the built
   catalog; no app entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source:
   `App/Intents`, `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`); the intents import only
   AppIntents, SwiftUI, AppModels and Foundation, never name a screen model, and depend on `Answers` alone; the one dialog is
   `answer.spoken`; the report choices are the catalog's titles. `scripts/intents_test.sh` (CI only) registers the Release build and
-  reads the nine definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
+  reads the ten definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
   no-key answer) ended "transport cancelled" on the runner, so it isn't run; the authentication policy is a likely cause,
   unconfirmed.
 - Gotcha: a serial dictated to Siri goes through Siri's speech recognition, which may not run on the Mac (D7 keeps models on
@@ -259,3 +262,46 @@ client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below
   but the metadata keeps only the intent's name, so Siri would ask which report). Hence one intent per report.
 - Screenshot: `snippet-out-of-warranty` (`ABAPIT_SNIPPET`, debug builds) draws the dialog's words and the snippet over the demo
   org; Siri's own frame isn't drawn.
+
+## The Ask
+
+`Packages/AbapitApp/Sources/AppModels/AskModel.swift`, `App/Intents/AskIntent.swift`, the Ask field above the report list in
+`App/Screens/ReportsView.swift`; tests `AppModelsTests/AskModelTests.swift`. AppModels depends on Assist for it (S9.7: the one
+graph change; `check_graph.py`, `PackageGraphTests`, `BoundaryTests` and plan §3.2 hold it). The operator's answers it rests on:
+Q3 "Picks + explanations", Q8 "On the Reports screen", D7 and D10 (on-device only; a model only drafts).
+
+- **A serial first, with no model call** (`AskModel.serial(in:)`): a token of 8 to 20 ASCII letters and digits in one case, with
+  letters before digits and never only digits then letters ("1825days"), or 14 to 17 digits alone (an IMEI, a MEID), goes to
+  `Answers.lookUp`. The picker would refuse it for its digits. It works with the model off. Mixed case ("iPhone15Pro") isn't one,
+  nor a token ending in a unit word after its last digit ("within90days", "last30days", "applecare2years"; the coordinating
+  session, 2026-11-27). Known, announced false positives: a word glued to a number with no unit, such as "macbookair2020" or
+  "FY2025Q4", is a lookup that says "I read that as: Serial lookup" first and finds nothing.
+- **A serial with other words** (beyond `AskModel.filler`: look up, find, serial, where is, please, …) runs only the lookup, and the
+  answer ends "Only the serial lookup was run; the rest of the question wasn't read." No change is ever drafted (the coordinating
+  session, 2026-11-27).
+- **A switch while the model is asked** (the review of PR 54): `read` takes the org generation before the picker and compares it
+  after; changed, Siri says `Answers.Phrase.switched` and the field drafts nothing, so a pick made for one client is never answered
+  over another's data.
+- **Then the picker** (`Picker.pick` over `Answers.assistClient`: the active org's scope, whether it has a Mosyle org, the
+  thresholds). A change request is answered with `Picker.changeRequestWords` and drafts nothing; a refusal is its words.
+- **Siri** (`ask`): a report pick is `Answers.answer(report:tokens:)`, the summary and a rule are `Answers.attention()` (the whole
+  summary, which counts the rule; the executor's choice, for review). The spoken answer starts with "I read that as: <report>,
+  <group or all groups>[, the number]." (or "Needs attention, every rule.", "Needs attention, <rule>.", "Serial lookup, for the
+  identifier given."), then `Answers`' own words, the client's name after it when there are two or more. The identifier is never
+  said back.
+- **The Reports screen** (`submit`, `apply`): the pick is a draft only, said in the same words. "Fill the Report" puts the report,
+  its group and its number (the sentence's, else the report's default) in the picker and filters, for the operator to check and
+  change; nothing is shown or read before that click. A serial points to the Devices screen's Find, and Needs attention to its own
+  screen: nothing runs.
+- **The model off**: `AskModel.off` is `Refusals.availability(of:)`'s words, one per `UnavailableReason` and for an unsupported
+  language. The field is disabled and says it; the report list works as before. Siri's answer says it and names the eight fixed
+  phrases (`AskModel.sirisPhrases`; a test holds each in `App/AppShortcuts.xcstrings`).
+- **Screenshots**: `reports` draws the field with the demo's model available; `reports-model-off` with `ABAPIT_MODEL=unavailable`
+  (debug builds only, `App/Debug/DemoModel.swift`; the demo's model is never asked anything).
+- **The draft is cleared** when the question is edited and when the org or client switches; "Fill the Report" is off until a new
+  draft exists (the coordinating session, 2026-11-27).
+- **IntentTests** hold `AskModel.swift` to the intents' list of screen models (`Mirror`, `selectClient`, `OrgsModel`, …) as well as
+  to the write path: an intent reaches whatever the Ask reaches.
+- Not done: re-checking the lists after `attention()`'s judgement. `NeedsAttentionModel.inputKey` already holds each list's
+  `LoadState`, whose `.loaded(at:)` changes with any read since, so a second check could not be told apart by a test.
+

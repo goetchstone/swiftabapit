@@ -133,7 +133,7 @@ release_code "$BINARY" "the binary" " (only its symbol table shows this: an arch
 
 # App Intents (Phase 9, adapted from SwiftGamGui scripts/check_app.sh @ e8560f2): the built metadata is what Siri and Shortcuts
 # read, and Xcode checks its rules only while it builds, so it is read here.
-# - exactly these intents, each read-only (`App/Intents/`; SourceScanTests' `noIntentReachesAWrite` holds the source): a new
+# - exactly these intents (Ask since S9.7: its one parameter is the question as a string, and it has a phrase), each read-only (`App/Intents/`; SourceScanTests' `noIntentReachesAWrite` holds the source): a new
 #   intent is a reviewed change to this list. Each runs in the background only (supportedModes 1: never opens a window) and asks
 #   for the Mac's own authentication first (authenticationPolicy 2, requiresLocalDeviceAuthentication, set in the code);
 # - every phrase names the app, and every phrase is in the phrase catalog the build ships (`en.lproj/AppShortcuts.strings`, from
@@ -153,7 +153,7 @@ catalog="$(plutil -convert json -o - "$PHRASES" 2>/dev/null)" || fail "the phras
 intents_checker='
 import json, sys
 actions = {"RunReportIntent", "NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent", "CoverageEndingIntent",
-           "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent"}
+           "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent", "AskIntent"}
 with open(sys.argv[1], encoding="utf-8") as f:
     text = f.read()
 d = json.loads(text)
@@ -180,8 +180,12 @@ missing = [p for p in phrases if catalog.get(p) != p]
 if missing:
     sys.exit(f"phrases not in the built phrase catalog: {missing}")
 shortcuts = {s.get("actionIdentifier") for s in d.get("autoShortcuts", [])}
-if not shortcuts <= actions or not {"NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent"} <= shortcuts:
+if not shortcuts <= actions or not {"NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent", "AskIntent"} <= shortcuts:
     sys.exit(f"the App Shortcuts are for {sorted(map(str, shortcuts))}")
+# Ask takes one thing, the question as plain text: no entity, no file, nothing optional that could carry another input.
+ask = [(p.get("name"), p.get("isOptional"), p.get("valueType")) for p in got["AskIntent"].get("parameters", [])]
+if ask != [("question", False, {"primitive": {"wrapper": {"typeIdentifier": 0}}})]:
+    sys.exit(f"AskIntent takes {ask}, not one required string named question")
 if d.get("entities") or d.get("assistantEntities") or d.get("queries") or "Indexed" in text or "indexingKey" in text:
     sys.exit("the metadata holds an app entity, a query or an indexed type (Spotlight is out: the operator, 2026-11-24, Q2)")
 '

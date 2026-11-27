@@ -1,4 +1,5 @@
 import AppleModels
+import Assist
 import Foundation
 import JSONAPI
 import Reports
@@ -72,7 +73,10 @@ public final class Answers {
         package static func sweepFailed(_ title: String) -> String {
             "The newest snapshot that read \(title) didn't read it, and no earlier one did, so this report judges nothing. Abapit says why."
         }
-        package static let historyStillReading = "The snapshot history was still being read after 25 seconds, so nothing is answered. Ask again."
+        /// After the history read's wait: `bound` is `LiveWait.bound`, the one wait every answer has, so the words follow it.
+        package static func historyStillReading(after bound: Duration = LiveWait.bound) -> String {
+            "The snapshot history was still being read after \(bound.components.seconds.formatted()) seconds, so nothing is answered. Ask again."
+        }
         package static let attentionChanged = "What the rules read changed while this was being answered, so nothing is answered. Ask again."
         /// After a list that can't be counted: a report judges nothing; Needs attention skips the rules that read it.
         package static let nothingJudged = "Nothing was judged."
@@ -116,6 +120,21 @@ public final class Answers {
         self.attentionModel = attention
     }
 
+    /// The active client as the Ask's picker needs it (`Assist`'s own scope, whether it has a Mosyle org, the Needs-attention
+    /// thresholds): no list data. Nil with no organization open.
+    public var assistClient: Picker.Client? {
+        guard let active = orgs.active else { return nil }
+        let school = active.provider == .known(.apple) && active.scope == .known(.school)
+        return Picker.Client(scope: school ? .school : .business, hasMosyle: orgs.mosyleOrg != nil, thresholds: attentionModel.thresholds)
+    }
+
+    /// The org generation: a request that awaited something (the Ask's model call) compares it before and after, and a change is
+    /// a switch, so nothing picked for one client is answered over another's data.
+    var generation: Int { orgs.generation }
+
+    /// Runs `handler` on every org or client switch (the Ask clears its draft).
+    func onSwitch(_ handler: @escaping @MainActor () -> Void) { orgs.onSwitch(handler) }
+
     // MARK: the questions
 
     /// An intent's group and number as the catalog's tokens: the group under `group`, the number under the report's number filter
@@ -142,7 +161,7 @@ public final class Answers {
         // Superseded by the screen's own read of the history: that read's result is the one to use, once it has ended.
         if await !reports.loadHistory(), orgs.generation == generation, !Task.isCancelled {
             guard await settle({ [reports] in !reports.state.isLoading }) else {
-                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading)
+                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading())
             }
         }
         if Task.isCancelled { return said(title, Phrase.cancelled) }
@@ -190,7 +209,7 @@ public final class Answers {
         // The history as the screen reads it; superseded by the screen's own read, once that read has ended.
         if await !attentionModel.loadHistory(), orgs.generation == generation, !Task.isCancelled {
             guard await settle({ [attentionModel] in !attentionModel.state.isLoading }) else {
-                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading)
+                return said(title, Task.isCancelled ? Phrase.cancelled : Phrase.historyStillReading())
             }
         }
         if Task.isCancelled { return said(title, Phrase.cancelled) }
@@ -524,7 +543,8 @@ public final class Answers {
     static let withoutActiveCoverage: Set = ["no-active-coverage", "no-record"]
     package static let shownWithoutCoverage = "Shown: the devices without active AppleCare coverage. Name a group to see others."
     package static let shownLocked = "Shown: the locked devices. Name a group to see others."
-    package static let shownPastDue = "Shown: the devices past the migration deadline without success. Name a group to see others."
+    /// Past due or past due with a status unknown (`past-due`, `past-due-status-unknown`): the rows hold both, so the note names both.
+    package static let shownPastDue = "Shown: the devices past the migration deadline without success, and those past it whose status is unknown. Name a group to see others."
 
     /// The answer, the client's name first when the app shows clients.
     private func said(_ title: String, _ spoken: String, rows all: [Answer.Row] = [], estimateNote: String? = nil) -> Answer {

@@ -105,6 +105,12 @@ public enum Refusals {
         if sentence.isEmpty { return .empty }
         if sentence.count > Picker.longest { return .tooLong(sentence.count) }
         if !client.hasMosyle && namesMosyle(sentence) { return .mosyleWithoutOrg }
+        return availability(of: model)
+    }
+
+    /// Why `model` can't answer on this Mac now (each `UnavailableReason`, or an unsupported language), or nil when it can: what
+    /// an Ask field says while it is off, before any sentence is typed.
+    public static func availability(of model: some Picker.Asking) -> Refusal? {
         switch model.availability {
         case .available: break
         case .unavailable(let reason): return .unavailable(unavailable(reason))

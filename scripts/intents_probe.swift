@@ -8,7 +8,7 @@ import Foundation
 
 let definitions = IntentDefinitions(bundleIdentifier: "io.github.goetchstone.swiftabapit")
 let names = ["RunReportIntent", "NeedsAttentionIntent", "LookUpSerialIntent", "OutOfWarrantyIntent", "CoverageEndingIntent",
-             "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent"]
+             "FleetAgeIntent", "ActivationLockIntent", "MigrationIntent", "ServiceHealthIntent", "AskIntent"]
 for name in names {
     let definition = definitions.intents[name]
     guard definition.identifier == name else {
@@ -16,9 +16,12 @@ for name in names {
         exit(1)
     }
 }
-// The parameters, by name and type: a report case, a group and a number for RunReportIntent; a serial for lookup.
+// The parameters, by name and type: a report case, a group and a number for RunReportIntent; a serial for lookup; a question
+// for Ask.
 let report = definitions.enums["ReportChoice"].makeCase("out-of-warranty")
 let run = definitions.intents["RunReportIntent"].makeIntent(report: report, group: "no-record", number: 3)
 print("intents_probe: \(names.count) intents defined; made \(run)")
 let lookUp = definitions.intents["LookUpSerialIntent"].makeIntent(serial: "C02EXAMPLE01")
 print("intents_probe: made \(lookUp)")
+let ask = definitions.intents["AskIntent"].makeIntent(question: "which devices are out of warranty")
+print("intents_probe: made \(ask)")
