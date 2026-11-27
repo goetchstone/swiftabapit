@@ -266,28 +266,25 @@ public enum Picker {
     /// The characters that join two numbers or a number and its unit, as a hyphen does: hyphen, en dash, em dash, minus sign and "/".
     static let dashes: Set<Character> = ["-", "\u{2013}", "\u{2014}", "\u{2212}", "/"]
 
-    /// Whether the number word "one" at token `i` sits in a range: next to "or", "to", "and", "through", "thru", "till", "until" or a
-    /// dash with another number after it ("one or two", "one-two", "one through two"), a comma between two number words ("one, two
-    /// years"), or after such a connector with a unit word or number right before it ("a week, or one", "thirty to one"). A bare
-    /// "one" anywhere else ("which one", "for each one", "one of them") is a pronoun and no number. The other number words never
-    /// ask: from two up, one with no unit after it is bare always (fix rounds 2 and 3, the coordinating session, 2026-11-27).
+    /// The words that join two ends of a range, between them and the second end: one word or a short phrase, as said.
+    static let rangeConnectors: Set<String> = [
+        "", "or", "to", "and", "through", "thru", "till", "until", "up to", "vs", "versus", "plus", "or else", "or more",
+    ]
+
+    /// Whether the number word "one" at token `i` is one end of a range: a number (a digit or a number word) follows it, or a number
+    /// or unit word precedes it, with between them only characters that aren't letters (any punctuation or spacing: "one - two",
+    /// "one; two", "one... two") or a connector word (`rangeConnectors`: "one up to two", "a week vs one"). A bare "one" anywhere else
+    /// ("which one", "for each one", "one of them") is a pronoun and no number. The other number words never ask: from two up, one
+    /// with no unit after it is bare always (fix rounds 2 to 4, the coordinating session, 2026-11-27: the default is turned round, a
+    /// closed list of separators missed every one it hadn't named).
     static func inARange(_ i: Int, _ tokens: [(word: String, start: Int, end: Int)], in text: [Character]) -> Bool {
-        func gap(_ a: Int, _ b: Int) -> ArraySlice<Character> { text[tokens[a].end..<tokens[b].start] }
-        func spaces(_ a: Int, _ b: Int) -> Bool { gap(a, b).allSatisfy(\.isWhitespace) }
-        /// Spaces, with at most one comma: for before "or"/"to" and between two number words.
-        func commaOrSpaces(_ a: Int, _ b: Int) -> Bool { gap(a, b).allSatisfy { $0.isWhitespace || $0 == "," } && gap(a, b).filter { $0 == "," }.count <= 1 }
-        func dash(_ a: Int, _ b: Int) -> Bool { gap(a, b).count == 1 && dashes.contains(gap(a, b).first!) }
         func isNumber(_ word: String) -> Bool { word.first?.isNumber == true || numberWords[word] != nil || bigNumbers.contains(word) }
-        let connectors: Set<String> = ["or", "to", "and", "through", "thru", "till", "until"]
-        // Forward: "one or two", "one, or two", "one through two", "one-two", "one/two", "one, two".
-        if i + 1 < tokens.count, isNumber(tokens[i + 1].word), dash(i, i + 1) || (commaOrSpaces(i, i + 1) && gap(i, i + 1).contains(",")) { return true }
-        if i + 2 < tokens.count, connectors.contains(tokens[i + 1].word), spaces(i + 1, i + 2), isNumber(tokens[i + 2].word),
-           spaces(i, i + 1) || (["or", "to"].contains(tokens[i + 1].word) && commaOrSpaces(i, i + 1)) { return true }
-        // Backward: "a week or one", "a week, or one", "thirty to one".
-        if i >= 2, connectors.contains(tokens[i - 1].word), spaces(i - 1, i),
-           spaces(i - 2, i - 1) || (["or", "to"].contains(tokens[i - 1].word) && commaOrSpaces(i - 2, i - 1)) {
-            let before = tokens[i - 2].word
-            if units[before] != nil || isNumber(before) { return true }
+        /// The words strictly between two tokens, joined by a space: "" when only punctuation and spacing stand between them.
+        func between(_ a: Int, _ b: Int) -> String { tokens[(a + 1)..<b].map(\.word).joined(separator: " ") }
+        for distance in 1...3 {
+            if i + distance < tokens.count, isNumber(tokens[i + distance].word), rangeConnectors.contains(between(i, i + distance)) { return true }
+            if i - distance >= 0, isNumber(tokens[i - distance].word) || units[tokens[i - distance].word] != nil,
+               rangeConnectors.contains(between(i - distance, i)) { return true }
         }
         return false
     }
