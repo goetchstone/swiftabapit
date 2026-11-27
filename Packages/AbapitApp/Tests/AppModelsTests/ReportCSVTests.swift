@@ -141,7 +141,7 @@ struct ReportCSVTests {
         let made = await answers.reportCSV(report: .outOfWarranty, tokens: [:])
         #expect(made.file != nil)
         #expect(made.spoken.contains("That snapshot read AppleCare coverage only in part"), "\(made.spoken)")
-        #expect(made.spoken == (await answers.answer(report: .outOfWarranty, tokens: [:])).spoken)
+        #expect(made.spoken.hasPrefix((await answers.answer(report: .outOfWarranty, tokens: [:])).spoken))
         #expect(!made.spoken.contains("ZQXCODE") && !made.spoken.contains("ZQXNOTE"))
 
         let capped = try await AnswersTests.world(devices: 1002, pageCap: 1, mosyle: false)
@@ -150,5 +150,29 @@ struct ReportCSVTests {
         #expect(live.file != nil && live.spoken.contains("Apple's device list was read in part"), "\(live.spoken)")
         let text = try #require(live.file?.text)
         #expect(text.contains("read in part: ") && !text.contains("read in full"), "the file's own listRead column says it")
+    }
+
+    /// A group doesn't filter the file (as on the screen), and coverage leaves devices out of it: the dialog says what the file holds,
+    /// in the screen's export note, so "The group no-record holds 0" is never read as the file's contents.
+    @Test func theDialogSaysWhatTheFileHolds() async throws {
+        let world = try await AnswersTests.world(oneClient: true)
+        try await AnswersTests.snapshot(world)
+        let answers = AnswersTests.answers(world, fixed: true)
+        let reports = world.screens.reports
+        let cases: [(ReportsModel.Report, [String: String])] = [
+            (.activationLock, ["group": "lock:USER"]), (.migration, ["group": "past-due"]), (.serviceHealth, ["group": "healthy"]),
+            (.outOfWarranty, ["group": "no-record"]), (.coverage, ["days": "30"]), (.fleetAge, [:]),
+        ]
+        for (report, tokens) in cases {
+            let made = await answers.reportCSV(report: report, tokens: tokens)
+            let note = reports.build(report, tokens: tokens).exportNote
+            #expect(made.file != nil && note.hasPrefix("The file holds") && made.spoken.hasSuffix(" " + note), "\(report): \(made.spoken)")
+        }
+        // The group's own count is still said, and the note says the file holds every device whatever it is.
+        let warranty = await answers.reportCSV(report: .outOfWarranty, tokens: ["group": "no-record"])
+        #expect(warranty.spoken.contains("The group no-record holds") && warranty.spoken.contains("whatever group is shown"), "\(warranty.spoken)")
+        // Nothing made, nothing said about a file.
+        let none = await AnswersTests.answers(try await AnswersTests.world(oneClient: true)).reportCSV(report: .coverage, tokens: [:])
+        #expect(none.file == nil && !none.spoken.contains("The file holds"), "\(none.spoken)")
     }
 }

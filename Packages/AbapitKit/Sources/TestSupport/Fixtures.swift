@@ -89,7 +89,12 @@ public enum SourceScan {
             }
         }
         let squeezed = scalars.filter { !$0.properties.isWhitespace && $0 != "`" }
-        return needles.contains { !offsets(of: $0, in: squeezed).isEmpty }
+        // The needle is squeezed the way the text is: a needle with a space (`func perform(`) would otherwise match nothing, ever,
+        // and the scan using it would pass vacuously (the review of PR 55).
+        return needles.contains { needle in
+            let wanted = String(String.UnicodeScalarView(needle.unicodeScalars.filter { !$0.properties.isWhitespace && $0 != "`" }))
+            return !wanted.isEmpty && !offsets(of: wanted, in: squeezed).isEmpty
+        }
     }
 
     /// The files under `directory` whose code names any of `names` (`names(_:_:)`).

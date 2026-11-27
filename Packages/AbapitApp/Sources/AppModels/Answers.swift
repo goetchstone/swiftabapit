@@ -173,11 +173,14 @@ public final class Answers {
     /// made from the same `Output` the answer was, with nothing awaited between, so a switch can't give it another client's rows.
     public func reportCSV(report: ReportsModel.Report, tokens: [String: String]) async -> CSVAnswer {
         var file: ReportFile?
+        var note = ""
         let answer = await run(report: report, tokens: tokens) { [reports] output in
             guard output.canExport else { return }
             file = ReportFile(name: reports.exportFileName(for: output), text: reports.csv(of: output))
+            note = output.exportNote
         }
-        return CSVAnswer(spoken: answer.spoken, file: file)
+        // What the file holds, in the screen's words: a group doesn't filter the file, and coverage leaves devices out of it.
+        return CSVAnswer(spoken: file == nil ? answer.spoken : answer.spoken + " " + note, file: file)
     }
 
     /// `answer`'s body; `took` sees the report's `Output` once it is built over data that was read, in the same turn.

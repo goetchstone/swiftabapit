@@ -234,8 +234,11 @@ client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below
   the report's CSV as an `IntentFile` made in memory, with no temporary file, log or copy of the app's own: the Reports screen's `csv(of:)` and `exportFileName(for:)`
   over the same `build`, through `Answers.reportCSV`, so the columns are `ExportPolicy`'s allowlist and the client's name leads the file name only with several clients.
   Nothing is returned, and `Answers`' words say why, when nothing was judged, the client changed (`Phrase.switched`) or the read didn't finish; a read in part or an old
-  snapshot is said in the dialog beside the file, whose `listRead` column carries it too. The screen export has no size bound beyond the reads' own caps, so neither does the intent. The rows are
-  the tenant's devices: use the file only in your own shortcuts.
+  snapshot is said in the dialog beside the file, whose `listRead` column carries it too. The dialog also says the report's `exportNote` (the coordinating session, 2026-11-27, fix round): a group does not
+  filter the file, and coverage's file leaves out devices with no coverage or an unreadable date. Decisions of the executor's: no size cap (the screen export has none beyond the reads' own caps, and a cap would
+  make the file differ from the screen's), the file in memory (the screen export writes no temporary file either), and `IntentFile?` so that "nothing" is a result with the reason spoken. The rows are
+  the tenant's devices: use the file only in your own shortcuts. Shortcuts may store the file in its own container when a later action uses it. For the operator: the file's `listRead` column carries the snapshot's
+  error code and collector note, as the screen export does.
 - **Each declares `.background`** (`supportedModes`) **and `authenticationPolicy = .requiresLocalDeviceAuthentication`**. Neither
   is verified on a Mac. A cold launch still runs `AbapitApp`, whose `WindowGroup` may open a window, and the app quits when its last
   window closes (`applicationShouldTerminateAfterLastWindowClosed`). Whether a window opens, what the authentication policy does,
