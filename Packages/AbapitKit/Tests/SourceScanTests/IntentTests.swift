@@ -26,7 +26,8 @@ struct IntentTests {
 
     /// What the CSV intent's files may not hold: a write to disk, a log, a dump, a handle, a pasteboard, a defaults store, a network call.
     static let outputNeedles = ["write(to", "FileManager", "createFile", "NSTemporaryDirectory", "temporaryDirectory", "Logger", "OSLog", "print(", "NSLog",
-                                "os_log", "NSPasteboard", "UIPasteboard", "URLSession", "dump(", "FileHandle", "debugPrint", "UserDefaults"]
+                                "os_log", "NSPasteboard", "UIPasteboard", "URLSession", "dump(", "FileHandle", "debugPrint", "UserDefaults",
+                                "fputs(", "fwrite(", "FileWrapper", "NSSharingService", "NSItemProvider", "CFPreferences", "NSUbiquitousKeyValueStore"]
     /// What `Answers` may not do on the way to a CSV or any answer: switch the client, write a snapshot or the history, record a finding.
     static let answersMayNot = [".select(", "selectClient", "snapshots.", "historyTransfer", "record("]
 
@@ -124,8 +125,165 @@ struct IntentTests {
         }
     }
 
-    /// `Answers` only reads: it names no client switch, snapshot write, history transfer or recording (the review of PR 55 asked for a
-    /// scan, since `reportCSV` sits beside the models it reads).
+    /// What `Answers` may call on each model it holds, and why each is a read (each checked against the model's own code on
+    /// 2026-11-27; the coordinating session's allowlist, in place of a list of the writes a reviewer thought of). A path is a member
+    /// and what it is read through (`dates.day`); `devices` on `mosyle` is a value (`Listing`), so what is read from it is not named. Any other
+    /// member of a held model fails `answersCallsOnlyTheAllowlist`; a member that writes, records, switches or changes a setting is
+    /// never added here.
+    static let answersMayCall: [String: [String: String]] = [
+        "orgs": [
+            "active": "the active profile, a value",
+            "mosyleOrg": "the client's Mosyle profile, a computed value",
+            "generation": "the switch counter, `private(set)`",
+            "showsClients": "whether there are two or more clients, computed",
+            "exportClient": "the client's name when shown, computed",
+            "onSwitch": "registers a handler to run on a switch (the Ask clears its draft); it stores a closure and changes no data, setting or client",
+        ],
+        "devices": [
+            "rows": "the device list read, `private(set)`",
+            "state": "the list's read state, `private(set)`",
+            "total": "the count Apple said, `private(set)`",
+            "services": "the service list read, `private(set)`",
+            "servicesState": "the service list's read state, `private(set)`",
+            "servicesTruncated": "whether the service list stopped at the page limit, `private(set)`",
+            "serviceDevices": "the devices of each service as read, `private(set)`",
+            "servicesAbsent": "the services Apple didn't send, `private(set)`",
+        ],
+        "mosyle": [
+            "devices": "the Mosyle device list as a value (`Listing`): its rows and state are read from it",
+            "columns": "the Mosyle columns as read, `private(set)`",
+        ],
+        "reports": [
+            "build": "builds an `Output` over what the history and the Devices model hold; it reads nothing from Apple and starts no sweep",
+            "loadHistory": "reads the snapshot history and the screen's live lists; it opens the store and writes nothing",
+            "state": "the history read's state, `private(set)`",
+            "sources": "the sweeps read from history, `private(set)`",
+            "isMosyle": "whether the active org is a Mosyle one, computed",
+            "exportFileName": "the file's name, computed from the output and the client",
+            "csv": "the CSV text of an `Output`, computed; the file is made in memory",
+            "dates.day": "words a date (`DateWords`, a value), so `dates` itself is never set",
+            "dates.dayTime": "words a date and time (`DateWords`, a value)",
+        ],
+        "attentionModel": [
+            "loadHistory": "reads the history, the settings file and the live lists; it records no finding",
+            "judge": "judges without recording: no `seen`, no first-seen date (the operator, 2026-11-25, \"Don't record\")",
+            "inputKey": "what the rules read now, computed",
+            "state": "the history read's state, `private(set)`",
+            "thresholds": "the settings' thresholds, computed",
+        ],
+    ]
+
+    /// The only places `Answers` names a held model bare, not through a member: its declaration and init, the capture lists that hand
+    /// a model to a closure that reads it, and the `LiveWait` it makes over the three lists it waits on (its own file, which reads).
+    /// A bare use anywhere else could pass a model on or give it another name.
+    static let answersBare = [
+        "private let orgs: OrgsModel", "private let devices: DevicesModel", "private let mosyle: MosyleModel", "private let reports: ReportsModel",
+        "private let attentionModel: NeedsAttentionModel",
+        "public init(orgs: OrgsModel, devices: DevicesModel, mosyle: MosyleModel, reports: ReportsModel, attention: NeedsAttentionModel)",
+        "self.orgs = orgs", "self.devices = devices", "self.mosyle = mosyle", "self.reports = reports", "self.attentionModel = attention",
+        "{ [reports]", "{ [attentionModel]", "LiveWait(orgs: orgs, devices: devices, mosyle: mosyle, now: now, sleep: sleep)",
+        // The report's device models by id: `devices` there is a parameter, not the held model.
+        "static func models(_ devices: [Resource])", "for device in devices where",
+    ]
+
+    /// The uses of the held `models` in `file`: each `<name>.<member>…` (also `self.<name>`, `?.`, across lines and in interpolations;
+    /// comments don't count) as the path of members it reads through, and each bare use not in `answersBare`, as `<name> (bare)`.
+    static func heldUses(_ file: SourceScan.File, _ models: [String], bare allowed: [String] = Self.answersBare) -> [(model: String, path: [String])] {
+        var flat = SourceScan.code(file.text, strings: false).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for text in allowed { flat = flat.replacingOccurrences(of: text, with: " ") }
+        let chars = Array(flat)
+        func isName(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" }
+        var found: [(model: String, path: [String])] = []
+        for model in models {
+            let name = Array(model)
+            var i = 0
+            while i + name.count <= chars.count {
+                defer { i += 1 }
+                guard Array(chars[i..<i + name.count]) == name, i + name.count == chars.count || !isName(chars[i + name.count]),
+                      i == 0 || !isName(chars[i - 1]) else { continue }
+                // Behind it: nothing, or `self.`; any other `.` makes it another value's member (`used.devices`).
+                var back = i - 1
+                while back >= 0, chars[back] == " " { back -= 1 }
+                if back >= 0, chars[back] == "." {
+                    let before = String(chars[max(0, back - 4)..<back])
+                    guard before == "self", back < 4 || !isName(chars[back - 5]) else { continue }
+                }
+                var path: [String] = []
+                var j = i + name.count
+                while true {
+                    var k = j
+                    while k < chars.count, chars[k] == " " { k += 1 }
+                    if k < chars.count, chars[k] == "?" || chars[k] == "!" { k += 1; while k < chars.count, chars[k] == " " { k += 1 } }
+                    guard k < chars.count, chars[k] == "." else { break }
+                    k += 1
+                    while k < chars.count, chars[k] == " " { k += 1 }
+                    var member = ""
+                    while k < chars.count, isName(chars[k]) { member.append(chars[k]); k += 1 }
+                    guard !member.isEmpty else { break }
+                    path.append(member)
+                    j = k
+                }
+                found.append((model, path))
+            }
+        }
+        return found
+    }
+
+    /// The allowlist entry of `model` that covers `path`: the entry whose members are the path's first ones.
+    static func entry(_ model: String, _ path: [String], in allowed: [String: [String: String]]) -> String? {
+        allowed[model]?.keys.first { Array(path.prefix($0.split(separator: ".").count)) == $0.split(separator: ".").map(String.init) }
+    }
+
+    /// The held-model uses in `file` that the allowlist doesn't cover, as `model.path`, and `model (bare)` for a bare one.
+    static func uncalled(_ file: SourceScan.File, allowed: [String: [String: String]] = Self.answersMayCall, bare: [String] = Self.answersBare) -> [String] {
+        heldUses(file, allowed.keys.sorted(), bare: bare).compactMap { use in
+            guard !use.path.isEmpty else { return "\(use.model) (bare)" }
+            return Self.entry(use.model, use.path, in: allowed) == nil ? "\(use.model).\(use.path.joined(separator: "."))" : nil
+        }
+    }
+
+    /// `Answers` only reads. A reviewer planted `attentionModel.evaluate(force: true)`, `orgs.remove(_, deleteSecrets: true)`,
+    /// `orgs.move`, `orgs.changeSettings` and `attentionModel.setMosyleService(nil)` in `reportCSV`, and the scan of five names
+    /// passed (the review of PR 55's follow-up). So each held model has the members `Answers` may call, and any other call fails;
+    /// the five names stay as a second line of defence.
+    @Test func answersCallsOnlyTheAllowlist() throws {
+        let answers = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.answers })
+        #expect(Self.uncalled(answers).isEmpty, "Answers.swift calls what no allowlist names: \(Self.uncalled(answers))")
+        // The scan sees the uses, and every allowlisted member is one `Answers` makes (a stale entry is a member nothing reads).
+        let used = Dictionary(grouping: Self.heldUses(answers, Self.answersHolds), by: \.model)
+            .mapValues { Set($0.compactMap { Self.entry($0.model, $0.path, in: Self.answersMayCall) }) }
+        for (model, members) in Self.answersMayCall {
+            #expect(used[model] == Set(members.keys), "\(model): used \(used[model, default: []].sorted()), allowed \(members.keys.sorted())")
+        }
+        #expect(Set(Self.answersMayCall.keys) == Set(Self.answersHolds), "the allowlist names the models Answers holds")
+    }
+
+    /// The scan finds a call the allowlist doesn't name, however it is spelled, and passes the ones it does.
+    @Test func theAllowlistScanFindsWhatItDoesNotName() {
+        let planted = [
+            "attentionModel.evaluate(force: true)", "orgs.remove(\"a\", deleteSecrets: true)", "orgs.move(\"a\", to: 2)",
+            "try orgs.changeSettings { $0.x = 1 }", "attentionModel.setMosyleService(nil)", "reports.refresh()", "devices.load(force: true)",
+            "mosyle.loadDevices(force: true)", "self.orgs.select(\"b\")", "orgs\n    .selectClient(\"b\")", "orgs?.remove(\"a\")", "orgs . remove(\"a\")",
+            "let line = \"\\(attentionModel.evaluate(force: true))\"", "let o = orgs", "take(orgs)", "reports.newMadeUpMethod()",
+            "orgs.active?.name; orgs.reloadSettings()",
+        ]
+        for code in planted {
+            let found = Self.uncalled(SourceScan.File(path: "x.swift", text: "func f() {\n    \(code)\n}"))
+            #expect(!found.isEmpty, "\(code)")
+        }
+        let fine = [
+            "orgs.active", "self.orgs.generation", "orgs.active?.provider == .known(.apple)", "await attentionModel.judge()",
+            "reports.build(r, tokens: t).judgesNothing", "mosyle.devices.state.isLoading", "// orgs.remove(\"a\")", "let s = \"orgs.remove\"",
+            "used.devices.count", "let h = other.orgs.remove(1)", "let ok = orgsCount + devicesX",
+        ]
+        for code in fine {
+            let found = Self.uncalled(SourceScan.File(path: "x.swift", text: "func f() {\n    \(code)\n}"))
+            #expect(found.isEmpty, "\(code): \(found)")
+        }
+    }
+
+    /// The second line of defence: `Answers` names no client switch, snapshot write, history transfer or recording (the review of
+    /// PR 55 asked for a scan, since `reportCSV` sits beside the models it reads).
     @Test func answersSwitchesNothingAndWritesNothing() throws {
         let answers = try #require(try SourceScan.swiftFiles(in: "Packages/AbapitApp/Sources/AppModels").first { $0.path == Self.answers })
         #expect(!SourceScan.mentions(answers, Self.answersMayNot), "Answers.swift switches, writes or records")
@@ -151,7 +309,9 @@ struct IntentTests {
         #expect(snippets.text.contains("IntentFile(data: Data($0.text.utf8), filename: $0.name, type: .commaSeparatedText)"))
         for planted in ["let url = FileManager.default.temporaryDirectory", "try text.write(to: url)", "Logger().info(\"x\")", "print(rows)", "dump(rows)",
                         "let h = FileHandle.standardError", "debugPrint(rows)", "UserDefaults.standard.set(rows, forKey: \"k\")",
-                        "NSPasteboard.general.setString(text, forType: .string)", "UIPasteboard.general.string = text"] {
+                        "NSPasteboard.general.setString(text, forType: .string)", "UIPasteboard.general.string = text",
+                        "fputs(text, stderr)", "fwrite(p, 1, n, f)", "let w = FileWrapper(regularFileWithContents: d)", "NSSharingService(named: .composeEmail)",
+                        "let i = NSItemProvider(object: s)", "CFPreferencesSetAppValue(k, v, id)", "NSUbiquitousKeyValueStore.default.set(rows, forKey: \"k\")"] {
             #expect(SourceScan.mentions(SourceScan.File(path: "x.swift", text: planted), Self.outputNeedles), "\(planted)")
         }
     }

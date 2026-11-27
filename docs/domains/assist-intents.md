@@ -261,7 +261,7 @@ client, named" (2026-11-24), and "Don't record (Recommended)" (2026-11-25, below
   catalog; no app entity, query or indexed type; no Spotlight index imported). SourceScanTests' `IntentTests` hold the source:
   `App/Intents`, `Assist` and `Answers.swift` never name the write path (`noIntentReachesAWrite`); the intents import only
   AppIntents, SwiftUI, AppModels and Foundation, never name a screen model, and depend on `Answers` alone; the one dialog is
-  `answer.spoken`; the report choices are the catalog's titles. `scripts/intents_test.sh` (CI only) registers the Release build and
+  `answer.spoken`; the report choices are the catalog's titles; `Answers` calls only the allowlisted members of each model it holds, bare uses included (`answersCallsOnlyTheAllowlist`: any other call, such as a new one, fails until a reviewer adds it with its reason). `scripts/intents_test.sh` (CI only) registers the Release build and
   reads the eleven definitions and their parameters from outside the app with `AppIntentsTesting`. Running an intent there (the
   no-key answer) ended "transport cancelled" on the runner, so it isn't run; the authentication policy is a likely cause,
   unconfirmed.
