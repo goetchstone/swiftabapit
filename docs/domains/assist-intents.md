@@ -5,7 +5,7 @@
 **Owns invariant(s):** #9
 
 **Status:** begun. Phase 9's read-only step started with the report catalog (below); the answers, the read intents, the
-model's pick and the Ask (in the app and from Siri, S9.7) are built (below). Read the plan section named above and the nearest SwiftGamGui
+model's pick and the Ask (in the app and from Siri, S9.7) are built (below), and the Needs-attention screen's explanations (S9.12, below). Read the plan section named above and the nearest SwiftGamGui
 runbook too.
 
 ## Files
@@ -18,6 +18,9 @@ runbook too.
 - `Tests/Fixtures/assist/{dev,heldout}.json`: invented phrasings with the right answer.
 - `Packages/AbapitApp/Sources/AppModels/AskModel.swift`, `App/Intents/AskIntent.swift`, the Ask field in
   `App/Screens/ReportsView.swift`; tests `AppModelsTests/AskModelTests.swift`.
+- `Packages/AbapitKit/Sources/Assist/Explain.swift`: a Needs-attention rule's findings explained (S9.12); tests
+  `AssistTests/ExplainTests.swift`, `AssistTests/Evals/Explain{Evaluation,ModelEvaluations}.swift`, `AppModelsTests/ExplainScreenTests.swift`,
+  `SourceScanTests/ExplainScanTests.swift`; invented fact sets in `Tests/Fixtures/assist/explain-dev.json` and the set held back beside it.
 
 ## How it works
 
@@ -349,4 +352,116 @@ Q3 "Picks + explanations", Q8 "On the Reports screen", D7 and D10 (on-device onl
   to the write path: an intent reaches whatever the Ask reaches.
 - Not done: re-checking the lists after `attention()`'s judgement. `NeedsAttentionModel.inputKey` already holds each list's
   `LoadState`, whose `.loaded(at:)` changes with any read since, so a second check could not be told apart by a test.
+
+## Explaining what needs attention
+
+`Packages/AbapitKit/Sources/Assist/Explain.swift`, the screen's part in `NeedsAttentionModel` (`explain()`, `explanation(_:)`,
+`explanationsOff`) and `App/Screens/NeedsAttentionView.swift` (S9.12). The operator's answers it rests on: Q3 "Picks + explanations"
+(2026-11-24: the model maps sentences onto picks, and explanations come later, here), D7 and D10 (on-device only, never Private Cloud
+Compute). The shape (what the model reads, the checks, display only) is the coordinating session's proposal; what follows marked "the
+executor's" was decided while building it.
+
+- **What the model reads** (`Explain.Facts`, built from a rule, the thresholds, whole numbers and two small enums): the rule's fixed
+  title, its fixed description (`NeedsAttention.Rule.about`, new here, one sentence with no number), its threshold in days (`thresholdDays`),
+  how many findings, how many of them the administrator dismissed or snoozed, whether the read was whole or in part, and the age in
+  whole days of the oldest snapshot the rule read (or "read live"). No serial, name, service, group, reason or source line, nothing
+  Apple's, Mosyle's or an attacker's text could hold: `ExplainTests.noListDataReachesThePromptBuilder` holds the signature, the imports
+  and the stored properties, `thePromptHoldsOnlyTheFacts` takes every call's prompt apart line by line, and
+  `ExplainScreenTests` finds no finding's subject, reason or source line, and none of the world's serials or names, in any prompt.
+- **The model**: one guided answer per rule in a fresh session, greedy, a 160-token cap, a `DynamicGenerationSchema` of one to three
+  strings, no tools, no re-ask (the executor's: a sentence that fails is dropped, not repaired). The open count is not in the prompt
+  (the executor's, from the first dev run: "open" read as "firewall open" and "open check-in alerts"), only found and dismissed or snoozed.
+- **Code checks every sentence** (`Explain.check`; a sentence failing any one is dropped, and every drop is counted):
+  - *number*: every number (digits, a thousands comma, number words, "no"/"none"/"nothing"/"zero" as zero) must be one of the
+    facts' with its unit **and in its place** (the coordinating session, 2026-11-27, fix round): a count is "findings" or the rule's
+    own noun (services for the quiet service rule, devices or Macs for the others; "alerts", "cases", "them" and the like count
+    findings too) and is the found count, or the dismissed or snoozed count only beside dismissed/snoozed/hidden words (within six
+    words); days are the threshold only beside window words (within, more than, at least, for, over, past, threshold, …) or the age
+    only beside age words (old, snapshot, ago, age, taken). With findings, a zero is only "none dismissed or snoozed", beside its
+    words, when none were: "No Macs have FileVault off." and "Nothing was found." are dropped. A number with no unit, a decimal, a
+    percentage, another unit (weeks, hours), a digit glued to letters or of another script ("5th", "7devices", "30d"), an ordinal, a
+    vague count ("a couple", "several", "both", "most", "many", "a single", "dozens") or span ("a fortnight", "a quarter",
+    "tomorrow", "last week") is dropped. "All" is vague too, except as the findings' own (fix round 2, the executor's reading of the
+    coordinating session's item): "all 12 Macs" (the number is still held to the found count), "all of these", "all of them"; bare
+    "all Macs" could be the whole fleet and is dropped. "One" with no unit is the pronoun; number words up to twelve and the tens may
+    start a sentence ("Twelve Macs have FileVault off.").
+  - *name*: every capitalized word must be in the rule's title or description, the fixed vocabulary (Apple, AppleCare, Mosyle, Mac,
+    iPhone, iPad, MDM, FileVault, Activation, Lock, Account, Business, School, IT), or an ordinary word starting the sentence.
+  - *person*: "I", "we", "our": the app never speaks as if it acted.
+  - *advice*: an imperative first word (renew, contact, turn, review, …), or "should", "must", "ought", "could", "wise", "need to",
+    "recommend", "consider", "please", "make sure", "you can", "good idea", "advisable". abapit can't do what advice asks, and the
+    model mustn't tell the person what to change.
+  - *done*: a claim of an act ("has been fixed", "were removed", "will be resolved", "abapit will notify"); a word that also names a state
+    (enrolled, assigned, locked) is a claim only after "been", "now", "will", "got" or "being".
+  - *read*: words against the read: over a part read, "complete", "full", "entire", "whole", "thorough", "exhaustive", "entirety"
+    (fix round 2), each/every/all with a read word ("it covered each Mac"; "found" and "listed" count, fix round 2: "it found every
+    Mac"), or a negated miss or skip ("nothing was missed", "no Mac was skipped"; not "some wasn't read, possibly missing some", nor
+    "is missing from Apple MDM", the missing-from rules' own finding); over a whole one, "partial", "in part", "missed"; a snapshot
+    when live, "live" when a snapshot.
+  - *allClear* (fix round; fix round 2 added the second half): with findings, words that say nothing needs attention ("fine",
+    "healthy", "no issues", "no attention", "need no", "nothing needs", "all clear"; "secure", "protected", "everything" anywhere,
+    "passes", "pass the check", "no risk", "looks good"; "encrypted" on the FileVault rule; "is safe"/"are safe" said of the findings,
+    not "FileVault keeps the data on a Mac safe").
+  - and empty, over 240 characters, the field's description echoed, a repeat, past the third.
+  **Known misses** (none reads meaning): a claim against the rule with no number ("FileVault is on for every Mac"); a name written
+  in lowercase; a wrong reading in general ("the service has been offline … on multiple devices", "MDM migration failed" where it may
+  only be requested, "the system flagged devices out of sync"). What is shown is labelled as the model's.
+- **Nothing shown when nothing holds**: all dropped is "The on-device model's explanation didn't match this rule's facts, so none is
+  shown."; a thrown error is "couldn't explain this rule: …" in `Refusal.NotUnderstood`'s words, never the error's text.
+- **Display only**: held in memory per rule with the facts it was written from, shown only while the line's facts are the same, cleared
+  by a switch of client; never in the history, a snapshot, the attention store, the CSV or a log. `ExplainScanTests` holds that only
+  `Explain.swift`, the screen's model and view and `AppServices` name it and that recording, judging, Dismiss, Snooze and the CSV
+  never touch it; `IntentTests` plants `attentionModel.explain()` to show `Answers` can't call it. Siri and Shortcuts don't speak it.
+- **When it runs** (the executor's): the screen explains each rule with findings (judged or partial; a skipped rule and a rule with
+  none get none) on its own, one call at a time, again only when a rule's facts change (`explainKey`). The Overview's card and the
+  intents never ask. About 1.45 s a rule on the operator's Mac, so twelve rules with findings take about 17 s, each shown as it lands.
+- **The clients rule**: `explain()` takes the org generation before each call and compares it after (as `AskModel.read`); changed, what
+  was written is dropped and nothing more is asked.
+- **Runs** (fix round): each `explain()` tags what it writes with its run; a cancelled run clears only an entry it wrote, and a run
+  takes over a rule another run left being written, so the screen cancelling one run and starting the next leaves every rule shown
+  (`ExplainScreenTests.aCancelledRunNeverClearsAnotherRunsWork`, the reviewer's repro: 300 ms calls, a cancel after 50 ms).
+- **The model off**: the screen says why in its own words (`Explain.offWords` over `Refusals.availability`, one per reason), asks
+  nothing, and everything else on it works as before.
+- **The flag**: `Explain.isOn`. On only if the held-out evaluation passes: no kept sentence the independent scan (`Unsupported`) finds
+  unsupported, and at least three in four fact sets keep a sentence (the bar the executor set, kept by the coordinating session in
+  the fix round). Off, nothing is shown, asked or said.
+- **The independent scan** (`Unsupported`, rewritten in the fix round): regular expressions and word lists of its own, none of
+  `Explain`'s code, unit- and fact-aware. It counts a number not the fact's with its unit and in its place, a zero or "all clear"
+  with findings, a part read said whole, a glued or foreign digit, an ordinal, a vague count or span, a scale word. The first scan
+  only looked for digits the facts didn't hold, so it shared the checker's blind spots. **It is separate code, not an independent
+  design**: it shares the checker's place-window idea (a number held to its fact by the words near it) and word lists much like the
+  checker's, so it can't catch what both miss. Known shared misses: a number placed by proximity ("within 3 days, per the
+  snapshot" reads 3 as the threshold), advice with no listed word ("The next step is renewal."), a claim against the rule, a
+  lowercase name, meaning in general. **A held-out "0 unsupported" measures only the classes the scan knows**, nothing more.
+- **Evaluation**: `ExplainEvaluation` (Apple's `Evaluations`; code evaluators: kept share, the share of sentences dropped, unsupported
+  numbers kept, which must be 0) over invented fact sets: 36 dev, and 24 held back in `explain-heldout-2.json`, committed on its own
+  before the fix round's changes (the first set held back is kept, superseded, read by the shape test only). The model run is behind
+  `ABAPIT_MODEL_EVALS=1` (refused on CI); the held-back set behind `ABAPIT_MODEL_EVALS_SET=explain-held-out` besides, once, printing
+  scores only. Tokens: instructions 105, the longest prompt 114, the schema 80, the cap 160: 459 of 8,192.
+- **Dev** (the operator's Mac, 2026-11-27):
+  - first run: 36 of 36 kept a sentence; 20 of 108 sentences dropped (19 number, 1 done); 0 unsupported. Nearly every drop was a true
+    count said without its unit ("16 are still open"); kept were false readings of "open" ("firewall open") and a quiet service's
+    findings counted as devices.
+  - after the open count left the prompt, the read lines were reworded, the rule's own noun was required, and "them", "alerts" and the
+    like became counts: 36 of 36 kept; 6 of 108 dropped, all number; 0 unsupported; mean 1.45 s, at most 1.81 s. Of the 6 drops, 5
+    were false (a quiet service's findings as devices, three times; "one Mac" for 41 and for 5) and 1 true ("the two systems").
+  - fix round (the stricter checks and the rewritten scan, on dev only): 36 of 36 kept; 12 of 108 dropped (11 number, 1 advice);
+    0 the new scan finds unsupported; mean 1.48 s, at most 2.17 s. Of the 12, 6 were false (a quiet service's findings as devices,
+    three times; "one Mac" for 41 and for 5; "flagged many devices out of sync") and 6 true, dropped by the new rules ("all the
+    details", "did not find all cases", "could not be read", "the two systems"). On the way, two true drops were fixed (a hidden
+    count six words from "dismissed"; "wasn't read, possibly missing some" said of a part read), and one false alarm of the new
+    scan on that same sentence.
+- **Held back, first set — superseded** (one run, 2026-11-27): 24 of 24 kept; 7 of 72 dropped (6 number, 1 done); 0 unsupported by
+  the first scan; mean 1.40 s, at most 2.28 s. It can't stand: that scan shared the checker's blind spots (a zero or "no devices"
+  with findings, a part read called whole, a fact's number in another's place all passed both), so the review of PR 58 had the flag
+  set off and a new set written.
+- **Held back, second set** (one run, the operator's Mac, 2026-11-27, nothing tuned against it): 24 of 24 kept a sentence; 7 of 72 sentences dropped (5 number, 1
+  advice, 1 done); **0 kept sentences the new scan finds unsupported**; mean 1.45 s, at most 2.53 s. It passes, so `Explain.isOn` is
+  true again. Its sentences weren't printed, so how many of its drops were true is unknown.
+- Fix round 2 (the coordinating session, 2026-11-27; stricter checks and two false drops removed; held out not re-run, dev only):
+  dev 36 of 36 kept, 12 of 108 dropped (11 number, 1 advice), 0 unsupported, the same 12 drops as before it; mean 1.46 s, at most
+  2.52 s.
+- Proven by mutants (the PR lists them): each check removed, the facts guard, the generation guard, the off guard, the flag, a field
+  added to `Facts`, the CSV naming the explanations, the independent scan blinded; and the fix round's: each new number, read,
+  all-clear and advice rule, the run token both ways, the age-0 wording, and each new rule of the scan.
 

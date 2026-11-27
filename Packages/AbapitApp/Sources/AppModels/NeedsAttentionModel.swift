@@ -1,4 +1,5 @@
 import AppleModels
+import Assist
 import Foundation
 import History
 import JSONAPI
@@ -204,6 +205,7 @@ public final class NeedsAttentionModel {
         actionNote = nil
         settingNote = nil
         showsHidden = false
+        explained = [:]
         if wasShowing { refresh() }
     }
 
@@ -738,6 +740,104 @@ public final class NeedsAttentionModel {
         if case .unusable(let why) = state { return why }
         guard evaluated.isEmpty else { return nil }
         return orgs.active == nil ? ScreenWords.noOrganization : "Judging what needs attention…"
+    }
+
+    // MARK: explanations (S9.12)
+
+    /// One rule's explanation as the screen shows it (the operator's Q3, "Picks + explanations"; D7 and D10, on-device only; the shape
+    /// is the coordinating session's proposal): sentences the on-device model wrote from the rule's facts alone (`Explain.Facts`: its
+    /// title, description, threshold and code's counts, never a serial or a name) and code checked against them. Shown, never stored:
+    /// it is held in memory for the client it was written for, cleared by a switch, and is in no history, snapshot, CSV or log.
+    public enum Explanation: Sendable, Equatable {
+        /// The model is writing it.
+        case writing
+        /// The sentences that held, and how many the checks dropped.
+        case shown(sentences: [String], dropped: Int)
+        /// Why none is shown: every sentence failed a check, or the model's answer couldn't be used.
+        case none(String)
+    }
+
+    /// The facts an explanation was written from, what is shown for them, and the run that wrote it: a run clears only an entry it
+    /// wrote itself (the coordinating session, 2026-11-27, fix round: a cancelled run had cleared one another run was writing).
+    private struct Held: Equatable {
+        let facts: Explain.Facts
+        let explanation: Explanation
+        let run: Int
+    }
+
+    /// The model the explanations ask: Apple's on-device model, or in a debug build the one `ABAPIT_MODEL` asks for.
+    @ObservationIgnored public var explainer: any Picker.Asking = Explain.OnDevice()
+    /// `Explain.isOn`: off, no explanation is shown or asked for, and nothing says so.
+    @ObservationIgnored package var explainsOn = Explain.isOn
+    private var explained: [Rule: Held] = [:]
+    /// Bumped by each `explain()`: the token its entries carry.
+    @ObservationIgnored private var explainRuns = 0
+    /// Explanation runs that have returned, kept or dropped: what the tests wait on.
+    package private(set) var explainsFinished = 0
+
+    /// Under each explanation: who wrote it, from what, and that it was checked.
+    public static let explanationLabel = "Written by Apple's on-device model from this rule's counts, and checked against them by abapit. The counts and findings are what abapit read."
+
+    /// Said when the checks dropped some sentences.
+    public static func droppedWords(_ count: Int) -> String? {
+        count == 0 ? nil : "\(count) sentence\(count == 1 ? "" : "s") the model wrote didn't match the facts and \(count == 1 ? "was" : "were") left out."
+    }
+
+    /// Why rules aren't explained (`Refusals.availability`'s reason, in this screen's words), or nil when they are. Nil, and nothing
+    /// said, while explanations are switched off (`explainsOn`).
+    public var explanationsOff: String? {
+        guard explainsOn else { return nil }
+        return Refusals.availability(of: explainer).map(Explain.offWords)
+    }
+
+    /// What the model is told about `line`: nil for a rule skipped or with no finding. Counts, the read and the age only.
+    func facts(_ line: Line) -> Explain.Facts? {
+        guard !line.isSkipped, !line.findings.isEmpty else { return nil }
+        let age = line.takenAt.map { Int(now().timeIntervalSince($0) / 86_400) }
+        return Explain.Facts(rule: line.rule, thresholds: thresholds, found: line.findings.count, hidden: line.hidden,
+                             read: line.isPartial ? .partial : .whole, ageDays: age)
+    }
+
+    /// The explanation shown for `line`: nil while explanations are off, for a rule with nothing to explain, and when what is held
+    /// was written from other facts than the line has now.
+    public func explanation(_ line: Line) -> Explanation? {
+        guard explainsOn, let facts = facts(line), let held = explained[line.rule], held.facts == facts else { return nil }
+        return held.explanation
+    }
+
+    /// What the explanations are made from: the screen explains again when it changes.
+    public var explainKey: [Explain.Facts] { explainsOn ? lines.compactMap(facts) : [] }
+
+    /// Explains each rule with findings whose facts have no explanation yet, one at a time, one model call each. A switch of client
+    /// while the model writes drops what it wrote (the clients rule: the generation check, as the Ask's); a cancel (the screen gone,
+    /// its facts changed) leaves nothing half written.
+    public func explain() async {
+        guard explainsOn, explanationsOff == nil else { return }
+        let generation = orgs.generation
+        explainRuns += 1
+        let run = explainRuns
+        defer { explainsFinished += 1 }
+        for line in lines {
+            guard let facts = facts(line) else { continue }
+            // Written for these facts, or being written by this run: skipped. One another run is writing is taken over (the screen
+            // cancels a run before it starts the next), so a cancelled run never leaves a rule unexplained.
+            if let held = explained[line.rule], held.facts == facts, held.explanation != .writing || held.run == run { continue }
+            explained[line.rule] = Held(facts: facts, explanation: .writing, run: run)
+            let outcome: Explain.Outcome
+            do {
+                outcome = try await Explain.explain(facts, using: explainer)
+            } catch {
+                if explained[line.rule] == Held(facts: facts, explanation: .writing, run: run) { explained[line.rule] = nil }
+                return
+            }
+            await afterAwait?("explain")
+            guard generation == orgs.generation else { return }
+            guard explained[line.rule]?.facts == facts else { continue }
+            let shown: Explanation = outcome.sentences.isEmpty
+                ? .none(outcome.note ?? "No explanation is shown.")
+                : .shown(sentences: outcome.sentences, dropped: outcome.dropped.count)
+            explained[line.rule] = Held(facts: facts, explanation: shown, run: run)
+        }
     }
 
     // MARK: dismiss and snooze

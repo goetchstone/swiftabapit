@@ -75,6 +75,36 @@ public struct NeedsAttention: Sendable {
         }
 
         static func days(_ count: Int) -> String { count == 1 ? "1 day" : "\(count) days" }
+
+        /// What the rule finds, in one fixed sentence with no number (the threshold is the title's): what the on-device model reads
+        /// beside the title to explain a rule's findings (`Assist/Explain.swift`, S9.12). Code's words only, never list data.
+        public var about: String {
+            switch self {
+            case .missingFromAppleMDM: "A device that Apple's device list assigns to an Apple MDM service, and that Apple MDM's own device list does not hold."
+            case .missingFromMosyle: "A device that Apple's device list assigns to the service set as this client's Mosyle org, and that Mosyle's device list does not hold."
+            case .appleMDMNotInApple: "A device in Apple MDM's device list that Apple's device list does not hold."
+            case .mosyleNotInApple: "A device in Mosyle's device list that Apple's device list does not hold."
+            case .appleCareExpiring: "A device whose active AppleCare coverage ends within the threshold, counted from today."
+            case .mosyleCheckIn: "A device in Mosyle whose last check-in is at least the threshold old."
+            case .appleMDMCheckIn: "A device in Apple MDM whose last check-in, from its details, is at least the threshold old."
+            case .fileVaultOff: "A Mac in Apple MDM whose details say FileVault disk encryption is off."
+            case .firewallOff: "A Mac in Apple MDM whose details say the firewall is off."
+            case .activationLock: "A device with Activation Lock held by a person's Apple Account, which keeps the organization from redeploying or releasing it."
+            case .quietService: "A device management service that has not connected to Apple for longer than the threshold."
+            case .migrationDeadline: "A device whose MDM migration has not succeeded (it is requested, started or failed) and whose migration deadline is within the threshold or already past."
+            }
+        }
+
+        /// The rule's threshold in days, as its title says it; nil for a rule with none.
+        public func thresholdDays(_ thresholds: Thresholds) -> Int? {
+            switch self {
+            case .appleCareExpiring: min(thresholds.appleCareExpiringDays, CoverageReport.maximumDays)
+            case .mosyleCheckIn, .appleMDMCheckIn: thresholds.checkInDays
+            case .quietService: thresholds.quietServiceDays
+            case .migrationDeadline: thresholds.migrationDeadlineDays
+            case .missingFromAppleMDM, .missingFromMosyle, .appleMDMNotInApple, .mosyleNotInApple, .fileVaultOff, .firewallOff, .activationLock: nil
+            }
+        }
     }
 
     /// When a rule raises a finding, in days. Fed from the local settings (`LocalSettings.Thresholds`, whose defaults, 30, 90,

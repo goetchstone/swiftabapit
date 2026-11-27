@@ -200,9 +200,10 @@ struct NavigationTests {
         #expect(snippets.map { "\($0[0]):\($0[7])" } == ["snippet-out-of-warranty:out-of-warranty"], "\(snippets)")
         #expect(snippets.allSatisfy { ReportsModel.Report(rawValue: $0[7]) != nil })
         // A run's model (its ninth field) is the on-device model as the Ask sees it: Reports drawn with it available (the demo's)
-        // and with it off (S9.7).
+        // and with it off (S9.7); Needs attention likewise, its explanations with the demo's model and off (S9.12).
         let models = specs.filter { $0.count > 8 && !$0[8].isEmpty }
-        #expect(models.map { "\($0[0]):\($0[1]):\($0[8])" } == ["reports-model-off:reports:unavailable"], "\(models)")
+        #expect(models.map { "\($0[0]):\($0[1]):\($0[8])" } == ["reports-model-off:reports:unavailable", "needs-attention-model-off:needs-attention:unavailable"],
+                "\(models)")
         // A run's demo (its fifth field) is one the app knows, `1` unless given; the client runs ask for two clients and draw
         // the switcher and Settings by client (the review of PR 18: a misspelt demo fell through to the real store, green).
         let demos = specs.map { $0.count > 4 ? $0[4] : "" }

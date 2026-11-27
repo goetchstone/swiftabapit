@@ -33,6 +33,9 @@ struct NeedsAttentionView: View {
         .fileDialogMessage(model.exportWords)
         .task { await model.load() }
         .task(id: model.inputKey) { await model.evaluate() }
+        // Each rule with findings explained by the on-device model, again only when its facts change (S9.12). Only this screen asks:
+        // the Overview's card and the intents never do.
+        .task(id: model.explainKey) { await model.explain() }
     }
 
     @ViewBuilder private func header(_ lines: [NeedsAttentionModel.Line]) -> some View {
@@ -52,6 +55,10 @@ struct NeedsAttentionView: View {
         if let note = model.actionNote {
             Label(note, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).accessibilityIdentifier("attention.actionnote")
         }
+        if let off = model.explanationsOff {
+            Label(off, systemImage: "text.bubble").font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("attention.explainoff")
+        }
         let hidden = lines.reduce(0) { $0 + $1.hidden }
         if hidden > 0 || model.showsHidden {
             Toggle("Show dismissed and snoozed (\(hidden.formatted()))", isOn: $model.showsHidden)
@@ -70,6 +77,7 @@ struct NeedsAttentionView: View {
                 if case .skipped(let why) = line.verdict {
                     Label(why, systemImage: "eye.slash").font(.callout).fixedSize(horizontal: false, vertical: true)
                 }
+                if let explanation = model.explanation(line) { explained(explanation, rule: line.rule) }
                 ForEach(line.source, id: \.self) {
                     Label($0, systemImage: "clock.arrow.circlepath").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -88,6 +96,29 @@ struct NeedsAttentionView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("attention.rule.\(line.rule.rawValue)")
+    }
+
+    /// The on-device model's explanation of a rule's findings, labelled as the model's, with what the checks left out. Shown only.
+    @ViewBuilder private func explained(_ explanation: NeedsAttentionModel.Explanation, rule: NeedsAttentionModel.Rule) -> some View {
+        Group {
+            switch explanation {
+            case .writing:
+                Label("Explaining with the on-device model…", systemImage: "ellipsis.bubble").font(.callout).foregroundStyle(.secondary)
+            case .shown(let sentences, let dropped):
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(sentences.joined(separator: " ")).fixedSize(horizontal: false, vertical: true)
+                    Label([NeedsAttentionModel.explanationLabel, NeedsAttentionModel.droppedWords(dropped)].compactMap { $0 }.joined(separator: " "),
+                          systemImage: "sparkles")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            case .none(let why):
+                Label(why, systemImage: "text.bubble").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("attention.explain.\(rule.rawValue)")
     }
 
     private func count(_ line: NeedsAttentionModel.Line) -> String {
