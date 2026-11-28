@@ -125,4 +125,16 @@ struct AppleStubTests {
         let last = try await harness.raw("/v1/apps", [("limit", "2"), ("cursor", "4")])
         #expect(last.body?["data"]?.array?.compactMap { $0["id"]?.string } == ["A4"] && last.body?["links"]?["next"] == nil)
     }
+
+    /// A next link keeps the request's other parameters as they were sent, byte for byte (get-org-devices.response.2.json:
+    /// the filters and `limit` come back as they went). Rebuilt through `queryItems` a filter value's `%2B` came back as `+`,
+    /// which a server reads as a space: page 2 would have asked for another value than page 1.
+    @Test func aNextLinkKeepsTheRequestsEncodedFilters() async throws {
+        let harness = try await Harness()
+        harness.stub.add(devices: (0..<3).map { DeviceFilterTests.device("TESTF000000\($0)", order: "A+B") })
+        let first = try await harness.raw("/v1/orgDevices", [("filter[orderNumber]", "A+B"), ("limit", "2")])
+        #expect(first.body?["data"]?.array?.count == 2)
+        let next = try #require(first.body?["links"]?["next"]?.string)
+        #expect(next == "https://api-business.apple.com/v1/orgDevices?cursor=2&filter%5BorderNumber%5D=A%2BB&limit=2")
+    }
 }

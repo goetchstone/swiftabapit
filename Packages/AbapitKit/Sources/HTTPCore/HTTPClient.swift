@@ -100,26 +100,33 @@ public actor HTTPClient {
                               body: request.body, authorizer: authorizer)
     }
 
+    /// Whether `url` stays in the API: on `host`, under `/v1/`. The rule for a next link and for a redirect's target
+    /// (`URLSessionTransport.followable`). A dot segment in any spelling (`..`, `%2e%2E`, `.%2e`) or a bad escape is
+    /// refused: decoded, it would climb out of `/v1/`.
+    static func staysInTheAPI(_ url: URL, on host: APIHost) -> Bool {
+        let path = url.path(percentEncoded: true)
+        return APIHost(of: url) == host && path.hasPrefix("/v1/")
+            && !path.split(separator: "/").contains(where: { segment in
+                guard let decoded = String(segment).removingPercentEncoding else { return true }
+                return decoded == "." || decoded == ".." || decoded.contains("/")
+            })
+    }
+
     /// A next-page link Apple returned: followed only when it stays on `host`, under `/v1/`.
     package func read(next url: URL, on host: APIHost, template: String, keeping limit: String? = nil,
                       authorizer: any Authorizer) async throws -> HTTPResponse {
         guard host == .appleBusiness || host == .appleSchool else { throw HTTPFailure.notARead("GET \(host.rawValue) \(template)") }
-        let path = url.path(percentEncoded: true)
-        // A dot segment in any spelling (`..`, `%2e%2E`, `.%2e`) or a bad escape is refused: decoded, it would climb
-        // out of `/v1/`.
-        guard APIHost(of: url) == host, path.hasPrefix("/v1/"),
-              !path.split(separator: "/").contains(where: { segment in
-                  guard let decoded = String(segment).removingPercentEncoding else { return true }
-                  return decoded == "." || decoded == ".." || decoded.contains("/")
-              }) else {
-            throw HTTPFailure.refusedHost(url.host(percentEncoded: false) ?? "?")
-        }
+        guard Self.staysInTheAPI(url, on: host) else { throw HTTPFailure.refusedHost(url.host(percentEncoded: false) ?? "?") }
         var target = url
         // Apple's example next link carries only `cursor`; asked once for 1000 a page, keep asking for 1000, or the
         // page cap would cover a tenth of the fleet (Phase 1a's review). Check live.
         if let limit, var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
            !(components.queryItems ?? []).contains(where: { $0.name == "limit" }) {
-            components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "limit", value: limit)]
+            // Apple's query goes out byte for byte: `queryItems` decodes and re-encodes it, and `%2B` went out as `+`
+            // (failure-log 2026-11-28). This setter traps on a value that isn't percent-encoded, so `limit` is encoded first.
+            let unreserved = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
+            components.percentEncodedQueryItems = (components.percentEncodedQueryItems ?? [])
+                + [URLQueryItem(name: "limit", value: limit.addingPercentEncoding(withAllowedCharacters: unreserved) ?? "")]
             target = components.url ?? url
         }
         return try await read(url: target, host: host, method: .get, template: template, body: nil, authorizer: authorizer)
