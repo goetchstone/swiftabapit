@@ -30,6 +30,10 @@ struct SettingsView: View {
     @State private var working: String?
     @State private var problem: String?
     @State private var acceptance: String?
+    /// What the Keychain holds under ids no organization has (`OrgsModel.orphanedCredentials`), read when Settings opens and
+    /// after every removal and every editor closing.
+    @State private var orphans: [String: Set<VaultItem.Kind>] = [:]
+    @State private var removingOrphan: String?
 
     private var profile: OrgProfile? { orgs.store[selected ?? orgs.active?.id ?? ""] }
 
@@ -74,6 +78,20 @@ struct SettingsView: View {
                         ForEach(orgs.migrationNotes, id: \.self) { Label($0, systemImage: "arrow.triangle.branch") }
                         Button("Got It") { orgs.dismissMigrationNotes() }.accessibilityIdentifier("settings.notes.dismiss")
                     }
+                }
+                if !orphans.isEmpty {
+                    Section("Stored credentials with no organization") {
+                        Text("This Mac's Keychain holds these under an id no organization uses: left by a save or a removal the Keychain refused, or by a settings file that was lost. Nothing reads them.")
+                            .foregroundStyle(.secondary)
+                        ForEach(orphans.keys.sorted(), id: \.self) { id in
+                            LabeledContent(id) {
+                                Text((orphans[id] ?? []).map(\.displayName).sorted().joined(separator: ", "))
+                            }
+                            Button("Delete from Keychain…", role: .destructive) { removingOrphan = id }
+                                .accessibilityIdentifier("settings.orphans.delete.\(id)")
+                        }
+                    }
+                    .accessibilityIdentifier("settings.orphans")
                 }
                 if let profile, profile.provider == .known(.mosyle) {
                     mosyle(profile)
@@ -133,6 +151,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .frame(minWidth: 380)
         }
+        .task { await loadOrphans() }
         .onAppear {
             #if DEBUG
             // The snapshot harness's add sheet (`ABAPIT_SHEET`, scripts/screenshots.sh): CI draws the customer question.
@@ -143,9 +162,9 @@ struct SettingsView: View {
             }
             #endif
         }
-        .sheet(item: $editing) { mode in OrgEditor(mode: mode, orgs: orgs) }
+        .sheet(item: $editing, onDismiss: { Task { await loadOrphans() } }) { mode in OrgEditor(mode: mode, orgs: orgs) }
         // A Test's result belongs to the credentials it read: an edit may have changed them.
-        .sheet(item: $editingMosyle, onDismiss: { testResult = [:] }) { mode in
+        .sheet(item: $editingMosyle, onDismiss: { testResult = [:]; Task { await loadOrphans() } }) { mode in
             MosyleOrgEditor(editing: { if case .edit(let profile) = mode { profile } else { nil } }(), orgs: orgs)
         }
         .sheet(isPresented: Binding(get: { acceptance != nil }, set: { if !$0 { acceptance = nil } })) {
@@ -160,6 +179,14 @@ struct SettingsView: View {
             }
             .padding()
             .frame(minWidth: 560, minHeight: 360)
+        }
+        .confirmationDialog("Delete the credentials stored under \(removingOrphan ?? "this id")?",
+                            isPresented: Binding(get: { removingOrphan != nil }, set: { if !$0 { removingOrphan = nil } }),
+                            presenting: removingOrphan) { id in
+            Button("Delete from Keychain", role: .destructive) { removeOrphan(id) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("They are deleted from this Mac's Keychain and can't be brought back. Apple or Mosyle keeps the account: revoke it there if you no longer need it.")
         }
         .confirmationDialog("Remove \(removing?.name ?? "this organization")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { profile in
@@ -426,6 +453,26 @@ struct SettingsView: View {
             } catch {
                 problem = DevicesModel.message(error)
             }
+            await loadOrphans()
+        }
+    }
+
+    private func loadOrphans() async {
+        do {
+            orphans = try await orgs.orphanedCredentials()
+        } catch {
+            problem = OrgsModel.message(error)
+        }
+    }
+
+    private func removeOrphan(_ id: String) {
+        Task {
+            do {
+                try await orgs.removeOrphanedCredentials(id)
+            } catch {
+                problem = OrgsModel.message(error)
+            }
+            await loadOrphans()
         }
     }
 }
