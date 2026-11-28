@@ -41,6 +41,9 @@ public actor Vault {
         if let started = sessionStarted, now() - started >= sessionLifetime { lock() }
     }
 
+    /// Starts the session's clock when a use returns, whatever it did: a write hands the Keychain the session's
+    /// context as a read does, and a use can fail after its prompt was answered. When it returns, not when it
+    /// begins: a prompt nobody has answered must not be cut off by the next use.
     private func used() { sessionStarted = sessionStarted ?? now() }
 
     // MARK: using secrets (package: the clients, never the app)
@@ -48,8 +51,8 @@ public actor Vault {
     /// A stored secret (Mosyle's token, email, password); `missing` when it isn't stored.
     package func secret(_ item: VaultItem) async throws -> Secret {
         beginUse()
+        defer { used() }
         let data = try await offMainThread { [store] in try store.read(item) }
-        used()
         guard let data else { throw VaultError.missing(item) }
         return Secret(data)
     }
@@ -66,8 +69,8 @@ public actor Vault {
     /// An ES256 signature, raw `r‖s`, by the org's stored key: the key never leaves the Keychain.
     package func sign(_ message: Data, with item: VaultItem) async throws -> Data {
         beginUse()
+        defer { used() }
         let signature = try await offMainThread { [store] in try store.sign(message, with: item) }
-        used()
         guard let signature else { throw VaultError.missing(item) }
         return signature
     }
@@ -78,6 +81,7 @@ public actor Vault {
     public func storeKey(_ key: ImportedKey, as item: VaultItem) async throws {
         guard item.kind.isKey else { throw VaultError.wrongKind(item.kind) }
         beginUse()
+        defer { used() }
         try await offMainThread { [store] in try store.storeKey(key.key, as: item) }
     }
 
@@ -85,6 +89,7 @@ public actor Vault {
     public func store(_ secret: Secret, as item: VaultItem) async throws {
         guard !item.kind.isKey else { throw VaultError.wrongKind(item.kind) }
         beginUse()
+        defer { used() }
         try await offMainThread { [store] in try store.write(secret.bytes, as: item) }
     }
 
@@ -128,6 +133,7 @@ public actor Vault {
     @discardableResult
     package func refresh(_ secret: Secret, as item: VaultItem, replacing original: Secret) async throws -> Bool {
         beginUse()
+        defer { used() }
         return try await offMainThread { [store] in try store.replace(secret.bytes, as: item, ifCurrent: original.bytes) }
     }
 

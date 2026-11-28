@@ -66,6 +66,66 @@ struct VaultTests {
         #expect(store.sessionsEnded == 1)
     }
 
+    /// A write hands the Keychain the session's context as a read does (updating a stored item prompts), so it starts
+    /// the session's clock: a read past the lifetime prompts again.
+    @Test func aWriteStartsTheSessionClock() async throws {
+        let store = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        try await vault.store(Secret("old"), as: Self.token)
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        _ = try await vault.secret(Self.token)
+        #expect(store.sessionsEnded == 1)
+    }
+
+    /// A use can fail after its prompt was answered, so a use that throws starts the clock too.
+    @Test func aUseThatFailsStartsTheSessionClock() async throws {
+        let store = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        store.failNext(.read, with: errSecAuthFailed)
+        await #expect(throws: VaultError.keychain(errSecAuthFailed)) { try await vault.secret(Self.token) }
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        #expect(try await vault.optionalSecret(Self.token) == nil)
+        #expect(store.sessionsEnded == 1)
+    }
+
+    /// The clock starts when a use returns, not when it begins: a use still waiting at the Keychain (a prompt nobody
+    /// has answered) is never cut off by the next use, which would wait for the store's lock on the actor.
+    @Test func aUseStillWaitingIsNotEndedByTheNextUse() async throws {
+        let store = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        store.holdNextWrite()
+        async let write: Void = vault.store(Secret("t"), as: Self.token)
+        for _ in 0..<5000 where store.writesWaiting == 0 { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(store.writesWaiting == 1)
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        #expect(try await vault.optionalSecret(VaultItem(org: Self.org, kind: .mosyleEmail)!) == nil)
+        #expect(store.sessionsEnded == 0)
+        store.releaseWriteHold()
+        try await write
+    }
+
+    /// A key import and a write-back start the clock too, when one is the session's first use.
+    @Test func aKeyImportAndAWriteBackStartTheSessionClock() async throws {
+        let imported = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        var vault = Vault(store: imported, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        try await vault.storeKey(KeyImport.parseForTests(P256.Signing.PrivateKey()), as: Self.key)
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        _ = try await vault.sign(Data("m".utf8), with: Self.key)
+        #expect(imported.sessionsEnded == 1, "storeKey")
+
+        let written = MemoryStore()
+        try written.write(Data("t".utf8), as: Self.token)
+        vault = Vault(store: written, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        #expect(try await vault.refresh(Secret("u"), as: Self.token, replacing: Secret("t")))
+        clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
+        _ = try await vault.secret(Self.token)
+        #expect(written.sessionsEnded == 1, "refresh")
+    }
+
     @Test func aSetIsWholeOrAbsent() async throws {
         let store = MemoryStore(), vault = Vault(store: store)
         let set: [VaultItem.Kind: Secret?] = [.mosyleAccessToken: Secret("a"), .mosyleEmail: Secret("b"),
