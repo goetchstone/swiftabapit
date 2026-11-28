@@ -250,7 +250,7 @@ public enum MosyleAPIError: Error, Equatable, Sendable {
         case .notARead(let template): "\(template) isn't a Mosyle read this app may send, so it wasn't sent."
         case .rateLimited: "Mosyle is rate-limiting this organization. Try again in a minute."
         case .server(let status): "Mosyle's service failed (HTTP \(status)). Try again later."
-        case .unexpected(let status): "Mosyle answered HTTP \(status), which this app doesn't expect."
+        case .unexpected(let status): (300..<400).contains(status) ? "Mosyle answered HTTP \(status) (a redirect), which this app doesn't follow." : "Mosyle answered HTTP \(status), which this app doesn't expect."
         case .notJSON(let bytes): "Mosyle's answer wasn't readable (\(bytes) bytes that aren't JSON)."
         case .http(let failure): failure.message
         case .vault(let guidance): guidance

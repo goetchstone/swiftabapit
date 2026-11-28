@@ -90,7 +90,7 @@ public enum AppleAPIError: Error, Equatable, Sendable {
             "Apple refused the request\(parameter.map { " (\($0))" } ?? "")\(detail.map { ": \($0)" } ?? ".")"
         case .rateLimited: "Apple is rate-limiting this account. It was retried; try again in a minute."
         case .server(let status): "Apple's service failed (HTTP \(status)). Try again later."
-        case .unexpected(let status): "Apple answered HTTP \(status), which this app doesn't expect."
+        case .unexpected(let status): (300..<400).contains(status) ? "Apple answered HTTP \(status) (a redirect), which this app doesn't follow." : "Apple answered HTTP \(status), which this app doesn't expect."
         case .notJSON(let bytes): "Apple's answer wasn't readable (\(bytes) bytes that aren't JSON)."
         case .malformed(let what): "Apple's answer wasn't the shape it documents (\(what))."
         case .http(let failure): failure.message

@@ -100,15 +100,15 @@ public actor HTTPClient {
                               body: request.body, authorizer: authorizer)
     }
 
-    /// Whether `url` stays in the API: on `host`, under `/v1/`. The rule for a next link and for a redirect's target
-    /// (`URLSessionTransport.followable`). A dot segment in any spelling (`..`, `%2e%2E`, `.%2e`) or a bad escape is
-    /// refused: decoded, it would climb out of `/v1/`.
+    /// Whether `url` stays in the API: on `host`, under `/v1/`. The rule for a next link. A dot segment in any spelling
+    /// (`..`, `%2e%2E`, `.%2e`) or a bad escape is refused: decoded, it would climb out of `/v1/`. So is a segment with a `;`
+    /// (a path parameter): some servers strip it, so `/v1/..;/v2` would climb out there.
     static func staysInTheAPI(_ url: URL, on host: APIHost) -> Bool {
         let path = url.path(percentEncoded: true)
         return APIHost(of: url) == host && path.hasPrefix("/v1/")
             && !path.split(separator: "/").contains(where: { segment in
                 guard let decoded = String(segment).removingPercentEncoding else { return true }
-                return decoded == "." || decoded == ".." || decoded.contains("/")
+                return decoded == "." || decoded == ".." || decoded.contains("/") || decoded.contains(";")
             })
     }
 

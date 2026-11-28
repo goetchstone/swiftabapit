@@ -137,4 +137,10 @@ struct AppleStubTests {
         let next = try #require(first.body?["links"]?["next"]?.string)
         #expect(next == "https://api-business.apple.com/v1/orgDevices?cursor=2&filter%5BorderNumber%5D=A%2BB&limit=2")
     }
+
+    /// A redirect is never followed (the operator's decision, 2026-11-28), and the answer says so; any other status keeps its words.
+    @Test func aRedirectIsNamedAsOne() {
+        #expect(AppleAPIError.unexpected(status: 307).message == "Apple answered HTTP 307 (a redirect), which this app doesn't follow.")
+        #expect(AppleAPIError.unexpected(status: 418).message == "Apple answered HTTP 418, which this app doesn't expect.")
+    }
 }
