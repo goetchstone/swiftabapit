@@ -69,5 +69,10 @@ Act on the items your diff touches.
     that drives it and the stub switch it uses; one without both is a finding (failure-log 2026-10-16,
     "the stub could not fail"). Run mutants with a script that restores each file, and call an
     equivalent mutant equivalent, with the reason.
+    A mutant or a refusal goes in a commit message or a PR only with the command that ran and the output
+    line that decided it: for a gate, its own message naming the reason, never an exit code alone (a copy
+    named `a.app` fails the Release gate for its name). A count N/N is the number of mutant commands
+    run. A check added but not seen failing goes under "Not exercised" in the PR (failure-log
+    2026-10-16, "the gate looked for what it could not see").
 15. **Publish as goetchstone**: `GH_TOKEN="$(gh auth token --user goetchstone)"`, after
     `gh api user --jq .login` says `goetchstone`. Don't stack on a branch `--delete-branch` will remove.

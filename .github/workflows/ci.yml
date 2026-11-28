@@ -34,6 +34,8 @@ jobs:
           for script in scripts/*.sh; do bash -n "$script"; done
       - name: No invisible or bidirectional characters in source
         run: python3 -I scripts/check_text.py
+      - name: The text check refuses what it must (14 files, each in a temporary repository)
+        run: python3 -I scripts/check_text_selftest.py
 
   macos:
     # GitHub's xcode-27 image: macOS 27 + Xcode 27, what the app targets. No signing team here, so the app
@@ -66,6 +68,8 @@ jobs:
         run: |
           xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Release -derivedDataPath "$RUNNER_TEMP/dd" DEPLOYMENT_POSTPROCESSING=YES build
           scripts/check_app.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
+      - name: The gate refuses each mutant it must (24 changed copies of the Release app, none run)
+        run: scripts/check_app_mutants.sh "$RUNNER_TEMP/dd/Build/Products/Release/abapit.app"
       - name: Screenshots (debug build, demo org only)
         run: |
           xcodebuild -project SwiftAbapit.xcodeproj -scheme abapit -configuration Debug -derivedDataPath "$RUNNER_TEMP/dd" build

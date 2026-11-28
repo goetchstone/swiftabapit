@@ -10,6 +10,9 @@ home; this one says how the homes themselves work and fail.
 **Enforcement home:** `ScannerTests` (the scanner finds every spelling each needle list must find, and its
 lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree), `DebugOnlyTests`,
 `GateScriptTests` (no pipe into `grep -q`), and the mutants recorded in each gate change's PR.
+The gate scripts have standing mutants too: `scripts/check_app_mutants.sh` (CI: 24 changed copies of the
+Release app, each refused for its own reason) and `scripts/check_graph_selftest.py` (`scripts/test.sh`:
+mutant manifests).
 
 ## Files
 - `Packages/AbapitKit/Sources/TestSupport/Fixtures.swift` — `SourceScan`: `code(_:strings:)` (the lexer),
@@ -28,6 +31,11 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
   are the stamps' type and name, a nested app or extension in `Contents` or `Resources`, a file in a folder the build
   never writes, a scripting definition, `InfoPlist.*` files, a symlink, and a nested app in `MacOS`.
 - `scripts/check_graph.py`, `scripts/check_text.py` — the manifest SwiftPM evaluates; invisible characters.
+- `scripts/check_graph_selftest.py`, `scripts/check_text_selftest.py` — those two checks' standing mutants:
+  15 changed manifests, one for each refusal the graph check can print (`scripts/test.sh`), and 14 files in
+  temporary repositories, one for each clause of `invisible` (CI's hygiene job). Each must be refused for its
+  own reason. A new refusal in either check gets its mutant there in the same PR. To see one fail, point it
+  at a scratch copy of the check with a rule removed (`CHECK_GRAPH=<copy>`, `CHECK_TEXT=<copy>`).
 
 ## How it works
 - **What a scan reads.** `SourceScan.code` blanks every comment (nested too) and, unless asked to keep them,
@@ -161,6 +169,9 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 ## Testing / verification status
 - Offline: `scripts/test.sh` (all four suites). Gate changes are proven by building mutant Release apps from
   a scratch copy and running the gate on each (list them in the PR).
+- Standing mutants: `scripts/check_app_mutants.sh <a Release app that passes>` and
+  `scripts/check_graph_selftest.py`. To see one fail, run it on a scratch copy of the gate with a rule removed
+  (`CHECK_APP_GATE=<that copy> scripts/check_app_mutants.sh <app>`).
 - Not covered: a name assembled at run time beyond the lookups listed in `RouteTests.lookups`; a free
   function from TestSupport in a stripped (archive) build, which leaves no trace there. The source holds it
   (no Release code imports TestSupport, `PackageGraphTests`), and CI's unstripped Release build would show it.
@@ -187,6 +198,8 @@ lexer reads literals as Swift does), `TreeTests` (the scans read the whole tree)
 - **A second transport user** (Mosyle's client, Phase 7): a reviewed change to
   `RouteTests.onlyTheClientBuildsTheTransportAndOnlyHTTPClientSends`.
 - **A gate change:** build each mutant it should refuse, from a scratch copy, and run the gate on each.
+  Add one mutant per new rule to `scripts/check_app_mutants.sh` (or `scripts/check_graph_selftest.py`) in
+  the same PR, with the reason the gate must print, and raise the count on its last line.
 - **A new Info.plist key:** add it to `want` in `scripts/check_app.sh` and its reason to the PR. An inbound door (a URL
   scheme, a document type, a Service) is a design change: stop for the operator.
 - **A Release use of `NSWorkspace` or `openURL`** (opening an activity's `downloadUrl` in the browser, by design): a
