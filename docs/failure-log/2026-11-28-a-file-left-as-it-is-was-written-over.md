@@ -9,7 +9,7 @@
   before a save whose failure is only a banner.
 - **Why not caught:** the earlier test, `aFileTheAppCantReadIsNeverWrittenOverAtLaunch`, held the launch only; no test tried a
   later change over a file that wasn't read, or over a newer version's file.
-- **Fix:** this PR. `OrgsModel.cannotPersist` is asked first by `move`, `renameClient`, `saveMosyle`, `save` and `remove`, before any
+- **Fix:** https://github.com/goetchstone/swiftabapit/pull/65. `OrgsModel.cannotPersist` is asked first by `move`, `renameClient`, `saveMosyle`, `save` and `remove`, before any
   Keychain write or history deletion, and says why in words; `save()` writes nothing after a failed load. Left alone on purpose: a
   save that fails as `unwritable` (a full disk) still returns success with the banner and is retried by the next save.
 - **Prevention:** `StoreGuardTests`, one test per guard, each killed by a mutant that removes it; `settings.json` over a file that

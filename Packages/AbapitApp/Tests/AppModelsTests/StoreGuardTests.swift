@@ -172,4 +172,39 @@ struct StoreGuardTests {
         #expect(try Self.text(folder, LocalSettings.fileName) == junk)
         #expect(orgs.settingsProblem != nil)
     }
+
+    /// A file a newer version wrote is said from launch, and a selection over it says again that it isn't kept.
+    @Test func aNewerVersionsFileIsSaidAtLaunch() throws {
+        let folder = try Self.folder(holding: Self.newer)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let orgs = Self.model(folder, Vault(store: MemoryStore()))
+        #expect(orgs.problem == OrgStore.Failure.newerVersion(3).message)
+        #expect(try Self.text(folder) == Self.newer)
+    }
+
+    /// A version below 1 isn't one this app wrote: the file is unreadable, so it is left byte for byte.
+    @Test func aVersionBelowOneIsUnreadableAndLeftAsItIs() async throws {
+        let text = #"{"version": -1, "active": "a", "orgs": [{"id": "a", "name": "A", "provider": "apple"}]}"#
+        let folder = try Self.folder(holding: text)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let orgs = Self.model(folder, Vault(store: MemoryStore()))
+        #expect(orgs.problem == OrgStore.Failure.notAnOrgFile.message)
+        #expect(try Self.text(folder) == text)
+        await #expect(throws: OrgsModel.SaveFailure.self) { try await orgs.saveMosyle(Self.mosyleDraft, editing: nil) }
+        #expect(try Self.text(folder) == text)
+    }
+
+    /// A removal, a move and a rename over a file that couldn't be read are refused, with the Keychain and the file untouched.
+    @Test func anUnreadableFileRefusesARemovalAMoveAndARename() async throws {
+        let folder = try Self.folder(holding: Self.cut)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let vault = Vault(store: MemoryStore())
+        try await vault.store(Secret("t"), as: try #require(VaultItem(org: "acme", kind: .mosyleAccessToken)))
+        let orgs = Self.model(folder, vault)
+        await #expect(throws: OrgsModel.SaveFailure.self) { try await orgs.remove("acme", deleteSecrets: true) }
+        #expect(throws: OrgsModel.SaveFailure.self) { try orgs.move("acme", toClient: nil) }
+        #expect(throws: OrgsModel.SaveFailure.self) { try orgs.renameClient("c1", to: "Other") }
+        #expect(try await vault.inventory() == ["acme": [.mosyleAccessToken]])
+        #expect(try Self.text(folder) == Self.cut)
+    }
 }

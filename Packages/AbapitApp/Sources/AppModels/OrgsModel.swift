@@ -203,6 +203,9 @@ public final class OrgsModel {
                 // read: one that couldn't be is never written over (the review of PR 18: one guard stood between an
                 // unreadable file and an empty store saved over it).
                 if self.store.migrated { save() }
+                // A file a newer version wrote is read, never saved: said from launch, not at the first change. A selection
+                // made over it is kept in memory only, and its failed save repeats this.
+                if self.store.fileVersion > OrgStore.version { problem = OrgStore.Failure.newerVersion(self.store.fileVersion).message }
             } catch {
                 self.store = OrgStore()
                 problem = error.message
