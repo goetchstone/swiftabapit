@@ -149,6 +149,18 @@ struct HTTPCoreTests {
         }
     }
 
+    /// A next link's bytes are Apple's. Adding `limit` once decoded and re-encoded the whole query: `%2B` went out as
+    /// `+`, which a server reads as a space (failure-log 2026-11-28). The stub's cursors are integers and can't show it.
+    @Test func aNextLinkKeepsItsBytesWhenLimitIsAdded() async throws {
+        let link = "https://api-business.apple.com/v1/mdmServers?cursor=abc%2Bdef%2Fghi%3D%3D"
+        let recorder = Recorder()
+        let client = HTTPClient(transport: recorder, limiter: RateLimiter(sleep: { _ in }))
+        for (next, limit) in [(link, "1000"), (link + "&limit=100", "1000"), (link, nil), (link, "1 0&x=%")] as [(String, String?)] {
+            _ = try await client.read(next: try #require(URL(string: next)), on: .appleBusiness, template: "/v1/mdmServers", keeping: limit, authorizer: NoAuth())
+        }
+        #expect(recorder.seen.withLock { $0 }.map { String($0.dropFirst(4)) } == [link + "&limit=1000", link + "&limit=100", link, link + "&limit=1%200%26x%3D%25"])
+    }
+
     /// A rate that isn't a number never reaches the limiter: NaN would never wait.
     @Test func aNonFiniteRateIsTheDefault() async {
         for rate in [Double.nan, .infinity, -.infinity] {
@@ -158,10 +170,61 @@ struct HTTPCoreTests {
 
     @Test func redirectsStayOnTheSameAllowlistedHost() {
         let business = URL(string: "https://api-business.apple.com/v1/orgDevices")
-        #expect(URLSessionTransport.followable(from: business, to: URL(string: "https://api-business.apple.com/v1/x")))
-        #expect(!URLSessionTransport.followable(from: business, to: URL(string: "https://api-school.apple.com/v1/x")))
-        #expect(!URLSessionTransport.followable(from: business, to: URL(string: "https://evil.example.com/v1/x")))
-        #expect(!URLSessionTransport.followable(from: business, to: URL(string: "http://api-business.apple.com/v1/x")))
+        #expect(URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://api-business.apple.com/v1/x")))
+        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://api-school.apple.com/v1/x")))
+        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://evil.example.com/v1/x")))
+        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "http://api-business.apple.com/v1/x")))
+        #expect(!URLSessionTransport.followable(method: nil, from: business, to: URL(string: "https://api-business.apple.com/v1/x")))
+    }
+
+    /// The transport holds the allowlist itself, before a connection: `HTTPClient` is its only caller by a source scan,
+    /// not by a type (failure-log 2026-11-28). `.invalid` never resolves, so undoing the guard fails here with a URLError.
+    @Test func theTransportRefusesAHostOffTheAllowlist() async {
+        await #expect(throws: HTTPFailure.refusedHost("host.invalid")) {
+            _ = try await URLSessionTransport().send(URLRequest(url: URL(string: "https://host.invalid/v1/x")!), limit: 1)
+        }
+    }
+
+    /// What the redirect delegate answers for a task that was never resumed (no connection is made).
+    static func redirected(_ method: String, from: String, to: String, status: Int = 307) async -> URLRequest? {
+        let transport = URLSessionTransport()
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        var original = URLRequest(url: URL(string: from)!)
+        original.httpMethod = method
+        let task = session.dataTask(with: original)
+        let target = URLRequest(url: URL(string: to)!)
+        let response = HTTPURLResponse(url: original.url!, statusCode: status, httpVersion: "HTTP/2", headerFields: ["Location": to])!
+        return await withCheckedContinuation { continuation in
+            transport.urlSession(session, task: task, willPerformHTTPRedirection: response, newRequest: target) { continuation.resume(returning: $0) }
+        }
+    }
+
+    /// Only a GET follows a redirect, and only to where a next link may go: a 307 or 308 would replay a POST (a
+    /// credential exchange's body, a Mosyle read, later a held write) to a path nothing previewed.
+    @Test func onlyAGETFollowsARedirectAndOnlyInsideTheAPI() async {
+        let devices = "https://api-business.apple.com/v1/orgDevices"
+        let followed = await Self.redirected("GET", from: devices, to: "https://api-business.apple.com/v1/x")
+        #expect(followed?.url?.absoluteString == "https://api-business.apple.com/v1/x")
+        for status in [301, 302, 303, 307, 308] {
+            let again = await Self.redirected("GET", from: devices, to: "https://api-business.apple.com/v1/x", status: status)
+            #expect(again?.url?.absoluteString == "https://api-business.apple.com/v1/x", "GET \(status)")
+        }
+        for method in ["POST", "PATCH", "DELETE", "PUT"] {
+            for status in [307, 308] {
+                let refused = await Self.redirected(method, from: devices, to: "https://api-business.apple.com/v1/x", status: status)
+                #expect(refused == nil, "\(method) \(status)")
+            }
+        }
+        let mosyle = await Self.redirected("POST", from: "https://businessapi.mosyle.com/v1/devices",
+                                           to: "https://businessapi.mosyle.com/v1/other", status: 308)
+        #expect(mosyle == nil)
+        for target in ["https://api-business.apple.com/v2/x", "https://api-business.apple.com/", "https://api-business.apple.com/v1/../v2/x",
+                       "https://api-business.apple.com/v1/%2e%2E/v2/x", "https://api-school.apple.com/v1/x", "https://evil.example.com/v1/x",
+                       "http://api-business.apple.com/v1/x"] {
+            let refused = await Self.redirected("GET", from: devices, to: target)
+            #expect(refused == nil, "\(target)")
+        }
     }
 
     @Test func retryAfterIsSecondsOrADateAndNeverOverAMinute() {

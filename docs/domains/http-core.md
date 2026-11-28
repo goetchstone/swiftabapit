@@ -16,8 +16,8 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   body), `AuthRequest` (a credential exchange), `URL.make` (names and values percent-encoded except
   unreserved: `fields%5BorgDevices%5D`, as abapit's httpx sent it).
 - `Sources/HTTPCore/Transport.swift` — `Transport` and `URLSessionTransport`: ephemeral, no cookies, cache or
-  credential storage, TLS ≥ 1.2, bodies capped at 32 MiB while they stream in, redirects followed only to the
-  same allowlisted host.
+  credential storage, TLS ≥ 1.2, bodies capped at 32 MiB while they stream in, a host off the allowlist
+  refused before connecting, and a redirect followed only for a GET, to the same allowlisted host, where a next link may go.
 - `Sources/HTTPCore/HTTPClient.swift` — reads (retry transport failures ×4 with backoff; 429 → `Retry-After`
   seconds or HTTP date, else 2^n s, capped 60 s, and the limiter halves, a `Retry-After` holding its read lane that long
   for every read waiting on it; 401 → `invalidate()` and one retry;
@@ -58,7 +58,15 @@ and the gate read code, and how they failed: [gates.md](gates.md).
   (`.%2e` got past a list of spellings). Foundation re-encodes a bad escape (`%zz` becomes `%25zz`), so that
   case is a literal, not a bypass.
 - **Apple's next link carries only `cursor`.** The client re-adds the first page's `limit`, or the 200-page
-  cap would cover a tenth of a large fleet. Check live.
+  cap would cover a tenth of a large fleet. Check live. `limit` is appended to the link's percent-encoded query and the rest goes
+  out byte for byte (`queryItems` re-encoded it: `%2B` went out as `+`, failure-log 2026-11-28); the encoded setter traps on a value
+  that isn't percent-encoded, so `limit` is encoded first. Check live: the cursor's alphabet, and whether a next link has literal
+  `[` and `]` (`URL(string:)` re-encodes such a link before HTTPCore sees it). The stub's own next link keeps the request's other
+  parameters byte for byte too (`aNextLinkKeepsTheRequestsEncodedFilters`).
+- **A POST never follows a redirect.** A 307 or 308 replays the body to the new path: a credential exchange, a Mosyle read, later
+  a held write, to a path nothing previewed. The Python app never followed one (httpx's default). Whether Apple or Mosyle ever
+  redirect: check live. Narrowing to a GET inside `/v1/` (`HTTPClient.staysInTheAPI`, the next-link rule) is a proposal the
+  operator can replace with "refuse every redirect".
 - A rate read from `orgs.json` that isn't finite is the default: a NaN rate never waits.
 - An ID typed into Find goes into a path: `AppleRead.isPathSafe` refuses anything but `[A-Za-z0-9._-]`, not
   starting with `.`, at most 128 characters, before a request exists.

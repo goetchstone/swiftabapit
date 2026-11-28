@@ -565,10 +565,11 @@ public final class AppleStub: Transport, Sendable {
             // `fields[...]`) and sets only `cursor` (get-org-devices.response.2.json). A link that dropped them would give page 2
             // of a read other attributes than page 1, which Apple's doesn't.
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-            let kept = (components.queryItems ?? []).filter { $0.name != "cursor" }
+            // The others as they were sent: `queryItems` decodes and re-encodes, and a filter's `%2B` came back as `+`.
+            let kept = (components.percentEncodedQueryItems ?? []).filter { $0.name.removingPercentEncoding != "cursor" }
             // `cursor` first: the order of a query isn't Apple's to promise, and tests queue a failure for a later page by the
             // prefix `<path>?cursor=`.
-            components.queryItems = [URLQueryItem(name: "cursor", value: String(next))] + kept
+            components.percentEncodedQueryItems = [URLQueryItem(name: "cursor", value: String(next))] + kept
             links["next"] = .string(components.url!.absoluteString)
             paging["nextCursor"] = .string(String(next))
         }

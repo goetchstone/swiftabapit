@@ -4,8 +4,8 @@ import Wire
 /// What carries a request: `URLSessionTransport` in the app, a strict stub in tests (`TestSupport`). This is
 /// the only file that names `URLSession` (`SourceScanTests`).
 public protocol Transport: Sendable {
-    /// The response, its body capped at `limit` bytes. A redirect is followed only to the same allowlisted
-    /// host; a response that isn't HTTP is a transport failure.
+    /// The response, its body capped at `limit` bytes. A redirect is followed only for a GET, to the same allowlisted
+    /// host, under `/v1/`; a response that isn't HTTP is a transport failure.
     func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse)
 }
 
@@ -32,6 +32,9 @@ public final class URLSessionTransport: NSObject, Transport, URLSessionTaskDeleg
     deinit { session.invalidateAndCancel() }
 
     public func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+        // The allowlist holds here too, before a connection: `HTTPClient` checks it first, and is this method's only
+        // caller by a source scan, not by a type (invariant 4; failure-log 2026-11-28).
+        guard let url = request.url, APIHost(of: url) != nil else { throw HTTPFailure.refusedHost(request.url?.host() ?? "?") }
         let (bytes, response) = try await session.bytes(for: request, delegate: self)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if http.expectedContentLength > Int64(limit) { throw HTTPFailure.tooLarge(limit: limit) }
@@ -44,16 +47,18 @@ public final class URLSessionTransport: NSObject, Transport, URLSessionTaskDeleg
         return (body, http)
     }
 
-    /// A redirect is followed only within the same allowlisted host: the API hosts don't redirect, and one
-    /// that did could otherwise carry the bearer token elsewhere (invariant 4). The completion-handler form:
+    /// A redirect is followed only for a GET, within the same allowlisted host, to where a next link may go: the API
+    /// hosts don't redirect, and one that did could otherwise carry the bearer token elsewhere (invariant 4) or, on a
+    /// 307 or 308, replay a POST's body to a path nothing previewed. The completion-handler form:
     /// Swift 6.4 crashes emitting the async form's Objective-C thunk (docs/domains/http-core.md).
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                            newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-        completionHandler(Self.followable(from: task.originalRequest?.url, to: request.url) ? request : nil)
+        let original = task.originalRequest
+        completionHandler(Self.followable(method: original?.httpMethod, from: original?.url, to: request.url) ? request : nil)
     }
 
-    static func followable(from original: URL?, to target: URL?) -> Bool {
-        guard let original, let target, let from = APIHost(of: original), let to = APIHost(of: target) else { return false }
-        return from == to
+    static func followable(method: String?, from original: URL?, to target: URL?) -> Bool {
+        guard method == HTTPMethod.get.rawValue, let original, let target, let host = APIHost(of: original) else { return false }
+        return HTTPClient.staysInTheAPI(target, on: host)
     }
 }
