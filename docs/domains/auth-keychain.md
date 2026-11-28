@@ -113,5 +113,7 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 - Assertion reuse (plan §3.4.2) and the token rate: Phase 1 live checks (operator).
 - The protections `KeychainStore` asks for (the data-protection Keychain, this device only, user presence) are held
   as text by `SourceScanTests`' `KeychainShapeTests` (failure-log 2026-11-18, "the Keychain's protections were held by
-  no test"): no offline test can run `KeychainStore`. What the Keychain stored is read back only by the
-  `ABAPIT_SPIKE=vault` spike on a team-signed build: pending (operator).
+  no test"): no offline test can run `KeychainStore`. The pins hold against an accidental edit and the weakenings they
+  list, not against a determined author; the review is the second line. What the Keychain stored was read back by the
+  `ABAPIT_SPIKE=vault` spike on a team-signed build, which passed 2026-11-19, and only for the Mosyle password's
+  accessibility class and access control: not the Apple key item, and not the name-only index (open, operator).

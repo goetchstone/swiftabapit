@@ -47,7 +47,7 @@ struct RouteTests {
     /// An extension of a request type, which can add a maker or a conformance a generic `T(host:…)` makes one through.
     static let requestExtensions = ["extensionReadRequest", "extensionWire.ReadRequest", "extensionAuthRequest", "extensionWire.AuthRequest"]
     /// The Keychain's item, key and access-control calls, and the legacy `SecKeychain…` family.
-    static let keychain = ["SecItem", "SecKeyCreate", "kSecClass", "SecAccessControl", "SecKeychain"]
+    static let keychain = ["SecItem", "SecKeyCreate", "kSecClass", "SecAccessControl", "SecKeychain", "kSecAttr", "kSecUse"]
     /// What reads or opens a URL without naming `URLSession`: Foundation's and the session's fetches, and (failure-log
     /// 2026-11-18) SwiftUI's `AsyncImage`, AppKit's `NSImage(byReferencing:)`, Foundation's `Stream.getStreamsToHost`, and
     /// what hands a URL to another app: `NSWorkspace`, Launch Services' `LSOpenCFURLRef` (and the rest of `LSOpen…`), SwiftUI's `openURL` (its `OpenURLAction`, App Intents' `OpenURLIntent`).

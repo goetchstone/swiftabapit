@@ -31,8 +31,9 @@ here and are already wired into the skills.
 - **What happened:** a review unhooked the redirect delegate, removed both body caps and loosened every session setting
   in `Transport.swift`; every test passed (failure-log 2026-11-18, "the transport's protections were held by no test").
 - **Invariant in force:** #4 (a redirect elsewhere is refused) and #7 (a bounded body).
-- **Why it didn't hold:** wrong layer. Its home is `HTTPCoreTests`, which at f3249c1 tested only a pure helper, and since then call the delegate method on a task never resumed, not its wiring to the session; every
-  other test sends through a stub, whose cap is its own.
+- **Why it didn't hold:** wrong layer. Its home is `HTTPCoreTests`, which at f3249c1 tested only a pure helper, and
+  since then calls the delegate method on a task never resumed, not its wiring to the session; every other test sends
+  through a stub, whose cap is its own.
 - **Would a rule have caught it?** only if enforced differently: where the stub stands in for a file, that file's
   protections are held as text (`TransportShapeTests`, added with this entry), and the stub's copy is named a copy.
 - **Enforcement home if changed:** tripwire test (`SourceScanTests`' `TransportShapeTests`). Invariant 4's home line
