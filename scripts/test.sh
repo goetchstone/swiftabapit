@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 -I scripts/check_graph.py
+# The graph check refuses what it must: mutant manifests in a temporary copy (failure-log 2026-11-27).
+python3 -I scripts/check_graph_selftest.py
 swift test --package-path Packages/AbapitKit --explicit-target-dependency-import-check error "$@"
 # The screen models' own package, which sees AbapitKit's public API only (Phase 1b review). A --filter that names no
 # test there still passes: swift test exits 0 when the filter leaves nothing to run.
