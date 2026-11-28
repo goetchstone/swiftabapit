@@ -41,6 +41,8 @@ public actor Vault {
         if let started = sessionStarted, now() - started >= sessionLifetime { lock() }
     }
 
+    /// Starts the session's clock, when a use returns and not when it begins: a prompt nobody has answered must not be
+    /// cut off by the next use. Only a use that may have authenticated the shared context starts it (see `timed`).
     private func used() { sessionStarted = sessionStarted ?? now() }
 
     // MARK: using secrets (package: the clients, never the app)
@@ -48,8 +50,7 @@ public actor Vault {
     /// A stored secret (Mosyle's token, email, password); `missing` when it isn't stored.
     package func secret(_ item: VaultItem) async throws -> Secret {
         beginUse()
-        let data = try await offMainThread { [store] in try store.read(item) }
-        used()
+        let data = try await timed(startsClock: { $0 != nil }) { [store] in try store.read(item) }
         guard let data else { throw VaultError.missing(item) }
         return Secret(data)
     }
@@ -66,8 +67,7 @@ public actor Vault {
     /// An ES256 signature, raw `r‖s`, by the org's stored key: the key never leaves the Keychain.
     package func sign(_ message: Data, with item: VaultItem) async throws -> Data {
         beginUse()
-        let signature = try await offMainThread { [store] in try store.sign(message, with: item) }
-        used()
+        let signature = try await timed(startsClock: { $0 != nil }) { [store] in try store.sign(message, with: item) }
         guard let signature else { throw VaultError.missing(item) }
         return signature
     }
@@ -85,7 +85,7 @@ public actor Vault {
     public func store(_ secret: Secret, as item: VaultItem) async throws {
         guard !item.kind.isKey else { throw VaultError.wrongKind(item.kind) }
         beginUse()
-        try await offMainThread { [store] in try store.write(secret.bytes, as: item) }
+        try await timed { [store] in try store.write(secret.bytes, as: item) }
     }
 
     /// Makes `set` the org's whole set of those kinds (Mosyle's four): a kind given as nil is removed. A set
@@ -128,7 +128,7 @@ public actor Vault {
     @discardableResult
     package func refresh(_ secret: Secret, as item: VaultItem, replacing original: Secret) async throws -> Bool {
         beginUse()
-        return try await offMainThread { [store] in try store.replace(secret.bytes, as: item, ifCurrent: original.bytes) }
+        return try await timed { [store] in try store.replace(secret.bytes, as: item, ifCurrent: original.bytes) }
     }
 
     /// What each org has stored, by kind: names only, never a prompt.
@@ -150,6 +150,33 @@ public actor Vault {
     public func lock() {
         store.endSession()
         sessionStarted = nil
+    }
+
+    /// A Keychain call that hands the store the session's context (a read, a signature, a write, a write-back): it
+    /// starts the session's clock when it returns, unless nothing was authenticated. Nothing was when it failed with
+    /// a status no answered prompt can precede (a cancelled or failed prompt, a locked Mac, no Keychain, a missing
+    /// entitlement), or when a read or a signature found no item (`startsClock` is false for the store's nil: the
+    /// store maps an item not found to nil and never throws it). Those start no clock, so a later prompt nobody has
+    /// answered is not cut off 600 s after one that never happened. `refresh`'s `false` (the secret was not the one
+    /// expected) and a write that finds no item and adds one may or may not have used the context, and the Vault
+    /// cannot tell: they start the clock, which can end a session early, never late.
+    private func timed<T: Sendable>(startsClock: (T) -> Bool = { _ in true },
+                                    _ body: @escaping @Sendable () throws -> T) async throws -> T {
+        do {
+            let result = try await offMainThread(body)
+            if startsClock(result) { used() }
+            return result
+        } catch {
+            if Self.mayHaveAuthenticated(error) { used() }
+            throw error
+        }
+    }
+
+    private static func mayHaveAuthenticated(_ error: any Error) -> Bool {
+        guard case VaultError.keychain(let status) = error else { return true }
+        // A prompt cancelled (-128), authentication failed (-25293), a locked Mac (-25308), no Keychain (-25291) and a
+        // missing entitlement (-34018), as numbers: this file names no Keychain constant (`onlyTheVaultTouchesTheKeychain`).
+        return ![-128, -25293, -25308, -25291, -34018].contains(status)
     }
 
     /// Keychain calls can block on a Touch ID prompt: run them on a GCD thread, never on the cooperative
