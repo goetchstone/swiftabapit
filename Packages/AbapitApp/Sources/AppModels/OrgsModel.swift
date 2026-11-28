@@ -178,6 +178,9 @@ public final class OrgsModel {
     /// id of an org removed while its edit is saving, which the edit would then have merged onto (verifier round 1).
     @ObservationIgnored private var reservedIDs: [String] = []
     @ObservationIgnored private var reservedClientIDs: [(org: String, client: String)] = []
+    /// Why `orgs.json` couldn't be read at launch, when it was there and couldn't: nothing is saved over a file that wasn't
+    /// read, and no organization is added, changed or removed until it is moved or repaired. The words are also in `problem`.
+    @ObservationIgnored private var unreadable: String?
 
     /// `history` opens the snapshot history: called once now, and again whenever it is needed while the last try failed.
     public init(storage: Storage, vault: Vault, store: OrgStore? = nil, history: @escaping @MainActor () -> Result<SnapshotStore, SnapshotStore.Failure>,
@@ -200,9 +203,13 @@ public final class OrgsModel {
                 // read: one that couldn't be is never written over (the review of PR 18: one guard stood between an
                 // unreadable file and an empty store saved over it).
                 if self.store.migrated { save() }
+                // A file a newer version wrote is read, never saved: said from launch, not at the first change. A selection
+                // made over it is kept in memory only, and its failed save repeats this.
+                if self.store.fileVersion > OrgStore.version { problem = OrgStore.Failure.newerVersion(self.store.fileVersion).message }
             } catch {
                 self.store = OrgStore()
                 problem = error.message
+                unreadable = error.message
             }
         } else {
             self.store = OrgStore()
@@ -210,6 +217,16 @@ public final class OrgsModel {
     }
 
     public var active: OrgProfile? { store.active }
+
+    /// Why nothing can be saved now, asked before any Keychain write: the file wasn't read at launch, or a newer version of the
+    /// app wrote it. A change that can't be saved isn't made: its Keychain items would outlive it, under no organization.
+    /// Only for a folder: the demo and the tests keep the store in memory.
+    var cannotPersist: String? {
+        guard case .folder = storage else { return nil }
+        if let unreadable { return "\(unreadable) Move or repair that file, then reopen abapit: nothing is saved over a file it couldn't read." }
+        if store.fileVersion > OrgStore.version { return OrgStore.Failure.newerVersion(store.fileVersion).message }
+        return nil
+    }
 
     /// The folder `orgs.json` lives in, where this Mac's other settings live too (`settings.json`); nil for the demo and the
     /// tests, which keep them in memory and write nothing.
@@ -345,6 +362,7 @@ public final class OrgsModel {
 
     /// Moves an org to another client (nil: a client of its own). When it changes what the screens read, they read again.
     public func move(_ org: String, toClient target: String?) throws(SaveFailure) {
+        if let why = cannotPersist { throw .refused(why) }
         let before = (activeClient?.id, mosyleOrg?.id)
         let from = store.client(of: org)?.id
         do {
@@ -419,6 +437,7 @@ public final class OrgsModel {
     static let editMoves = "An edit doesn't change which customer an organization is for: change that in Settings."
 
     public func renameClient(_ id: String, to name: String) throws(SaveFailure) {
+        if let why = cannotPersist { throw .refused(why) }
         do {
             try store.renameClient(id, to: name)
         } catch {
@@ -478,6 +497,7 @@ public final class OrgsModel {
     /// - An org on screen reads again: an Add that becomes the active org, or an edit with new credentials.
     @discardableResult
     public func saveMosyle(_ draft: MosyleDraft, editing id: String?, client choice: ClientChoice? = nil) async throws(SaveFailure) -> OrgProfile {
+        if let why = cannotPersist { throw .refused(why) }
         guard draft.base?.id == id else { throw .refused("This editor was opened for another organization: close it and open it again.") }
         guard id == nil || choice == nil else { throw .refused(Self.editMoves) }
         if let why = draft.problem { throw .refused(why) }
@@ -626,6 +646,7 @@ public final class OrgsModel {
     /// does, and is refused with no answer while some client has room for an Apple org.
     @discardableResult
     public func save(_ draft: OrgDraft, key: ImportedKey?, editing id: String?, client choice: ClientChoice? = nil) async throws(SaveFailure) -> OrgProfile {
+        if let why = cannotPersist { throw .refused(why) }
         guard draft.isComplete else { throw .refused("A name, a client ID and a key ID are needed.") }
         guard id == nil || choice == nil else { throw .refused(Self.editMoves) }
         let orgID: String
@@ -744,6 +765,8 @@ public final class OrgsModel {
     /// can't be deleted (a file a newer version wrote, one that won't open) refuses the removal and leaves the org, its key
     /// and its history as they were.
     public func remove(_ id: String, deleteSecrets: Bool, deleteHistory: Bool = false) async throws {
+        // First: the history's deletion can't be undone either.
+        if let why = cannotPersist { throw SaveFailure.refused(why) }
         // A write for this history in flight (a snapshot past its last check, an import into another org of the client) could land
         // after the deletion: refused, in words. Removing the org and keeping its history stays allowed.
         if deleteHistory, let why = historyDeletionBlocked { throw SaveFailure.refused(why) }
@@ -883,7 +906,8 @@ public final class OrgsModel {
     }
 
     private func save() {
-        guard case .folder(let folder) = storage else { return }
+        // Never over a file that wasn't read: what the load said stays in `problem`.
+        guard case .folder(let folder) = storage, unreadable == nil else { return }
         do {
             try store.save(to: folder)
             problem = nil

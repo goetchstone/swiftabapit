@@ -359,6 +359,7 @@ struct SettingsView: View {
                             try orgs.renameClient(client.id, to: clientName)
                             problem = nil
                         } catch {
+                            clientName = client.name
                             problem = OrgsModel.message(error)
                         }
                     }

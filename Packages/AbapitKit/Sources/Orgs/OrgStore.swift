@@ -376,7 +376,7 @@ public struct OrgStore: Sendable, Equatable {
             total += got
         }
         guard let root = JSONValue.parse(String(decoding: bytes[..<total], as: UTF8.self))?.object,
-              let version = root["version"]?.int, let list = root["orgs"]?.array else { throw .notAnOrgFile }
+              let version = root["version"]?.int, version >= 1, let list = root["orgs"]?.array else { throw .notAnOrgFile }
         var usable: [OrgProfile] = [], kept: [JSONValue] = [], ids: Set<String> = []
         for entry in list {
             if let object = entry.object, let id = object["id"]?.string, !id.isEmpty, ids.insert(id).inserted {

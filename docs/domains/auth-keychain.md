@@ -69,6 +69,11 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   compare-and-swap, so a removed org stays removed.
 - **A set is whole or absent**: a failure part-way through importing a Mosyle org's four secrets
   removes what was written.
+- **A file that wasn't read is never saved over, and a change that can't be saved isn't made**: after a failed load, or over a
+  file a newer version wrote, an Add, an edit, a move, a rename and a removal are refused before any Keychain write
+  (`OrgsModel.cannotPersist`); a selection, a probe result and the migration notes write nothing. The file is `orgs.json` in the
+  app's Application Support folder, `abapit/`: move or repair it, then reopen the app. `settings.json` has its own guard
+  (`LocalSettings.blocked`). A save that fails for another reason (a full disk) still shows the banner and is retried by the next save.
 - **Every use checks the session**, not only reads: `sign`, `store`, `storeKey` and `refresh` end an
   expired one first (Phase 1a review: an hour-old session still covered a write). Every use that may have
   authenticated the session's context also starts its clock when it returns, a write, a write-back and a use that
