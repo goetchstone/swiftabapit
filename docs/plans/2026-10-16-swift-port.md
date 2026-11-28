@@ -397,7 +397,7 @@ Source-scan tests (§6.4) back this up for what the compiler can't see.
 - **Host allowlist**:
   - allowed: `account.apple.com`, `api-business.apple.com`, `api-school.apple.com`,
     `businessapi.mosyle.com`, `businessapilogs.mosyle.com`;
-  - a redirect is refused unless it is a GET's, to the same allowlisted host, under `/v1/` (`willPerformHTTPRedirection`);
+  - every redirect is refused (the operator, 2026-11-28; `willPerformHTTPRedirection`);
   - the activity `downloadUrl` (presigned, unknown host) is **opened in the browser** with
     `NSWorkspace`, never fetched.
 - **Read classification**:

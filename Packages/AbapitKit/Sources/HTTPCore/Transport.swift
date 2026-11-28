@@ -4,8 +4,7 @@ import Wire
 /// What carries a request: `URLSessionTransport` in the app, a strict stub in tests (`TestSupport`). This is
 /// the only file that names `URLSession` (`SourceScanTests`).
 public protocol Transport: Sendable {
-    /// The response, its body capped at `limit` bytes. A redirect is followed only for a GET, to the same allowlisted
-    /// host, under `/v1/`; a response that isn't HTTP is a transport failure.
+    /// The response, its body capped at `limit` bytes. A redirect is never followed (the 3xx answer is returned); a response that isn't HTTP is a transport failure.
     func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse)
 }
 
@@ -47,18 +46,13 @@ public final class URLSessionTransport: NSObject, Transport, URLSessionTaskDeleg
         return (body, http)
     }
 
-    /// A redirect is followed only for a GET, within the same allowlisted host, to where a next link may go: the API
-    /// hosts don't redirect, and one that did could otherwise carry the bearer token elsewhere (invariant 4) or, on a
-    /// 307 or 308, replay a POST's body to a path nothing previewed. The completion-handler form:
-    /// Swift 6.4 crashes emitting the async form's Objective-C thunk (docs/domains/http-core.md).
+    /// No redirect is followed, for any method or target: the API hosts don't redirect, and one that did could carry the
+    /// bearer token elsewhere (invariant 4) or, on a 307 or 308, replay a POST's body to a path nothing previewed. The caller
+    /// gets the 3xx answer. The operator's decision, 2026-11-28: refuse every redirect, as the Python app did (httpx's
+    /// default). The completion-handler form: Swift 6.4 crashes emitting the async form's Objective-C thunk
+    /// (docs/domains/http-core.md).
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                            newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-        let original = task.originalRequest
-        completionHandler(Self.followable(method: original?.httpMethod, from: original?.url, to: request.url) ? request : nil)
-    }
-
-    static func followable(method: String?, from original: URL?, to target: URL?) -> Bool {
-        guard method == HTTPMethod.get.rawValue, let original, let target, let host = APIHost(of: original) else { return false }
-        return HTTPClient.staysInTheAPI(target, on: host)
+        completionHandler(nil)
     }
 }

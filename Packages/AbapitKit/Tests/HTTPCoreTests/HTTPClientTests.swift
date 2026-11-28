@@ -142,6 +142,7 @@ struct HTTPCoreTests {
                      "https://api-school.apple.com/v1/orgDevices", "https://api-business.apple.com/v2/other",
                      "https://api-business.apple.com/v1/../v2/x", "https://api-business.apple.com/v1/%2e%2E/v2/x",
                      "https://api-business.apple.com/v1/.%2e/v2/x", "https://api-business.apple.com/v1/%2E./v2/x",
+                     "https://api-business.apple.com/v1/..;/v2/x", "https://api-business.apple.com/v1/a;b/orgDevices", "https://api-business.apple.com/v1/%2e%2e%3B/v2/x",
                      "https://api-business.apple.com/v1/./orgDevices", "https://api-business.apple.com/v1/a%2Fb"] {
             await #expect(throws: HTTPFailure.self, "\(link)") {
                 _ = try await client.read(next: URL(string: link)!, on: .appleBusiness, template: "/v1/orgDevices", authorizer: NoAuth())
@@ -168,15 +169,6 @@ struct HTTPCoreTests {
         }
     }
 
-    @Test func redirectsStayOnTheSameAllowlistedHost() {
-        let business = URL(string: "https://api-business.apple.com/v1/orgDevices")
-        #expect(URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://api-business.apple.com/v1/x")))
-        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://api-school.apple.com/v1/x")))
-        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "https://evil.example.com/v1/x")))
-        #expect(!URLSessionTransport.followable(method: "GET", from: business, to: URL(string: "http://api-business.apple.com/v1/x")))
-        #expect(!URLSessionTransport.followable(method: nil, from: business, to: URL(string: "https://api-business.apple.com/v1/x")))
-    }
-
     /// The transport holds the allowlist itself, before a connection: `HTTPClient` is its only caller by a source scan,
     /// not by a type (failure-log 2026-11-28). `.invalid` never resolves, so undoing the guard fails here with a URLError.
     @Test func theTransportRefusesAHostOffTheAllowlist() async {
@@ -200,31 +192,22 @@ struct HTTPCoreTests {
         }
     }
 
-    /// Only a GET follows a redirect, and only to where a next link may go: a 307 or 308 would replay a POST (a
-    /// credential exchange's body, a Mosyle read, later a held write) to a path nothing previewed.
-    @Test func onlyAGETFollowsARedirectAndOnlyInsideTheAPI() async {
+    /// No redirect is followed: not a GET's, not a POST's, at any 3xx status, not to the same host under `/v1/` either. The
+    /// operator's decision (2026-11-28): refuse every redirect, as the Python app did.
+    @Test func noRedirectIsFollowed() async {
         let devices = "https://api-business.apple.com/v1/orgDevices"
-        let followed = await Self.redirected("GET", from: devices, to: "https://api-business.apple.com/v1/x")
-        #expect(followed?.url?.absoluteString == "https://api-business.apple.com/v1/x")
-        for status in [301, 302, 303, 307, 308] {
-            let again = await Self.redirected("GET", from: devices, to: "https://api-business.apple.com/v1/x", status: status)
-            #expect(again?.url?.absoluteString == "https://api-business.apple.com/v1/x", "GET \(status)")
-        }
-        for method in ["POST", "PATCH", "DELETE", "PUT"] {
-            for status in [307, 308] {
-                let refused = await Self.redirected(method, from: devices, to: "https://api-business.apple.com/v1/x", status: status)
-                #expect(refused == nil, "\(method) \(status)")
+        for method in ["GET", "POST", "PATCH", "DELETE", "PUT"] {
+            for status in [301, 302, 303, 307, 308] {
+                for target in ["https://api-business.apple.com/v1/x", "https://api-business.apple.com/v2/x", "https://api-school.apple.com/v1/x",
+                               "https://evil.example.com/v1/x", "http://api-business.apple.com/v1/x"] {
+                    let followed = await Self.redirected(method, from: devices, to: target, status: status)
+                    #expect(followed == nil, "\(method) \(status) \(target)")
+                }
             }
         }
         let mosyle = await Self.redirected("POST", from: "https://businessapi.mosyle.com/v1/devices",
                                            to: "https://businessapi.mosyle.com/v1/other", status: 308)
         #expect(mosyle == nil)
-        for target in ["https://api-business.apple.com/v2/x", "https://api-business.apple.com/", "https://api-business.apple.com/v1/../v2/x",
-                       "https://api-business.apple.com/v1/%2e%2E/v2/x", "https://api-school.apple.com/v1/x", "https://evil.example.com/v1/x",
-                       "http://api-business.apple.com/v1/x"] {
-            let refused = await Self.redirected("GET", from: devices, to: target)
-            #expect(refused == nil, "\(target)")
-        }
     }
 
     @Test func retryAfterIsSecondsOrADateAndNeverOverAMinute() {

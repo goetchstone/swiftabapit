@@ -292,8 +292,8 @@ struct MosyleFailureTests {
         await #expect(throws: MosyleAPIError.rateLimited) { try await harness.client.ping() }
     }
 
-    /// Any other status is unexpected, a redirect with a well-formed envelope included (the transport refuses to
-    /// follow one off the host; the client reads nothing from one).
+    /// Any other status is unexpected, a redirect with a well-formed envelope included (the transport follows
+    /// none; the client reads nothing from one), and a redirect is named as one.
     @Test func anyOtherStatusIsUnexpected() async throws {
         let harness = try await Harness()
         harness.stub.queue(418, for: "/v1/devices")
@@ -301,6 +301,8 @@ struct MosyleFailureTests {
         harness.stub.queue(302, for: "/v1/devices", headers: ["Location": "https://businessapi.mosyle.com/v1/devices"],
                            body: #"{"status":"OK","response":[{"status":"DEVICES_NOTFOUND"}]}"#)
         await #expect(throws: MosyleAPIError.unexpected(status: 302)) { try await harness.client.ping() }
+        #expect(MosyleAPIError.unexpected(status: 302).message == "Mosyle answered HTTP 302 (a redirect), which this app doesn't follow.")
+        #expect(MosyleAPIError.unexpected(status: 418).message == "Mosyle answered HTTP 418, which this app doesn't expect.")
     }
 
     /// The body cap holds for Mosyle's answers too (`HTTPClient.bodyLimit`; the stub sizes its body as the transport does).
