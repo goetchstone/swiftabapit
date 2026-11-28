@@ -70,10 +70,12 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 - **A set is whole or absent**: a failure part-way through importing a Mosyle org's four secrets
   removes what was written.
 - **Every use checks the session**, not only reads: `sign`, `store`, `storeKey` and `refresh` end an
-  expired one first (Phase 1a review: an hour-old session still covered a write). Every use also starts the
-  session's clock when it returns, a write, a write-back and a use that failed included, never when it begins
-  (failure-log 2026-11-28, "A write authenticated a session nobody timed"). A clock a key import starts can end a
-  session early, never late.
+  expired one first (Phase 1a review: an hour-old session still covered a write). Every use that may have
+  authenticated the session's context also starts its clock when it returns, a write, a write-back and a use that
+  failed after its prompt was answered included, never when it begins (failure-log 2026-11-28, "A write authenticated
+  a session nobody timed"). A cancelled prompt (-128), a failed authentication (-25293), a locked Mac (-25308), an item
+  not found (-25300) and a key import (it passes no context) start none. A write that adds a new item never used the
+  context, but the Vault can't tell, so it starts the clock: that can end a session early, never late.
 - **A set's clean-up tries every kind** and throws the first refusal, so what is left after a refused
   clean-up is at most the refused items, never old and new mixed.
 - **A key and a secret each have one door**: `store` refuses `.appleKey` and `storeKey` refuses the rest
@@ -121,4 +123,4 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   `ABAPIT_SPIKE=vault` spike on a team-signed build, which passed 2026-11-19, and only for the Mosyle password's
   accessibility class and access control: not the Apple key item, and not the name-only index (open, operator).
 - Does `SecItemUpdate` on a user-presence item prompt and authenticate the shared context? Operator's check (Touch ID); not
-  measured.
+  measured. See `docs/domains/mosyle.md`, the editor on the team-signed build (S1).

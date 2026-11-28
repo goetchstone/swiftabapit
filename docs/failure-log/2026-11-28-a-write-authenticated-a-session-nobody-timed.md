@@ -8,10 +8,14 @@
   until the next read or signature, which then ran without a prompt.
 - **Why not caught:** every session test began with a read or a signature, and Phase 1a's review fixed only the reverse
   case (a use ends an expired session). `MemoryStore` has no authenticated context to outlive anything.
-- **Fix:** this PR. Each use calls `defer { used() }` right after `beginUse()`, so the clock starts when the use
-  returns, whatever it did. Not at its start: a second use arriving 600 s after a prompt nobody has answered would
+- **Fix:** this PR. A read, a signature, a write and a write-back start the clock when they return, whatever they
+  did, except after a status that authenticated nothing (-128, -25293, -25308, -25300): a clock started by a cancelled
+  prompt would let a later unanswered prompt be cut off 600 s after it. A key import passes no context and starts none.
+  A write that adds a new item starts it though it never used the context (the Vault can't tell); that can end a
+  session early, never late. The clock starts when a use returns, not at its start: a second use arriving 600 s after a prompt nobody has answered would
   end the session under that prompt and throw away the authentication the operator gives next.
-- **Prevention:** `aWriteStartsTheSessionClock`, `aUseThatFailsStartsTheSessionClock`,
-  `aUseStillWaitingIsNotEndedByTheNextUse` and `aKeyImportAndAWriteBackStartTheSessionClock`. The real Keychain's
+- **Prevention:** `aWriteStartsTheSessionClock`, `aUseThatFailsAfterItsPromptStartsTheSessionClock`,
+  `aUseThatAuthenticatedNothingStartsNoClock`, `aKeyImportStartsNoClock`, `aWriteBackStartsTheSessionClock`,
+  `aUseStillWaitingIsNotEndedByTheNextUse` and `aCancelledPromptDoesNotCutOffALaterUnansweredOne`. The real Keychain's
   behaviour on `SecItemUpdate` is not measured: whether it prompts and authenticates the shared context is the
   operator's check (Touch ID), listed in the runbook.
