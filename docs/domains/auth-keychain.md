@@ -111,3 +111,7 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 
 - S1 team build, the keychain spike and the vault spike: passed 2026-11-19 (operator; results above).
 - Assertion reuse (plan §3.4.2) and the token rate: Phase 1 live checks (operator).
+- The protections `KeychainStore` asks for (the data-protection Keychain, this device only, user presence) are held
+  as text by `SourceScanTests`' `KeychainShapeTests` (failure-log 2026-11-18, "the Keychain's protections were held by
+  no test"): no offline test can run `KeychainStore`. What the Keychain stored is read back only by the
+  `ABAPIT_SPIKE=vault` spike on a team-signed build: pending (operator).

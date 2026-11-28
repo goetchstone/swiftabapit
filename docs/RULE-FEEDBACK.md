@@ -27,6 +27,29 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-18 — Invariant 4's home tested a helper, not the transport that uses it
+- **What happened:** a review unhooked the redirect delegate, removed both body caps and loosened every session setting
+  in `Transport.swift`; every test passed (failure-log 2026-11-18, "the transport's protections were held by no test").
+- **Invariant in force:** #4 (a redirect elsewhere is refused) and #7 (a bounded body).
+- **Why it didn't hold:** wrong layer. Its home is `HTTPCoreTests`, which at f3249c1 tested only a pure helper, and since then call the delegate method on a task never resumed, not its wiring to the session; every
+  other test sends through a stub, whose cap is its own.
+- **Would a rule have caught it?** only if enforced differently: where the stub stands in for a file, that file's
+  protections are held as text (`TransportShapeTests`, added with this entry), and the stub's copy is named a copy.
+- **Enforcement home if changed:** tripwire test (`SourceScanTests`' `TransportShapeTests`). Invariant 4's home line
+  should name it: an `improve-rules` edit, not made here.
+
+## 2026-11-18 — Invariant 3's home held the Vault's logic, not the Keychain's protections
+- **What happened:** a review dropped `.userPresence`, widened the accessibility class and sent all five queries to the
+  file-based Keychain in `KeychainStore.swift`; every test passed (failure-log 2026-11-18, "the Keychain's protections
+  were held by no test").
+- **Invariant in force:** #3 (secrets live only in the Keychain: data-protection, this device only, user presence).
+- **Why it didn't hold:** wrong layer. Its home is `VaultTests`, which run on `MemoryStore`; an ad-hoc build can't reach
+  the data-protection Keychain, so no offline test runs `KeychainStore`, and the home line didn't say so.
+- **Would a rule have caught it?** only if enforced differently: a home that can't run the code it names holds the
+  text (`KeychainShapeTests`, added with this entry) and says what only the operator's team-build spike proves.
+- **Enforcement home if changed:** tripwire test (`SourceScanTests`' `KeychainShapeTests`). Invariant 3's home line
+  should name it: an `improve-rules` edit, not made here.
+
 ## 2026-11-18 — Invariant 4's hosts were held by lists of the routes someone had already found
 - **What happened:** a review's probes (a stream pair, a name lookup, a BSD socket, an `AsyncImage`, `NSWorkspace`, and
   `URLSession` in a second source folder) built into Release with every test and the gate green (failure-log
