@@ -350,7 +350,9 @@ collectors follow Phase 3's store (`docs/domains/logs-stream.md`).
     (`ABAPIT_SPIKE=vault`) reads a stored password's protection back (this device only, with an access control) and fails
     without it; whether replacing a user-presence item prompts, and what a cancelled prompt mid-set leaves; an edit with
     every credential given replaces the set, one without keeps it; an empty Logs Stream token removes a stored one;
-    Remove deletes them all.
+    Remove deletes them all, also when it is pressed in one window while an edit of that org is saving in another
+    (Keychain Access, search `abapit:`, then shows no item for the org; auth-keychain.md, "An item can outlive its
+    index entry").
   - **Step 3's reads** (`Contracts/mosyle/operations.json` marks each guess G): the custom attributes' list key
     (`custom_device_attributes`, `attributes` or `info`) and field names, and whether `visionos` is a platform there; the
     admin log's list key (`logs`, `adminlogs` or `admin_logs`), its field names, its date format (`YYYY-MM-DD`), whether

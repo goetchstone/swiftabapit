@@ -91,6 +91,14 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   unindexes the key, so the inventory never lists a key that isn't stored; the old key is gone either way.
 - **A removed org's id stays taken while its items are stored**: `OrgStore.uniqueID(for:avoiding:)` takes
   the vault inventory, or a new org of the same name would inherit the old one's secrets.
+- **An item can outlive its index entry** (read from the code; never seen on the real Keychain). `KeychainStore.write`
+  and `storeKey` add the kind to the org's index entry and then add the item, in separate lock sections. A `delete`
+  (which unindexes) or the `forget` that ends `Vault.remove(org:)`, landing between the two, leaves an item the
+  inventory doesn't list; `forget` also drops the whole entry when a write landed after its kind's delete.
+  `MemoryStore` can't show either: its inventory reads the items themselves. `OrgsModel` closes it from above: a save
+  that finds its org gone removes by item again, and `remove` repeats its removal while a save finished a write
+  meanwhile (failure-log 2026-11-28). Anything new that stores under an org id outside `OrgsModel.save`, `saveMosyle`
+  and `remove` reopens it.
 - **The PEM text can't be wiped.** `KeyImport` zeroes its read buffer, but the `String` copies it parses
   live until Swift frees them. Accepted: the key leaves memory for the Keychain at once.
 - **The session counts sleep**: `ContinuousClock`, not `SuspendingClock` (GamGUI failure-log
@@ -123,6 +131,9 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
 
 - S1 team build, the keychain spike and the vault spike: passed 2026-11-19 (operator; results above).
 - Assertion reuse (plan §3.4.2) and the token rate: Phase 1 live checks (operator).
+- An item added after its index entry was dropped (Gotchas): not verified on the real Keychain, and no spike drives
+  it. What the operator can see on the team-signed build: after Remove, Keychain Access (search `abapit:`) shows no
+  item for that org, also when Remove is pressed in one window while an edit of that org is saving in another.
 - The protections `KeychainStore` asks for (the data-protection Keychain, this device only, user presence) are held
   as text by `SourceScanTests`' `KeychainShapeTests` (failure-log 2026-11-18, "the Keychain's protections were held by
   no test"): no offline test can run `KeychainStore`. The pins hold against an accidental edit and the weakenings they
