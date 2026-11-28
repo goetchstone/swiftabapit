@@ -52,6 +52,9 @@ public final class MemoryStore: SecretStore {
         var sessionsEnded = 0
         var keyHold = KeyHold()
         var writeHold = KeyHold()
+        var deleteHoldKind: VaultItem.Kind?
+        var deleteHoldReleased = false
+        var deleteWaiting = 0
     }
 
     private struct KeyHold { var armed = false, released = false, waiting = 0 }
@@ -86,6 +89,12 @@ public final class MemoryStore: SecretStore {
     public func holdNextWrite() { state.withLock { $0.writeHold.armed = true; $0.writeHold.released = false } }
     public func releaseWriteHold() { state.withLock { $0.writeHold.released = true } }
     public var writesWaiting: Int { state.withLock { $0.writeHold.waiting } }
+
+    /// The next `delete` of `kind` waits off the caller's thread until `releaseDeleteHold()`, as `holdNextWrite` does for a
+    /// write: a test holds a removal inside `Vault.remove(org:)`, after the kinds before `kind` in `removalOrder` are gone.
+    public func holdNextDelete(of kind: VaultItem.Kind) { state.withLock { $0.deleteHoldKind = kind; $0.deleteHoldReleased = false } }
+    public func releaseDeleteHold() { state.withLock { $0.deleteHoldReleased = true } }
+    public var deletesWaiting: Int { state.withLock { $0.deleteWaiting } }
 
     /// Reads and signatures so far: what a session would have prompted for.
     public var useCount: Int { state.withLock { $0.uses } }
@@ -161,6 +170,17 @@ public final class MemoryStore: SecretStore {
     }
 
     package func delete(_ item: VaultItem) throws {
+        let held = state.withLock { state -> Bool in
+            guard state.deleteHoldKind == item.kind else { return false }
+            state.deleteHoldKind = nil
+            state.deleteWaiting += 1
+            return true
+        }
+        if held {
+            let deadline = ContinuousClock.now.advanced(by: Self.keyHoldLimit)
+            while !state.withLock({ $0.deleteHoldReleased }), ContinuousClock.now < deadline { usleep(500) }
+            state.withLock { $0.deleteWaiting -= 1 }
+        }
         try state.withLock { state in
             try check(.delete, in: &state)
             state.values[item] = nil

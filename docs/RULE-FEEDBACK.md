@@ -27,6 +27,20 @@ its entries on parity copying the reference's defects, the reviewer's checkout c
 stacked PRs closing, invisible characters from an editing tool and the wrong GitHub account all apply
 here and are already wired into the skills.
 
+## 2026-11-28 — A review's "could not check" list had no home, and a race fix was tested in one order
+- **What happened:** PR #17's credential reviewer listed an unverified Keychain race under "What I could not check". The
+  PR body, the failure-log entry and the runbook carried its findings and not that list. A later re-read found
+  that the nearest order a test can drive is a real defect: a removal that finishes after a save left the save's
+  credentials behind (failure-log 2026-11-28, "a removal that finished after an edit left the edit's credentials
+  behind"). The fix for the review's M2 had been tested with the removal finishing first only.
+- **Invariant in force:** none numbered. `pre-commit` item 13 ("fix each real finding with a test") and `end-of-session`
+  item 5 ("deferred work is written in the PR").
+- **Why it didn't hold:** not covered. What a reviewer could not check is neither a finding to fix nor work the session
+  deferred, so neither rule names it.
+- **Would a rule have caught it?** yes, if stated: what a reviewer could not check goes into the PR's live checks or the
+  area's runbook, in the reviewer's words; and a fix for a race gets a test for each side finishing last.
+- **Enforcement home if changed:** skill (`pre-commit` item 13 and the review brief).
+
 ## 2026-11-18 — Invariant 4's home tested a helper, not the transport that uses it
 - **What happened:** a review unhooked the redirect delegate, removed both body caps and loosened every session setting
   in `Transport.swift`; every test passed (failure-log 2026-11-18, "the transport's protections were held by no test").

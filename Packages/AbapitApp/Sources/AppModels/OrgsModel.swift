@@ -178,6 +178,10 @@ public final class OrgsModel {
     /// id of an org removed while its edit is saving, which the edit would then have merged onto (verifier round 1).
     @ObservationIgnored private var reservedIDs: [String] = []
     @ObservationIgnored private var reservedClientIDs: [(org: String, client: String)] = []
+    /// How many Keychain writes saves have finished for each org id, stored or refused. `remove` reads it before and after
+    /// its own Keychain removal: a save that finished one meanwhile may have written after its kind was removed, so the
+    /// removal runs again (failure-log: "a removal that finished after an edit left the edit's credentials behind").
+    @ObservationIgnored private var credentialWrites: [String: Int] = [:]
     /// Why `orgs.json` couldn't be read at launch, when it was there and couldn't: nothing is saved over a file that wasn't
     /// read, and no organization is added, changed or removed until it is moved or repaired. The words are also in `problem`.
     @ObservationIgnored private var unreadable: String?
@@ -524,6 +528,7 @@ public final class OrgsModel {
 
         if draft.givesCredentials {
             do {
+                defer { credentialWrites[orgID, default: 0] += 1 }
                 try await vault.replaceSet([
                     .mosyleAccessToken: draft.accessToken, .mosyleEmail: draft.email, .mosylePassword: draft.password,
                     .mosyleLogsToken: draft.logsToken.isEmpty ? nil : draft.logsToken,
@@ -683,6 +688,7 @@ public final class OrgsModel {
 
         if let key {
             do {
+                defer { credentialWrites[orgID, default: 0] += 1 }
                 try await vault.storeKey(key, as: item)
             } catch {
                 throw .keyNotStored(error as? VaultError ?? .keyNotUsable, adding: id == nil)
@@ -776,7 +782,17 @@ public final class OrgsModel {
             case .failure(let failure): throw failure
             }
         }
-        if deleteSecrets { try await vault.remove(org: id) }
+        if deleteSecrets {
+            // A save that finished a Keychain write while these were being removed wrote after its kind was removed: remove
+            // again until none landed meanwhile, so nothing stays under an id no org has. A save still inside its write
+            // finds the org gone afterwards and removes its own (`saveMosyle`, `save`). No await between the last
+            // comparison and `store.remove` below.
+            var seen: Int
+            repeat {
+                seen = credentialWrites[id, default: 0]
+                try await vault.remove(org: id)
+            } while credentialWrites[id, default: 0] != seen
+        }
         // The Mosyle org the active Apple org is paired with is on screen too: removing it clears what was read from it.
         let wasShown = store.active?.id == id || mosyleOrg?.id == id
         let client = store.client(of: id)?.id
