@@ -91,6 +91,10 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   unindexes the key, so the inventory never lists a key that isn't stored; the old key is gone either way.
 - **A removed org's id stays taken while its items are stored**: `OrgStore.uniqueID(for:avoiding:)` takes
   the vault inventory, or a new org of the same name would inherit the old one's secrets.
+- **Items under an id no organization has are listed and removable in Settings** (`OrgsModel.orphanedCredentials`,
+  `removeOrphanedCredentials`): never an organization's own id, never one a save in flight is writing, never
+  while `orgs.json` wasn't read or a newer version wrote it (the store is then not the whole truth), and never
+  removed without the operator's click. Cited: failure-log 2026-11-28, "Leftover credentials the app named".
 - **The PEM text can't be wiped.** `KeyImport` zeroes its read buffer, but the `String` copies it parses
   live until Swift frees them. Accepted: the key leaves memory for the Keychain at once.
 - **The session counts sleep**: `ContinuousClock`, not `SuspendingClock` (GamGUI failure-log
@@ -133,3 +137,6 @@ On an ad-hoc build every data-protection call is expected to fail with `errSecMi
   measured. See `docs/domains/mosyle.md`, the editor on the team-signed build (S1).
 - Does a cancelled `SecKeyCreateSignature` report its error in the OSStatus domain (-128) or as an `LAError` code? If it
   is an `LAError`, the signature's failure starts the clock (early only, never late). Operator's check (Touch ID); not measured.
+- Does the Settings section for leftover credentials list what the real Keychain holds under an id no organization has,
+  and does its delete remove the item and its index entry? Operator's check (Touch ID, a team-signed build); not run. The
+  tests use `MemoryStore` only.

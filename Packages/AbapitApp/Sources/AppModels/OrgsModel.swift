@@ -812,6 +812,31 @@ public final class OrgsModel {
         return try? await opened.count(org: profile)
     }
 
+    /// What the Keychain holds under ids no organization has, by id: left by a clean-up the Keychain refused, or by an
+    /// `orgs.json` that was lost or replaced. Names only, never a prompt. An id a save in flight is writing isn't one: its
+    /// organization is about to exist, or its save removes what it stored. Nothing is listed while `orgs.json` wasn't read or
+    /// a newer version wrote it: the store is then empty or not the whole truth, and every stored id would look left over.
+    public func orphanedCredentials() async throws -> [String: Set<VaultItem.Kind>] {
+        guard cannotPersist == nil else { return [:] }
+        let stored = try await vault.inventory()
+        return stored.filter { store[$0.key] == nil && !reservedIDs.contains($0.key) }
+    }
+
+    /// Deletes what the Keychain holds under `id`, an id no organization has. Refused before the Keychain is touched where
+    /// nothing can be saved (the file wasn't read, or a newer version wrote it: an id that looks left over may be an
+    /// organization's), for an organization's own id, and for one a save in flight is writing: an organization's
+    /// credentials go with it, in Remove. The id stays reserved meanwhile, so no Add takes it half removed. A refused
+    /// removal is thrown: something stayed.
+    public func removeOrphanedCredentials(_ id: String) async throws {
+        if let why = cannotPersist { throw SaveFailure.refused(why) }
+        guard store[id] == nil, !reservedIDs.contains(id) else {
+            throw SaveFailure.refused("These credentials belong to an organization: remove the organization instead.")
+        }
+        reservedIDs.append(id)
+        defer { if let index = reservedIDs.firstIndex(of: id) { reservedIDs.remove(at: index) } }
+        try await vault.remove(org: id)
+    }
+
     /// What Settings → Permissions found, kept so sections show locked without probing again. `probed` is the
     /// profile as the probe started: if the org was edited to another account while the probe ran, the results
     /// are the old account's and are dropped, so they never put back the locks that edit cleared (the first fix's
