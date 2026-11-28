@@ -93,7 +93,8 @@ struct VaultTests {
 
     /// A use that authenticated nothing (a cancelled or failed prompt, a locked Mac) starts no clock.
     @Test func aUseThatAuthenticatedNothingStartsNoClock() async throws {
-        for status in [errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed] {
+        for status in [errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed, errSecNotAvailable,
+                       errSecMissingEntitlement] {
             let store = MemoryStore()
             let clock = Mutex(ContinuousClock.now)
             let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
@@ -114,6 +115,26 @@ struct VaultTests {
         clock.withLock { $0 = $0.advanced(by: .seconds(601)) }
         #expect(try await vault.optionalSecret(Self.token) == nil)
         #expect(store.sessionsEnded == 0)
+    }
+
+    /// A read or a signature that finds no item authenticated nothing, so it starts no clock: the optional Logs Stream
+    /// token is usually absent, and a later prompt nobody has answered must not be cut off 600 s after that read.
+    @Test func aReadThatFindsNothingStartsNoClock() async throws {
+        let store = MemoryStore()
+        let clock = Mutex(ContinuousClock.now)
+        let vault = Vault(store: store, sessionLifetime: .seconds(600), now: { clock.withLock { $0 } })
+        #expect(try await vault.optionalSecret(VaultItem(org: Self.org, kind: .mosyleLogsToken)!) == nil)
+        await #expect(throws: VaultError.missing(Self.key)) { try await vault.sign(Data("m".utf8), with: Self.key) }
+        clock.withLock { $0 = $0.advanced(by: .seconds(590)) }
+        store.holdNextWrite()
+        async let write: Void = vault.store(Secret("t"), as: Self.token)
+        for _ in 0..<5000 where store.writesWaiting == 0 { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(store.writesWaiting == 1)
+        clock.withLock { $0 = $0.advanced(by: .seconds(11)) }
+        #expect(try await vault.optionalSecret(VaultItem(org: Self.org, kind: .mosylePassword)!) == nil)
+        #expect(store.sessionsEnded == 0)
+        store.releaseWriteHold()
+        try await write
     }
 
     /// A cancelled prompt starts no clock, so a prompt left unanswered 590 s later is not cut off 11 s after that by
