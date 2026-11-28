@@ -81,3 +81,10 @@ and the gate read code, and how they failed: [gates.md](gates.md).
 - Offline: `HTTPCoreTests`, `AppleClientTests`, `AppleClientFailureTests` (transport failures, a revoked
   account, a body over the cap, short and expiring tokens: all through the strict stub). Live (Phase 1, operator): the real read rate and
   whether 429 carries `Retry-After`.
+- `URLSessionTransport` itself runs in no test: every suite sends through a stub `Transport`, and the oversized-body
+  tests run the stubs' own cap, which imitates the transport's. Its redirect delegate, its body cap and its session
+  settings are held as text by `SourceScanTests`' `TransportShapeTests` (failure-log 2026-11-18, "the transport's
+  protections were held by no test"); `HTTPCoreTests.noRedirectIsFollowed` calls the delegate method on a task never
+  resumed, not its wiring (`delegate: self`). The pins hold against an accidental edit and the weakenings they list, not
+  against a determined author; the review is the second line. Live (Phase 1, operator): that a redirect off the host is
+  refused on the wire.

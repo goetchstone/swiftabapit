@@ -134,6 +134,8 @@ struct ScannerTests {
         "let query = [kSecClass: kSecClassGenericPassword]",
         "let access = SecAccessControlCreateWithFlags(nil, accessible, .userPresence, nil)",
         "SecKeychainFindGenericPassword(nil, 0, nil, 0, nil, nil, nil, nil)",
+        "let flag = kSecAttrSynchronizable",
+        "let flag = kSecUseDataProtectionKeychain",
     ])
     func theKeychainNeedlesFind(_ code: String) {
         #expect(Self.found(code, RouteTests.keychain))
